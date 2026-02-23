@@ -116,7 +116,7 @@ export default function OrderDetailPage() {
 
             // 3. Update Weight if it's 0 but items exist (Initial logic)
             if (orderData && (!orderData.total_weight_kg || orderData.total_weight_kg === 0) && itemsData?.length) {
-                const autoWeight = itemsData.reduce((acc: number, item: any) => {
+                const autoWeight = (itemsData as any[]).reduce((acc: number, item: any) => {
                     const w = item.product?.weight_kg || 0;
                     return acc + (item.quantity * w);
                 }, 0);
