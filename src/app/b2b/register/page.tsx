@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Navbar from '../../../components/Navbar';
 import LeadGenBotV2 from '../../../components/LeadGenBot';
+import { Rocket, Banknote, Leaf, CreditCard } from 'lucide-react';
 
 interface B2BBenefit {
     icon: string;
@@ -29,8 +30,14 @@ export default function B2BRegister() {
         const fetchData = async () => {
             const { data: settings } = await supabase.from('app_settings').select('key, value');
             
-            const b2bStatus = settings?.find(s => s.key === 'enable_b2b_lead_capture')?.value === 'true';
+            const getSetting = (key: string, defaultValue: string) => {
+                const s = settings?.find(x => x.key === key);
+                return s ? s.value : defaultValue;
+            };
+
+            const b2bStatus = getSetting('enable_b2b_lead_capture', 'true') === 'true';
             if (!b2bStatus) {
+                console.log('🚫 B2B Registration disabled by settings.');
                 router.push('/');
                 return;
             }
@@ -65,15 +72,15 @@ export default function B2BRegister() {
                 backgroundPosition: 'center',
                 padding: '4rem 0'
             }}>
-                {/* Dark Overlay */}
+                {/* Sophisticated Overlay */}
                 <div style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.6)',
-                    background: 'linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 100%)',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    background: 'radial-gradient(circle at 70% 50%, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%)',
                     zIndex: 0
                 }}></div>
 
@@ -96,12 +103,14 @@ export default function B2BRegister() {
                             {b2b.badge || 'Exclusivo HORECA Bogotá, Girardot, Melgar y Anapoima'}
                         </span>
                         <h1 style={{
-                            fontSize: '3.5rem',
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            fontSize: '3.8rem',
                             fontWeight: '900',
                             marginBottom: '1.5rem',
                             lineHeight: '1.1',
-                            textShadow: '0 4px 10px rgba(0,0,0,0.5)',
-                            whiteSpace: 'pre-line'
+                            textShadow: '0 4px 15px rgba(0,0,0,0.6)',
+                            whiteSpace: 'pre-line',
+                            letterSpacing: '-0.04em'
                         }}>
                             {b2b.title || 'Tu Operación Merece \n Lo Mejor del Campo'}
                         </h1>
@@ -125,18 +134,27 @@ export default function B2BRegister() {
                             ]).map((item: B2BBenefit, i: number) => (
                                 <div key={i} style={{
                                     display: 'flex',
-                                    alignItems: 'start',
-                                    gap: '1rem',
-                                    backgroundColor: 'rgba(255,255,255,0.1)',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
-                                    backdropFilter: 'blur(5px)',
-                                    border: '1px solid rgba(255,255,255,0.1)'
+                                    alignItems: 'center',
+                                    gap: '1.2rem',
+                                    backgroundColor: 'rgba(255,255,255,0.08)',
+                                    padding: '1.25rem',
+                                    borderRadius: 'var(--radius-lg)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
                                 }}>
-                                    <div style={{ fontSize: '1.5rem' }}>{item.icon}</div>
+                                    <div style={{ color: 'var(--primary)', backgroundColor: 'white', padding: '10px', borderRadius: '12px', display: 'flex' }}>
+                                        {i === 0 ? <Rocket size={24} /> : i === 1 ? <Banknote size={24} /> : i === 2 ? <Leaf size={24} /> : <CreditCard size={24} />}
+                                    </div>
                                     <div>
-                                        <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '0.2rem' }}>{item.title}</h3>
-                                        <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.3' }}>{item.desc}</p>
+                                        <h3 style={{ 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            fontSize: '1.1rem', 
+                                            fontWeight: '800', 
+                                            marginBottom: '0.2rem',
+                                            letterSpacing: '-0.02em'
+                                        }}>{item.title}</h3>
+                                        <p style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: '1.4' }}>{item.desc}</p>
                                     </div>
                                 </div>
                             ))}

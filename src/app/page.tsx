@@ -4,6 +4,7 @@ import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
 import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
+import { Building2, ShoppingCart, Clock, Leaf, Gem, Flame } from 'lucide-react';
 
 // SEO Metadata
 export const metadata = {
@@ -80,70 +81,74 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       {/* HERO SECTION: European/Clean Style */}
       <section style={{
         position: 'relative',
-        height: '500px',
+        height: '620px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         color: 'white',
         overflow: 'hidden',
-        background: 'linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url(/hero_fresh_produce.png)',
+        background: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.5)), url(/hero_fresh_produce.png)',
         backgroundSize: 'cover',
-        backgroundPosition: 'center'
+        backgroundPosition: 'center',
+        boxShadow: 'inset 0 -120px 100px -50px rgba(0,0,0,0.3)'
       }}>
         <div className="container" style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <h1 style={{
-            fontSize: '3.5rem',
-            fontWeight: '800',
-            marginBottom: '1rem',
-            textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-            lineHeight: 1.2,
+            fontFamily: 'var(--font-outfit), sans-serif',
+            fontSize: '4.5rem',
+            fontWeight: '900',
+            marginBottom: '1.5rem',
+            textShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            lineHeight: 1.1,
+            letterSpacing: '-0.03em',
             whiteSpace: 'pre-line' 
           }}>
             {heroTitle}
           </h1>
           <p style={{
-            fontSize: '1.25rem',
-            maxWidth: '700px',
-            margin: '0 auto 2rem',
-            textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-            fontWeight: '400'
+            fontSize: '1.35rem',
+            maxWidth: '800px',
+            margin: '0 auto 3rem',
+            textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+            fontWeight: '400',
+            opacity: 0.95,
+            lineHeight: 1.5
           }}>
             {heroDescription}
           </p>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
             {isB2bEnabled && (
             <Link href="/b2b/register">
-              <button className="btn btn-primary" style={{
-                fontSize: '1.2rem',
-                padding: '1rem 2.5rem',
-                fontWeight: 'bold',
-                boxShadow: '0 8px 20px rgba(46, 204, 113, 0.4)',
+              <button className="btn btn-primary btn-premium" style={{
+                fontSize: '1.15rem',
+                padding: '1.1rem 2.8rem',
+                fontWeight: '700',
+                borderRadius: 'var(--radius-full)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                transform: 'scale(1.05)'
+                gap: '0.6rem',
+                backgroundColor: 'var(--primary)'
               }}>
-                <span>🏢</span> Institucional
+                <span><Building2 size={22} strokeWidth={2.5} /></span> Institucional
               </button>
             </Link>
             )}
             
             <Link href="/register" style={{ textDecoration: 'none' }}>
-              <button className={isB2bEnabled ? "btn" : "btn btn-primary"} style={{
-                fontSize: isB2bEnabled ? '1.1rem' : '1.3rem',
-                padding: isB2bEnabled ? '1rem 2rem' : '1rem 3rem',
-                backgroundColor: isB2bEnabled ? 'rgba(255, 255, 255, 0.95)' : undefined,
-                color: isB2bEnabled ? '#374151' : undefined,
+              <button className="btn-glass" style={{
+                fontSize: '1.15rem',
+                padding: '1.1rem 2.8rem',
+                color: 'white',
                 fontWeight: '700',
+                borderRadius: 'var(--radius-full)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: !isB2bEnabled ? '0 8px 25px rgba(46, 204, 113, 0.5)' : undefined,
-                transform: !isB2bEnabled ? 'scale(1.1)' : undefined,
+                gap: '0.6rem',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
                 cursor: 'pointer'
               }}>
-                <span>{isB2bEnabled ? '🛒' : '🛒'}</span> {isB2bEnabled ? 'Hogar / Registro' : 'Ver Catálogo Completo'}
+                <span><ShoppingCart size={22} strokeWidth={2.5} /></span> Hogar / Mi cuenta
               </button>
             </Link>
           </div>
@@ -154,10 +159,24 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       <section style={{ padding: '4rem 0', backgroundColor: '#F9FAFB' }}>
         <div className="container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '3rem', textAlign: 'center' }}>
           {valueProps.map((prop: { icon: string; title: string; desc: string }, i: number) => (
-            <div key={i}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{prop.icon}</div>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.5rem' }}>{prop.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }}>{prop.desc}</p>
+            <div key={i} style={{ padding: '1rem' }}>
+              <div style={{ 
+                marginBottom: '1.5rem', 
+                color: 'var(--primary)',
+                backgroundColor: 'var(--accent)',
+                width: '80px',
+                height: '80px',
+                borderRadius: 'var(--radius-lg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.5rem',
+                boxShadow: '0 10px 20px rgba(26, 77, 46, 0.1)'
+              }}>
+                {i === 0 ? <Clock size={40} strokeWidth={1.5} /> : i === 1 ? <Leaf size={40} strokeWidth={1.5} /> : <Gem size={40} strokeWidth={1.5} />}
+              </div>
+              <h3 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '1.6rem', fontWeight: '800', marginBottom: '1rem', color: 'var(--primary-dark)' }}>{prop.title}</h3>
+              <p style={{ color: 'var(--text-muted)', lineHeight: '1.7', fontSize: '1.05rem' }}>{prop.desc}</p>
             </div>
           ))}
         </div>
@@ -175,16 +194,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             alignItems: 'baseline',
             marginBottom: '2.5rem'
           }}>
-            <h2 style={{
-              fontSize: '2rem',
-              fontWeight: '900',
-              color: 'var(--primary-dark)',
-              textTransform: 'uppercase',
-              letterSpacing: '-0.02em',
-              margin: 0
-            }}>
-              {featuredTitle}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Flame size={32} strokeWidth={2.5} style={{ color: 'var(--primary)' }} />
+              <h2 style={{
+                fontFamily: 'var(--font-outfit), sans-serif',
+                fontSize: '2.4rem',
+                fontWeight: '900',
+                color: 'var(--primary-dark)',
+                letterSpacing: '-0.04em',
+                margin: 0
+              }}>
+                {featuredTitle.replace('🔥', '').trim()}
+              </h2>
+            </div>
             <Link href="#catalog" style={{
               color: 'var(--secondary)',
               fontWeight: '700',
@@ -201,8 +223,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       </section>
       
       <section id="catalog" className="container" style={{ padding: '4rem 1rem', scrollMarginTop: '80px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-          <h2 className="section-title">{catalogTitle}</h2>
+        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+          <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900', letterSpacing: '-0.03em' }}>{catalogTitle}</h2>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
             <SearchBar />
           </div>
@@ -218,21 +240,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               <Link
                 key={cat}
                 href={`/?${new URLSearchParams({
-                  ...(q ? { q } : {}),
+                  ...Object.fromEntries(new URLSearchParams(String(q || ''))),
                   category: cat
-                }).toString()}#catalog`}
-                scroll={false}
+                }).toString()}`}
+                className={`category-pill ${((!category && cat === 'Todos') || category === cat) ? 'active' : ''}`}
                 style={{
-                  padding: '0.6rem 1.4rem',
-                  borderRadius: '30px',
-                  fontSize: '0.95rem',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  border: '1px solid var(--border)',
-                  backgroundColor: (category === cat || (!category && cat === 'Todos')) ? 'var(--primary)' : 'white',
-                  color: (category === cat || (!category && cat === 'Todos')) ? 'white' : 'var(--text-main)',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: (category === cat || (!category && cat === 'Todos')) ? '0 4px 12px rgba(46, 204, 113, 0.2)' : 'var(--shadow-sm)'
+                  padding: '0.8rem 1.8rem',
+                  fontSize: '1rem'
                 }}
               >
                 {cat}
