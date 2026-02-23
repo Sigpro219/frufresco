@@ -184,7 +184,8 @@ export default function OrderDetailPage() {
         if (isEditing) {
             // Cancel
             if (order) {
-                setEditForm(order);
+                const resetForm: Partial<Order> = { ...order };
+                setEditForm(resetForm);
                 setEditItems(items);
             }
             setIsEditing(false);
