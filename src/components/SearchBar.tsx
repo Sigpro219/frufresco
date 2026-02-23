@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, Suspense } from 'react';
 
-export default function SearchBar() {
+function SearchBarContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [query, setQuery] = useState(searchParams.get('q') || '');
@@ -74,5 +74,15 @@ export default function SearchBar() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function SearchBar() {
+    return (
+        <Suspense fallback={
+            <div style={{ marginBottom: '2rem', height: '58px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-md)' }}></div>
+        }>
+            <SearchBarContent />
+        </Suspense>
     );
 }

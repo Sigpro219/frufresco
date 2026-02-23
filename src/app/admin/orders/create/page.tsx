@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function CreateOrderPage() {
+function CreateOrderContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
@@ -1052,5 +1052,17 @@ export default function CreateOrderPage() {
                 </div>
             )}
         </main>
+    );
+}
+
+export default function CreateOrderPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#F3F4F6' }}>
+                <div style={{ color: '#3B82F6', fontWeight: '600' }}>Cargando formulario...</div>
+            </div>
+        }>
+            <CreateOrderContent />
+        </Suspense>
     );
 }

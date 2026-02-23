@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
@@ -15,7 +15,7 @@ interface ProductItem {
     notes?: string;
 }
 
-export default function PickingClientDetail() {
+function PickingClientContent() {
     const { id: orderId } = useParams();
     const searchParams = useSearchParams();
     const category = searchParams.get('category');
@@ -229,5 +229,17 @@ export default function PickingClientDetail() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function PickingClientDetail() {
+    return (
+        <Suspense fallback={
+            <div style={{ backgroundColor: '#111827', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ color: '#10B981', fontWeight: 'bold' }}>Cargando detalles de alistamiento...</div>
+            </div>
+        }>
+            <PickingClientContent />
+        </Suspense>
     );
 }
