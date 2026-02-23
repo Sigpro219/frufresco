@@ -183,8 +183,10 @@ export default function OrderDetailPage() {
     const handleEditToggle = () => {
         if (isEditing) {
             // Cancel
-            setEditForm(order);
-            setEditItems(items);
+            if (order) {
+                setEditForm(order);
+                setEditItems(items);
+            }
             setIsEditing(false);
         } else {
             setIsEditing(true);
