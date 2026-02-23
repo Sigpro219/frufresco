@@ -94,7 +94,10 @@ export default function OrderDetailPage() {
 
             if (orderError) throw orderError;
             setOrder(orderData);
-            setEditForm(orderData);
+            if (orderData) {
+                setEditForm(orderData);
+            }
+
 
             // 2. Fetch Items
             const { data: itemsData, error: itemsError } = await supabase
