@@ -407,7 +407,7 @@ export default function PickingDashboard() {
                 <div
                     onClick={() => router.push('/ops')}
                     style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#22C55E', fontWeight: '900', fontSize: '1.5rem', cursor: 'pointer' }}>
-                    FRUFRESCO <span style={{ color: '#666' }}>|</span> <span style={{ color: '#fff' }}>PICKING</span>
+                    LOGISTICS PRO <span style={{ color: '#666' }}>|</span> <span style={{ color: '#fff' }}>PICKING</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3rem' }}>

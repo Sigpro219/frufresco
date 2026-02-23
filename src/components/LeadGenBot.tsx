@@ -28,7 +28,7 @@ type LeadData = {
 
 export default function LeadGenBotV2() {
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: '¡Hola! 👋 Soy el asistente virtual de FruFresco.', sender: 'bot' },
+        { id: 1, text: '¡Hola! 👋 Soy el asistente virtual de Logistics Pro.', sender: 'bot' },
         { id: 2, text: 'Me encantaría ayudarte a activar tu cuenta empresarial con precios mayoristas.', sender: 'bot' },
         { id: 3, text: 'Para empezar, ¿cómo se llama tu negocio?', sender: 'bot' }
     ]);
@@ -370,7 +370,7 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-                                                    text: 'Mil disculpas, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. 😔 No podemos habilitar el registro para tu ubicación actual.',
+                                                    text: 'Mil disculpas, por el momento Logistics Pro solo opera en Bogotá, Girardot, Melgar y Anapoima. 😔 No podemos habilitar el registro para tu ubicación actual.',
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
@@ -392,7 +392,7 @@ export default function LeadGenBotV2() {
                 )}
                 {isTyping && (
                     <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        FruFresco está escribiendo...
+                        Logistics Pro está escribiendo...
                     </div>
                 )}
                 <div ref={messagesEndRef} />

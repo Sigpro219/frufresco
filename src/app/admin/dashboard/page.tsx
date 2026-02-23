@@ -114,7 +114,7 @@ export default function AdminDashboard() {
                 <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', marginBottom: '0.5rem' }}>Centro de Comando</h1>
-                        <p style={{ color: '#4B5563', fontSize: '1.1rem' }}>Resumen operativo de FruFresco en tiempo real.</p>
+                        <p style={{ color: '#4B5563', fontSize: '1.1rem' }}>Resumen operativo de Logistics Pro en tiempo real.</p>
                         <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                             <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '700' }}>
                                 🛡️ Admin: {profile?.company_name || user?.email?.split('@')[0]}

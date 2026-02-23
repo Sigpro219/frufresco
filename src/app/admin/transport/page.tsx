@@ -184,7 +184,7 @@ export default function TransportControlTower() {
                                 Torre de <span style={{ color: '#0891B2' }}>Control</span>
                             </h1>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
-                                <p style={{ color: '#64748B', fontSize: '1.1rem', fontWeight: '500', margin: 0 }}>Gestión centralizada de rutas y flota <span style={{ color: '#111827', fontWeight: '700' }}>Frufresco</span>.</p>
+                                <p style={{ color: '#64748B', fontSize: '1.1rem', fontWeight: '500', margin: 0 }}>Gestión centralizada de rutas y flota <span style={{ color: '#111827', fontWeight: '700' }}>Logistics Pro</span>.</p>
                                 <button 
                                     onClick={() => fetchTransportData()}
                                     disabled={loading}

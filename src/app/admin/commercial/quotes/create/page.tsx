@@ -349,7 +349,7 @@ export default function CreateQuotePage() {
                             <p style={{ color: '#6B7280', margin: '0.5rem 0' }}>Fecha: {new Date().toLocaleDateString()}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>FruFresco S.A.S</div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>Logistics Pro S.A.S</div>
                             <div style={{ color: '#6B7280', fontSize: '0.9rem' }}>Nit: 900.123.456-7</div>
                         </div>
                     </div>

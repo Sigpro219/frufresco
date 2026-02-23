@@ -1034,7 +1034,7 @@ export default function ProcurementPage() {
 
       {/* Print-Only Table Section */}
       <div className="print-only">
-        <h1 style={{ textAlign: "center" }}>Lista de Compras - FruFresco</h1>
+        <h1 style={{ textAlign: "center" }}>Lista de Compras - Logistics Pro</h1>
         <p style={{ textAlign: "center" }}>
           Fecha de Entrega: {formatDateFriendly(targetDateLabel)}
         </p>

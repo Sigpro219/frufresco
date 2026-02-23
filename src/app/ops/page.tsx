@@ -56,7 +56,7 @@ export default function OpsHome() {
     return (
         <div style={{ padding: '2rem 1rem' }}>
             <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem' }}>Portal <span style={{ color: '#10B981' }}>Operativo</span></h1>
-            <p style={{ color: 'var(--ops-text-muted)', marginBottom: '2rem' }}>Bienvenido al sistema de administración de FruFresco Express.</p>
+            <p style={{ color: 'var(--ops-text-muted)', marginBottom: '2rem' }}>Bienvenido al sistema de administración de Logistics Pro.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <Link href="/ops/compras" style={{ textDecoration: 'none' }}>
