@@ -27,8 +27,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 zIndex: 100
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <img src="/logo.png" alt="FruFresco" style={{ height: '40px', width: 'auto' }} />
-                    <span style={{ fontWeight: '800', fontSize: '1rem', letterSpacing: '0.05em' }}>FRUFRESCO <span style={{ color: 'var(--ops-primary)' }}>OPS</span></span>
+                    <span style={{ fontWeight: '900', fontSize: '1.2rem', color: 'var(--ops-primary)' }}>LOGISTICS <span style={{ color: '#fff' }}>PRO</span></span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <Link href="/">

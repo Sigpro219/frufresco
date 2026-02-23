@@ -80,7 +80,7 @@ export default function Navbar() {
             }}>
                 {/* LOGO */}
                 <Link href="/" style={{ display: 'flex', alignItems: 'center' }}>
-                    <img src="/logo.png" alt="FruFresco" style={{ height: '65px', width: 'auto' }} />
+                    <span style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--primary)' }}>Logistics <span style={{ color: '#111827' }}>Pro</span></span>
                 </Link>
 
                 {/* NAV LINKS */}

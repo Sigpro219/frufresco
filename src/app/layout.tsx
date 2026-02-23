@@ -5,7 +5,7 @@ import ClientLayout from '@/components/ClientLayout';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'FruFresco | Proveedor de Alimentos',
+  title: 'Logistics Pro | Gestión Integral de Suministros',
   description: 'Abastecimiento de alimentos frescos para tu negocio.',
 };
 

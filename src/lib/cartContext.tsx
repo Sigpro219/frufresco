@@ -28,7 +28,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     // Load from LocalStorage
     useEffect(() => {
-        const saved = localStorage.getItem('frufresco_cart');
+        const saved = localStorage.getItem('logistics_pro_cart');
         if (saved) {
             try {
                 setItems(JSON.parse(saved));
@@ -40,7 +40,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     // Save to LocalStorage
     useEffect(() => {
-        localStorage.setItem('frufresco_cart', JSON.stringify(items));
+        localStorage.setItem('logistics_pro_cart', JSON.stringify(items));
     }, [items]);
 
     const addItem = (newItem: CartItem) => {

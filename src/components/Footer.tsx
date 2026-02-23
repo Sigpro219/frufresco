@@ -24,7 +24,7 @@ export default function Footer() {
   };
 
   const phone = getSetting('contact_phone', '+57 300 123 4567');
-  const email = getSetting('contact_email', 'contacto@frufresco.com');
+  const email = getSetting('contact_email', 'contacto@logisticspro.com');
   const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
   const description = getSetting('footer_description', 'Llevando la frescura del campo a tu negocio con calidad garantizada y precios justos.');
 
@@ -41,7 +41,7 @@ export default function Footer() {
           
           {/* Brand */}
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1rem', color: 'white' }}>FruFresco</h3>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1rem', color: 'white' }}>Logistics Pro</h3>
             <p style={{ opacity: 0.8, lineHeight: 1.6 }}>
               {description}
             </p>
@@ -75,7 +75,7 @@ export default function Footer() {
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} FruFresco Express. Todos los derechos reservados.
+          © {new Date().getFullYear()} Logistics Pro. Todos los derechos reservados.
         </div>
       </div>
     </footer>

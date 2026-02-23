@@ -7,9 +7,9 @@ import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
 
 // SEO Metadata
 export const metadata = {
-  title: 'FruFresco | Proveedor de Frutas y Verduras Institucionales',
-  description: 'Líderes en abastecimiento de alimentos frescos para restaurantes, hoteles y casinos en Bogotá. Frescura garantizada, entrega puntual y los mejores precios del mercado.',
-  keywords: ['frutas al por mayor', 'verduras institucional', 'proveedor alimentos bogota', 'corabastos a domicilio', 'frufresco'],
+  title: 'Logistics Pro | Soluciones de Abastecimiento Inteligente',
+  description: 'Líderes en gestión logística y abastecimiento para tu negocio. Eficiencia garantizada y tecnología de punta.',
+  keywords: ['logística integral', 'gestión de suministros', 'transporte inteligente', 'logistics pro'],
 };
 
 // Opt out of caching (for dev)
