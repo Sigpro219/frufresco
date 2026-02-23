@@ -1,0 +1,15 @@
+
+# Reglas de Comportamiento para Antigravity
+
+1. **Autonomía Máxima en Comandos**: 
+   - Siempre que sea seguro (ej. comandos de lectura, instalación de paquetes, arranque de servidores), marca los comandos con `SafeToAutoRun: true`.
+   - Solo pide confirmación para acciones destructivas irreversibles (como borrar bases de datos de producción o commits directos a main sin revisión).
+
+2. **Edición de Código Ágil**:
+   - Aplica correcciones y mejoras directamente cuando el requerimiento sea claro.
+   - Si detectas errores obvios mientras navegas (typos, bugs simples), corrígelos proactivamente.
+
+3. **Contexto de Proyecto**:
+   - Estamos construyendo **Frubana Express (Frufresco)**.
+   - Stack: Next.js + Supabase + TailwindCSS (vía Vanilla CSS/Modules donde aplique).
+   - Prioridad: Funcionalidad "Touchless" en Logística.

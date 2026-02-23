@@ -1,0 +1,1 @@
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS pickup_completed_at TIMESTAMP WITH TIME ZONE;

@@ -1,0 +1,34 @@
+﻿                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                                <button
+                                                    onClick={() => window.open(`/product/${product.id}`, '_blank')}
+                                                    title="Ver en tienda"
+                                                    style={{
+                                                        padding: '0.8rem',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        border: '1px solid var(--border)',
+                                                        backgroundColor: 'white',
+                                                        cursor: 'pointer',
+                                                        fontSize: '1.1rem'
+                                                    }}
+                                                >
+                                                    ðŸ‘ï¸â€ðŸ—¨ï¸
+                                                </button>
+                                                <button
+                                                    onClick={() => toggleActive(product.id, product.is_active)}
+                                                    style={{
+                                                        padding: '0.8rem 1.5rem',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        border: '1px solid var(--border)',
+                                                        backgroundColor: product.is_active ? 'white' : '#EF4444',
+                                                        color: product.is_active ? 'inherit' : 'white',
+                                                        cursor: 'pointer',
+                                                        fontSize: '1.05rem',
+                                                        fontWeight: '700',
+                                                        transition: 'all 0.2s',
+                                                        minWidth: '120px'
+                                                    }}
+                                                >
+                                                    {product.is_active ? 'ðŸš« Ocultar' : 'ðŸ‘ï¸ Mostrar'}
+                                                </button>
+                                            </div>
+                                        </td>
