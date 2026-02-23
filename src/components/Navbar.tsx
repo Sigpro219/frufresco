@@ -6,6 +6,7 @@ import { useAuth } from '../lib/authContext';
 
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
 
 export default function Navbar() {
     const { totalItems } = useCart();
@@ -66,32 +67,53 @@ export default function Navbar() {
 
     return (
         <header style={{
-            backgroundColor: 'var(--surface)',
-            borderBottom: '1px solid var(--border)',
+            backgroundColor: 'rgba(251, 250, 245, 0.8)',
+            borderBottom: '1px solid rgba(0,0,0,0.05)',
             position: 'sticky',
             top: 0,
-            zIndex: 100
+            zIndex: 100,
+            backdropFilter: 'blur(20px)',
+            transition: 'all 0.3s ease'
         }}>
             <div className="container" style={{
-                height: '80px',
+                height: '85px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between'
             }}>
                 {/* LOGO */}
-                <Link href="/" style={{ display: 'flex', alignItems: 'center' }}>
-                    <img src="/logo.png" alt="FruFresco" style={{ height: '65px', width: 'auto' }} />
+                <Link href="/" style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                    <img src="/logo.png" alt="FruFresco" style={{ height: '70px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
                 </Link>
 
                 {/* NAV LINKS */}
-                <nav style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+                <nav style={{ 
+                    display: 'flex', 
+                    gap: '2.5rem', 
+                    alignItems: 'center',
+                    fontFamily: 'var(--font-outfit), sans-serif'
+                }}>
                     {/* B2C (Sin login) o Usuario Genérico */}
                     {!user && (
                         <>
-                            <Link href="/" style={{ fontWeight: '500' }}>Inicio</Link>
-                            <Link href="/#catalog" style={{ fontWeight: '500' }}>Catálogo</Link>
+                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>Inicio</Link>
+                            <Link href="/#catalog" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>Catálogo</Link>
                             {b2bEnabled && (
-                                <Link href="/b2b/register" style={{ fontWeight: '500', color: 'var(--secondary)' }}>Línea Institucional</Link>
+                                <Link href="/b2b/register" style={{ 
+                                    fontWeight: '800', 
+                                    fontSize: '1.05rem',
+                                    color: 'var(--primary)',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: 'var(--radius-full)',
+                                    backgroundColor: 'var(--accent)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                >Línea Institucional</Link>
                             )}
                         </>
                     )}
@@ -99,36 +121,44 @@ export default function Navbar() {
                     {/* B2B Cliente */}
                     {user && profile?.role === 'b2b_client' && (
                         <>
-                            <Link href="/b2b/dashboard" style={{ fontWeight: '600', color: 'var(--primary)' }}>Mi Portal</Link>
-                            <Link href="/b2b/orders" style={{ fontWeight: '500' }}>Mis Pedidos</Link>
-                            <Link href="/b2b/catalog" style={{ fontWeight: '500' }}>Catálogo B2B</Link>
+                            <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
+                            <Link href="/b2b/orders" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Mis Pedidos</Link>
+                            <Link href="/b2b/catalog" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Catálogo B2B</Link>
                         </>
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
                     {user && (profile?.role === 'admin' || profile?.role === 'employee') && (
                         <>
-                            <Link href="/" style={{ fontWeight: '500' }}>🏠 Inicio</Link>
-                            <Link href="/admin/dashboard" style={{ fontWeight: '600', color: 'var(--primary)' }}>⚙️ Admin</Link>
+                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Home size={18} strokeWidth={2.5} /> Inicio
+                            </Link>
+                            <Link href="/admin/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Settings size={18} strokeWidth={2.5} /> Admin
+                            </Link>
+                            <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Building2 size={18} strokeWidth={2.5} /> Canal B2B
+                            </Link>
                             
                             {/* Dropdown Operaciones */}
                             <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
                                 <span 
                                     onClick={() => setOperationsOpen(!operationsOpen)}
                                     style={{ 
-                                        fontWeight: '600', 
+                                        fontWeight: '800', 
                                         color: '#334155', 
                                         cursor: 'pointer', 
                                         display: 'flex', 
                                         alignItems: 'center', 
-                                        gap: '4px',
+                                        gap: '6px',
                                         padding: '8px 12px',
-                                        borderRadius: '6px',
+                                        borderRadius: 'var(--radius-md)',
                                         backgroundColor: operationsOpen ? '#F1F5F9' : 'transparent',
-                                        transition: 'background-color 0.2s'
+                                        transition: 'background-color 0.2s',
+                                        fontSize: '1.05rem'
                                     }}
                                 >
-                                    📦 Operaciones {operationsOpen ? '▴' : '▾'}
+                                    <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
                                 </span>
                                 {operationsOpen && (
                                     <div style={{
@@ -313,33 +343,63 @@ export default function Navbar() {
                     )}
                 </nav>
 
-                {/* ACTIONS */}
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <Link href="/checkout">
-                        <button className="btn" style={{ border: '1px solid var(--border)', backgroundColor: 'transparent' }}>
-                            🛒 <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>{totalItems}</span>
+                        <button className="btn" style={{ 
+                            border: '1px solid var(--border)', 
+                            backgroundColor: 'white',
+                            borderRadius: 'var(--radius-full)',
+                            padding: '0.6rem 1.2rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+                            cursor: 'pointer'
+                        }}>
+                            <ShoppingCart size={20} color="var(--primary)" strokeWidth={2.5} /> 
+                            <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
                         </button>
                     </Link>
 
                     {!loading && (
                         user ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                                    {profile?.company_name || user.email?.split('@')[0]}
-                                </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px', 
+                                    backgroundColor: 'white', 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: 'var(--radius-full)',
+                                    border: '1px solid var(--border)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                                }}>
+                                    <User size={16} color="var(--primary)" />
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                                        {profile?.company_name || user.email?.split('@')[0]}
+                                    </span>
+                                </div>
                                 <button
                                     onClick={() => signOut()}
                                     className="btn"
                                     style={{ 
-                                        padding: '0.5rem 1rem', 
-                                        fontSize: '0.85rem', 
-                                        border: '1px solid var(--border)', 
-                                        backgroundColor: 'transparent',
+                                        padding: '0.6rem 1.2rem', 
+                                        fontSize: '0.9rem', 
+                                        border: '1px solid #fee2e2', 
+                                        backgroundColor: '#fff1f1',
+                                        color: '#ef4444',
                                         cursor: 'pointer',
-                                        fontWeight: '600'
+                                        fontWeight: '800',
+                                        borderRadius: 'var(--radius-full)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.2s'
                                     }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff1f1'}
                                 >
-                                    Salir
+                                    <LogOut size={16} /> Salir
                                 </button>
                             </div>
                         ) : (

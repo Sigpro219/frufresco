@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { logError } from '../lib/errorUtils';
 
 export default function GlobalBanner() {
   const [bannerText, setBannerText] = useState<string | null>(null);
@@ -28,9 +27,20 @@ export default function GlobalBanner() {
         }
 
         if (data?.value) {
-          setBannerText(data.value);
+          let text = data.value;
+          
+          // Environment-based branding override
+          const isLocal = typeof window !== 'undefined' && 
+                          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+          
+          if (isLocal) {
+            // In CORE (Localhost), we always maintain origin branding
+            text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
+          }
+          
+          setBannerText(text);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isMounted) return;
         // console.error('GlobalBanner exception:', err); 
       }
@@ -43,13 +53,15 @@ export default function GlobalBanner() {
 
   return (
     <div style={{
-      backgroundColor: '#111827',
-      color: 'white',
+      backgroundColor: '#0a1a0f',
+      color: 'rgba(255, 255, 255, 0.95)',
       textAlign: 'center',
-      padding: '0.75rem',
-      fontSize: '0.9rem',
+      padding: '0.7rem',
+      fontSize: '0.85rem',
       fontWeight: '600',
-      letterSpacing: '0.05em'
+      letterSpacing: '0.04em',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+      fontFamily: 'var(--font-inter), sans-serif'
     }}>
       {bannerText}
     </div>

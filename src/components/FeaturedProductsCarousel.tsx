@@ -29,33 +29,33 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     left: '-20px',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    width: '40px',
-                    height: '40px',
+                    width: '48px',
+                    height: '48px',
                     borderRadius: '50%',
                     backgroundColor: 'white',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-md)',
-                    zIndex: 10,
+                    border: '1px solid rgba(0,0,0,0.05)',
+                    boxShadow: 'var(--shadow-float)',
+                    zIndex: 20,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    color: 'var(--text-main)',
-                    transition: 'all 0.2s'
+                    fontSize: '1.4rem',
+                    color: 'var(--primary)',
+                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--primary)';
                     e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'white';
-                    e.currentTarget.style.color = 'var(--text-main)';
-                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.color = 'var(--primary)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
                 }}
             >
-                ←
+                ‹
             </button>
 
             <button
@@ -65,33 +65,33 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     right: '-20px',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    width: '40px',
-                    height: '40px',
+                    width: '48px',
+                    height: '48px',
                     borderRadius: '50%',
                     backgroundColor: 'white',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-md)',
-                    zIndex: 10,
+                    border: '1px solid rgba(0,0,0,0.05)',
+                    boxShadow: 'var(--shadow-float)',
+                    zIndex: 20,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    color: 'var(--text-main)',
-                    transition: 'all 0.2s'
+                    fontSize: '1.4rem',
+                    color: 'var(--primary)',
+                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--primary)';
                     e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
                 }}
                 onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'white';
-                    e.currentTarget.style.color = 'var(--text-main)';
-                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.color = 'var(--primary)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
                 }}
             >
-                →
+                ›
             </button>
 
             {/* Scroll Container */}

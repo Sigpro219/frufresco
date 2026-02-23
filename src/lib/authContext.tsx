@@ -73,59 +73,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let isMounted = true;
 
         const initAuth = async () => {
-            let subscription;
             try {
-                console.log('🏁 Iniciando AuthProvider...');
-                // 1. Get initial session
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 
                 if (sessionError) {
-                    console.error('❌ Error al obtener sesión inicial:', sessionError);
+                    console.error('❌ Sesión corrupta detectada:', sessionError.message);
+                    await supabase.auth.signOut();
+                    localStorage.clear();
+                    window.location.href = '/login?error=reset';
+                    return;
                 }
 
                 if (isMounted) {
                     const currentUser = session?.user ?? null;
                     setUser(currentUser);
-                    console.log('👤 Usuario detectado:', currentUser?.email || 'Ninguno');
-                    
                     if (currentUser) {
-                        // No esperamos a que fetchProfile termine para liberar el Navbar,
-                        // pero sí lo llamamos para cargar los datos en segundo plano.
-                        fetchProfile(currentUser.id).catch(err => {
-                             console.error('❌ Error asíncrono en fetchProfile:', err);
-                        });
+                        fetchProfile(currentUser.id).catch(e => console.error('Error perfil:', e));
                     }
-                    // IMPORTANTE: Liberamos el estado de carga lo antes posible
                     setLoading(false);
                 }
 
-                // 2. Set up auth state change listener
-                const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-                    console.log('🔔 Cambio de estado Auth:', event);
-                    if (!isMounted) return;
-                    
-                    const newUser = session?.user ?? null;
-                    setUser(newUser);
-                    
-                    if (newUser) {
-                        await fetchProfile(newUser.id);
-                    } else {
-                        setProfile(null);
+                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+                    if (isMounted) {
+                        setUser(session?.user ?? null);
+                        if (session?.user) fetchProfile(session.user.id);
+                        else setProfile(null);
+                        setLoading(false);
                     }
-                    setLoading(false);
                 });
-                subscription = data.subscription;
+                return subscription;
             } catch (err) {
-                console.error('❌ Error crítico en initAuth:', err);
-                logError('authContext initAuth', err);
-            } finally {
-                if (isMounted) {
-                    console.log('✅ Fin de inicialización auth (loading=false)');
-                    setLoading(false);
-                }
+                console.error('❌ Error crítico auth:', err);
+                setLoading(false);
             }
-
-            return subscription;
         };
 
         const authSubPromise = initAuth();
