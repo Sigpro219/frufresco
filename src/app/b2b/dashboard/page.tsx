@@ -7,6 +7,7 @@ import Navbar from '../../../components/Navbar';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
+import { Package, Trash2, Search, Truck, Clock, ShoppingCart, Smile, Printer, Rocket, ShoppingBag } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -409,28 +410,40 @@ export default function B2BDashboard() {
             <div className="container" style={{ padding: '2rem 1rem', maxWidth: '800px' }}>
 
                 {/* HEADER */}
-                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--primary-dark)', marginBottom: '0.5rem' }}>
-                        {profile?.company_name || 'Cliente'} 👋
+                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                    <h1 style={{ 
+                        fontFamily: 'var(--font-outfit), sans-serif',
+                        fontSize: '2.2rem', 
+                        fontWeight: '900', 
+                        color: 'var(--text-main)', 
+                        marginBottom: '0.75rem',
+                        letterSpacing: '-0.04em'
+                    }}>
+                        {profile?.company_name || 'Panel Institucional'}
                     </h1>
 
                     {/* Subtle Time Dashboard */}
                     <div style={{
                         display: 'inline-flex',
-                        gap: '2rem',
-                        backgroundColor: 'white',
-                        padding: '0.6rem 1.5rem',
-                        borderRadius: '50px',
-                        boxShadow: 'var(--shadow-sm)',
-                        border: '1px solid var(--border)',
+                        flexWrap: 'wrap',
+                        justifyContent: 'center',
+                        gap: '1.5rem',
+                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                        padding: '0.75rem 2rem',
+                        borderRadius: 'var(--radius-full)',
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(255,255,255,0.5)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.05)',
                         fontSize: '0.9rem'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ color: isAfterCutoff ? '#DC2626' : 'var(--primary)', fontWeight: '700' }}>⏰ Cierre de pedido:</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>{timeLeft}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <Clock size={18} color={isAfterCutoff ? '#DC2626' : 'var(--primary)'} strokeWidth={2.5} />
+                            <span style={{ color: 'var(--text-main)', fontWeight: '700' }}>Cierre:</span>
+                            <span style={{ color: isAfterCutoff ? '#DC2626' : 'var(--text-main)', fontWeight: '600' }}>{timeLeft}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ color: 'var(--secondary)', fontWeight: '700' }}>🚚 Fecha de entrega:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <Truck size={18} color="var(--secondary)" strokeWidth={2.5} />
+                            <span style={{ color: 'var(--text-main)', fontWeight: '700' }}>Entrega:</span>
                             <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
                                 {new Date(deliveryDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
                             </span>
@@ -451,67 +464,85 @@ export default function B2BDashboard() {
                     <div style={{
                         backgroundColor: 'var(--primary)',
                         color: 'white',
-                        padding: '1.5rem',
+                        padding: '1.5rem 2rem',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0'
+                        borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+                        boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
+                        zIndex: 5
                     }}>
                         <div>
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>📦 Tu Pedido Sugerido</h2>
-                            <p style={{ margin: '0.25rem 0 0', opacity: 0.9, fontSize: '0.9rem' }}>Ajusta las cantidades o agrega nuevos productos</p>
+                            <h2 style={{ 
+                                fontFamily: 'var(--font-outfit), sans-serif',
+                                fontSize: '1.3rem', 
+                                fontWeight: '900', 
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                letterSpacing: '-0.02em'
+                            }}>
+                                <Package size={22} strokeWidth={2.5} /> Pedido Sugerido
+                            </h2>
+                            <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem', fontWeight: '500' }}>
+                                Personaliza cantidades o añade nuevos productos
+                            </p>
                         </div>
                         {orderItems.length > 0 && (
-                            <button
-                                onClick={handleClearOrder}
-                                title="Borrar todo y empezar de cero"
-                                style={{
-                                    backgroundColor: 'rgba(255,255,255,0.15)',
-                                    border: '1px solid rgba(255,255,255,0.3)',
-                                    borderRadius: '8px',
-                                    padding: '0.4rem 0.8rem',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    color: 'white',
-                                    fontWeight: '500',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.25)';
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                🗑️ Borrar Todo
-                            </button>
+                                <button
+                                    onClick={handleClearOrder}
+                                    title="Borrar todo y empezar de cero"
+                                    className="btn-glass"
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        fontSize: '0.8rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        color: 'white',
+                                        fontWeight: '800',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <Trash2 size={16} /> Borrar Todo
+                                </button>
                         )}
                     </div>
 
                     {/* Search Bar Inside Card */}
                     <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
                         <div style={{ position: 'relative' }}>
+                            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                <Search size={20} strokeWidth={2.5} />
+                            </div>
                             <input
                                 type="text"
-                                placeholder="🔍 Buscar otro producto por nombre o SKU..."
+                                placeholder="Buscar productos por nombre o SKU..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '0.75rem 2.5rem 0.75rem 1rem',
+                                    padding: '0.85rem 3rem 0.85rem 2.8rem',
                                     borderRadius: 'var(--radius-md)',
-                                    border: '2px solid var(--border)',
+                                    border: '1px solid var(--border)',
                                     fontSize: '1rem',
+                                    fontWeight: '500',
                                     outline: 'none',
-                                    transition: 'border-color 0.2s'
+                                    transition: 'all 0.2s',
+                                    backgroundColor: '#F9FAFB'
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                                onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = 'var(--primary)';
+                                    e.target.style.backgroundColor = 'white';
+                                    e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = 'var(--border)';
+                                    e.target.style.backgroundColor = '#F9FAFB';
+                                    e.target.style.boxShadow = 'none';
+                                }}
                             />
                             {searchTerm && (
                                 <button
@@ -590,17 +621,24 @@ export default function B2BDashboard() {
                     </div>
 
                     {/* Category Selector */}
-                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1rem' }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '0.75rem', 
+                        overflowX: 'auto', 
+                        padding: '0.5rem 1rem 1rem', 
+                        borderBottom: '1px solid var(--border)' 
+                    }}>
                         <button
                             onClick={() => setSelectedCategory(null)}
+                            className="category-pill"
                             style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '20px',
-                                border: '1px solid var(--border)',
+                                padding: '0.55rem 1.25rem',
+                                borderRadius: 'var(--radius-full)',
+                                border: selectedCategory === null ? 'none' : '1px solid var(--border)',
                                 backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
                                 color: selectedCategory === null ? 'white' : 'var(--text-main)',
                                 fontSize: '0.85rem',
-                                fontWeight: '600',
+                                fontWeight: '800',
                                 cursor: 'pointer',
                                 whiteSpace: 'nowrap'
                             }}
@@ -609,14 +647,15 @@ export default function B2BDashboard() {
                             <button
                                 key={cat}
                                 onClick={() => setSelectedCategory(cat)}
+                                className="category-pill"
                                 style={{
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '20px',
-                                    border: '1px solid var(--border)',
+                                    padding: '0.55rem 1.25rem',
+                                    borderRadius: 'var(--radius-full)',
+                                    border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
                                     backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
                                     color: selectedCategory === cat ? 'white' : 'var(--text-main)',
                                     fontSize: '0.85rem',
-                                    fontWeight: '600',
+                                    fontWeight: '800',
                                     cursor: 'pointer',
                                     whiteSpace: 'nowrap'
                                 }}
@@ -631,7 +670,7 @@ export default function B2BDashboard() {
                             {isLoadingCategory ? (
                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando articulos...</p>
                             ) : categoryProducts.length > 0 ? (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
+                                <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
                                     {categoryProducts.map(p => (
                                         <div
                                             key={p.id}
@@ -688,43 +727,76 @@ export default function B2BDashboard() {
                                         {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                                     </div>
                                     <div>
-                                        <p style={{ fontWeight: '600', margin: 0 }}>{item.product_name}</p>
+                                        <p style={{ 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            fontWeight: '800', 
+                                            fontSize: '1.05rem',
+                                            margin: 0,
+                                            color: 'var(--text-main)',
+                                            letterSpacing: '-0.02em'
+                                        }}>{item.product_name}</p>
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                     <button
                                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
                                         style={{
-                                            width: '32px', height: '32px',
-                                            borderRadius: '50%',
+                                            width: '36px', height: '36px',
+                                            borderRadius: '10px',
                                             border: '1px solid var(--border)',
                                             backgroundColor: 'white',
                                             cursor: 'pointer',
-                                            fontSize: '1.2rem'
+                                            fontSize: '1.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s',
+                                            fontWeight: '600',
+                                            color: 'var(--text-main)'
                                         }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                     >−</button>
-
-                                    <span style={{
-                                        minWidth: '60px',
+                                    
+                                    <div style={{
+                                        minWidth: '70px',
                                         textAlign: 'center',
-                                        fontWeight: '700',
-                                        fontSize: '1.1rem'
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center'
                                     }}>
-                                        {item.quantity} {item.unit}
-                                    </span>
+                                        <span style={{
+                                            fontWeight: '900',
+                                            fontSize: '1.15rem',
+                                            color: 'var(--primary)',
+                                            fontFamily: 'var(--font-outfit), sans-serif'
+                                        }}>
+                                            {item.quantity}
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>
+                                            {item.unit}
+                                        </span>
+                                    </div>
 
                                     <button
                                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
                                         style={{
-                                            width: '32px', height: '32px',
-                                            borderRadius: '50%',
-                                            border: '1px solid var(--primary)',
+                                            width: '36px', height: '36px',
+                                            borderRadius: '10px',
+                                            border: 'none',
                                             backgroundColor: 'var(--primary)',
                                             color: 'white',
                                             cursor: 'pointer',
-                                            fontSize: '1.2rem'
+                                            fontSize: '1.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s',
+                                            boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)'
                                         }}
+                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                     >+</button>
 
                                     <button
@@ -733,10 +805,14 @@ export default function B2BDashboard() {
                                             marginLeft: '1rem',
                                             background: 'none',
                                             border: 'none',
-                                            color: '#DC2626',
+                                            color: '#94A3B8',
                                             cursor: 'pointer',
-                                            fontSize: '0.85rem'
+                                            fontSize: '0.8rem',
+                                            fontWeight: '700',
+                                            textTransform: 'uppercase'
                                         }}
+                                        onMouseEnter={(e) => e.currentTarget.style.color = '#DC2626'}
+                                        onMouseLeave={(e) => e.currentTarget.style.color = '#94A3B8'}
                                     >Quitar</button>
                                 </div>
                             </div>
@@ -762,17 +838,31 @@ export default function B2BDashboard() {
                             <button
                                 onClick={handleSubmit}
                                 disabled={submitting || orderItems.filter(i => i.quantity > 0).length === 0}
-                                className="btn btn-primary"
+                                className="btn-premium"
                                 style={{
                                     width: '100%',
                                     fontSize: '1.25rem',
-                                    padding: '1rem',
-                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#ccc' : undefined,
+                                    padding: '1.1rem',
+                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
+                                    color: 'white',
                                     cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
-                                    opacity: orderItems.filter(i => i.quantity > 0).length === 0 ? 0.5 : 1
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '12px',
+                                    border: 'none',
+                                    borderRadius: 'var(--radius-full)',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    fontWeight: '900',
+                                    boxShadow: '0 12px 24px rgba(26, 77, 46, 0.3)',
+                                    letterSpacing: '0.02em'
                                 }}
                             >
-                                {submitting ? 'Enviando...' : '✅ Confirmar Pedido'}
+                                {submitting ? 'Transmitiendo...' : (
+                                    <>
+                                        <ShoppingCart size={24} strokeWidth={2.5} /> Confirmar Pedido
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -788,38 +878,55 @@ export default function B2BDashboard() {
                 )}
 
                 {/* Support Section */}
-                <div style={{
-                    marginTop: '3rem',
-                    backgroundColor: '#F3F4F6',
+                <div className="mobile-stack" style={{
+                    marginTop: '4rem',
+                    backgroundColor: 'white',
                     borderRadius: 'var(--radius-lg)',
-                    padding: '1.5rem',
+                    padding: '2rem',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    border: '1px dashed var(--border)'
+                    border: '1px solid var(--border)',
+                    boxShadow: 'var(--shadow-sm)'
                 }}>
                     <div style={{ flex: 1 }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0, color: 'var(--text-main)' }}>🚀 ¿Necesitas un pedido especial o ayuda?</h3>
-                        <p style={{ margin: '0.25rem 0 0', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Tu asesor personal está disponible para ayudarte con cualquier cambio o requerimiento especial.</p>
+                        <h3 style={{ 
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            fontSize: '1.2rem', 
+                            fontWeight: '800', 
+                            margin: 0, 
+                            color: 'var(--text-main)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                        }}>
+                            <Smile size={24} color="var(--primary)" strokeWidth={2.5} /> ¿Necesitas ayuda o un pedido especial?
+                        </h3>
+                        <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                            Tu asesor personal está disponible para ayudarte con cualquier requerimiento adicional.
+                        </p>
                     </div>
                     <a
                         href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido"
                         target="_blank"
-                        className="btn"
+                        className="btn-premium"
                         style={{
-                            backgroundColor: '#25D366',
+                            backgroundColor: '#075e54', // Darker WhatsApp green
                             color: 'white',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.5rem',
-                            fontWeight: '600',
+                            gap: '0.75rem',
+                            fontWeight: '900',
                             textDecoration: 'none',
-                            padding: '0.75rem 1.5rem',
-                            marginLeft: '1.5rem',
-                            whiteSpace: 'nowrap'
+                            padding: '0.9rem 1.8rem',
+                            borderRadius: 'var(--radius-full)',
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.95rem',
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            boxShadow: '0 8px 16px rgba(7, 94, 84, 0.2)'
                         }}
                     >
-                        💬 Hablar con Asesor
+                        Contactar Asesor
                     </a>
                 </div>
 
@@ -852,10 +959,17 @@ export default function B2BDashboard() {
                         <img
                             src={selectedProductForModal.image_url}
                             alt={selectedProductForModal.name}
-                            style={{ width: '120px', height: '120px', borderRadius: 'var(--radius-md)', objectFit: 'cover', marginBottom: '1rem' }}
+                            style={{ width: '120px', height: '120px', borderRadius: '20px', objectFit: 'cover', marginBottom: '1.25rem', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
                         />
-                        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem' }}>{selectedProductForModal.name}</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Personaliza tu producto:</p>
+                        <h3 style={{ 
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            margin: '0 0 0.5rem', 
+                            fontSize: '1.5rem',
+                            fontWeight: '900',
+                            letterSpacing: '-0.02em',
+                            color: 'var(--text-main)'
+                        }}>{selectedProductForModal.name}</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontWeight: '500' }}>Personaliza tu selección:</p>
 
                         {/* Variantes / Opciones */}
                         {selectedProductForModal.options_config && Array.isArray(selectedProductForModal.options_config) && (
@@ -960,11 +1074,31 @@ export default function B2BDashboard() {
                         flexDirection: 'column'
                     }}>
                         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📄</div>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--text-main)', margin: 0 }}>
+                            <div style={{ 
+                                background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)', 
+                                color: 'white', 
+                                width: '72px', 
+                                height: '72px', 
+                                borderRadius: '50%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                margin: '0 auto 1.5rem',
+                                boxShadow: '0 8px 16px rgba(26, 77, 46, 0.2)' 
+                            }}>
+                                <ShoppingBag size={34} strokeWidth={2} />
+                            </div>
+                            <h2 style={{ 
+                                fontFamily: 'var(--font-outfit), sans-serif',
+                                fontSize: '1.6rem', 
+                                fontWeight: '900', 
+                                color: 'var(--text-main)', 
+                                margin: 0,
+                                letterSpacing: '-0.04em'
+                            }}>
                                 Confirmación de Pedido
                             </h2>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '500' }}>
                                 Revisa los detalles finales antes de enviar.
                             </p>
                         </div>
@@ -1002,50 +1136,56 @@ export default function B2BDashboard() {
 
                         {/* Footer Info */}
                         <div style={{
-                            backgroundColor: '#EFF6FF',
-                            padding: '1rem',
-                            borderRadius: '12px',
-                            marginBottom: '2rem'
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            padding: '1.25rem',
+                            borderRadius: '16px',
+                            marginBottom: '2rem',
+                            border: '1px solid rgba(59, 130, 246, 0.1)'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                                <span style={{ color: '#3B82F6', fontWeight: '700' }}>🚚 Fecha requerida:</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3B82F6', fontWeight: '800' }}>
+                                    <Truck size={18} /> Fecha requerida:
+                                </div>
                                 <input
                                     type="date"
                                     value={deliveryDate}
                                     onChange={(e) => setDeliveryDate(e.target.value)}
                                     min={minDeliveryDate}
                                     style={{
-                                        fontWeight: '700',
+                                        fontWeight: '800',
                                         color: '#1E40AF',
                                         border: '1px solid #93C5FD',
-                                        borderRadius: '6px',
-                                        padding: '0.2rem 0.5rem',
+                                        borderRadius: '10px',
+                                        padding: '0.4rem 0.75rem',
                                         backgroundColor: 'white',
-                                        fontFamily: 'inherit'
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        outline: 'none',
+                                        boxShadow: '0 2px 4px rgba(59, 130, 246, 0.1)'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        <div className="no-print" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div className="no-print" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                             {/* Print Button */}
                             <button
                                 onClick={() => window.print()}
-                                className="btn"
+                                className="btn-glass"
                                 style={{
-                                    flex: 0.5,
-                                    backgroundColor: 'white',
-                                    border: '2px solid #E5E7EB',
-                                    color: '#374151',
-                                    fontWeight: '700',
-                                    borderRadius: '14px',
+                                    flex: 0.4,
+                                    color: 'var(--text-main)',
+                                    fontWeight: '800',
+                                    borderRadius: 'var(--radius-lg)',
                                     padding: '1rem',
-                                    fontSize: '1.2rem',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1px solid var(--border)'
                                 }}
                                 title="Imprimir copia"
                             >
-                                🖨️
+                                <Printer size={20} />
                             </button>
 
                             <button
@@ -1055,9 +1195,11 @@ export default function B2BDashboard() {
                                     flex: 1,
                                     backgroundColor: '#F3F4F6',
                                     color: '#4B5563',
-                                    fontWeight: '700',
-                                    borderRadius: '14px',
-                                    padding: '1rem'
+                                    fontWeight: '800',
+                                    borderRadius: 'var(--radius-lg)',
+                                    padding: '1rem',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    fontSize: '0.95rem'
                                 }}
                             >
                                 Ajustar Pedido
@@ -1065,16 +1207,29 @@ export default function B2BDashboard() {
                             <button
                                 onClick={handleFinalSubmit}
                                 disabled={submitting}
-                                className="btn btn-primary"
+                                className="btn-premium"
                                 style={{
                                     flex: 1.5,
+                                    backgroundColor: 'var(--primary)',
+                                    color: 'white',
                                     fontWeight: '900',
-                                    fontSize: '1.1rem',
-                                    borderRadius: '14px',
-                                    padding: '1rem'
+                                    fontSize: '1rem',
+                                    borderRadius: 'var(--radius-full)',
+                                    padding: '1rem',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '10px',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    boxShadow: '0 12px 24px rgba(26, 77, 46, 0.2)'
                                 }}
                             >
-                                {submitting ? 'Enviando...' : '🚀 Enviar Ahora'}
+                                {submitting ? 'Enviando...' : (
+                                    <>
+                                        <Rocket size={20} strokeWidth={2.5} /> Enviar Ahora
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

@@ -16,6 +16,7 @@ export function isAbortError(err: unknown): boolean {
         errStr.includes('abort') ||
         errStr.includes('cancel') ||
         errStr.includes('signal') ||
+        errStr.includes('refresh token') ||
         cause.includes('abort')
     ) {
         return true;

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import OrderTracking from './OrderTracking';
+import { MapPin, Phone, Mail } from 'lucide-react';
 
 export default function Footer() {
   const [appSettings, setAppSettings] = useState<{key: string, value: string}[] | null>(null);
@@ -24,16 +25,21 @@ export default function Footer() {
   };
 
   const phone = getSetting('contact_phone', '+57 300 123 4567');
-  const email = getSetting('contact_email', 'contacto@logisticspro.com');
+  const email = getSetting('contact_email', 'contacto@frufresco.com');
   const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
   const description = getSetting('footer_description', 'Llevando la frescura del campo a tu negocio con calidad garantizada y precios justos.');
 
   return (
-    <footer style={{ backgroundColor: '#111827', color: '#F9FAFB', padding: '1.5rem 0 1rem' }}>
+    <footer style={{ 
+      backgroundColor: '#0a1a0f', 
+      color: '#F9FAFB', 
+      padding: '1.5rem 0 1rem',
+      borderTop: '1px solid rgba(255,255,255,0.05)'
+    }}>
       <div className="container">
         {/* Compact Tracking in Footer */}
         {/* Compact Tracking in Footer */}
-        <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
+        <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
              <OrderTracking />
         </div>
 
@@ -41,41 +47,62 @@ export default function Footer() {
           
           {/* Brand */}
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1rem', color: 'white' }}>Logistics Pro</h3>
-            <p style={{ opacity: 0.8, lineHeight: 1.6 }}>
+            <h3 style={{ 
+              fontFamily: 'var(--font-outfit), sans-serif',
+              fontSize: '1.8rem', 
+              fontWeight: '900', 
+              marginBottom: '1rem', 
+              color: 'white',
+              letterSpacing: '-0.04em'
+            }}>FruFresco</h3>
+            <p style={{ opacity: 0.7, lineHeight: 1.6, fontSize: '0.95rem' }}>
               {description}
             </p>
           </div>
 
           {/* Links */}
           <div>
-            <h4 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1rem', color: 'white' }}>Enlaces Rápidos</h4>
-            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <li><Link href="/" style={{ color: '#D1D5DB', textDecoration: 'none' }}>Inicio</Link></li>
-              <li><Link href="/catalog" style={{ color: '#D1D5DB', textDecoration: 'none' }}>Catálogo</Link></li>
-              <li><Link href="/b2b/register" style={{ color: '#D1D5DB', textDecoration: 'none' }}>Institucional</Link></li>
+            <h4 style={{ 
+              fontFamily: 'var(--font-outfit), sans-serif',
+              fontSize: '1.1rem', 
+              fontWeight: '800', 
+              marginBottom: '1.2rem', 
+              color: 'white',
+              letterSpacing: '-0.02em'
+            }}>Enlaces Rápidos</h4>
+            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <li><Link href="/" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Inicio</Link></li>
+              <li><Link href="/catalog" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Catálogo</Link></li>
+              <li><Link href="/b2b/register" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Institucional</Link></li>
             </ul>
           </div>
 
           {/* Contact */}
           <div>
-            <h4 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1rem', color: 'white' }}>Contacto</h4>
-            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem', opacity: 0.9 }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>📍</span> {address}
+            <h4 style={{ 
+              fontFamily: 'var(--font-outfit), sans-serif',
+              fontSize: '1.1rem', 
+              fontWeight: '800', 
+              marginBottom: '1.2rem', 
+              color: 'white',
+              letterSpacing: '-0.02em'
+            }}>Contacto</h4>
+            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
+                <MapPin size={18} strokeWidth={1.5} color="var(--primary)" /> {address}
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>📞</span> {phone}
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
+                <Phone size={18} strokeWidth={1.5} color="var(--primary)" /> {phone}
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>✉️</span> {email}
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
+                <Mail size={18} strokeWidth={1.5} color="var(--primary)" /> {email}
               </li>
             </ul>
           </div>
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} Logistics Pro. Todos los derechos reservados.
+          © {new Date().getFullYear()} FruFresco Express. Todos los derechos reservados.
         </div>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { isInsidePolygon, Point } from '../lib/geoUtils';
 import { APIProvider, Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
+import { User } from 'lucide-react';
 
 type Message = {
     id: number;
@@ -28,9 +29,9 @@ type LeadData = {
 
 export default function LeadGenBotV2() {
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: '¡Hola! 👋 Soy el asistente virtual de FruFresco.', sender: 'bot' },
-        { id: 2, text: 'Me encantaría ayudarte a activar tu cuenta empresarial con precios mayoristas.', sender: 'bot' },
-        { id: 3, text: 'Para empezar, ¿cómo se llama tu negocio?', sender: 'bot' }
+        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de FruFresco.', sender: 'bot' },
+        { id: 2, text: 'Me encantaría acompañarte en el proceso de activación de tu cuenta institucional con precios de origen.', sender: 'bot' },
+        { id: 3, text: 'Para comenzar, ¿cuál es el nombre de tu empresa o negocio?', sender: 'bot' }
     ]);
     const [currentStep, setCurrentStep] = useState<number>(0); // 0: Co, 1: Typ, 2: Siz, 3: Address, 4: LocationConfirm, 5: Name, 6: Phone, 7: Email, 8: Done
     const [inputValue, setInputValue] = useState('');
@@ -123,7 +124,7 @@ export default function LeadGenBotV2() {
             updatedLeadData.company_name = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
-                text: `¡Genial! 🏢 ¿Qué tipo de negocio es ${userText}?`, 
+                text: `Excelente. ¿Qué tipo de operación maneja ${userText}?`, 
                 sender: 'bot',
                 options: ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
             }];
@@ -152,19 +153,19 @@ export default function LeadGenBotV2() {
         } else if (currentStep === 2) { // Captured Size
             updatedLeadData.business_size = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: 'Entendido. Eso nos ayuda a priorizar tu atención. ✨', sender: 'bot' },
-                { id: Date.now() + 2, text: '¿Dinos la dirección de tu negocio para verificar cobertura?', sender: 'bot' }
+                { id: Date.now() + 1, text: 'Entendido. Esta información es clave para priorizar tu atención.', sender: 'bot' },
+                { id: Date.now() + 2, text: '¿Podrías indicarnos la dirección para verificar la logística de entrega?', sender: 'bot' }
             ];
         } else if (currentStep === 3) { // Captured Address
             updatedLeadData.address = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: '📍 Por favor, confirma tu ubicación exacta en el mapa para habilitar la logística mayorista.', sender: 'bot' }
+                { id: Date.now() + 1, text: 'Por favor, confirma tu ubicación exacta en el mapa para habilitar los beneficios mayoristas.', sender: 'bot' }
             ];
             // We'll show a map after this message is displayed
         } else if (currentStep === 4) { // Location confirmed
             nextBotMessages = [
-                { id: Date.now() + 1, text: '¡Ubicación verificada! 📍 Tenemos cobertura en tu zona.', sender: 'bot' },
-                { id: Date.now() + 2, text: '¿Con quién tenemos el gusto de hablar? (Tu nombre)', sender: 'bot' }
+                { id: Date.now() + 1, text: 'Ubicación verificada. Contamos con cobertura total en tu zona.', sender: 'bot' },
+                { id: Date.now() + 2, text: '¿Con quién tenemos el gusto de hablar?', sender: 'bot' }
             ];
         } else if (currentStep === 5) { // Captured Name
             updatedLeadData.contact_name = userText;
@@ -245,7 +246,7 @@ export default function LeadGenBotV2() {
                 setIsTyping(false);
                 setMessages(prev => [...prev, {
                     id: Date.now(),
-                    text: '¡Listo! 🎉 Hemos recibido tus datos. Un Gerente de Cuenta te contactará próximamente.',
+                    text: 'Registro completado. Hemos recibido tus datos con éxito. Un Gerente de Cuenta se pondrá en contacto contigo a la brevedad.',
                     sender: 'bot'
                 }]);
                 setIsSubmitting(false); 
@@ -271,26 +272,41 @@ export default function LeadGenBotV2() {
             height: '600px', // Fixed height for chat container
             maxHeight: '80vh'
         }}>
-            {/* Header */}
-            <div style={{ backgroundColor: '#D4AF37', borderBottom: '1px solid #B8860B', padding: '15px 25px', display: 'flex', alignItems: 'center', gap: '15px', color: 'white' }}>
+            {/* Header - Premium Concierge Style */}
+            <div style={{ 
+                backgroundColor: 'var(--primary)', 
+                padding: '20px 25px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '15px', 
+                color: 'white',
+                boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
+                zIndex: 10
+            }}>
                 <div style={{ 
-                    width: '45px', 
-                    height: '45px', 
-                    backgroundColor: '#FFD700', 
-                    borderRadius: '12px', 
+                    width: '48px', 
+                    height: '48px', 
+                    backgroundColor: 'rgba(255,255,255,0.2)', 
+                    borderRadius: 'var(--radius-md)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    fontSize: '1.8rem',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255,255,255,0.3)'
                 }}>
-                    🤖
+                    <User size={24} strokeWidth={2} />
                 </div>
                 <div>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: 'white', letterSpacing: '0.05rem' }}>Asistente B2B - GOLD v2.2</h3>
-                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#4ADE80' }}></div>
-                        RELOAD v2.2 + GPS ACTIVO
+                    <h3 style={{ 
+                        margin: 0, 
+                        fontSize: '1.2rem', 
+                        fontWeight: '900', 
+                        fontFamily: 'var(--font-outfit), sans-serif',
+                        letterSpacing: '-0.02em' 
+                    }}>Asistente Personal B2B</h3>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80', boxShadow: '0 0 10px #4ADE80' }}></div>
+                        Conectado · Respuesta Inmediata
                     </span>
                 </div>
             </div>
@@ -304,13 +320,15 @@ export default function LeadGenBotV2() {
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                         <div style={{
                             backgroundColor: msg.sender === 'user' ? 'var(--primary)' : 'white',
-                            color: msg.sender === 'user' ? 'white' : '#1F2937',
-                            padding: '1rem 1.25rem',
+                            color: msg.sender === 'user' ? 'white' : 'var(--text-main)',
+                            padding: '1.1rem 1.4rem',
                             borderRadius: msg.sender === 'user' ? '24px 24px 4px 24px' : '4px 24px 24px 24px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                            fontSize: '1rem',
+                            boxShadow: msg.sender === 'user' ? '0 10px 20px rgba(26, 77, 46, 0.2)' : '0 4px 15px rgba(0,0,0,0.03)',
+                            fontSize: '0.95rem',
+                            fontWeight: '500',
                             lineHeight: '1.5',
-                            border: msg.sender === 'user' ? 'none' : '1px solid #F3F4F6'
+                            border: msg.sender === 'user' ? 'none' : '1px solid var(--border)',
+                            fontFamily: 'var(--font-inter), sans-serif'
                         }}>
                             {msg.text}
                         </div>
@@ -321,19 +339,19 @@ export default function LeadGenBotV2() {
                                     <button 
                                         key={opt}
                                         onClick={() => handleInput(undefined, opt)}
+                                        className="btn-premium"
                                         style={{
-                                            padding: '8px 16px',
-                                            borderRadius: '20px',
-                                            border: '2px solid var(--primary)',
+                                            padding: '10px 20px',
+                                            borderRadius: 'var(--radius-full)',
+                                            border: '1px solid var(--primary)',
                                             backgroundColor: 'white',
                                             color: 'var(--primary)',
-                                            fontWeight: '700',
-                                            fontSize: '0.9rem',
+                                            fontWeight: '800',
+                                            fontSize: '0.85rem',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s'
+                                            boxShadow: '0 4px 12px rgba(26, 77, 46, 0.08)',
+                                            letterSpacing: '0.02em'
                                         }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.color = 'var(--primary)'; }}
                                     >
                                         {opt}
                                     </button>
@@ -370,7 +388,7 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-                                                    text: 'Mil disculpas, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. 😔 No podemos habilitar el registro para tu ubicación actual.',
+                                                    text: 'Lo sentimos, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
@@ -398,10 +416,6 @@ export default function LeadGenBotV2() {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Debug Info */}
-            <div style={{ fontSize: '10px', color: '#999', padding: '5px', textAlign: 'center', backgroundColor: '#eee' }}>
-                DEBUG: {JSON.stringify(leadDataRef.current)} | STEP: {currentStep}
-            </div>
             
             {/* Input Area */}
             {(currentStep <= 7 && !isSubmitting && !isTerminated) ? (

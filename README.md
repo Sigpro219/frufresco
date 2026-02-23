@@ -1,36 +1,50 @@
-# FruFresco - Control Tower (Sync V2)
+# Logistics Pro - Platform Architecture (Sync V2)
+
+This project follows a **Multi-tenant SaaS Architecture** designed to scale from a single operation into a global logistics platform.
+
+## 🏗️ Project Hierarchy & Branches
+
+To maintain order across different brands and clients, we use the following nomenclature:
+
+### 1. CORE (The Engine)
+
+- **Environment:** `localhost`
+- **Purpose:** Technical foundation and "Laboratory". All new features (GPS, AI Routing, Dashboard improvements) are developed and tested here first.
+- **Branch:** `core`
+
+### 2. SHOWCASE (The Demo)
+
+- **Environment:** `https://frufresco.vercel.app` (Temporary URL)
+- **Branding:** **Logistics Pro** (White-label)
+- **Purpose:** Sales and demonstrations. It is always mirrors the `CORE` features but remains brand-neutral to showcase to potential third-party clients.
+- **Branch:** `main` (or `showcase`)
+
+### 3. TENANT_FRUFRESCO (Official Production)
+
+- **Environment:** Pending Deployment
+- **Branding:** **FruFresco** (Original)
+- **Purpose:** The production-ready instance for the official operation.
+- **Branch:** `tenant-frufresco`
+
+### 4. TENANT\_[CLIENT_NAME] (Future Instances)
+
+- **Purpose:** Custom instances for third-party companies. Modules can be enabled or disabled based on client needs/subscription plans.
+
+---
+
+## 🛠️ Development Workflow
+
+1. **Develop** new features in the `CORE`.
+2. **Merge** to `SHOWCASE` for client demos.
+3. **Deploy** to specific `TENANTS` for production use.
+4. **Feature Flagging:** Use settings to enable/disable specific modules per tenant.
 
 ## Getting Started
 
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev -p 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.

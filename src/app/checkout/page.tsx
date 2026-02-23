@@ -9,6 +9,22 @@ import Link from 'next/link';
 import { APIProvider, Map } from '@vis.gl/react-google-maps';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
+import { 
+    Trash2, 
+    MapPin, 
+    Map as MapIcon, 
+    Loader2, 
+    CheckCircle2, 
+    CreditCard, 
+    Rocket, 
+    ShoppingCart, 
+    User,
+    Phone,
+    Mail,
+    Calendar,
+    AlertCircle,
+    X
+} from 'lucide-react';
 
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart } = useCart();
@@ -301,66 +317,144 @@ export default function CheckoutPage() {
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
             <Navbar />
 
-            <div className="container" style={{ padding: '4rem 1rem', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '4rem' }}>
+            <div className="container mobile-stack" style={{ padding: '4rem 1rem', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '4rem' }}>
 
                 {/* LEFT COLUMN: LIST */}
-                <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                        <h1 className="section-title" style={{ textAlign: 'left', margin: 0 }}>Resumen de Compra</h1>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        marginBottom: '2.5rem',
+                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                        padding: '1.25rem 2rem',
+                        borderRadius: '24px',
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(255, 255, 255, 0.5)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.05)'
+                    }}>
+                        <h1 style={{ 
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            fontSize: '1.8rem', 
+                            fontWeight: '900', 
+                            color: 'var(--text-main)', 
+                            margin: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            letterSpacing: '-0.04em'
+                        }}>
+                            <ShoppingCart size={28} strokeWidth={2.5} color="var(--primary)" /> Resumen de Compra
+                        </h1>
                         {items.length > 0 && (
                             <button
                                 onClick={() => {
                                     clearCart();
                                     router.push('/');
                                 }}
+                                className="btn-glass"
                                 style={{
-                                    backgroundColor: '#F3F4F6',
-                                    color: '#6B7280',
-                                    border: 'none',
                                     padding: '0.6rem 1.2rem',
-                                    borderRadius: '12px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    transition: 'all 0.2s'
+                                    borderRadius: 'var(--radius-full)',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.6rem',
+                                    color: '#6B7280',
+                                    fontWeight: '800',
+                                    cursor: 'pointer'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
                             >
-                                🗑️ Vaciar Carrito
+                                <Trash2 size={16} /> Vaciar Carrito
                             </button>
                         )}
                     </div>
 
                     {items.length === 0 ? (
-                        <p>Tu carrito está vacío.</p>
+                        <div style={{ 
+                            textAlign: 'center', 
+                            padding: '4rem 2rem', 
+                            backgroundColor: 'white', 
+                            borderRadius: '32px',
+                            border: '1px dashed var(--border)'
+                        }}>
+                            <ShoppingCart size={64} color="var(--border)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500' }}>Tu carrito está vacío.</p>
+                            <Link href="/" className="btn-premium" style={{ display: 'inline-flex', marginTop: '1.5rem', padding: '0.8rem 2rem' }}>
+                                Explorar Productos
+                            </Link>
+                        </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             {items.map((item) => (
                                 <div key={`${item.id}-${item.name}`} style={{
                                     backgroundColor: 'white',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
-                                    border: '1px solid #E5E7EB',
+                                    padding: '1.25rem 1.75rem',
+                                    borderRadius: '24px',
+                                    border: '1px solid var(--border)',
                                     display: 'flex',
                                     justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}>
-                                    <div>
-                                        <h4 style={{ fontWeight: '600' }}>{item.name}</h4>
-                                        <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>
-                                            ${item.price.toLocaleString('es-CO')} x {item.quantity}
-                                        </p>
+                                    alignItems: 'center',
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                }}
+                                className="cart-item-card"
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div>
+                                            <h4 style={{ 
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontSize: '1.15rem',
+                                                fontWeight: '800', 
+                                                margin: '0 0 0.25rem 0',
+                                                color: 'var(--text-main)',
+                                                letterSpacing: '-0.02em'
+                                            }}>{item.name}</h4>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                <span style={{ 
+                                                    color: 'var(--primary)', 
+                                                    fontSize: '0.9rem', 
+                                                    fontWeight: '700',
+                                                    backgroundColor: 'rgba(26, 77, 46, 0.05)',
+                                                    padding: '2px 10px',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    ${item.price.toLocaleString('es-CO')}
+                                                </span>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '600' }}>
+                                                    Cantidad: {item.quantity}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <p style={{ fontWeight: '700', color: '#0F172A' }}>
+                                        <p style={{ 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            fontSize: '1.25rem',
+                                            fontWeight: '900', 
+                                            color: 'var(--text-main)',
+                                            margin: 0,
+                                            letterSpacing: '-0.02em'
+                                        }}>
                                             ${(item.price * item.quantity).toLocaleString('es-CO')}
                                         </p>
                                         <button
                                             onClick={() => removeItem(item.id, item.name)}
-                                            style={{ color: '#EF4444', fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer', marginTop: '0.5rem' }}
+                                            style={{ 
+                                                color: '#EF4444', 
+                                                fontSize: '0.85rem', 
+                                                background: 'none', 
+                                                border: 'none', 
+                                                cursor: 'pointer', 
+                                                marginTop: '0.6rem',
+                                                fontWeight: '700',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                marginLeft: 'auto'
+                                            }}
                                         >
-                                            Eliminar
+                                            <Trash2 size={14} /> Eliminar
                                         </button>
                                     </div>
                                 </div>
@@ -370,112 +464,157 @@ export default function CheckoutPage() {
                 </div>
 
                 {/* RIGHT COLUMN: FORM & TOTAL */}
-                <div>
+                <div style={{ position: 'relative', zIndex: 1 }}>
                     <div style={{
-                        backgroundColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(20px)',
                         padding: '2.5rem',
-                        borderRadius: '24px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        borderRadius: '32px',
+                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
                         position: 'sticky',
                         top: '100px',
-                        border: '1px solid #E5E7EB'
+                        border: '1px solid rgba(255, 255, 255, 0.5)'
                     }}>
-                        <h3 style={{ fontSize: '1.5rem', fontWeight: '900', marginBottom: '2rem', color: '#1E293B', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem' }}>Finalizar Pedido</h3>
+                        <h3 style={{ 
+                            fontFamily: 'var(--font-outfit), sans-serif',
+                            fontSize: '1.6rem', 
+                            fontWeight: '900', 
+                            marginBottom: '2rem', 
+                            color: 'var(--text-main)', 
+                            borderBottom: '2px solid rgba(0,0,0,0.05)', 
+                            paddingBottom: '0.75rem',
+                            letterSpacing: '-0.02em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                        }}>
+                            <CreditCard size={24} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
+                        </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: '#374151' }}>Nombre Completo</label>
-                                <input
-                                    type="text"
-                                    placeholder="Ej: Juan Pérez"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem' }}
-                                />
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: '#374151' }}>WhatsApp / Celular</label>
+                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Nombre Completo
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
+                                        <User size={18} />
+                                    </div>
                                     <input
-                                        type="tel"
-                                        placeholder="300 123 4567"
-                                        value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem' }}
+                                        type="text"
+                                        placeholder="Juan Pérez"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
+                                        className="checkout-input"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: '#374151' }}>Email</label>
-                                    <input
-                                        type="email"
-                                        placeholder="cliente@correo.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem' }}
-                                    />
+                                    <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        WhatsApp
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
+                                            <Phone size={18} />
+                                        </div>
+                                        <input
+                                            type="tel"
+                                            placeholder="300 123 4567"
+                                            value={phone}
+                                            onChange={(e) => setPhone(e.target.value)}
+                                            style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
+                                            className="checkout-input"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Email
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
+                                            <Mail size={18} />
+                                        </div>
+                                        <input
+                                            type="email"
+                                            placeholder="cliente@correo.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
+                                            className="checkout-input"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: '#374151' }}>Dirección de Entrega (Incluye Apto/Torre)</label>
-                                <input
-                                    type="text"
-                                    placeholder="Ej: Calle 158 # 93-37, Apto 310"
-                                    value={address}
-                                    onChange={(e) => setAddress(e.target.value)}
-                                    style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', marginBottom: '0.5rem' }}
-                                />
+                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Dirección de Entrega
+                                </label>
+                                <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
+                                        <MapPin size={18} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Ej: Calle 158 # 93-37, Apto 310"
+                                        value={address}
+                                        onChange={(e) => setAddress(e.target.value)}
+                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
+                                        className="checkout-input"
+                                    />
+                                </div>
 
-                                {/* GPS Capture Flow: Prominent button appears only after address is typed */}
+                                {/* GPS Capture Flow */}
                                 {address.trim().length > 3 && !latitude && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                        <button 
+                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '0.5rem' }}>
+                                        <button
                                             onClick={handleGetLocation}
                                             type="button"
+                                            className="btn-glass"
                                             style={{ 
-                                                width: '100%',
-                                                fontSize: '0.85rem', 
-                                                background: '#EFF6FF', 
+                                                fontSize: '0.8rem', 
+                                                background: 'rgba(37, 99, 235, 0.05)', 
                                                 color: '#2563EB', 
-                                                border: '1px dashed #BFDBFE', 
+                                                border: '1px solid rgba(37, 99, 235, 0.2)', 
                                                 padding: '0.8rem', 
-                                                borderRadius: '12px', 
+                                                borderRadius: '14px', 
                                                 cursor: 'pointer',
-                                                fontWeight: '700',
+                                                fontWeight: '800',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 gap: '8px',
-                                                transition: 'all 0.2s'
                                             }}
                                             disabled={isGettingLocation}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = '#DBEAFE'}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = '#EFF6FF'}
                                         >
-                                            {isGettingLocation ? '⌛ Obteniendo...' : '📍 Estoy en el sitio (Usar GPS)'}
+                                            {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+                                            Usar GPS
                                         </button>
 
                                         <button 
                                             onClick={() => setShowMapPicker(true)}
                                             type="button"
+                                            className="btn-glass"
                                             style={{ 
-                                                width: '100%',
-                                                fontSize: '0.85rem', 
-                                                background: '#F8FAFC', 
-                                                color: '#64748B', 
-                                                border: '1px solid #E2E8F0', 
+                                                fontSize: '0.8rem', 
+                                                background: 'rgba(0,0,0,0.03)', 
+                                                color: 'var(--text-main)', 
+                                                border: '1px solid rgba(0,0,0,0.1)', 
                                                 padding: '0.8rem', 
-                                                borderRadius: '12px', 
+                                                borderRadius: '14px', 
                                                 cursor: 'pointer',
-                                                fontWeight: '700',
+                                                fontWeight: '800',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 gap: '8px'
                                             }}
                                         >
-                                            🗺️ No estoy en el sitio (Elegir en Mapa)
+                                            <MapIcon size={16} /> Mapa
                                         </button>
                                     </div>
                                 )}
@@ -486,20 +625,20 @@ export default function CheckoutPage() {
                                         alignItems: 'center', 
                                         justifyContent: 'space-between',
                                         gap: '8px', 
-                                        backgroundColor: '#DCFCE7', 
-                                        padding: '0.6rem 1rem', 
-                                        borderRadius: '12px',
-                                        border: '1px solid #BBF7D0'
+                                        backgroundColor: 'rgba(22, 101, 52, 0.08)', 
+                                        padding: '0.75rem 1.25rem', 
+                                        borderRadius: '16px',
+                                        border: '1px solid rgba(22, 101, 52, 0.2)'
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '1.2rem' }}>✅</span>
-                                            <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0, fontWeight: '600' }}>
-                                                Punto de entrega vinculado
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <CheckCircle2 size={18} color="#166534" strokeWidth={2.5} />
+                                            <p style={{ fontSize: '0.85rem', color: '#166534', margin: 0, fontWeight: '700' }}>
+                                                Ubicación vinculada
                                             </p>
                                         </div>
                                         <button 
                                             onClick={() => { setLatitude(null); setLongitude(null); }}
-                                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
+                                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '800', textDecoration: 'underline' }}
                                         >
                                             Cambiar
                                         </button>
@@ -508,90 +647,165 @@ export default function CheckoutPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: '#374151' }}>Fecha Programada</label>
-                                <input
-                                    type="date"
-                                    value={date}
-                                    onChange={(e) => setDate(e.target.value)}
-                                    min={minDeliveryDate}
-                                    style={{ width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem' }}
-                                />
+                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Fecha de Entrega
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
+                                        <Calendar size={18} />
+                                    </div>
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        min={minDeliveryDate}
+                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '600', color: 'var(--text-main)', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
+                                        className="checkout-input"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px dashed #F3F4F6' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span style={{ color: '#6B7280', fontWeight: '500' }}>Subtotal</span>
-                                <span style={{ fontWeight: '600' }}>${totalPrice.toLocaleString('es-CO')}</span>
+                        <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.95rem' }}>Subtotal</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${totalPrice.toLocaleString('es-CO')}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1E293B' }}>Total</span>
-                                <span style={{ fontSize: '1.6rem', fontWeight: '900', color: '#059669' }}>${totalPrice.toLocaleString('es-CO')}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2rem' }}>
+                                <span style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    fontSize: '1.4rem', 
+                                    fontWeight: '900', 
+                                    color: 'var(--text-main)',
+                                    letterSpacing: '-0.02em'
+                                }}>Total de compra</span>
+                                <span style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    fontSize: '2rem', 
+                                    fontWeight: '900', 
+                                    color: 'var(--primary)',
+                                    letterSpacing: '-0.04em'
+                                }}>${totalPrice.toLocaleString('es-CO')}</span>
                             </div>
 
                             {!isMinOrderMet && (
                                 <div style={{
-                                    backgroundColor: '#FEF2F2',
-                                    color: '#991B1B',
-                                    padding: '0.8rem',
-                                    borderRadius: '8px',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                    color: '#B91C1C',
+                                    padding: '1rem',
+                                    borderRadius: '16px',
                                     fontSize: '0.85rem',
                                     marginBottom: '1.5rem',
-                                    border: '1px solid #FECACA',
+                                    border: '1px solid rgba(239, 68, 68, 0.2)',
                                     textAlign: 'center',
-                                    fontWeight: '600'
+                                    fontWeight: '700',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px'
                                 }}>
-                                    ⚠️ No has alcanzado el pedido mínimo de ${minOrder.toLocaleString('es-CO')}
+                                    <AlertCircle size={18} /> Mínimo pedido: ${minOrder.toLocaleString('es-CO')}
                                 </div>
                             )}
 
                             {outOfZone && latitude && (
                                 <div style={{
-                                    backgroundColor: '#FFF7ED',
-                                    color: '#9A3412',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
+                                    backgroundColor: 'rgba(249, 115, 22, 0.08)',
+                                    color: '#C2410C',
+                                    padding: '1.25rem',
+                                    borderRadius: '20px',
                                     fontSize: '0.85rem',
                                     marginBottom: '1.5rem',
-                                    border: '1px solid #FFEDD5',
+                                    border: '1px solid rgba(249, 115, 22, 0.2)',
                                     textAlign: 'center'
                                 }}>
-                                    <p style={{ fontWeight: '900', margin: '0 0 8px 0' }}>📍 Zona de Cobertura Limitada</p>
-                                    <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem' }}>Las entregas B2C están limitadas a la Zona Norte. ¿Eres un comercio o estás en el sur?</p>
-                                    <Link href="/register" style={{ color: '#C2410C', fontWeight: '900', textDecoration: 'underline' }}>
-                                        Regístrate como Cliente B2B aquí
+                                    <p style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontWeight: '900', 
+                                        margin: '0 0 8px 0',
+                                        fontSize: '1.1rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        <MapPin size={18} /> Fuera de Cobertura
+                                    </p>
+                                    <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: '600', opacity: 0.8 }}>
+                                        B2C solo disponible en Zona Norte. 
+                                    </p>
+                                    <Link href="/b2b/register" style={{ 
+                                        color: 'white', 
+                                        backgroundColor: '#C2410C',
+                                        padding: '0.6rem 1.2rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        fontWeight: '800', 
+                                        textDecoration: 'none',
+                                        display: 'inline-block',
+                                        fontSize: '0.8rem'
+                                    }}>
+                                        Registrar mi Negocio (B2B)
                                     </Link>
                                 </div>
                             )}
 
                             <button
-                                className="btn btn-primary"
+                                className="btn-premium"
                                 style={{ 
                                     width: '100%', 
-                                    padding: '1.2rem', 
-                                    fontSize: '1.2rem', 
-                                    borderRadius: '14px', 
+                                    padding: '1.25rem', 
+                                    fontSize: '1.3rem', 
+                                    borderRadius: 'var(--radius-full)', 
                                     fontWeight: '900', 
-                                    backgroundColor: (loading || !isMinOrderMet || !latitude || outOfZone) ? '#94A3B8' : '#059669', 
-                                    color: 'white', 
+                                    backgroundColor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.1)' : 'var(--primary)', 
+                                    color: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.3)' : 'white', 
                                     border: 'none', 
                                     cursor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.3s ease'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '12px',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    boxShadow: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'none' : '0 10px 30px rgba(26, 77, 46, 0.2)'
                                 }}
                                 disabled={loading || !isMinOrderMet || !latitude || outOfZone}
                                 onClick={handleSubmit}
                             >
-                                {loading ? '🚀 Procesando...' : !latitude ? '📍 Vincula GPS para Pagar' : outOfZone ? 'Zona No Soportada' : '💳 Pagar Seguro'}
+                                {loading ? (
+                                    <>Procesando <Loader2 size={24} className="animate-spin" /></>
+                                ) : !latitude ? (
+                                    <>Vincular GPS para Pagar <MapPin size={24} strokeWidth={2.5} /></>
+                                ) : outOfZone ? (
+                                    <>Zona No Soportada <MapPin size={24} /></>
+                                ) : (
+                                    <>Pagar Pedido Seguro <Rocket size={24} strokeWidth={2.5} /></>
+                                )}
                             </button>
 
                             {!latitude && address.trim().length > 3 && (
-                                <p style={{ fontSize: '0.75rem', color: '#64748B', textAlign: 'center', marginTop: '0.8rem', fontWeight: '500' }}>
-                                    * Es obligatorio vincular tu ubicación GPS para habilitar el pago.
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontWeight: '600', opacity: 0.7 }}>
+                                    * Capturar tu ubicación GPS es obligatorio.
                                 </p>
                             )}
 
-                            <div style={{ marginTop: '1.2rem', textAlign: 'center' }}>
-                                <img src="https://wompi.com/assets/img/logos-pagos.png" alt="Medios de pago aceptados: Tarjetas, PSE y Corresponsales" style={{ height: '24px', opacity: 0.6, filter: 'grayscale(1)' }} />
+                            <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                                <p style={{ 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: '700', 
+                                    color: 'var(--text-muted)', 
+                                    marginBottom: '0.75rem',
+                                    fontFamily: 'var(--font-outfit), sans-serif'
+                                }}>
+                                    Pago seguro 💳 Wompi o Contraentrega
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'center', opacity: 0.5, filter: 'grayscale(1)' }}>
+                                    <img 
+                                        src="https://cdn.wompi.co/assets/img/logos-pagos.png" 
+                                        alt="Medios de pago" 
+                                        style={{ height: '20px' }} 
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -603,23 +817,54 @@ export default function CheckoutPage() {
             {showMapPicker && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-                    backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 999, display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', padding: '2rem'
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)', zIndex: 9999, display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', padding: '2rem',
+                    backdropFilter: 'blur(8px)'
                 }}>
                     <div style={{
-                        width: '100%', maxWidth: '900px', height: '80vh', backgroundColor: 'white',
-                        borderRadius: '24px', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column'
+                        width: '100%', maxWidth: '1000px', height: '85vh', backgroundColor: 'white',
+                        borderRadius: '32px', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)'
                     }}>
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ 
+                            padding: '1.5rem 2rem', 
+                            borderBottom: '1px solid var(--border)', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            backgroundColor: 'white'
+                        }}>
                             <div>
-                                <h3 style={{ margin: 0, fontWeight: '900' }}>🗺️ Selecciona ubicación de entrega</h3>
-                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>Mueve el mapa para que el marcador quede exacto en tu puerta.</p>
+                                <h3 style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    margin: 0, 
+                                    fontWeight: '900', 
+                                    fontSize: '1.4rem',
+                                    color: 'var(--text-main)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <MapPin size={24} color="var(--primary)" /> Selecciona tu Ubicación
+                                </h3>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>Mueve el mapa para centrar el marcador en tu puerta.</p>
                             </div>
                             <button 
                                 onClick={() => setShowMapPicker(false)}
-                                style={{ background: '#F1F5F9', border: 'none', padding: '0.5rem 1rem', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
+                                className="btn-glass"
+                                style={{ 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: '12px', 
+                                    cursor: 'pointer', 
+                                    fontWeight: '800',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.85rem'
+                                }}
                             >
-                                Cerrar
+                                <X size={18} /> Cerrar
                             </button>
                         </div>
                         
@@ -627,10 +872,9 @@ export default function CheckoutPage() {
                             <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
                                 <Map
                                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }} // Bogota
-                                    defaultZoom={13}
+                                    defaultZoom={15}
                                     mapId="DEMO_MAP_ID"
                                     onCenterChanged={(e) => {
-                                        // Update coords as map moves
                                         const center = e.map.getCenter();
                                         if (center) {
                                             setLatitude(center.lat());
@@ -642,21 +886,52 @@ export default function CheckoutPage() {
                                     <div style={{
                                         position: 'absolute', top: '50%', left: '50%',
                                         transform: 'translate(-50%, -100%)', zIndex: 1,
-                                        pointerEvents: 'none', fontSize: '2.5rem'
+                                        pointerEvents: 'none',
+                                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))'
                                     }}>
-                                        📍
+                                        <div style={{ 
+                                            backgroundColor: 'var(--primary)', 
+                                            color: 'white', 
+                                            padding: '8px', 
+                                            borderRadius: '50% 50% 50% 0',
+                                            transform: 'rotate(-45deg)',
+                                            width: '40px',
+                                            height: '40px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            border: '3px solid white'
+                                        }}>
+                                            <div style={{ transform: 'rotate(45deg)' }}>
+                                                <MapPin size={20} fill="white" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </Map>
                             </APIProvider>
                         </div>
 
-                        <div style={{ padding: '1.5rem', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                        <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '2rem', borderTop: '1px solid var(--border)' }}>
+                            <div style={{ marginRight: 'auto' }}>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Coordenadas Detectadas</p>
+                                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '700', fontFamily: 'monospace' }}>
+                                    {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
+                                </p>
+                            </div>
                             <button 
                                 onClick={() => setShowMapPicker(false)}
-                                className="btn btn-primary"
-                                style={{ padding: '1rem 2.5rem', borderRadius: '14px', fontWeight: '900' }}
+                                className="btn-premium"
+                                style={{ 
+                                    padding: '1rem 2.5rem', 
+                                    borderRadius: 'var(--radius-full)', 
+                                    fontWeight: '900',
+                                    fontSize: '1rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px'
+                                }}
                             >
-                                Confirmar este punto
+                                <CheckCircle2 size={20} /> Confirmar Ubicación
                             </button>
                         </div>
                     </div>
