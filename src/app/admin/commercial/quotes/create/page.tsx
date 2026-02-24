@@ -105,7 +105,10 @@ export default function CreateQuotePage() {
             .order('created_at', { ascending: false })
             .limit(5);
 
-        if (!purchases || purchases.length === 0) return 0;
+        if (!purchases || purchases.length === 0) {
+            console.warn(`No price history found for product ${productId}. Seed required.`);
+            return 0;
+        }
 
         let totalNormalizedCost = 0;
         let count = 0;

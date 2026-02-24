@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
 import Navbar from '../../../components/Navbar';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, Clock, ShoppingCart, Smile, Printer, Rocket, ShoppingBag } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3 } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -27,8 +26,6 @@ export default function B2BDashboard() {
     const [submitting, setSubmitting] = useState(false);
     const [deliveryDate, setDeliveryDate] = useState('');
     const [minDeliveryDate, setMinDeliveryDate] = useState('');
-    const [timeLeft, setTimeLeft] = useState('');
-    const [isAfterCutoff, setIsAfterCutoff] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -39,6 +36,11 @@ export default function B2BDashboard() {
     const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
     const [isLoadingCategory, setIsLoadingCategory] = useState(false);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'order' | 'invoices' | 'consumption'>('order');
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+    const [consumptionData, setConsumptionData] = useState<any[]>([]);
+    const [isLoadingConsumption, setIsLoadingConsumption] = useState(false);
     const isMounted = useRef(true);
 
     const categories = ['Frutas', 'Verduras', 'Lácteos'];
@@ -179,41 +181,28 @@ export default function B2BDashboard() {
 
                 if (!isMounted.current) return;
 
-                const cutoffEnabled = cutoffSetting?.value !== 'false'; // Default to TRUE if missing
-
+                const cutoffEnabled = cutoffSetting?.value !== 'false';
                 const now = new Date();
                 const cutoff = new Date();
-                cutoff.setHours(17, 0, 0, 0); // 5:00 PM
+                cutoff.setHours(17, 0, 0, 0);
 
-            let afterCutoff = false;
-            let nextDelivery = new Date();
+                const nextDeliveryDate = new Date();
 
-            if (cutoffEnabled) {
-                // Apply 5 PM Cutoff Logic
-                afterCutoff = now >= cutoff;
-                setIsAfterCutoff(afterCutoff);
-
-                if (afterCutoff) {
-                    nextDelivery.setDate(now.getDate() + 2); // Day after tomorrow
-                    setTimeLeft('Cerrado por hoy');
+                if (cutoffEnabled) {
+                    const afterCutoff = now >= cutoff;
+                    if (afterCutoff) {
+                        nextDeliveryDate.setDate(now.getDate() + 2);
+                    } else {
+                        nextDeliveryDate.setDate(now.getDate() + 1);
+                    }
+                    console.log('⏱️ Cutoff Rules ENABLED');
                 } else {
-                    nextDelivery.setDate(now.getDate() + 1); // Tomorrow
-                    const diff = cutoff.getTime() - now.getTime();
-                    const hours = Math.floor(diff / (1000 * 60 * 60));
-                    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                    setTimeLeft(`${hours}h ${mins}m`);
+                    nextDeliveryDate.setDate(now.getDate() + 1);
+                    console.log('🛑 Cutoff Rules DISABLED');
                 }
-                console.log(`⏱️ Cutoff Rules ENABLED: Delivery date calculated based on 5 PM rule.`);
-            } else {
-                // Cutoff DISABLED: Always deliver tomorrow
-                setIsAfterCutoff(false);
-                nextDelivery.setDate(now.getDate() + 1); // Always tomorrow
-                setTimeLeft('🛑 Reglas Desactivadas');
-                console.log(`🛑 Cutoff Rules DISABLED: Delivery set for TOMORROW regardless of time.`);
-            }
 
                 if (isMounted.current) {
-                    const minDateStr = nextDelivery.toISOString().split('T')[0];
+                    const minDateStr = nextDeliveryDate.toISOString().split('T')[0];
                     setDeliveryDate(minDateStr);
                     setMinDeliveryDate(minDateStr);
                 }
@@ -317,6 +306,88 @@ export default function B2BDashboard() {
     const removeItem = (id: string) => {
         setOrderItems(prev => prev.filter(item => item.id !== id));
     };
+
+    // Fetch Invoices
+    useEffect(() => {
+        if (activeTab !== 'invoices' || !profile?.company_name) return;
+
+        const fetchInvoices = async () => {
+            setIsLoadingInvoices(true);
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('customer_name', profile.company_name)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                if (isMounted.current) setInvoices(data || []);
+            } catch (err) {
+                console.error("Error fetching invoices:", err);
+            } finally {
+                if (isMounted.current) setIsLoadingInvoices(false);
+            }
+        };
+
+        fetchInvoices();
+    }, [activeTab, profile?.company_name]);
+
+    // Fetch Consumption Data
+    useEffect(() => {
+        if (activeTab !== 'consumption' || !profile?.company_name) return;
+
+        const fetchConsumption = async () => {
+            setIsLoadingConsumption(true);
+            try {
+                // Fetch all orders to get their IDs
+                const { data: ordersData, error: ordersError } = await supabase
+                    .from('orders')
+                    .select('id')
+                    .eq('customer_name', profile.company_name);
+
+                if (ordersError) throw ordersError;
+                
+                if (ordersData && ordersData.length > 0) {
+                    const orderIds = ordersData.map(o => o.id);
+                    
+                    // Fetch all items from those orders
+                    const { data: itemsData, error: itemsError } = await supabase
+                        .from('order_items')
+                        .select('product_name, quantity, unit, product_image')
+                        .in('order_id', orderIds);
+
+                    if (itemsError) throw itemsError;
+
+                    // Aggregate
+                    const aggregation: Record<string, any> = {};
+                    itemsData?.forEach(item => {
+                        if (!aggregation[item.product_name]) {
+                            aggregation[item.product_name] = {
+                                name: item.product_name,
+                                totalQuantity: 0,
+                                unit: item.unit,
+                                image: item.product_image,
+                                ordersCount: 0
+                            };
+                        }
+                        aggregation[item.product_name].totalQuantity += Number(item.quantity || 0);
+                        aggregation[item.product_name].ordersCount += 1;
+                    });
+
+                    const sorted = Object.values(aggregation)
+                        .sort((a: any, b: any) => b.totalQuantity - a.totalQuantity);
+                    
+                    if (isMounted.current) setConsumptionData(sorted);
+                }
+            } catch (err) {
+                console.error("Error fetching consumption:", err);
+            } finally {
+                if (isMounted.current) setIsLoadingConsumption(false);
+            }
+        };
+
+        fetchConsumption();
+    }, [activeTab, profile?.company_name]);
 
     const handleClearOrder = () => {
         if (window.confirm('¿Estás seguro de que quieres borrar todo el pedido y empezar de cero?')) {
@@ -422,513 +493,786 @@ export default function B2BDashboard() {
                         {profile?.company_name || 'Panel Institucional'}
                     </h1>
 
-                    {/* Subtle Time Dashboard */}
-                    <div style={{
-                        display: 'inline-flex',
-                        flexWrap: 'wrap',
-                        justifyContent: 'center',
-                        gap: '1.5rem',
-                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                        padding: '0.75rem 2rem',
-                        borderRadius: 'var(--radius-full)',
-                        backdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(255,255,255,0.5)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.05)',
-                        fontSize: '0.9rem'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                            <Clock size={18} color={isAfterCutoff ? '#DC2626' : 'var(--primary)'} strokeWidth={2.5} />
-                            <span style={{ color: 'var(--text-main)', fontWeight: '700' }}>Cierre:</span>
-                            <span style={{ color: isAfterCutoff ? '#DC2626' : 'var(--text-main)', fontWeight: '600' }}>{timeLeft}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                            <Truck size={18} color="var(--secondary)" strokeWidth={2.5} />
-                            <span style={{ color: 'var(--text-main)', fontWeight: '700' }}>Entrega:</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: '600' }}>
-                                {new Date(deliveryDate).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
-                            </span>
-                        </div>
-                    </div>
+                </div>
+
+                {/* TAB NAVIGATION */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: '1rem',
+                    marginBottom: '2rem'
+                }}>
+                    <button 
+                        onClick={() => setActiveTab('order')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.8rem 1.5rem',
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            backgroundColor: activeTab === 'order' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
+                            color: activeTab === 'order' ? 'white' : 'var(--text-main)',
+                            fontWeight: '800',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: activeTab === 'order' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
+                            backdropFilter: 'blur(8px)'
+                        }}
+                    >
+                        <ShoppingCart size={18} strokeWidth={2.5} /> Pedido Rápido
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('invoices')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.8rem 1.5rem',
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            backgroundColor: activeTab === 'invoices' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
+                            color: activeTab === 'invoices' ? 'white' : 'var(--text-main)',
+                            fontWeight: '800',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: activeTab === 'invoices' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
+                            backdropFilter: 'blur(8px)'
+                        }}
+                    >
+                        <FileText size={18} strokeWidth={2.5} /> Mis Facturas
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('consumption')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.8rem 1.5rem',
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            backgroundColor: activeTab === 'consumption' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
+                            color: activeTab === 'consumption' ? 'white' : 'var(--text-main)',
+                            fontWeight: '800',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: activeTab === 'consumption' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
+                            backdropFilter: 'blur(8px)'
+                        }}
+                    >
+                        <BarChart3 size={18} strokeWidth={2.5} /> Mi Consumo
+                    </button>
                 </div>
 
                 {/* ORDER CARD */}
-                <div style={{
-                    backgroundColor: 'white',
-                    borderRadius: 'var(--radius-lg)',
-                    boxShadow: 'var(--shadow-lg)',
-                    overflow: 'visible', // Allow results dropdown
-                    position: 'relative'
-                }}>
-
-                    {/* Header */}
-                    <div style={{
-                        backgroundColor: 'var(--primary)',
-                        color: 'white',
-                        padding: '1.5rem 2rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-                        boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
-                        zIndex: 5
-                    }}>
-                        <div>
-                            <h2 style={{ 
-                                fontFamily: 'var(--font-outfit), sans-serif',
-                                fontSize: '1.3rem', 
-                                fontWeight: '900', 
-                                margin: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                letterSpacing: '-0.02em'
-                            }}>
-                                <Package size={22} strokeWidth={2.5} /> Pedido Sugerido
-                            </h2>
-                            <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem', fontWeight: '500' }}>
-                                Personaliza cantidades o añade nuevos productos
-                            </p>
-                        </div>
-                        {orderItems.length > 0 && (
-                                <button
-                                    onClick={handleClearOrder}
-                                    title="Borrar todo y empezar de cero"
-                                    className="btn-glass"
-                                    style={{
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: 'var(--radius-full)',
-                                        fontSize: '0.8rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        color: 'white',
-                                        fontWeight: '800',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <Trash2 size={16} /> Borrar Todo
-                                </button>
-                        )}
-                    </div>
-
-                    {/* Search Bar Inside Card */}
-                    <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
-                        <div style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
-                                <Search size={20} strokeWidth={2.5} />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Buscar productos por nombre o SKU..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.85rem 3rem 0.85rem 2.8rem',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: '1px solid var(--border)',
-                                    fontSize: '1rem',
-                                    fontWeight: '500',
-                                    outline: 'none',
-                                    transition: 'all 0.2s',
-                                    backgroundColor: '#F9FAFB'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = 'var(--primary)';
-                                    e.target.style.backgroundColor = 'white';
-                                    e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = 'var(--border)';
-                                    e.target.style.backgroundColor = '#F9FAFB';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '12px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: '#f3f4f6',
-                                        border: 'none',
-                                        borderRadius: '50%',
-                                        width: '24px',
-                                        height: '24px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#6b7280',
-                                        cursor: 'pointer',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 'bold',
-                                        zIndex: 5
-                                    }}
-                                    title="Limpiar búsqueda"
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Search Results Dropdown */}
-                        {(searchResults.length > 0 || isSearching) && (
+                {/* TAB CONTENT */}
+                {activeTab === 'order' && (
+                    <>
+                        {/* Order Card */}
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: 'var(--radius-lg)',
+                            boxShadow: 'var(--shadow-lg)',
+                            overflow: 'visible',
+                            position: 'relative'
+                        }}>
+                            {/* Header */}
                             <div style={{
-                                position: 'absolute',
-                                top: '100%',
-                                left: 0,
-                                right: 0,
-                                backgroundColor: 'white',
-                                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                                borderRadius: '0 0 var(--radius-md) var(--radius-md)',
-                                zIndex: 100,
-                                marginTop: '2px',
-                                maxHeight: '300px',
-                                overflowY: 'auto',
-                                border: '1px solid var(--border)'
+                                backgroundColor: 'var(--primary)',
+                                color: 'white',
+                                padding: '1.5rem 2rem',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+                                boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
+                                zIndex: 5
                             }}>
-                                {isSearching ? (
-                                    <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>Buscando...</p>
-                                ) : (
-                                    searchResults.map(p => (
-                                        <div
-                                            key={p.id}
-                                            onClick={() => addFromSearch(p)}
+                                <div>
+                                    <h2 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '1.3rem', 
+                                        fontWeight: '900', 
+                                        margin: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        letterSpacing: '-0.02em'
+                                    }}>
+                                        <Package size={22} strokeWidth={2.5} /> Pedido Sugerido
+                                    </h2>
+                                    <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem', fontWeight: '500' }}>
+                                        Personaliza cantidades o añade nuevos productos
+                                    </p>
+                                </div>
+                                {orderItems.length > 0 && (
+                                    <button
+                                        onClick={handleClearOrder}
+                                        title="Borrar todo y empezar de cero"
+                                        className="btn-glass"
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: 'var(--radius-full)',
+                                            fontSize: '0.8rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            color: 'white',
+                                            fontWeight: '800',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <Trash2 size={16} /> Borrar Todo
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Search Bar Inside Card */}
+                            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                        <Search size={20} strokeWidth={2.5} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar productos por nombre o SKU..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.85rem 3rem 0.85rem 2.8rem',
+                                            borderRadius: 'var(--radius-md)',
+                                            border: '1px solid var(--border)',
+                                            fontSize: '1rem',
+                                            fontWeight: '500',
+                                            outline: 'none',
+                                            transition: 'all 0.2s',
+                                            backgroundColor: '#F9FAFB'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = 'var(--primary)';
+                                            e.target.style.backgroundColor = 'white';
+                                            e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = 'var(--border)';
+                                            e.target.style.backgroundColor = '#F9FAFB';
+                                            e.target.style.boxShadow = 'none';
+                                        }}
+                                    />
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
                                             style={{
+                                                position: 'absolute',
+                                                right: '12px',
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                background: '#f3f4f6',
+                                                border: 'none',
+                                                borderRadius: '50%',
+                                                width: '24px',
+                                                height: '24px',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '1rem',
-                                                padding: '0.75rem 1rem',
+                                                justifyContent: 'center',
+                                                color: '#6b7280',
                                                 cursor: 'pointer',
-                                                borderBottom: '1px solid #f0f0f0'
+                                                fontSize: '0.8rem',
+                                                fontWeight: 'bold',
+                                                zIndex: 5
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                            title="Limpiar búsqueda"
                                         >
-                                            <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
-                                            <div style={{ flex: 1 }}>
-                                                <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{p.name}</p>
-                                                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>SKU: {p.sku}</p>
-                                            </div>
-                                            <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ Agregar</span>
-                                        </div>
-                                    ))
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Search Results Dropdown */}
+                                {(searchResults.length > 0 || isSearching) && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '100%',
+                                        left: 0,
+                                        right: 0,
+                                        backgroundColor: 'white',
+                                        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                                        borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                                        zIndex: 100,
+                                        marginTop: '2px',
+                                        maxHeight: '300px',
+                                        overflowY: 'auto',
+                                        border: '1px solid var(--border)'
+                                    }}>
+                                        {isSearching ? (
+                                            <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>Buscando...</p>
+                                        ) : (
+                                            searchResults.map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => addFromSearch(p)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '1rem',
+                                                        padding: '0.75rem 1rem',
+                                                        cursor: 'pointer',
+                                                        borderBottom: '1px solid #f0f0f0'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{p.name}</p>
+                                                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>SKU: {p.sku}</p>
+                                                    </div>
+                                                    <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ Agregar</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* Category Selector */}
-                    <div style={{ 
-                        display: 'flex', 
-                        gap: '0.75rem', 
-                        overflowX: 'auto', 
-                        padding: '0.5rem 1rem 1rem', 
-                        borderBottom: '1px solid var(--border)' 
-                    }}>
-                        <button
-                            onClick={() => setSelectedCategory(null)}
-                            className="category-pill"
-                            style={{
-                                padding: '0.55rem 1.25rem',
-                                borderRadius: 'var(--radius-full)',
-                                border: selectedCategory === null ? 'none' : '1px solid var(--border)',
-                                backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
-                                color: selectedCategory === null ? 'white' : 'var(--text-main)',
-                                fontSize: '0.85rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap'
-                            }}
-                        >Todos</button>
-                        {categories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => setSelectedCategory(cat)}
-                                className="category-pill"
-                                style={{
-                                    padding: '0.55rem 1.25rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
-                                    backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
-                                    color: selectedCategory === cat ? 'white' : 'var(--text-main)',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '800',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap'
-                                }}
-                            >{cat}</button>
-                        ))}
-                    </div>
+                            {/* Category Selector */}
+                            <div style={{ 
+                                display: 'flex', 
+                                gap: '0.75rem', 
+                                overflowX: 'auto', 
+                                padding: '0.5rem 1rem 1rem', 
+                                borderBottom: '1px solid var(--border)' 
+                            }}>
+                                <button
+                                    onClick={() => setSelectedCategory(null)}
+                                    className="category-pill"
+                                    style={{
+                                        padding: '0.55rem 1.25rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        border: selectedCategory === null ? 'none' : '1px solid var(--border)',
+                                        backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
+                                        color: selectedCategory === null ? 'white' : 'var(--text-main)',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >Todos</button>
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategory(cat)}
+                                        className="category-pill"
+                                        style={{
+                                            padding: '0.55rem 1.25rem',
+                                            borderRadius: 'var(--radius-full)',
+                                            border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
+                                            backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
+                                            color: selectedCategory === cat ? 'white' : 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                    >{cat}</button>
+                                ))}
+                            </div>
 
-                    {/* Category Products Results */}
-                    {selectedCategory && (
-                        <div style={{ marginTop: '1rem', borderTop: '1px solid #f0f0f0', paddingTop: '1rem' }}>
-                            <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Catálogo: {selectedCategory}</h4>
-                            {isLoadingCategory ? (
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando articulos...</p>
-                            ) : categoryProducts.length > 0 ? (
-                                <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                                    {categoryProducts.map(p => (
-                                        <div
-                                            key={p.id}
-                                            onClick={() => {
-                                                setModalQuantity(1);
-                                                setSelectedProductForModal(p);
-                                            }}
-                                            style={{
-                                                padding: '0.75rem',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: 'var(--radius-md)',
-                                                cursor: 'pointer',
-                                                textAlign: 'center',
-                                                backgroundColor: '#fff',
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                                                e.currentTarget.style.borderColor = 'var(--primary)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.boxShadow = 'none';
-                                                e.currentTarget.style.borderColor = 'var(--border)';
-                                            }}
-                                        >
-                                            <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '4px', marginBottom: '0.5rem' }} />
-                                            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '700', lineHeight: '1.2', color: 'var(--text-main)' }}>{p.name}</p>
-                                            <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
+                            {/* Category Products Results */}
+                            {selectedCategory && (
+                                <div style={{ marginTop: '1rem', borderTop: '1px solid #f0f0f0', paddingTop: '1rem', padding: '0 1rem 1rem' }}>
+                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Catálogo: {selectedCategory}</h4>
+                                    {isLoadingCategory ? (
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando articulos...</p>
+                                    ) : categoryProducts.length > 0 ? (
+                                        <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
+                                            {categoryProducts.map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        setModalQuantity(1);
+                                                        setSelectedProductForModal(p);
+                                                    }}
+                                                    style={{
+                                                        padding: '0.75rem',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: 'var(--radius-md)',
+                                                        cursor: 'pointer',
+                                                        textAlign: 'center',
+                                                        backgroundColor: '#fff',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
+                                                        e.currentTarget.style.borderColor = 'var(--primary)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.transform = 'translateY(0)';
+                                                        e.currentTarget.style.boxShadow = 'none';
+                                                        e.currentTarget.style.borderColor = 'var(--border)';
+                                                    }}
+                                                >
+                                                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '4px', marginBottom: '0.5rem' }} />
+                                                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '700', lineHeight: '1.2', color: 'var(--text-main)' }}>{p.name}</p>
+                                                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No hay productos disponibles por ahora.</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Items List - Inside Card for better grouping */}
+                            {orderItems.length > 0 ? (
+                                <div style={{ borderTop: '4px solid #F9FAFB' }}>
+                                    {orderItems.map((item) => (
+                                        <div key={item.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '1.25rem 2rem',
+                                            borderBottom: '1px solid #F3F4F6'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flex: 1 }}>
+                                                <div style={{ width: '64px', height: '64px', backgroundColor: '#f0f0f0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                                                    {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                </div>
+                                                <div>
+                                                    <p style={{ 
+                                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                                        fontWeight: '800', 
+                                                        fontSize: '1.1rem',
+                                                        margin: 0,
+                                                        color: 'var(--text-main)',
+                                                        letterSpacing: '-0.02em'
+                                                    }}>{item.product_name}</p>
+                                                    {item.variant_label && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{item.variant_label}</span>}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                                                    style={{
+                                                        width: '38px', height: '38px',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid var(--border)',
+                                                        backgroundColor: 'white',
+                                                        cursor: 'pointer',
+                                                        fontSize: '1.2rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: '600',
+                                                        color: 'var(--text-main)'
+                                                    }}
+                                                >−</button>
+                                                
+                                                <div style={{ minWidth: '70px', textAlign: 'center' }}>
+                                                    <div style={{ fontWeight: '900', fontSize: '1.2rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                        {item.quantity}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>
+                                                        {item.unit}
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                    style={{
+                                                        width: '38px', height: '38px',
+                                                        borderRadius: '12px',
+                                                        border: 'none',
+                                                        backgroundColor: 'var(--primary)',
+                                                        color: 'white',
+                                                        cursor: 'pointer',
+                                                        fontSize: '1.2rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s',
+                                                        boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)'
+                                                    }}
+                                                >+</button>
+
+                                                <button
+                                                    onClick={() => removeItem(item.id)}
+                                                    style={{
+                                                        marginLeft: '1.5rem',
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#94A3B8',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: '700',
+                                                        textTransform: 'uppercase'
+                                                    }}
+                                                >Quitar</button>
+                                            </div>
                                         </div>
                                     ))}
+
+                                    {/* Submit Button Section */}
+                                    <div style={{ padding: '2.5rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)' }}>
+                                        {orderItems.filter(i => i.quantity > 0).length === 0 && (
+                                            <p style={{ 
+                                                color: '#DC2626', 
+                                                fontSize: '0.95rem', 
+                                                fontWeight: '600',
+                                                marginBottom: '1.5rem',
+                                                backgroundColor: '#FEF2F2',
+                                                padding: '1rem',
+                                                borderRadius: '12px',
+                                                border: '1px solid #FEE2E2',
+                                                display: 'inline-block'
+                                            }}>
+                                                ⚠️ Agrega cantidades mayores a 0 para continuar
+                                            </p>
+                                        )}
+                                        <button
+                                            onClick={handleSubmit}
+                                            disabled={submitting || orderItems.filter(i => i.quantity > 0).length === 0}
+                                            className="btn-premium"
+                                            style={{
+                                                width: '100%',
+                                                maxWidth: '400px',
+                                                fontSize: '1.3rem',
+                                                padding: '1.2rem',
+                                                backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
+                                                color: 'white',
+                                                cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '15px',
+                                                border: 'none',
+                                                borderRadius: 'var(--radius-full)',
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontWeight: '900',
+                                                boxShadow: '0 12px 24px rgba(26, 77, 46, 0.3)',
+                                                margin: '0 auto'
+                                            }}
+                                        >
+                                            {submitting ? 'Emitiendo...' : (
+                                                <>
+                                                    <ShoppingCart size={26} strokeWidth={2.5} /> Finalizar Pedido
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No hay productos disponibles por ahora.</p>
+                                <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+                                    <div style={{ backgroundColor: '#F3F4F6', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                        <Package size={40} color="#94A3B8" />
+                                    </div>
+                                    <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', fontWeight: '500' }}>
+                                        No hay productos seleccionados para hoy.
+                                    </p>
+                                    <button 
+                                        onClick={() => setSelectedCategory('Frutas')}
+                                        className="btn btn-primary"
+                                        style={{ padding: '0.8rem 2rem' }}
+                                    >Explorar Catálogo</button>
+                                </div>
                             )}
                         </div>
-                    )}
-                </div>
 
-                {/* Items List */}
-                {orderItems.length > 0 ? (
-                    <div style={{ padding: '1rem' }}>
-                        {orderItems.map((item) => (
-                            <div key={item.id} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '1rem',
-                                borderBottom: '1px solid var(--border)'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
-                                    <div style={{ width: '60px', height: '60px', backgroundColor: '#f0f0f0', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                                        {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                    </div>
-                                    <div>
-                                        <p style={{ 
-                                            fontFamily: 'var(--font-outfit), sans-serif',
-                                            fontWeight: '800', 
-                                            fontSize: '1.05rem',
-                                            margin: 0,
-                                            color: 'var(--text-main)',
-                                            letterSpacing: '-0.02em'
-                                        }}>{item.product_name}</p>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                    <button
-                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                        style={{
-                                            width: '36px', height: '36px',
-                                            borderRadius: '10px',
-                                            border: '1px solid var(--border)',
-                                            backgroundColor: 'white',
-                                            cursor: 'pointer',
-                                            fontSize: '1.2rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            transition: 'all 0.2s',
-                                            fontWeight: '600',
-                                            color: 'var(--text-main)'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                    >−</button>
-                                    
-                                    <div style={{
-                                        minWidth: '70px',
-                                        textAlign: 'center',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center'
-                                    }}>
-                                        <span style={{
-                                            fontWeight: '900',
-                                            fontSize: '1.15rem',
-                                            color: 'var(--primary)',
-                                            fontFamily: 'var(--font-outfit), sans-serif'
-                                        }}>
-                                            {item.quantity}
-                                        </span>
-                                        <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>
-                                            {item.unit}
-                                        </span>
-                                    </div>
-
-                                    <button
-                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                        style={{
-                                            width: '36px', height: '36px',
-                                            borderRadius: '10px',
-                                            border: 'none',
-                                            backgroundColor: 'var(--primary)',
-                                            color: 'white',
-                                            cursor: 'pointer',
-                                            fontSize: '1.2rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    >+</button>
-
-                                    <button
-                                        onClick={() => removeItem(item.id)}
-                                        style={{
-                                            marginLeft: '1rem',
-                                            background: 'none',
-                                            border: 'none',
-                                            color: '#94A3B8',
-                                            cursor: 'pointer',
-                                            fontSize: '0.8rem',
-                                            fontWeight: '700',
-                                            textTransform: 'uppercase'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.color = '#DC2626'}
-                                        onMouseLeave={(e) => e.currentTarget.style.color = '#94A3B8'}
-                                    >Quitar</button>
-                                </div>
-                            </div>
-                        ))}
-
-                        {/* Submit Button */}
-                        <div style={{ padding: '1.5rem' }}>
-                            {orderItems.filter(i => i.quantity > 0).length === 0 && (
-                                <p style={{ 
-                                    textAlign: 'center', 
-                                    color: '#DC2626', 
-                                    fontSize: '0.9rem', 
-                                    fontWeight: '600',
-                                    marginBottom: '1rem',
-                                    backgroundColor: '#FEF2F2',
-                                    padding: '0.75rem',
-                                    borderRadius: '8px',
-                                    border: '1px solid #FEE2E2'
-                                }}>
-                                    ⚠️ Agrega cantidades mayores a 0 para continuar
-                                </p>
-                            )}
-                            <button
-                                onClick={handleSubmit}
-                                disabled={submitting || orderItems.filter(i => i.quantity > 0).length === 0}
-                                className="btn-premium"
-                                style={{
-                                    width: '100%',
-                                    fontSize: '1.25rem',
-                                    padding: '1.1rem',
-                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
-                                    color: 'white',
-                                    cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
+                        {/* Support Section - Below the card for cleaner look */}
+                        <div className="mobile-stack" style={{
+                            marginTop: '2.5rem',
+                            backgroundColor: 'white',
+                            borderRadius: 'var(--radius-lg)',
+                            padding: '1.5rem 2rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            border: '1px solid var(--border)',
+                            boxShadow: 'var(--shadow-sm)'
+                        }}>
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    fontSize: '1.1rem', 
+                                    fontWeight: '800', 
+                                    margin: 0, 
+                                    color: 'var(--text-main)',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '12px',
-                                    border: 'none',
-                                    borderRadius: 'var(--radius-full)',
-                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    gap: '10px'
+                                }}>
+                                    <Smile size={22} color="var(--primary)" strokeWidth={2.5} /> ¿Necesitas un requerimiento especial?
+                                </h3>
+                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                    Tu ejecutivo de cuenta FruFresco está disponible para asistirte.
+                                </p>
+                            </div>
+                            <a
+                                href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido%20institucional"
+                                target="_blank"
+                                className="btn-premium"
+                                style={{
+                                    backgroundColor: '#075e54',
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
                                     fontWeight: '900',
-                                    boxShadow: '0 12px 24px rgba(26, 77, 46, 0.3)',
-                                    letterSpacing: '0.02em'
+                                    textDecoration: 'none',
+                                    padding: '0.75rem 1.5rem',
+                                    borderRadius: 'var(--radius-full)',
+                                    whiteSpace: 'nowrap',
+                                    fontSize: '0.9rem',
+                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                    boxShadow: '0 6px 12px rgba(7, 94, 84, 0.15)'
                                 }}
                             >
-                                {submitting ? 'Transmitiendo...' : (
-                                    <>
-                                        <ShoppingCart size={24} strokeWidth={2.5} /> Confirmar Pedido
-                                    </>
-                                )}
-                            </button>
+                                WhatsApp Directo
+                            </a>
                         </div>
-                    </div>
-                ) : (
-                    <div style={{ padding: '3rem', textAlign: 'center' }}>
-                        <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                            No tienes pedidos anteriores todavía.
-                        </p>
-                        <Link href="/#catalog">
-                            <button className="btn btn-primary">Ver Catálogo</button>
-                        </Link>
+                    </>
+                )}
+
+                {/* INVOICES TAB */}
+                {activeTab === 'invoices' && (
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '2.5rem',
+                        boxShadow: 'var(--shadow-lg)',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <div>
+                                <h2 style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif', 
+                                    fontWeight: 900, 
+                                    fontSize: '1.5rem',
+                                    margin: 0,
+                                    color: 'var(--text-main)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <FileText size={28} color="var(--primary)" strokeWidth={2.5} /> Historial de Facturas
+                                </h2>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
+                                    Gestiona tus pedidos anteriores y descarga comprobantes.
+                                </p>
+                            </div>
+                        </div>
+
+                        {isLoadingInvoices ? (
+                            <div style={{ padding: '3rem', textAlign: 'center' }}>
+                                <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
+                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Cargando facturas...</p>
+                            </div>
+                        ) : invoices.length > 0 ? (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.75rem' }}>
+                                    <thead>
+                                        <tr style={{ textAlign: 'left', color: '#64748B', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            <th style={{ padding: '0 1rem' }}>ID Pedido</th>
+                                            <th style={{ padding: '0 1rem' }}>Fecha</th>
+                                            <th style={{ padding: '0 1rem' }}>Monto</th>
+                                            <th style={{ padding: '0 1rem' }}>Estado</th>
+                                            <th style={{ padding: '0 1rem', textAlign: 'right' }}>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.map((inv) => (
+                                            <tr key={inv.id} style={{ 
+                                                backgroundColor: '#F8FAFC', 
+                                                transition: 'all 0.2s',
+                                                cursor: 'pointer'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                            >
+                                                <td style={{ padding: '1rem', borderRadius: '12px 0 0 12px', fontWeight: '700', color: 'var(--text-main)' }}>
+                                                    #{inv.id.substring(0, 8)}
+                                                </td>
+                                                <td style={{ padding: '1rem', color: '#64748B', fontWeight: '500' }}>
+                                                    {new Date(inv.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </td>
+                                                <td style={{ padding: '1rem', fontWeight: '800', color: 'var(--primary)' }}>
+                                                    ${Number(inv.total_amount || 0).toLocaleString()}
+                                                </td>
+                                                <td style={{ padding: '1rem' }}>
+                                                    <span style={{
+                                                        padding: '0.35rem 0.75rem',
+                                                        borderRadius: 'var(--radius-full)',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '800',
+                                                        textTransform: 'uppercase',
+                                                        backgroundColor: inv.status === 'delivered' ? '#DCFCE7' : inv.status === 'pending' ? '#FEF3C7' : '#F1F5F9',
+                                                        color: inv.status === 'delivered' ? '#166534' : inv.status === 'pending' ? '#92400E' : '#475569'
+                                                    }}>
+                                                        {inv.status === 'delivered' ? 'Entregado' : inv.status === 'pending' ? 'Pendiente' : inv.status}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '1rem', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
+                                                    <button 
+                                                        onClick={() => {
+                                                            alert('Función de re-pedir disponible pronto.');
+                                                        }}
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            color: 'var(--primary)',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.85rem',
+                                                            textDecoration: 'underline'
+                                                        }}
+                                                    >Re-pedir</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
+                                <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                    <ShoppingCart size={32} color="#94A3B8" />
+                                </div>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin facturas todavía</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>Cuando realices tu primer pedido institucional, aparecerá aquí.</p>
+                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">Hacer un Pedido</button>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {/* Support Section */}
-                <div className="mobile-stack" style={{
-                    marginTop: '4rem',
-                    backgroundColor: 'white',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '2rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    border: '1px solid var(--border)',
-                    boxShadow: 'var(--shadow-sm)'
-                }}>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ 
-                            fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.2rem', 
-                            fontWeight: '800', 
-                            margin: 0, 
-                            color: 'var(--text-main)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                        }}>
-                            <Smile size={24} color="var(--primary)" strokeWidth={2.5} /> ¿Necesitas ayuda o un pedido especial?
-                        </h3>
-                        <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                            Tu asesor personal está disponible para ayudarte con cualquier requerimiento adicional.
-                        </p>
+                {/* CONSUMPTION TAB */}
+                {activeTab === 'consumption' && (
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '2.5rem',
+                        boxShadow: 'var(--shadow-lg)',
+                    }}>
+                        <div style={{ marginBottom: '2.5rem' }}>
+                            <h2 style={{ 
+                                fontFamily: 'var(--font-outfit), sans-serif', 
+                                fontWeight: 900, 
+                                fontSize: '1.5rem',
+                                margin: 0,
+                                color: 'var(--text-main)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px'
+                            }}>
+                                <BarChart3 size={28} color="var(--primary)" strokeWidth={2.5} /> Mi Consumo Habitual
+                            </h2>
+                            <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
+                                Analiza tus hábitos de compra y optimiza tus pedidos.
+                            </p>
+                        </div>
+
+                        {isLoadingConsumption ? (
+                            <div style={{ padding: '3rem', textAlign: 'center' }}>
+                                <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
+                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Calculando analíticas...</p>
+                            </div>
+                        ) : consumptionData.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                {consumptionData.slice(0, 6).map((item, index) => (
+                                    <div key={item.name} style={{
+                                        backgroundColor: '#F8FAFC',
+                                        borderRadius: 'var(--radius-lg)',
+                                        padding: '1.25rem',
+                                        border: '1px solid var(--border)',
+                                        position: 'relative',
+                                        overflow: 'hidden'
+                                    }}>
+                                        {index < 3 && (
+                                            <div style={{ 
+                                                position: 'absolute', 
+                                                top: 10, 
+                                                right: 10, 
+                                                backgroundColor: index === 0 ? '#FEF3C7' : '#F1F5F9',
+                                                color: index === 0 ? '#92400E' : '#475569',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: '900'
+                                            }}>
+                                                TOP {index + 1}
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <div style={{ width: '56px', height: '56px', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
+                                                {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>{item.name}</h4>
+                                                <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Total: {item.totalQuantity} {item.unit}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ marginTop: '1.25rem' }}>
+                                            <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                <div style={{ 
+                                                    width: `${Math.min(100, (item.ordersCount / invoices.length) * 100)}%`, 
+                                                    height: '100%', 
+                                                    backgroundColor: 'var(--primary)',
+                                                    borderRadius: '3px'
+                                                }}></div>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>
+                                                <span>Frecuencia</span>
+                                                <span>{item.ordersCount} pedidos</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
+                                <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                    <BarChart3 size={32} color="#94A3B8" />
+                                </div>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin datos de consumo</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>Realiza pedidos para generar analíticas personalizadas.</p>
+                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">Hacer un Pedido</button>
+                            </div>
+                        )}
+                        
+                        {consumptionData.length > 0 && (
+                            <div style={{ 
+                                marginTop: '2.5rem', 
+                                paddingTop: '2rem', 
+                                borderTop: '1px solid #F1F5F9',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <div style={{ opacity: 0.7, fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                                    * Basado en tus últimos {invoices.length} pedidos institucionales.
+                                </div>
+                                <button onClick={() => alert('Pronto: Reporte en PDF')} style={{
+                                    backgroundColor: '#EFF6FF',
+                                    color: '#1D4ED8',
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: 'none',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer'
+                                }}>Exportar Reporte</button>
+                            </div>
+                        )}
                     </div>
-                    <a
-                        href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido"
-                        target="_blank"
-                        className="btn-premium"
-                        style={{
-                            backgroundColor: '#075e54', // Darker WhatsApp green
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            fontWeight: '900',
-                            textDecoration: 'none',
-                            padding: '0.9rem 1.8rem',
-                            borderRadius: 'var(--radius-full)',
-                            whiteSpace: 'nowrap',
-                            fontSize: '0.95rem',
-                            fontFamily: 'var(--font-outfit), sans-serif',
-                            boxShadow: '0 8px 16px rgba(7, 94, 84, 0.2)'
-                        }}
-                    >
-                        Contactar Asesor
-                    </a>
-                </div>
+                )}
 
             </div> {/* Container End */}
 

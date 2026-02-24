@@ -66,28 +66,10 @@ export default function MasterProductsPage() {
         fetchProducts();
     }, []);
 
-    // Helper para generar SKU técnico si no viene en el Excel
-    const generateSKU = (name: string, category: string, unit: string) => {
-        if (!name) return 'TEMP-' + Math.random().toString(36).substr(2, 5).toUpperCase();
-        
-        const catMap: Record<string, string> = {
-            'Frutas': 'F', 'Hortalizas': 'H', 'Verduras': 'V', 'Tubérculos': 'T', 'Despensa': 'D', 'Lácteos': 'L'
-        };
-        const catPrefix = catMap[category] || 'X';
-        
-        const unitMap: Record<string, string> = {
-            'kg': 'K', 'g': 'G', 'lb': 'A', 'lt': 'L', 'un': 'U', 'atado': 'T', 'bulto': 'B', 'saco': 'S', 'caja': 'C', 'cubeta': 'K'
-        };
-        const unitSuffix = unitMap[unit?.toLowerCase()] || 'X';
-
-        // Extraer 3 consonantes
-        const consonantes = name.toUpperCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^BCDFGHJKLMNPQRSTVWXYZ]/g, '');
-        
-        const namePart = consonantes.substring(0, 3).padEnd(3, 'X');
-        
-        return `${catPrefix}-${namePart}-${unitSuffix}`;
+    // Helper para generar SKU técnico secuencial
+    const generateSequentialSKU = (lastSKU: string) => {
+        const num = parseInt(lastSKU || '0') + 1;
+        return num.toString().padStart(4, '0');
     };
 
     // Helper para generar descripción técnica equilibrada
@@ -125,7 +107,11 @@ export default function MasterProductsPage() {
 
             for (const p of toUpdate) {
                 const updates: any = {};
-                if (!p.sku) updates.sku = generateSKU(p.name, p.category, p.unit_of_measure);
+                if (!p.sku) {
+                    // Para sanetización manual de productos huérfanos
+                    const lastSku = products.filter(pr => pr.sku).sort((a,b) => a.sku.localeCompare(b.sku)).pop()?.sku || '0000';
+                    updates.sku = generateSequentialSKU(lastSku);
+                }
                 if (!p.description) updates.description = generateDescription(p.name, p.category, p.unit_of_measure);
 
                 if (Object.keys(updates).length > 0) {
@@ -438,7 +424,6 @@ export default function MasterProductsPage() {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             
-            // Convert to JSON (array of arrays)
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
             
             if (rows.length <= 1) {
@@ -448,31 +433,38 @@ export default function MasterProductsPage() {
 
             setLoading(true);
             const newProducts: any[] = [];
+            const seeds: any[] = [];
             let errors = 0;
 
+            // Encontrar el último SKU secuencial para continuar
+            const sortedProducts = [...products].sort((a,b) => (a.sku || '').localeCompare(b.sku || ''));
+            let currentLastSKU = sortedProducts.length > 0 ? sortedProducts[sortedProducts.length - 1].sku : '0000';
+
             // Skip header (index 0)
-            rows.slice(1).forEach((cols) => {
+            for (const cols of rows.slice(1)) {
                 if (cols.length < 4) {
                     errors++;
-                    return;
+                    continue;
                 }
 
                 let sku = cols[0]?.toString().trim();
                 const name = cols[1]?.toString().trim();
                 const category = cols[2]?.toString().trim();
                 const unit = cols[3]?.toString().trim();
+                const initialCost = parseFloat(cols[4]?.toString() || '0');
 
                 if (!name || !category || !unit) {
                     errors++;
-                    return;
+                    continue;
                 }
 
                 // Generar SKU si está vacío
-                if (!sku) {
-                    sku = generateSKU(name, category, unit);
+                if (!sku || sku === "" || sku === "AUTO") {
+                    currentLastSKU = generateSequentialSKU(currentLastSKU);
+                    sku = currentLastSKU;
                 }
 
-                newProducts.push({
+                const productData = {
                     sku,
                     name,
                     category,
@@ -480,21 +472,31 @@ export default function MasterProductsPage() {
                     description: generateDescription(name, category, unit),
                     is_active: true,
                     image_url: `https://loremflickr.com/320/240/${category.toLowerCase()}`
-                });
-            });
+                };
 
-            if (newProducts.length > 0) {
-                const { error } = await supabase.from('products').upsert(newProducts, { onConflict: 'sku' });
+                const { data: upserted, error } = await supabase
+                    .from('products')
+                    .upsert(productData, { onConflict: 'sku' })
+                    .select()
+                    .single();
+
                 if (error) {
-                    console.error('Bulk Error:', error);
-                    showToast('Error en carga masiva: ' + error.message, 'error');
-                } else {
-                    showToast(`Carga exitosa: ${newProducts.length} procesados, ${errors} errores.`, 'success');
-                    fetchProducts();
+                    console.error('Upsert Error:', error);
+                    errors++;
+                } else if (upserted && initialCost > 0) {
+                    // Sembrar costo inicial en purchases
+                    await supabase.from('purchases').insert({
+                        product_id: upserted.id,
+                        unit_price: initialCost,
+                        purchase_unit: unit,
+                        status: 'completed',
+                        notes: 'Sembrado inicial de carga masiva'
+                    });
                 }
-            } else if (errors > 0) {
-                showToast(`Error: no se detectaron filas válidas (${errors} errores).`, 'error');
             }
+
+            showToast(`Carga masiva finalizada con ${errors} errores.`, errors > 0 ? 'info' : 'success');
+            fetchProducts();
             
             setLoading(false);
             setSelectedFile(null);
@@ -505,17 +507,16 @@ export default function MasterProductsPage() {
 
     const downloadTemplate = () => {
         const data = [
-            ["SKU (Opcional)", "Nombre", "Categoría", "Unidad"],
-            ["", "Papa Sabanera", "Tubérculos", "Kg"],
-            ["", "Tomate Chonto", "Verduras", "Kg"]
+            ["SKU (Opcional)", "Nombre", "Categoría", "Unidad", "Costo Inicial"],
+            ["AUTO", "Papa Sabanera", "Tubérculos", "Kg", "2500"],
+            ["AUTO", "Tomate Chonto", "Verduras", "Kg", "3800"]
         ];
 
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla");
         
-        // Use XLSX.writeFile for browser download
-        XLSX.writeFile(workbook, "plantilla_maestro_productos.xlsx");
+        XLSX.writeFile(workbook, "plantilla_maestro_productos_v2.xlsx");
     };
 
     const filteredProducts = products.filter(p => {
@@ -538,6 +539,28 @@ export default function MasterProductsPage() {
                             <p style={{ color: '#6B7280' }}>Definición técnica de productos, códigos únicos y unidades base.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                onClick={() => {
+                                    const confirmReset = confirm("🚨 ATENCIÓN: Esta acción es IRREVERSIBLE.\n\nSe borrarán TODOS los SKUs, Clientes, Proveedores, Órdenes y Compras de la base de datos para iniciar el Maestro Limpio.\n\n¿Deseas ver el script SQL de limpieza?");
+                                    if (confirmReset) {
+                                        alert("Script de Limpieza (The Grand Reset):\n\nTRUNCATE TABLE order_items, orders, inventory_transactions, product_conversions, product_variants, products, suppliers, purchases, leads RESTART IDENTITY CASCADE;\nDELETE FROM profiles WHERE role != 'admin';\n\nEjecuta este script en el SQL Editor de Supabase.");
+                                    }
+                                }}
+                                style={{
+                                    padding: '1rem 1.5rem',
+                                    borderRadius: '12px',
+                                    backgroundColor: '#FEF2F2',
+                                    color: '#991B1B',
+                                    border: '1px solid #FEE2E2',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.8rem',
+                                }}
+                            >
+                                💀 The Grand Reset
+                            </button>
                             <button
                                 onClick={sanitizeMasterData}
                                 style={{
