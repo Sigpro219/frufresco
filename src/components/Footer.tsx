@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
+import { config } from '@/lib/config';
 import OrderTracking from './OrderTracking';
 import { MapPin, Phone, Mail } from 'lucide-react';
 
@@ -25,9 +26,9 @@ export default function Footer() {
   };
 
   const phone = getSetting('contact_phone', '+57 300 123 4567');
-  const email = getSetting('contact_email', 'contacto@frufresco.com');
+  const email = getSetting('contact_email', `contacto@${config.brand.name.toLowerCase().replace(/\s/g, '')}.com`);
   const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
-  const description = getSetting('footer_description', 'Llevando la frescura del campo a tu negocio con calidad garantizada y precios justos.');
+  const description = getSetting('footer_description', config.brand.footerDescription);
 
   return (
     <footer style={{ 
@@ -54,7 +55,7 @@ export default function Footer() {
               marginBottom: '1rem', 
               color: 'white',
               letterSpacing: '-0.04em'
-            }}>FruFresco</h3>
+            }}>{config.brand.name}</h3>
             <p style={{ opacity: 0.7, lineHeight: 1.6, fontSize: '0.95rem' }}>
               {description}
             </p>
@@ -102,7 +103,7 @@ export default function Footer() {
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} FruFresco Express. Todos los derechos reservados.
+          © {new Date().getFullYear()} {config.brand.name}. Todos los derechos reservados.
         </div>
       </div>
     </footer>
