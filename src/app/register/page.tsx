@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { config } from '@/lib/config';
 import { User, Mail, Phone, Lock, Rocket, LayoutDashboard, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function RegisterB2C() {
@@ -187,7 +188,7 @@ export default function RegisterB2C() {
                                 letterSpacing: '-0.06em'
                             }}>Crea tu cuenta</h1>
                             <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '0.75rem', fontSize: '1rem', fontWeight: '500' }}>
-                                Únete a la red gourmet de FruFresco
+                                Únete a la red gourmet de {config.brand.name}
                             </p>
                         </div>
 
