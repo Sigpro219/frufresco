@@ -145,7 +145,7 @@ export default function LoginPage() {
                                 marginTop: '0',
                                 letterSpacing: '-0.06em'
                             }}>
-                                FruFresco<span style={{ color: 'var(--secondary)' }}>.</span>
+                                Logistics Pro<span style={{ color: 'var(--secondary)' }}>.</span>
                             </h1>
                             <p style={{ 
                                 color: 'rgba(255, 255, 255, 0.6)', 
@@ -153,7 +153,7 @@ export default function LoginPage() {
                                 fontSize: '1rem',
                                 fontWeight: '500'
                             }}>
-                                Portal de ingreso al sistema FruFresco
+                                Portal de ingreso al sistema Logistics Pro
                             </p>
                         </div>
 

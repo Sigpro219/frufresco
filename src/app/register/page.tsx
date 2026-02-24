@@ -187,7 +187,7 @@ export default function RegisterB2C() {
                                 letterSpacing: '-0.06em'
                             }}>Crea tu cuenta</h1>
                             <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '0.75rem', fontSize: '1rem', fontWeight: '500' }}>
-                                Únete a la red gourmet de FruFresco
+                                Únete a la red gourmet de Logistics Pro
                             </p>
                         </div>
 

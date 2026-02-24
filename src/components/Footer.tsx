@@ -102,7 +102,7 @@ export default function Footer() {
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} FruFresco Express. Todos los derechos reservados.
+          © {new Date().getFullYear()} Logistics Pro. Todos los derechos reservados.
         </div>
       </div>
     </footer>

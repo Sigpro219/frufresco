@@ -86,7 +86,7 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img src="/logo.png" alt="FruFresco" style={{ height: '70px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
+                    <img src="/logo.png" alt="Logistics Pro" style={{ height: '70px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
                 </Link>
 
                 {/* NAV LINKS */}
