@@ -29,15 +29,9 @@ type LeadData = {
 
 export default function LeadGenBotV2() {
     const [messages, setMessages] = useState<Message[]>([
-<<<<<<< HEAD
-        { id: 1, text: '¡Hola! 👋 Soy el asistente virtual de Logistics Pro.', sender: 'bot' },
-        { id: 2, text: 'Me encantaría ayudarte a activar tu cuenta empresarial con precios mayoristas.', sender: 'bot' },
-        { id: 3, text: 'Para empezar, ¿cómo se llama tu negocio?', sender: 'bot' }
-=======
         { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de Logistics Pro.', sender: 'bot' },
         { id: 2, text: 'Me encantaría acompañarte en el proceso de activación de tu cuenta institucional con precios de origen.', sender: 'bot' },
         { id: 3, text: 'Para comenzar, ¿cuál es el nombre de tu empresa o negocio?', sender: 'bot' }
->>>>>>> core
     ]);
     const [currentStep, setCurrentStep] = useState<number>(0); // 0: Co, 1: Typ, 2: Siz, 3: Address, 4: LocationConfirm, 5: Name, 6: Phone, 7: Email, 8: Done
     const [inputValue, setInputValue] = useState('');
@@ -394,11 +388,7 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-<<<<<<< HEAD
-                                                    text: 'Mil disculpas, por el momento Logistics Pro solo opera en Bogotá, Girardot, Melgar y Anapoima. 😔 No podemos habilitar el registro para tu ubicación actual.',
-=======
                                                     text: 'Lo sentimos, por el momento Logistics Pro solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
->>>>>>> core
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
