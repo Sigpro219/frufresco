@@ -2,9 +2,32 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
     const [isDarkMode, setIsDarkMode] = useState(true);
+    const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
+    const [appShortName, setAppShortName] = useState('FRUFRESCO');
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchLogosymbol = async () => {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .in('key', ['app_logosymbol_url', 'app_short_name']);
+            
+            if (isMounted && !error && data) {
+                const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
+                if (logo) setDynamicLogosymbol(logo);
+
+                const shortName = data.find(s => s.key === 'app_short_name')?.value;
+                if (shortName) setAppShortName(shortName.toUpperCase());
+            }
+        };
+        fetchLogosymbol();
+        return () => { isMounted = false; };
+    }, []);
 
     return (
         <div className="ops-theme-wrapper" style={{
@@ -26,8 +49,33 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 top: 0,
                 zIndex: 100
             }}>
+<<<<<<< HEAD
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <span style={{ fontWeight: '900', fontSize: '1.2rem', color: 'var(--ops-primary)' }}>LOGISTICS <span style={{ color: '#fff' }}>PRO</span></span>
+=======
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 0 15px rgba(255,255,255,0.1)',
+                        padding: '4px'
+                    }}>
+                        <img 
+                            src={dynamicLogosymbol || "/logosimbolo.png"} 
+                            alt={appShortName} 
+                            style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
+                        />
+                    </div>
+                     <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'white' }}>
+                        {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
+                    </span>
+>>>>>>> CORE
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <Link href="/">
