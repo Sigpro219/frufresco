@@ -364,7 +364,7 @@ export default function RegisterB2C() {
                         <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
                             <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', fontWeight: '500', lineHeight: '1.5' }}>
                                 ¿Buscas catálogo para negocio o restaurante? 
-                                <Link href="/b2b/register" style={{ display: 'block', marginTop: '0.75rem', color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                <Link href="/b2b/register" style={{ marginTop: '0.75rem', color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                     Inscríbete como B2B <LayoutDashboard size={14} />
                                 </Link>
                             </p>

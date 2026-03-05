@@ -1,0 +1,7 @@
+src/app/admin/settings/page.tsx(445,55): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(81,18): error TS2339: Property 'abortSignal' does not exist on type 'PostgrestBuilder<any, { value: any; }, false>'.
+src/app/register/page.tsx(368,179): error TS1117: An object literal cannot have multiple properties with the same name.
+src/components/FleetManagement.tsx(130,75): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/components/FleetManagement.tsx(130,78): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/components/RoutePlanner.tsx(140,54): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/RoutePlanner.tsx(140,92): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.

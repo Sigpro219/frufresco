@@ -137,7 +137,7 @@ export default function RoutePlanner() {
 
                 setAssignments(newAssignments);
                 setIsOptimized(true);
-                setTheoreticalMetrics({ distance_km: assignments.length * 2, duration_min: assignments.length * 15 }); // Mock metrics for simulation
+                setTheoreticalMetrics({ distance_km: Object.keys(assignments).length * 2, duration_min: Object.keys(assignments).length * 15 }); // Mock metrics for simulation
             } else if (result.routes) {
                 setAssignments(result.routes);
                 setIsOptimized(true);
@@ -513,7 +513,7 @@ export default function RoutePlanner() {
                                             }}
                                         >
                                             <option value="">👤 Sin Piloto</option>
-                                            {drivers.map(d => {
+                                            {drivers.map((d: any) => {
                                                 const isAssignedToOther = vehicles.some(v => v.driver_id === d.id && v.id !== vehicle.id);
                                                 return (
                                                     <option key={d.id} value={d.id} disabled={isAssignedToOther}>
