@@ -77,8 +77,7 @@ export default function PickingExecutionPage() {
                 .from('app_settings')
                 .select('value')
                 .eq('key', 'enable_cutoff_rules')
-                .single()
-                .abortSignal(signal as any);
+                .single();
             
             const cutoffEnabled = settings?.value !== 'false';
 

@@ -442,7 +442,7 @@ export default function AdminSettingsPage() {
                                 <input placeholder="+ Nueva unidad..." style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #DDD' }} onKeyDown={(e) => { if(e.key==='Enter' && e.currentTarget.value) { addNewUnit(e.currentTarget.value); e.currentTarget.value=''; } }} />
                              </div>
                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {getActiveUnits().map(u => (
+                                {getActiveUnits().map((u: string) => (
                                     <div key={u} style={{ backgroundColor: 'white', padding: '6px 12px', borderRadius: '20px', border: '1px solid #0EA5E9', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <span style={{ fontWeight: 'bold', color: '#0369A1' }}>{u}</span>
                                         <button onClick={() => toggleUnitStatus(u, 'active')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444' }}>×</button>

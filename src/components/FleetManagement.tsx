@@ -127,7 +127,7 @@ export default function FleetManagement() {
                 return {
                     ...v,
                     avg_daily_km: dynamicAvg,
-                    maintenance_schedules: v.maintenance_schedules?.sort((a, b) => 
+                    maintenance_schedules: v.maintenance_schedules?.sort((a: any, b: any) => 
                         (a.next_due_km || 999999) - (b.next_due_km || 999999)
                     ),
                     active_route: activeRoute ? {
