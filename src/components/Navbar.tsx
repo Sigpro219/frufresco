@@ -13,6 +13,8 @@ export default function Navbar() {
     const { totalItems } = useCart();
     const { user, profile, signOut, loading } = useAuth();
     const [b2bEnabled, setB2bEnabled] = useState(false);
+    const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
+    const [appName, setAppName] = useState(config.brand.name);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -22,19 +24,25 @@ export default function Navbar() {
         // Chequear configuración al montar
         const checkSettings = async () => {
             try {
-                const { data, error } = await supabase
+                const { data: settings, error } = await supabase
                     .from('app_settings')
-                    .select('value')
-                    .eq('key', 'enable_b2b_lead_capture')
-                    .maybeSingle();
+                    .select('key, value')
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name']);
                     
                 if (!isMounted) return;
                 
                 if (error) {
                     throw error;
                 }
-                if (data) {
-                    setB2bEnabled(data.value === 'true');
+                if (settings) {
+                    const b2bObj = settings.find(s => s.key === 'enable_b2b_lead_capture');
+                    if (b2bObj) setB2bEnabled(b2bObj.value === 'true');
+
+                    const logoObj = settings.find(s => s.key === 'app_logo_url');
+                    if (logoObj?.value) setDynamicLogo(logoObj.value);
+
+                    const nameObj = settings.find(s => s.key === 'app_name');
+                    if (nameObj?.value) setAppName(nameObj.value);
                 }
             } catch (err: unknown) {
                 if (!isMounted) return;
@@ -48,6 +56,12 @@ export default function Navbar() {
             isMounted = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (appName && typeof document !== 'undefined') {
+            document.title = `${appName} | Proveedor de Alimentos`;
+        }
+    }, [appName]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -87,7 +101,15 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img src="/logo.png" alt={config.brand.logoAlt} style={{ height: '80px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
+                    <img 
+                        src={dynamicLogo || "/logo.png"} 
+                        alt={appName} 
+                        style={{ height: '80px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} 
+                        onError={(e) => {
+                            // Fallback if dynamic URL fails
+                            (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                        }}
+                    />
                 </Link>
 
                 {/* NAV LINKS */}

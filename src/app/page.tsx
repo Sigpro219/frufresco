@@ -102,6 +102,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const isB2bEnabled = getSetting('enable_b2b_lead_capture', 'true') === 'true';
   const heroTitle = getSetting('hero_title', 'Excelencia en Frescura \n para tu Negocio y Hogar');
   const heroDescription = getSetting('hero_description', 'Somos el aliado estratégico de los mejores restaurantes y casinos de Bogotá. Llevamos la calidad de Corabastos a tu puerta, con cero desperdicio y puntualidad suiza.');
+  const heroImageUrl = getSetting('hero_image_url', '/hero_fresh_produce.png');
   const featuredTitle = getSetting('home_featured_title', '🔥 Lo más vendido de la semana');
   const catalogTitle = getSetting('home_catalog_title', 'Nuestro Catálogo');
   
@@ -172,20 +173,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
       <Navbar />
 
-      {/* HERO SECTION: European/Clean Style */}
-      <section style={{
-        position: 'relative',
-        height: '620px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'white',
-        overflow: 'hidden',
-        boxShadow: 'inset 0 -120px 100px -50px rgba(0,0,0,0.3)'
-      }}>
+      <section 
+        className="hero-container"
+        style={{
+          position: 'relative',
+          height: '620px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          overflow: 'hidden',
+          backgroundColor: '#1a4d2e', // Fallback color
+          boxShadow: 'inset 0 -120px 100px -50px rgba(0,0,0,0.3)'
+        }}>
         {/* Optimized Hero Image */}
         <Image 
-          src="/hero_fresh_produce.png"
+          src={heroImageUrl}
           alt="Fresh Produce Hero"
           fill
           priority

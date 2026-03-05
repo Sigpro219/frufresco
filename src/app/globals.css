@@ -127,7 +127,7 @@ button {
   border-radius: var(--radius-md); /* 16px para armonizar con el resto */
   color: var(--text-main);
   font-size: 0.95rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .category-pill:hover {
@@ -151,7 +151,7 @@ button {
 }
 
 .link-hover-premium::after {
-  content: '';
+  content: "";
   position: absolute;
   width: 0;
   height: 2px;
@@ -172,7 +172,7 @@ button {
     grid-template-columns: 1fr !important;
     gap: 1.5rem !important;
   }
-  
+
   .mobile-padding-sm {
     padding: 1.5rem !important;
   }
@@ -185,5 +185,26 @@ button {
 @media (min-width: 769px) {
   .desktop-hide {
     display: none !important;
+  }
+}
+/* Responsive Hero Section */
+.hero-container {
+  padding-top: 0;
+}
+
+@media (max-width: 768px) {
+  .hero-container {
+    padding-top: 80px !important; /* Offset for mobile navbar overlap */
+    height: auto !important;
+    min-height: 500px;
+  }
+
+  .hero-container h1 {
+    font-size: 2.8rem !important;
+  }
+
+  .hero-container p {
+    font-size: 1.1rem !important;
+    margin-bottom: 2rem !important;
   }
 }

@@ -2,9 +2,32 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
     const [isDarkMode, setIsDarkMode] = useState(true);
+    const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
+    const [appShortName, setAppShortName] = useState('FRUFRESCO');
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchLogosymbol = async () => {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .in('key', ['app_logosymbol_url', 'app_short_name']);
+            
+            if (isMounted && !error && data) {
+                const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
+                if (logo) setDynamicLogosymbol(logo);
+
+                const shortName = data.find(s => s.key === 'app_short_name')?.value;
+                if (shortName) setAppShortName(shortName.toUpperCase());
+            }
+        };
+        fetchLogosymbol();
+        return () => { isMounted = false; };
+    }, []);
 
     return (
         <div className="ops-theme-wrapper" style={{
@@ -38,10 +61,15 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                         boxShadow: '0 0 15px rgba(255,255,255,0.1)',
                         padding: '4px'
                     }}>
-                        <img src="/logosimbolo.png" alt="FruFresco" style={{ height: '100%', width: 'auto', objectFit: 'contain' }} />
+                        <img 
+                            src={dynamicLogosymbol || "/logosimbolo.png"} 
+                            alt={appShortName} 
+                            style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
+                        />
                     </div>
-                    <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'white' }}>
-                        FRUFRESCO <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
+                     <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'white' }}>
+                        {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
                     </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

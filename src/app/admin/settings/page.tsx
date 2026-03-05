@@ -5,6 +5,97 @@ import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { diagnoseStorageError } from '@/lib/errorUtils';
+
+function ImageUpload({ 
+    label, 
+    value, 
+    onUpload, 
+    onClear,
+    description,
+    bucket = 'branding'
+}: { 
+    label: string, 
+    value: string, 
+    onUpload: (url: string) => void, 
+    onClear: () => void,
+    description?: string,
+    bucket?: string
+}) {
+    const [uploading, setUploading] = useState(false);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setUploading(true);
+
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file);
+
+            if (uploadError) {
+                diagnoseStorageError(uploadError, bucket);
+                throw uploadError;
+            }
+
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            onUpload(publicUrl);
+            (window as any).showToast?.('Imagen subida con éxito', 'success');
+        } catch (err: any) {
+            console.error('Upload error:', err);
+            (window as any).showToast?.('Error al subir: ' + err.message, 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+            <h4 style={{ margin: '0 0 4px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>{label}</h4>
+            {description && <p style={{ margin: '0 0 12px 0', fontSize: '0.7rem', color: '#6B7280' }}>{description}</p>}
+            
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                {value ? (
+                    <div style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB' }}>
+                        <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        <button 
+                            onClick={(e) => { e.preventDefault(); onClear(); }}
+                            style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            ×
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ width: '100px', height: '100px', borderRadius: '12px', border: '2px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB', color: '#9CA3AF', fontSize: '1.5rem' }}>
+                        🖼️
+                    </div>
+                )}
+                
+                <div style={{ flex: 1 }}>
+                    <label style={{ 
+                        display: 'inline-block', 
+                        padding: '8px 16px', 
+                        backgroundColor: uploading ? '#9CA3AF' : '#111827', 
+                        color: 'white', 
+                        borderRadius: '8px', 
+                        cursor: uploading ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        transition: 'all 0.2s'
+                    }}>
+                        {uploading ? 'Subiendo...' : value ? 'Cambiar Imagen' : 'Subir Imagen'}
+                        <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploading} style={{ display: 'none' }} />
+                    </label>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '0.65rem', color: '#9CA3AF' }}>PNG, JPG o WEBP. Máx 2MB.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function AdminSettingsPage() {
     const [settings, setSettings] = useState<any[]>([]);
@@ -85,7 +176,11 @@ export default function AdminSettingsPage() {
             { key: 'contact_phone', value: '+57 300 123 4567', description: 'Teléfono de contacto (Footer)' },
             { key: 'contact_email', value: 'contacto@frufresco.com', description: 'Email de contacto (Footer)' },
             { key: 'contact_address', value: 'Corabastos Bodega 123, Bogotá', description: 'Dirección física (Footer)' },
-            { key: 'footer_description', value: 'Llevando la frescura del campo a tu negocio con calidad garantizada y precios justos.', description: 'Texto descriptivo en el pie de página' },
+            { key: 'app_logo_url', value: '', description: 'URL del logo de la aplicación para Navbar y Footer' },
+            { key: 'app_logosymbol_url', value: '', description: 'URL del logosímbolo pequeño para la página de OPS' },
+            { key: 'hero_image_url', value: '', description: 'URL de la imagen de fondo del Hero principal' },
+            { key: 'app_name', value: 'FruFresco', description: 'Nombre oficial de la aplicación (SEO)' },
+            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' },
             { key: 'standard_units', value: 'Kg,G,Lb,Lt,Un,Atado,Bulto,Caja,Saco,Cubeta', description: 'Unidades oficiales de medida para todo el inventario' },
             { key: 'suspended_units', value: '', description: 'Unidades desactivadas temporalmente' }
         ];
@@ -296,6 +391,42 @@ export default function AdminSettingsPage() {
                     </button>
                     {openSections.includes('design') && (
                         <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            {/* Nueva Sección Marca */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '1rem' }}>
+                                <ImageUpload 
+                                    label="Logo Principal" 
+                                    description="Navbar y Footer."
+                                    value={settings.find(s => s.key === 'app_logo_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('app_logo_url', url)}
+                                    onClear={() => handleUpdateSetting('app_logo_url', '')}
+                                />
+                                <ImageUpload 
+                                    label="Logosímbolo (Ops)" 
+                                    description="Header de Operaciones."
+                                    value={settings.find(s => s.key === 'app_logosymbol_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('app_logosymbol_url', url)}
+                                    onClear={() => handleUpdateSetting('app_logosymbol_url', '')}
+                                />
+                                <ImageUpload 
+                                    label="Imagen del Hero" 
+                                    description="Fondo página inicio."
+                                    value={settings.find(s => s.key === 'hero_image_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('hero_image_url', url)}
+                                    onClear={() => handleUpdateSetting('hero_image_url', '')}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Nombre de la App</h4>
+                                    <input type="text" defaultValue={settings.find(s => s.key === 'app_name')?.value || ''} onBlur={(e) => handleUpdateSetting('app_name', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
+                                </div>
+                                <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Nombre Corto</h4>
+                                    <input type="text" defaultValue={settings.find(s => s.key === 'app_short_name')?.value || ''} onBlur={(e) => handleUpdateSetting('app_short_name', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
+                                </div>
+                            </div>
+
                             {settings.filter(s => ['global_banner', 'hero_title', 'hero_description'].includes(s.key)).map((setting) => (
                                 <div key={setting.key} style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
                                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>{setting.description}</h4>
@@ -455,7 +586,7 @@ export default function AdminSettingsPage() {
 
                 <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #DBEAFE', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.85rem', color: '#1E40AF', margin: 0 }}>
-                        💡 <strong>TIP:</strong> Las unidades que marques como "Suspendidas" dejarán de aparecer como opciones al crear productos o conversiones, manteniendo la integridad histórica del sistema.
+                        💡 <strong>TIP:</strong> Las unidades que marques como &quot;Suspendidas&quot; dejarán de aparecer como opciones al crear productos o conversiones, manteniendo la integridad histórica del sistema.
                     </p>
                 </div>
 
