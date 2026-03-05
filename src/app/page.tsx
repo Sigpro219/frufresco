@@ -357,7 +357,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                   }}
                 >
                   {Icon && <Icon size={18} strokeWidth={2.5} />}
-                  {CATEGORY_MAP[cat] || cat}
+                  {CATEGORY_MAP[cat.trim().toUpperCase()] || cat}
                 </Link>
               );
             })}
