@@ -18,9 +18,18 @@ interface ActiveRoute {
     total_orders: number;
     total_kilos: number;
     start_time: string;
+    created_at: string;
     route_stops: {
+        id: string;
+        order_id: string;
         status: string;
-        completion_time: string;
+        completion_time: string | null;
+        sequence_number: number;
+        order?: {
+            latitude: number;
+            longitude: number;
+            customer_name: string;
+        };
     }[];
 }
 
@@ -59,8 +68,9 @@ export default function TransportControlTower() {
             if (routeIds.length > 0) {
                 const { data: stopsData, error: sErr } = await supabase
                     .from('route_stops')
-                    .select('route_id, status, completion_time')
+                    .select('*, order:orders(latitude, longitude, customer_name)')
                     .in('route_id', routeIds)
+                    .order('sequence_number', { ascending: true })
                     .abortSignal(signal as AbortSignal);
                 
                 if (sErr) {
@@ -318,17 +328,26 @@ export default function TransportControlTower() {
                                             mapId={MAP_ID}
                                             style={{ width: '100%', height: '100%' }}
                                         >
-                                            {activeRoutes.filter(r => r.status === 'in_transit').map((r, i) => {
+                                            {activeRoutes.filter(r => r.status === 'in_transit' || r.status === 'loading').map((r, i) => {
                                                 const total = r.route_stops.length;
-                                                const done = r.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
-                                                const progress = total > 0 ? (done / total) : 0;
+                                                const doneStops = r.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed');
+                                                const currentStop = r.route_stops.find(s => s.status === 'pending') || r.route_stops[r.route_stops.length - 1];
+                                                
+                                                // Real position based on next pending stop, otherwise fallback to mock
+                                                const realPos = currentStop?.order?.latitude && currentStop?.order?.longitude 
+                                                    ? { lat: currentStop.order.latitude, lng: currentStop.order.longitude }
+                                                    : null;
+
+                                                const progress = total > 0 ? (doneStops.length / total) : 0;
                                                 const mockPos = { 
                                                     lat: 4.6097 + (i * 0.05) + (progress * 0.02), 
                                                     lng: -74.0817 + (i * 0.02) + (progress * 0.05) 
                                                 };
+                                                
+                                                const vehiclePos = realPos || mockPos;
 
                                                 return (
-                                                    <AdvancedMarker key={r.id} position={mockPos}>
+                                                    <AdvancedMarker key={r.id} position={vehiclePos}>
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                                             <div style={{ 
                                                                 backgroundColor: 'white', 
@@ -339,11 +358,12 @@ export default function TransportControlTower() {
                                                                 fontWeight: '900', 
                                                                 marginBottom: '4px', 
                                                                 border: '1px solid #E5E7EB',
-                                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+                                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                                                                whiteSpace: 'nowrap'
                                                             }}>
-                                                                {r.vehicle_plate}
+                                                                {r.vehicle_plate} • {Math.round(progress * 100)}%
                                                             </div>
-                                                            <Pin background={'#0891B2'} glyphColor={'white'} borderColor={'#0E7490'} scale={1.2} />
+                                                            <Pin background={r.status === 'loading' ? '#F59E0B' : '#0891B2'} glyphColor={'white'} borderColor={'#0E7490'} scale={1.2} />
                                                         </div>
                                                     </AdvancedMarker>
                                                 );

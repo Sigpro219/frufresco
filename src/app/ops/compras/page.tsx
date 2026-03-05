@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
-import { isAbortError } from "@/lib/errorUtils";
+import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
+import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
 
 interface ProcurementTask {
   id: string;
@@ -138,10 +139,6 @@ export default function ProcurementPage() {
         // Simplest: Default to TODAY. But test data is TOMORROW.
         // Let's match OrderLoading logic: If disabled, trust the user selection or default to TODAY.
         // But this function returns a single string.
-
-        // Let's return TODAY so he can see everything if he changes the date picker?
-        // Compras page DOES NOT have a date picker exposed easily in the UI code I saw (it filters by targetDate).
-        // Wait, handleConsolidate uses this date.
 
         // If I return TODAY, and his orders are TOMORROW, he won't see them.
         // Test script puts orders at `CURRENT_DATE + 1`.
@@ -464,7 +461,10 @@ export default function ProcurementPage() {
         .from("vouchers")
         .upload(filePath, voucherFile);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        diagnoseStorageError(uploadError, 'vouchers');
+        throw uploadError;
+      }
 
       const {
         data: { publicUrl },
@@ -472,8 +472,8 @@ export default function ProcurementPage() {
 
       return publicUrl;
     } catch (err: any) {
-      console.error("Error uploading voucher:", err);
-      alert("Error subiendo la foto del vale: " + err.message);
+      diagnoseStorageError(err, "vouchers");
+      alert("Error subiendo la foto del vale: " + (err.message || err));
       return null;
     } finally {
       setUploadingImage(false);
@@ -684,6 +684,16 @@ export default function ProcurementPage() {
   const pendingTasks = tasks.filter((t) => t.status === "pending").length;
   const totalProgress =
     tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+
+  // Estadísticas por Categoría
+  const categories = ["Frutas", "Verduras", "Lácteos", "Cereales"];
+  const categoryStats = categories.map((cat) => {
+    const catTasks = tasks.filter((t) => t.category === cat);
+    const completed = catTasks.filter((t) => t.status === "completed").length;
+    const percentage =
+      catTasks.length > 0 ? Math.round((completed / catTasks.length) * 100) : 0;
+    return { name: cat, percentage, count: catTasks.length };
+  });
 
   return (
     <div style={{ padding: "1rem", paddingBottom: "5rem" }}>
@@ -961,37 +971,92 @@ export default function ProcurementPage() {
               </div>
             </div>
 
-            {/* Barra Circular Pequeña (Total) */}
+            {/* Barra Circular Pequeña (Total) - RESALTADA SEGÚN FEEDBACK */}
             <div
               style={{
                 textAlign: "center",
                 borderLeft: "1px solid var(--ops-border)",
-                paddingLeft: "1rem",
+                paddingLeft: "1.2rem",
+                marginLeft: "0.2rem",
+                position: "relative",
               }}
             >
               <div
                 style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "900",
-                  color: "var(--ops-text)",
+                  backgroundColor: totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.15)",
+                  padding: "0.5rem 0.8rem",
+                  borderRadius: "12px",
+                  border: `1px solid ${totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.3)"}`,
+                  boxShadow: totalProgress > 0 ? "0 0 15px rgba(59, 130, 246, 0.2)" : "none",
+                  transition: "all 0.4s ease",
                 }}
               >
-                {Math.round(totalProgress)}%
-              </div>
-              <div
-                style={{
-                  fontSize: "0.6rem",
-                  fontWeight: "bold",
-                  color: "var(--ops-text)",
-                  opacity: 0.7,
-                }}
-              >
-                TOTAL
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: "900",
+                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
+                    lineHeight: "1",
+                  }}
+                >
+                  {Math.round(totalProgress)}%
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.6rem",
+                    fontWeight: "900",
+                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
+                    opacity: 0.8,
+                    marginTop: "2px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  TOTAL AVANCE
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Category Progress Legend (Compact Breakdown) */}
+      {tasks.length > 0 && (
+        <div 
+          style={{ 
+            display: "flex", 
+            gap: "0.75rem", 
+            margin: "0 0.5rem 1rem 0.5rem", 
+            overflowX: "auto", 
+            padding: "0.2rem 0",
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'none'
+          }}
+        >
+          {categoryStats.map(stat => (
+            <div 
+              key={stat.name}
+              style={{
+                fontSize: "0.65rem",
+                fontWeight: "800",
+                color: "var(--ops-text-muted)",
+                backgroundColor: "var(--ops-surface)",
+                padding: "0.3rem 0.6rem",
+                borderRadius: "8px",
+                border: "1px solid var(--ops-border)",
+                whiteSpace: "nowrap",
+                display: "flex",
+                gap: "4px"
+              }}
+            >
+              <span style={{ opacity: 0.6 }}>{stat.name}:</span>
+              <span style={{ color: stat.percentage === 100 ? "var(--ops-primary)" : stat.percentage > 0 ? "#F59E0B" : "inherit" }}>
+                {stat.percentage}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Category Filter Pills */}
       <div
@@ -1004,31 +1069,36 @@ export default function ProcurementPage() {
         }}
       >
         {["Ver Todo", "Frutas", "Verduras", "Lácteos", "Cereales"].map(
-          (cat) => (
-            <button
-              key={cat}
-              onClick={() => {
-                setFilterCategory(cat);
-                fetchTasks(undefined, cat);
-              }}
-              style={{
-                padding: "0.4rem 1rem",
-                borderRadius: "20px",
-                border: `1px solid var(--ops-border)`,
-                backgroundColor:
-                  filterCategory === cat
-                    ? "var(--ops-primary)"
-                    : "var(--ops-surface)",
-                color:
-                  filterCategory === cat ? "white" : "var(--ops-text-muted)",
-                fontSize: "0.75rem",
-                fontWeight: "700",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {cat}
-            </button>
-          ),
+          (cat) => {
+            const stat = categoryStats.find(s => s.name === cat);
+            const displayLabel = stat ? `${cat} (${stat.percentage}%)` : cat;
+
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  setFilterCategory(cat);
+                  fetchTasks(undefined, cat);
+                }}
+                style={{
+                  padding: "0.4rem 1rem",
+                  borderRadius: "20px",
+                  border: `1px solid var(--ops-border)`,
+                  backgroundColor:
+                    filterCategory === cat
+                      ? "var(--ops-primary)"
+                      : "var(--ops-surface)",
+                  color:
+                    filterCategory === cat ? "white" : "var(--ops-text-muted)",
+                  fontSize: "0.75rem",
+                  fontWeight: "700",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {displayLabel}
+              </button>
+            );
+          }
         )}
       </div>
 

@@ -7,6 +7,7 @@ import Navbar from '../../../components/Navbar';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3 } from 'lucide-react';
+import { CATEGORY_MAP } from '@/lib/constants';
 
 interface OrderItem {
     id: string;
@@ -43,7 +44,7 @@ export default function B2BDashboard() {
     const [isLoadingConsumption, setIsLoadingConsumption] = useState(false);
     const isMounted = useRef(true);
 
-    const categories = ['Frutas', 'Verduras', 'Lácteos'];
+    const categories = Object.keys(CATEGORY_MAP);
 
     useEffect(() => {
         isMounted.current = true;
@@ -74,7 +75,17 @@ export default function B2BDashboard() {
                     if (isAbortError(error)) return;
                     throw error;
                 }
-                if (isMounted.current) setCategoryProducts(data || []);
+                
+                // Priorizar con foto
+                const sorted = (data || []).sort((a, b) => {
+                    const hasA = a.image_url && String(a.image_url).length > 5;
+                    const hasB = b.image_url && String(b.image_url).length > 5;
+                    if (hasA && !hasB) return -1;
+                    if (!hasA && hasB) return 1;
+                    return 0;
+                });
+
+                if (isMounted.current) setCategoryProducts(sorted);
             } catch (err) {
                 console.error("Error fetching category products:", err);
             } finally {
@@ -101,7 +112,7 @@ export default function B2BDashboard() {
                 const { data, error } = await supabase
                     .from('products')
                     .select('id, name, unit_of_measure, image_url, sku, options_config')
-                    .ilike('name', `%${searchTerm}%`)
+                    .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
                     .limit(5)
                     .abortSignal(signal as any);
@@ -110,7 +121,17 @@ export default function B2BDashboard() {
                     if (isAbortError(error)) return;
                     throw error;
                 }
-                if (isMounted.current) setSearchResults(data || []);
+
+                // Priorizar con foto
+                const sorted = (data || []).sort((a, b) => {
+                    const hasA = a.image_url && String(a.image_url).length > 5;
+                    const hasB = b.image_url && String(b.image_url).length > 5;
+                    if (hasA && !hasB) return -1;
+                    if (!hasA && hasB) return 1;
+                    return 0;
+                });
+
+                if (isMounted.current) setSearchResults(sorted);
             } catch (err) {
                 console.error("Search error:", err);
             } finally {
@@ -270,12 +291,20 @@ export default function B2BDashboard() {
                     .limit(10);
 
                 if (topProducts) {
-                    const suggestedItems = topProducts.map(p => ({
+                    const prioritizedTop = [...topProducts].sort((a, b) => {
+                        const hasA = a.image_url && String(a.image_url).length > 5;
+                        const hasB = b.image_url && String(b.image_url).length > 5;
+                        if (hasA && !hasB) return -1;
+                        if (!hasA && hasB) return 1;
+                        return 0;
+                    });
+
+                    const suggestedItems = prioritizedTop.map(p => ({
                         id: Math.random().toString(36).substr(2, 9),
                         product_id: p.id,
                         product_name: p.name,
                         product_image: p.image_url || '',
-                        quantity: 0, // Iniciar en 0 para que el cliente decida
+                        quantity: 0,
                         unit: p.unit_of_measure || 'kg'
                     }));
                     setOrderItems(suggestedItems);
@@ -778,14 +807,14 @@ export default function B2BDashboard() {
                                             cursor: 'pointer',
                                             whiteSpace: 'nowrap'
                                         }}
-                                    >{cat}</button>
+                                    >{CATEGORY_MAP[cat] || cat}</button>
                                 ))}
                             </div>
 
                             {/* Category Products Results */}
                             {selectedCategory && (
                                 <div style={{ marginTop: '1rem', borderTop: '1px solid #f0f0f0', paddingTop: '1rem', padding: '0 1rem 1rem' }}>
-                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Catálogo: {selectedCategory}</h4>
+                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Catálogo: {CATEGORY_MAP[selectedCategory] || selectedCategory}</h4>
                                     {isLoadingCategory ? (
                                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando articulos...</p>
                                     ) : categoryProducts.length > 0 ? (

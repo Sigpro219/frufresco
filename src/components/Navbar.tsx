@@ -26,7 +26,7 @@ export default function Navbar() {
                     .from('app_settings')
                     .select('value')
                     .eq('key', 'enable_b2b_lead_capture')
-                    .single();
+                    .maybeSingle();
                     
                 if (!isMounted) return;
                 
@@ -87,7 +87,7 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img src="/logo.png" alt={config.brand.logoAlt} style={{ height: '70px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
+                    <img src="/logo.png" alt={config.brand.logoAlt} style={{ height: '80px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
                 </Link>
 
                 {/* NAV LINKS */}

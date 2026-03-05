@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect } from 'react';
+import { supabase, Product } from '@/lib/supabase';
+import { diagnoseStorageError } from '@/lib/errorUtils';
+import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
 
 interface CreateProductModalProps {
     onClose: () => void;
@@ -14,13 +16,16 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
+        accounting_id: '',
         category: 'Frutas',
         unit_of_measure: 'Kg',
         weight_kg: 0.5,
         description: '',
-        image_url: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=400',
+        image_url: '',
         is_active: true,
-        min_inventory_level: 0
+        show_on_web: true,
+        min_inventory_level: 0,
+        iva_rate: 19
     });
 
     const [options, setOptions] = useState<any[]>([]);
@@ -29,80 +34,98 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     // Mapeo técnico de unidades para evitar colisiones (Ej: Lb vs Lt)
-    const unitMap: Record<string, { prefix: string, label: string }> = {
-        'Kg': { prefix: 'K', label: 'kilogramo' },
-        'G': { prefix: 'G', label: 'gramo' },
-        'Lb': { prefix: 'A', label: 'libra' },
-        'Lt': { prefix: 'L', label: 'litro' },
-        'Un': { prefix: 'U', label: 'unidad' },
-        'Atado': { prefix: 'T', label: 'atado' },
-        'Bulto': { prefix: 'B', label: 'bulto' }
+
+    // Ayudante para generar SKU técnico basado en estándares (CATEGORIA-ID)
+    const generateSKU = (category: string, id: string | number) => {
+        const catPrefix = REVERSE_CATEGORY_MAP[category] || 'DE';
+        const cleanId = id.toString().padStart(5, '0');
+        return `${catPrefix}-${cleanId}`;
     };
 
-    // Ayudante para generar SKU técnico basado en estándares
-    const generateSKU = (name: string, category: string, unit: string) => {
-        if (!name) return '';
-        const catMap: Record<string, string> = {
-            'Frutas': 'F', 'Hortalizas': 'H', 'Verduras': 'V', 'Tubérculos': 'T', 'Despensa': 'D', 'Lácteos': 'L'
+    const INITIAL_ATTRIBUTES = [
+        { name: 'Madurez', values: ['Verde', 'Pintón', 'Maduro', 'Sobremaduro'] },
+        { name: 'Tamaño', values: ['Pequeño', 'Mediano', 'Grande', 'Extra Grande'] },
+        { name: 'Calidad', values: ['Primera (Extra)', 'Segunda (Estándar)', 'Industrial'] },
+        { name: 'Presentación', values: ['Granel', 'Empacado', 'Malla', 'Caja'] },
+        { name: 'Corte', values: ['Entero', 'Picado', 'Troceado', 'Pelado'] },
+        { name: 'Proceso', values: ['Lavado', 'Sucio', 'Cepillado'] }
+    ];
+
+    const [masterAttributes, setMasterAttributes] = useState(INITIAL_ATTRIBUTES);
+
+    useEffect(() => {
+        const fetchMaster = async () => {
+            try {
+                const { data, error } = await supabase.from('product_attributes_master').select('*').order('name');
+                if (error) {
+                    console.warn('CreateModal: No master table found, using defaults.');
+                    return;
+                }
+                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                }
+            } catch (err) {
+                console.warn('CreateModal: Error fetching master attributes.');
+            }
         };
-        const catPrefix = catMap[category] || 'X';
-        
-        // Extraer 3 consonantes representativas
-        const consonantes = name.toUpperCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
-            .replace(/[^BCDFGHJKLMNPQRSTVWXYZ]/g, ''); // Solo consonantes
-        
-        const namePart = consonantes.substring(0, 3).padEnd(3, 'X');
-        const unitSuffix = unitMap[unit]?.prefix || 'U';
-        
-        return `${catPrefix}-${namePart}-${unitSuffix}`;
-    };
+        fetchMaster();
+    }, []);
 
-    // Ayudante para generar descripción técnica equilibrada (B2B/B2C)
-    const generateDescription = (name: string, category: string, unit: string) => {
+    // Ayudante para generar descripción técnica con usos y beneficios de salud
+    const generateDescription = (name: string, category: string) => {
         if (!name) return '';
         const nameNorm = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        const unitLong = unitMap[unit]?.label || 'unidad';
         
         let usage = "consumo diario";
-        if (category === 'Frutas') usage = "ensaladas, postres y jugos frescos";
-        if (category === 'Verduras' || category === 'Hortalizas') usage = "preparaciones gourmet, guisos y ensaladas";
-        if (category === 'Tubérculos') usage = "frituras, purés y bases de cocina";
-        if (category === 'Lácteos') usage = "consumo directo y repostería";
+        let healthBenefit = "aliado para una dieta equilibrada y bienestar integral";
 
-        return `${nameNorm} de calidad premium seleccionada. Frescura garantizada desde el origen. Ideal para ${usage}. Presentación técnica por ${unitLong}.`;
+        if (category === 'Frutas') {
+            usage = "ensaladas, postres y jugos frescos";
+            healthBenefit = "fuente natural de vitaminas, antioxidantes y fibra que fortalece el sistema inmunológico";
+        } else if (category === 'Verduras' || category === 'Hortalizas') {
+            usage = "preparaciones gourmet, guisos y ensaladas";
+            healthBenefit = "con alto contenido de minerales y clorofila que favorecen una digestión saludable";
+        } else if (category === 'Tubérculos') {
+            usage = "frituras, purés y bases de cocina";
+            healthBenefit = "excelente fuente de energía duradera y carbohidratos complejos";
+        } else if (category === 'Lácteos') {
+            usage = "consumo directo y repostería";
+            healthBenefit = "fuente de calcio y proteínas esenciales para el fortalecimiento óseo";
+        }
+
+        return `${nameNorm} de calidad premium seleccionada. Frescura garantizada desde el origen. Ideal para ${usage}. Este producto es una ${healthBenefit}.`;
     };
 
     const handleNameBlur = () => {
         if (!formData.name) return;
         
-        // Sugerir SKU si está vacío
-        if (!formData.sku) {
-            const suggestedSku = generateSKU(formData.name, formData.category, formData.unit_of_measure);
+        // Sugerir SKU si hay ID
+        if (!formData.sku && formData.accounting_id) {
+            const suggestedSku = generateSKU(formData.category, formData.accounting_id);
             setFormData(prev => ({ ...prev, sku: suggestedSku }));
         }
         // Sugerir descripción si está vacía
         if (!formData.description) {
-            const suggestedDesc = generateDescription(formData.name, formData.category, formData.unit_of_measure);
+            const suggestedDesc = generateDescription(formData.name, formData.category);
             setFormData(prev => ({ ...prev, description: suggestedDesc }));
         }
     };
 
-    // Actualizador inteligente de SKU y descripción al cambiar Categoría o Unidad
-    const handleMetadataChange = (field: 'category' | 'unit_of_measure', value: string) => {
+    // Actualizador inteligente de SKU y descripción al cambiar Categoría, Unidad o ID
+    const handleMetadataChange = (field: 'category' | 'unit_of_measure' | 'accounting_id', value: string) => {
         setFormData(prev => {
-            const currentSuggestedSku = generateSKU(prev.name, prev.category, prev.unit_of_measure);
-            const currentSuggestedDesc = generateDescription(prev.name, prev.category, prev.unit_of_measure);
+            const currentSuggestedSku = generateSKU(prev.category, prev.accounting_id);
+            const currentSuggestedDesc = generateDescription(prev.name, prev.category);
             
             const nextCategory = field === 'category' ? value : prev.category;
-            const nextUnit = field === 'unit_of_measure' ? value : prev.unit_of_measure;
+            const nextId = field === 'accounting_id' ? value : prev.accounting_id;
             
-            const newSku = (prev.sku === currentSuggestedSku || !prev.sku) 
-                ? generateSKU(prev.name, nextCategory, nextUnit) 
+            const newSku = (prev.sku === currentSuggestedSku || !prev.sku) && nextId 
+                ? generateSKU(nextCategory, nextId) 
                 : prev.sku;
                 
             const newDesc = (prev.description === currentSuggestedDesc || !prev.description)
-                ? generateDescription(prev.name, nextCategory, nextUnit)
+                ? generateDescription(prev.name, nextCategory)
                 : prev.description;
             
             return { ...prev, [field]: value, sku: newSku, description: newDesc };
@@ -183,6 +206,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             .upload(filePath, imageFile);
 
         if (uploadError) {
+            diagnoseStorageError(uploadError, 'product-images');
             alert('Error subiendo imagen: ' + uploadError.message);
             setUploading(false);
             return formData.image_url;
@@ -208,7 +232,10 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                 .eq('sku', formData.sku)
                 .maybeSingle();
 
-            if (checkError) throw checkError;
+            if (checkError) {
+                diagnoseStorageError(checkError, 'products'); // Assuming 'products' is the bucket/table context
+                throw checkError;
+            }
             if (existing) {
                 alert(`Error: El SKU "${formData.sku}" ya está registrado en el sistema.`);
                 setLoading(false);
@@ -223,7 +250,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     ...formData,
                     image_url: uploadedImageUrl,
                     options_config: options,
-                    variants: variants
+                    variants: variants,
+                    iva_rate: formData.iva_rate
                 }])
                 .select()
                 .single();
@@ -345,18 +373,45 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     />
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'end' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>SKU Código</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            value={formData.sku}
-                                            onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                                            placeholder="ABC-123"
-                                            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #2563EB', fontSize: '1.2rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF' }}
-                                        />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '80px 1.2fr 80px', gap: '1rem', alignItems: 'end' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '700', marginBottom: '8px' }}>ID</label>
+                                            <input
+                                                required
+                                                type="number"
+                                                value={formData.accounting_id}
+                                                onChange={(e) => handleMetadataChange('accounting_id', e.target.value)}
+                                                placeholder="123"
+                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.1rem', fontWeight: '700' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>SKU Código</label>
+                                            <input
+                                                required
+                                                type="text"
+                                                value={formData.sku}
+                                                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                                                placeholder="CC-00123"
+                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #2563EB', fontSize: '1.2rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '700', marginBottom: '8px' }}>IVA %</label>
+                                            <select
+                                                value={formData.iva_rate}
+                                                onChange={(e) => setFormData({ ...formData, iva_rate: parseInt(e.target.value) })}
+                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #10B981', fontSize: '1.1rem', fontWeight: '900', color: '#065F46', backgroundColor: '#ECFDF5', cursor: 'pointer' }}
+                                            >
+                                                <option value={19}>19</option>
+                                                <option value={5}>5</option>
+                                                <option value={0}>0</option>
+                                                <option value={22}>22</option>
+                                            </select>
+                                        </div>
                                     </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', alignItems: 'end' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Peso Logístico (kg)</label>
                                         <input
@@ -413,6 +468,30 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         </div>
                                     )}
                                 </div>
+
+                                <div style={{ 
+                                    backgroundColor: '#EFF6FF', 
+                                    padding: '1.2rem', 
+                                    borderRadius: '16px', 
+                                    border: '1px solid #BFDBFE',
+                                    marginTop: '1rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="showOnWeb"
+                                            checked={formData.show_on_web}
+                                            onChange={(e) => setFormData({ ...formData, show_on_web: e.target.checked })}
+                                            style={{ width: '22px', height: '22px', cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="showOnWeb" style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E40AF', cursor: 'pointer' }}>
+                                            🌐 Disponible para Página Web (Público)
+                                        </label>
+                                    </div>
+                                    <p style={{ fontSize: '0.85rem', color: '#3B82F6', marginTop: '6px', marginLeft: '30px' }}>
+                                        Si se apaga, el producto solo será visible en el panel administrativo.
+                                    </p>
+                                </div>
                             </div>
 
                             <div style={{ marginTop: '1rem' }}>
@@ -465,23 +544,93 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                             style={{ position: 'absolute', right: '10px', top: '10px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '800', cursor: 'pointer' }}
                                         >✕</button>
 
+                                        {/* TIPO DE VARIACIÓN - DROPDOWN MAESTRO */}
                                         <div style={{ marginBottom: '1rem' }}>
-                                            <input
-                                                type="text"
-                                                placeholder="Ej: Madurez, Tamaño..."
-                                                value={opt.name}
-                                                onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #D1D5DB', fontWeight: '600' }}
-                                            />
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                                TIPO DE VARIACIÓN
+                                            </label>
+                                            <select
+                                                value={masterAttributes.some(a => a.name === opt.name) ? opt.name : (opt.name ? 'Personalizado' : '')}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === 'Personalizado') {
+                                                        updateOption(idx, '', '');
+                                                    } else if (val === '') {
+                                                        updateOption(idx, '', '');
+                                                    } else {
+                                                        const master = masterAttributes.find(a => a.name === val);
+                                                        updateOption(idx, val, master?.values.join(', ') || '');
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', color: '#1F2937', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236B7280%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.8rem center', backgroundSize: '1.2em' }}
+                                            >
+                                                <option value="">-- Seleccionar --</option>
+                                                {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
+                                                <option value="Personalizado">➕ Otra (Personalizada)...</option>
+                                            </select>
+
+                                            {(opt.name !== '' && !masterAttributes.some(a => a.name === opt.name)) && (
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre: ej. Calibre, Color..."
+                                                    value={opt.name}
+                                                    onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
+                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '2px solid #3B82F6', fontWeight: '800', marginTop: '10px', outline: 'none' }}
+                                                    autoFocus
+                                                />
+                                            )}
                                         </div>
+
+                                        {/* VALORES - LISTA DE CHEQUEO O MANUAL */}
                                         <div>
-                                            <input
-                                                type="text"
-                                                placeholder="Verde, Pintón, Maduro"
-                                                value={opt.values.join(', ')}
-                                                onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #D1D5DB', fontSize: '0.95rem' }}
-                                            />
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                                VALORES POSIBLES
+                                            </label>
+                                            
+                                            {masterAttributes.some(a => a.name === opt.name) ? (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
+                                                    {masterAttributes.find(a => a.name === opt.name)?.values.map(val => (
+                                                        <label 
+                                                            key={val} 
+                                                            style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                gap: '8px', 
+                                                                fontSize: '0.9rem', 
+                                                                cursor: 'pointer', 
+                                                                padding: '6px 12px', 
+                                                                backgroundColor: opt.values.includes(val) ? '#EFF6FF' : '#F9FAFB', 
+                                                                borderRadius: '8px', 
+                                                                transition: 'all 0.2s',
+                                                                border: `1.5px solid ${opt.values.includes(val) ? '#3B82F6' : '#F3F4F6'}`,
+                                                                color: opt.values.includes(val) ? '#1E40AF' : '#4B5563',
+                                                                fontWeight: opt.values.includes(val) ? '800' : '500'
+                                                            }}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={opt.values.includes(val)}
+                                                                onChange={(e) => {
+                                                                    const newValues = e.target.checked
+                                                                        ? [...opt.values, val]
+                                                                        : opt.values.filter((v: string) => v !== val);
+                                                                    updateOption(idx, opt.name, newValues.join(', '));
+                                                                }}
+                                                                style={{ width: '16px', height: '16px', accentColor: '#3B82F6' }}
+                                                            />
+                                                            {val}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    placeholder="Verde, Pintón, Maduro"
+                                                    value={opt.values.join(', ')}
+                                                    onChange={(e) => updateOption(idx, opt.name, e.target.value)}
+                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 ))}

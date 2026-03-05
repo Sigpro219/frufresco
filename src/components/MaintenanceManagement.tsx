@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
+import { useParams, useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 
 interface MaintenanceTask {
     id: string;
@@ -115,7 +118,7 @@ export default function MaintenanceManagement() {
         } catch (err: unknown) {
             if (!isMounted.current) return;
             const error = err as { message?: string, code?: string, name?: string };
-            if (error.message?.includes('aborted') || error.code === 'ABORTED' || error.name === 'AbortError') {
+            if (isAbortError(error)) {
                 return;
             }
             console.error('Error fetching maintenance data:', error.message || error);
@@ -149,6 +152,29 @@ export default function MaintenanceManagement() {
         }
     }, []);
 
+    const downloadHistory = () => {
+        if (history.length === 0) {
+            alert('No hay historial para exportar.');
+            return;
+        }
+
+        const dataToExport = history.map(log => ({
+            'Vehículo': log.vehicle?.plate,
+            'Tarea': log.task_name,
+            'Fecha Realización': log.performed_date,
+            'Kms Realizados': log.performed_km,
+            'Conductor': log.driver?.contact_name || 'N/A',
+            'Próximo Obj (Km)': log.next_due_km || 'Vencido',
+            'Próximo Obj (Fecha)': log.next_due_date || 'N/A',
+            'Notas': log.notes || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Historial_Mantenimiento');
+        XLSX.writeFile(wb, `FruFresco_Mantenimiento_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
     const handleCloseTask = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!completingTask) return;
@@ -179,14 +205,14 @@ export default function MaintenanceManagement() {
                     .from('delivery-evidence') // Using existing bucket for now
                     .upload(fileName, file);
 
-                if (!uploadError) {
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('delivery-evidence')
-                        .getPublicUrl(fileName);
-                    uploadedUrls.push(publicUrl);
-                } else {
-                    console.warn('Upload error:', uploadError);
+                if (uploadError) {
+                    diagnoseStorageError(uploadError, 'delivery-evidence');
+                    throw uploadError;
                 }
+                const { data: { publicUrl } } = supabase.storage
+                    .from('delivery-evidence')
+                    .getPublicUrl(fileName);
+                uploadedUrls.push(publicUrl);
             }
 
             // 3. Insert History Log
@@ -407,6 +433,18 @@ export default function MaintenanceManagement() {
                         >
                             {showHistory ? '📂 Ver Cronograma' : '📜 Historial'}
                         </button>
+                        {showHistory && (
+                            <button 
+                                onClick={downloadHistory}
+                                style={{ 
+                                    padding: '0.6rem 1.2rem', borderRadius: '12px', 
+                                    backgroundColor: '#F0FDF4', color: '#15803D', border: '1px solid #10B981', 
+                                    fontWeight: '700', cursor: 'pointer'
+                                }}
+                            >
+                                📥 Exportar Excel
+                            </button>
+                        )}
                         <button 
                             onClick={() => setShowAdd(!showAdd)}
                             style={{ padding: '0.6rem 1.2rem', borderRadius: '12px', backgroundColor: '#0891B2', color: 'white', border: 'none', fontWeight: '700', cursor: 'pointer' }}

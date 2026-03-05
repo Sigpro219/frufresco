@@ -29,4 +29,12 @@ export interface Product {
     min_inventory_level: number;
     variants?: any[];
     options_config?: any[];
+    accounting_id?: number | null;
+    show_on_web?: boolean;
+    parent_id?: string | null;
+    buying_team?: string | null;
+    procurement_method?: string | null;
+    theoretical_shrinkage_pct?: number;
+    allowed_waste_reasons?: string[];
+    iva_rate?: number;
 }

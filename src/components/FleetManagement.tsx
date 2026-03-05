@@ -3,6 +3,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
+interface Route {
+    id: string;
+    vehicle_plate: string;
+    status: string;
+    total_orders: number;
+    start_time: string;
+    theoretical_distance_km?: number;
+    route_stops: { status: string; }[];
+}
+
+interface VehicleIssue {
+    event_type: string;
+    created_at: string;
+    description: string;
+    evidence_url?: string;
+}
+
 interface Vehicle {
     id: string;
     plate: string;
@@ -49,7 +66,7 @@ export default function FleetManagement() {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
-    const [vehicleIssues, setVehicleIssues] = useState<any[]>([]);
+    const [vehicleIssues, setVehicleIssues] = useState<VehicleIssue[]>([]);
 
     const fetchDrivers = useCallback(async () => {
         try {
@@ -87,26 +104,30 @@ export default function FleetManagement() {
             const plates = vehiclesData?.map(v => v.plate) || [];
             const { data: routesData } = await supabase
                 .from('routes')
-                .select('id, vehicle_plate, status, total_orders, start_time, route_stops(status)')
+                .select('id, vehicle_plate, status, total_orders, start_time, theoretical_distance_km, route_stops(status)')
                 .in('vehicle_plate', plates)
                 .order('start_time', { ascending: false });
 
             // 3. Enrich vehicles with route data and calculate dynamic avg_daily_km
             const enrichedVehicles = vehiclesData?.map(v => {
-                const vRoutes = (routesData as any[])?.filter(r => r.vehicle_plate === v.plate) || [];
+                const vRoutes = (routesData as Route[])?.filter(r => r.vehicle_plate === v.plate) || [];
                 const activeRoute = vRoutes.find(r => r.status === 'in_transit' || r.status === 'loading');
                 
-                // Check for dynamic avg_daily_km (last 30 days) - Future implementation
+                // Calculate dynamic avg_daily_km (last 30 days)
                 const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
                 const recentRoutes = vRoutes.filter(r => r.start_time > thirtyDaysAgo && r.status === 'completed');
                 
+                let dynamicAvg = v.avg_daily_km || 0;
                 if (recentRoutes.length > 0) {
-                    console.debug(`Found ${recentRoutes.length} recent routes for ${v.plate}`);
+                    const totalKm = recentRoutes.reduce((sum, r) => sum + (r.theoretical_distance_km || 0), 0);
+                    dynamicAvg = Math.round((totalKm / 30) * 10) / 10; // Round to 1 decimal
+                    console.debug(`Calculated dynamic avg for ${v.plate}: ${dynamicAvg} km/day (${recentRoutes.length} routes)`);
                 }
 
                 return {
                     ...v,
-                    maintenance_schedules: v.maintenance_schedules?.sort((a: any, b: any) => 
+                    avg_daily_km: dynamicAvg,
+                    maintenance_schedules: v.maintenance_schedules?.sort((a, b) => 
                         (a.next_due_km || 999999) - (b.next_due_km || 999999)
                     ),
                     active_route: activeRoute ? {
@@ -318,6 +339,8 @@ export default function FleetManagement() {
                         <tr style={{ textAlign: 'left', borderBottom: '2px solid #F3F4F6' }}>
                             <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>VEHÍCULO</th>
                             <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>INFO TÉCNICA</th>
+                            <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>ODÓMETRO</th>
+                            <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>PROM. DIARIO (KM)</th>
                             <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>MANTENIMIENTO</th>
                             <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>OPERACIÓN</th>
                             <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>ESTADO</th>
@@ -359,6 +382,14 @@ export default function FleetManagement() {
                                         <td style={{ padding: '1rem' }}>
                                             <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{v.capacity_kg?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KG</span></div>
                                             <div style={{ fontSize: '0.7rem', color: '#0891B2', fontWeight: '900' }}>{v.vehicle_type.toUpperCase()}</div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>{v.current_odometer?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KM</span></div>
+                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700' }}>REGISTRADO</div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0369A1' }}>{v.avg_daily_km} <span style={{ color: '#94A3B8' }}>KM/DÍA</span></div>
+                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700' }}>DINÁMICO</div>
                                         </td>
                                         <td style={{ padding: '1rem' }}>
                                             {nextMaint ? (

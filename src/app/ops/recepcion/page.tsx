@@ -45,7 +45,16 @@ export default function ReceptionPage() {
     // Filter/Tab State
     const [activeTab, setActiveTab] = useState<'transport' | 'received'>('transport');
     const [activeCategory, setActiveCategory] = useState<string>('Todas');
+    const [currentTime, setCurrentTime] = useState(new Date());
     const router = useRouter();
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const timeString = currentTime.getHours().toString().padStart(2, '0') + ':' + currentTime.getMinutes().toString().padStart(2, '0');
+    const isLocked = timeString >= '09:30' && timeString < '10:30';
 
     useEffect(() => {
         fetchIncoming();
@@ -256,6 +265,25 @@ export default function ReceptionPage() {
     const partialPct = totalCount > 0 ? (partialCount / totalCount) * 100 : 0;
     // El porcentaje restante es lo que falta (Transito + Rechazo)
 
+
+    if (isLocked) {
+        return (
+            <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#111827', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center', color: 'white' }}>
+                <div style={{ maxWidth: '600px', backgroundColor: 'rgba(255,255,255,0.05)', padding: '4rem 2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                    <div style={{ fontSize: '5rem', marginBottom: '2rem' }}>🛡️</div>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '1rem', letterSpacing: '-1px' }}>Módulo en Pausa Técnica</h1>
+                    <p style={{ fontSize: '1.2rem', color: '#9CA3AF', marginBottom: '2.5rem', lineHeight: '1.6' }}>
+                        Estamos en el período de **Corte de Inventario (09:30 - 10:30 AM)**. <br/>
+                        La recepción de mercancía está temporalmente bloqueada para garantizar la precisión del conteo físico.
+                    </p>
+                    <div style={{ padding: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '16px', border: '1px solid #10B981', display: 'inline-block' }}>
+                        <span style={{ fontSize: '0.9rem', color: '#10B981', fontWeight: '800', textTransform: 'uppercase', display: 'block', marginBottom: '0.5rem' }}>Próxima reapertura</span>
+                        <span style={{ fontSize: '2rem', fontWeight: '900', color: 'white' }}>10:30 AM</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#F3F4F6', minHeight: '100vh' }}>
