@@ -29,14 +29,9 @@ export default function GlobalBanner() {
         if (data?.value) {
           let text = data.value;
           
-          // Environment-based branding override
-          const isLocal = typeof window !== 'undefined' && 
-                          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-          
-          if (isLocal) {
-            // In CORE (Localhost), we always maintain origin branding
-            text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
-          }
+          // Branding dinámico: reemplaza "Logistic Pro" por el nombre configurado en FruFresco
+          // si el mensaje original contenía el nombre base.
+          text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
           
           setBannerText(text);
         }
