@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isAbortError } from '@/lib/errorUtils';
+import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
 
 interface DeliverableItem {
@@ -164,7 +164,10 @@ export default function DeliveryConfirmationPage() {
                     .from('delivery-evidence')
                     .upload(fileName, file);
 
-                if (uploadError) throw uploadError;
+                if (uploadError) {
+                    diagnoseStorageError(uploadError, 'delivery-evidence');
+                    throw uploadError;
+                }
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('delivery-evidence')
@@ -204,7 +207,10 @@ export default function DeliveryConfirmationPage() {
                 .from('delivery-evidence')
                 .upload(fileName, file);
 
-            if (uploadError) throw uploadError;
+            if (uploadError) {
+                diagnoseStorageError(uploadError, 'delivery-evidence');
+                throw uploadError;
+            }
 
             const { data: { publicUrl } } = supabase.storage
                 .from('delivery-evidence')

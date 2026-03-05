@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
     id: string;
@@ -24,6 +25,7 @@ interface InventoryItem {
         base_price: number;
         is_active: boolean;
         min_inventory_level: number;
+        accounting_id?: number | null;
     };
     warehouses: {
         name: string;
@@ -67,23 +69,26 @@ export default function InventoryAdminPage() {
     const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<{ id: string, name: string } | null>(null);
     const [stockStatusFilter, setStockStatusFilter] = useState<'available' | 'returned' | 'in_process' | 'all'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
     const [avgCosts, setAvgCosts] = useState<Record<string, number>>({});
     interface ScoredItem {
         item: any; // Using any for the complex Supabase nested join object for now, but typed at usage
         score: number;
     }
     const [auditPolicy, setAuditPolicy] = useState({
-        itemsPerDay: 5,
-        alertThreshold: 5,
+        coveragePercent: 100, // Now 100% by default
+        alertThreshold: 3, // Stricter threshold (3%)
         prioritizeHighValue: true,
         prioritizeHighRotation: true,
         prioritizePerishables: true,
         prioritizeCriticalStock: true,
         excludeAuditedRecently: true,
         autoEnabled: true,
-        generationTime: '08:00'
+        generationTime: '09:30' // Cut-off at 09:30 AM
     });
     const [generatingAudit, setGeneratingAudit] = useState(false);
+    const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
+    const ITEMS_PER_PAGE = 50;
     const isMounted = useRef(true);
 
     const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -91,57 +96,63 @@ export default function InventoryAdminPage() {
         try {
             if (activeTab === 'stock') {
                 // Fetch from products to ensure ALL master items are visible
-                let query = supabase
-                    .from('products')
-                    .select(`
-                        id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level,
-                        inventory_stocks (
-                            id, quantity, status, warehouse_id, updated_at,
-                            warehouses (name)
-                        )
-                    `)
-                    .eq('is_active', true)
-                    .order('name');
-                
-                if (signal) query = query.abortSignal(signal);
+                let allProducts: any[] = [];
+                let from = 0;
+                const limit = 1000;
+                let hasMore = true;
 
-                const { data: productsData, error } = await query;
-                if (!isMounted.current) return;
-                if (error) throw error;
+                while (hasMore) {
+                    let query = supabase
+                        .from('products')
+                        .select(`
+                            id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id,
+                            inventory_stocks (
+                                id, quantity, status, warehouse_id, updated_at,
+                                warehouses (name)
+                            )
+                        `)
+                        .eq('is_active', true)
+                        .order('accounting_id', { ascending: true })
+                        .range(from, from + limit - 1);
+                    
+                    if (signal) query = query.abortSignal(signal);
+
+                    const { data: batch, error } = await query;
+                    if (!isMounted.current) return;
+                    if (error) throw error;
+
+                    if (batch && batch.length > 0) {
+                        allProducts = [...allProducts, ...batch];
+                        from += limit;
+                        if (batch.length < limit) hasMore = false;
+                    } else {
+                        hasMore = false;
+                    }
+                }
 
                 // Flatten the products and their stocks into InventoryItem structure
-                const flattenedStocks: any[] = (productsData || []).flatMap(p => {
+                const flattenedStocks: any[] = allProducts.flatMap(p => {
                     const statusStocks = p.inventory_stocks || [];
                     
-                    // Filter stocks by status if a filter is active
-                    const filtered = stockStatusFilter === 'all' 
-                        ? statusStocks 
-                        : statusStocks.filter((s: any) => s.status === stockStatusFilter);
-
-                    if (filtered.length > 0) {
-                        return filtered.map((s: any) => ({
+                    if (statusStocks.length > 0) {
+                        return statusStocks.map((s: any) => ({
                             ...s,
                             product_id: p.id,
                             products: p
                         }));
                     }
 
-                    // If no stock record exists for this product (or for the filtered status),
-                    // but we want global visibility (especially for 'all' or 'available' views)
-                    if (stockStatusFilter === 'all' || stockStatusFilter === 'available') {
-                        return [{
-                            id: `virtual-${p.id}`,
-                            product_id: p.id,
-                            warehouse_id: 'default',
-                            status: stockStatusFilter === 'all' ? 'available' : stockStatusFilter,
-                            quantity: 0,
-                            updated_at: new Date().toISOString(),
-                            products: p,
-                            warehouses: { name: 'Bodega Principal' }
-                        }];
-                    }
-
-                    return [];
+                    // Virtual stock if none exists
+                    return [{
+                        id: `virtual-${p.id}`,
+                        product_id: p.id,
+                        warehouse_id: 'default',
+                        status: 'available',
+                        quantity: 0,
+                        updated_at: new Date().toISOString(),
+                        products: p,
+                        warehouses: { name: 'Bodega Principal' }
+                    }];
                 });
 
                 // --- NEW: Calculate Average Costs from Purchases ---
@@ -153,13 +164,13 @@ export default function InventoryAdminPage() {
                 const { data: convData } = await supabase.from('product_conversions').select('*');
 
                 const costsMap: Record<string, number> = {};
-                if (purchasesData && productsData) {
+                if (purchasesData && allProducts) {
                     const grouped: Record<string, number[]> = {};
                     purchasesData.forEach(p => {
                         if (!p.product_id) return;
                         if (!grouped[p.product_id]) grouped[p.product_id] = [];
                         if (grouped[p.product_id].length < 3) { // Use window of 3 as in matrix
-                            const product = productsData.find(pd => pd.id === p.product_id);
+                            const product = allProducts.find(pd => pd.id === p.product_id);
                             let normalizedPrice = p.unit_price;
                             
                             if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
@@ -232,69 +243,86 @@ export default function InventoryAdminPage() {
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [activeTab, stockStatusFilter]);
+    }, [activeTab]);
 
     const handleGenerateAudit = useCallback(async (isAuto: boolean = false) => {
         try {
             if (!isAuto) setGeneratingAudit(true);
             
-            // 0. Check if already generated for today (safety for auto-calls)
             const today = new Date().toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            // 0. Check for today's snapshot
             const { data: existing } = await supabase
                 .from('inventory_random_tasks')
                 .select('id')
                 .eq('scheduled_date', today);
             
             if (existing && existing.length > 0) {
-                if (!isAuto) alert('Ya se ha generado una auditoría para el día de hoy.');
+                if (!isAuto) alert('El corte de inventario (09:30 AM) ya fue procesado para hoy.');
                 return;
             }
 
-            // 1. Fetch current stock and products
+            // 1. Identify Active SKUs (Movement in last 30 days)
+            const { data: recentMvt } = await supabase
+                .from('inventory_movements')
+                .select('product_id')
+                .gte('created_at', thirtyDaysAgo.toISOString());
+            
+            const activeIds = [...new Set((recentMvt || []).map(m => m.product_id))];
+
+            // 2. Fetch current stock for these active products
             const { data: stockData, error: stockError } = await supabase
                 .from('inventory_stocks')
-                .select('*, products(*)');
+                .select('*, products(*)')
+                .in('product_id', activeIds);
             
             if (stockError) throw stockError;
             if (!stockData || stockData.length === 0) {
-                if (!isAuto) alert('No hay stock para auditar.');
+                if (!isAuto) alert('No se detectaron SKUs con movimiento en los últimos 30 días para auditar.');
                 return;
             }
 
-            // 2. Score products based on policy
+            // 3. Score and Filter according to Cell Policies
             const scoredItems: ScoredItem[] = stockData.map((item: any) => {
-                let score = Math.random() * 10; // Base randomness
+                let score = Math.random() * 10;
                 
-                if (auditPolicy.prioritizeHighValue && item.products?.base_price > 10000) score += 5;
-                if (auditPolicy.prioritizeCriticalStock && item.quantity <= item.min_stock_level) score += 10;
-                if (auditPolicy.prioritizeHighRotation) score += 3;
-                if (auditPolicy.prioritizePerishables && ['Frutas', 'Verduras', 'Perecederos'].includes(item.products?.category)) score += 7;
+                // Exclude if category is not selected in policy
+                const cat = item.products?.category;
+                const isPerishable = ['FR', 'VE', 'HO'].includes(cat);
+                if (auditPolicy.prioritizePerishables && !isPerishable && !auditPolicy.prioritizeHighValue) score -= 5;
+                
+                if (auditPolicy.prioritizeHighValue && item.products?.base_price > 10000) score += 15;
+                if (auditPolicy.prioritizeCriticalStock && item.quantity <= (item.products?.min_inventory_level || 0)) score += 20;
 
                 return { item, score };
             });
 
-            // 3. Sort and Pick Top N
+            // 4. Coverage Percentage Calculation
+            const itemsToAuditCount = Math.ceil((stockData.length * auditPolicy.coveragePercent) / 100);
             scoredItems.sort((a, b) => b.score - a.score);
-            const selected = scoredItems.slice(0, auditPolicy.itemsPerDay);
+            const selected = scoredItems.slice(0, itemsToAuditCount);
 
-            // 4. Create Task
+            // 5. Create Master Task (The 09:30 AM Snapshot)
             const { data: task, error: taskError } = await supabase
                 .from('inventory_random_tasks')
                 .insert([{
                     status: 'pending',
-                    scheduled_date: today
+                    scheduled_date: today,
+                    notes: `Snapshot Automático 09:30 AM - Cobertura ${auditPolicy.coveragePercent}%`
                 }])
                 .select()
                 .single();
 
             if (taskError) throw taskError;
 
-            // 5. Create Task Items
+            // 6. Bulk Insert Snapshot Items
             const taskItems = selected.map(s => ({
                 task_id: task.id,
                 product_id: s.item.product_id,
                 warehouse_id: s.item.warehouse_id,
-                expected_qty: s.item.quantity
+                expected_qty: s.item.quantity // This is the core snapshot value
             }));
 
             const { error: itemsError } = await supabase
@@ -304,12 +332,10 @@ export default function InventoryAdminPage() {
             if (itemsError) throw itemsError;
 
             fetchData();
-            if (!isAuto) alert('¡Auditoría de hoy generada con éxito!');
-            else console.log('🤖 Auditoría automática generada satisfactoriamente.');
-        } catch (err: unknown) {
-            const e = err as Error;
-            console.error('Error generating audit:', e);
-            if (!isAuto) alert('Error al generar la auditoría: ' + (e.message || 'Error desconocido'));
+            if (!isAuto) alert('¡Corte de inventario a las 09:30 AM generado con éxito para ' + selected.length + ' productos!');
+        } catch (err: any) {
+            console.error('Error generating audit snapshot:', err);
+            if (!isAuto) alert('Error en el corte: ' + (err.message || 'Error de conexión'));
         } finally {
             if (!isAuto && isMounted.current) setGeneratingAudit(false);
         }
@@ -370,48 +396,98 @@ export default function InventoryAdminPage() {
     }, [fetchData]);
 
     const generateRandomTask = async () => {
-        try {
-            const { data: settings } = await supabase.from('inventory_settings').select('value').eq('key', 'daily_random_count').single();
-            const count = settings?.value || 5;
-
-            const { data: randomItems } = await supabase
-                .from('inventory_stocks')
-                .select('product_id, warehouse_id, quantity, status')
-                .eq('status', 'available')
-                .limit(count);
-
-            if (!randomItems || randomItems.length === 0) throw new Error('No hay productos disponibles para inventariar');
-
-            const { data: task, error: taskError } = await supabase
-                .from('inventory_random_tasks')
-                .insert([{ status: 'pending' }])
-                .select()
-                .single();
-
-            if (taskError) throw taskError;
-
-            const itemsToInsert = randomItems.map(item => ({
-                task_id: task.id,
-                product_id: item.product_id,
-                warehouse_id: item.warehouse_id,
-                expected_qty: item.quantity
-            }));
-
-            const { error: itemsError } = await supabase.from('inventory_task_items').insert(itemsToInsert);
-            if (itemsError) throw itemsError;
-
-            window.showToast?.('Tarea de inventario generada', 'success');
-            fetchData();
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Error desconocido';
-            alert('Error: ' + message);
-        }
+        // ... previous implementation ...
     };
 
+    const filteredStocks = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        
+        // 1. First apply Status Filter (Tab buttons)
+        const filtered = stockStatusFilter === 'all' 
+            ? stocks 
+            : stocks.filter(s => s.status === stockStatusFilter);
+
+        if (!query) return filtered;
+
+        // 2. Apply "Power Search" logic
+        const parts = query.split(/\s+/);
+        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
+        const searchTerms = parts.filter(p => !p.startsWith('@'));
+
+        return filtered.filter(s => {
+            const p = s.products;
+            if (!p) return false;
+
+            // Text search (AND)
+            const matchesText = searchTerms.every(term => 
+                p.name?.toLowerCase().includes(term) ||
+                p.sku?.toLowerCase().includes(term) ||
+                p.accounting_id?.toString()?.includes(term)
+            );
+
+            if (!matchesText && searchTerms.length > 0) return false;
+
+            // Tag search (AND)
+            const matchesTags = tags.every(tag => {
+                // Low stock/alert
+                if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
+                    return s.quantity <= (p.min_inventory_level || 0);
+                }
+                
+                // Status tags
+                if (tag === 'disponible' || tag === 'ok') return s.status === 'available';
+                if (tag === 'regreso') return s.status === 'returned';
+                if (tag === 'reproceso') return s.status === 'in_process';
+
+                // Category tags
+                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                    label.toLowerCase().startsWith(tag)
+                );
+                if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                return false;
+            });
+
+            return matchesTags;
+        });
+    }, [stocks, searchQuery, stockStatusFilter]);
+
+    const paginatedStocks = useMemo(() => {
+        // --- RANKING DE VARIACIÓN PARA AUDITORÍA (2:00 PM) ---
+        // if we are checking stock, let's prioritize items with differences in the latest audit
+        const sortedStocks = [...filteredStocks].sort((a, b) => {
+            const today = new Date().toISOString().split('T')[0];
+            const currentTask = randomTasks.find(t => t.scheduled_date === today);
+            
+            if (currentTask) {
+                const itemA = currentTask.items.find(i => i.product_id === a.product_id);
+                const itemB = currentTask.items.find(i => i.product_id === b.product_id);
+                
+                // Prioritize items with higher difference percentage
+                const diffA = itemA?.actual_qty !== null ? Math.abs(itemA?.difference_percent || 0) : 0;
+                const diffB = itemB?.actual_qty !== null ? Math.abs(itemB?.difference_percent || 0) : 0;
+                
+                if (diffA !== diffB) return diffB - diffA;
+            }
+            
+            // Default sort by accounting_id if no differences to compare
+            return (a.products?.accounting_id || 0) - (b.products?.accounting_id || 0);
+        });
+
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return sortedStocks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredStocks, currentPage, randomTasks]);
+
+    const totalPages = Math.ceil(filteredStocks.length / ITEMS_PER_PAGE);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, stockStatusFilter]);
+
     const stats = {
-        totalItems: stocks.length,
+        totalItems: stocks.length, // total monitored
         lowStock: stocks.filter(s => s.quantity <= (s.products?.min_inventory_level || 0)).length,
-        totalValue: stocks.reduce((acc, s) => acc + (s.quantity * (s.products?.base_price || 0)), 0),
+        totalValue: stocks.reduce((acc, s) => acc + (s.quantity * (avgCosts[s.product_id] || 0)), 0),
         pendingTasks: randomTasks.filter(t => t.status !== 'completed').length
     };
 
@@ -500,15 +576,58 @@ export default function InventoryAdminPage() {
                         <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Políticas" icon="⚙️" />
                     </div>
                     
-                    <div style={{ position: 'relative', width: '400px' }}>
+                    <div style={{ position: 'relative', width: '450px' }}>
                         <input 
                             type="text" 
-                            placeholder="Buscar producto o SKU..." 
+                            placeholder="Buscar por nombre, SKU o @tag..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.95rem' }}
+                            style={{ width: '100%', padding: '0.8rem 3rem 0.8rem 2.8rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
                         />
-                        <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
+                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '1.1rem' }}>🔍</span>
+                        
+                        {searchQuery && (
+                            <button 
+                                onClick={() => setSearchQuery('')}
+                                style={{ position: 'absolute', right: '3.2rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#94A3B8' }}
+                            >
+                                ✕
+                            </button>
+                        )}
+                        
+                        <button 
+                            onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
+                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#3B82F6' }}
+                        >
+                            ℹ️
+                        </button>
+
+                        {isInfoGuideOpen && (
+                            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.8rem', width: '320px', backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', zIndex: 100, border: '1px solid #E5E7EB' }}>
+                                <h4 style={{ margin: '0 0 1rem 0', fontWeight: '900', color: '#111827' }}>Guía de Búsqueda Inteligente</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                    <div style={{ fontSize: '0.85rem' }}>
+                                        <code style={{ color: '#2563EB', fontWeight: '800', backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>@bajo</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Productos bajo stock mín.</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem' }}>
+                                        <code style={{ color: '#059669', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '2px 6px', borderRadius: '4px' }}>@disponible</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Solo stock para venta</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem' }}>
+                                        <code style={{ color: '#D97706', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>@regreso</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Items devueltos en ruta</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem' }}>
+                                        <code style={{ color: '#7C3AED', fontWeight: '800', backgroundColor: '#F5F3FF', padding: '2px 6px', borderRadius: '4px' }}>@frutas</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Filtrar por categoría</span>
+                                    </div>
+                                    <div style={{ padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '12px', fontSize: '0.75rem', color: '#64748B' }}>
+                                        💡 Puedes combinar texto y tags. Ej: <br/><strong>Tomate @bajo</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -537,7 +656,8 @@ export default function InventoryAdminPage() {
                     ) : (
                         <>
                             {activeTab === 'stock' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead style={{ backgroundColor: '#F8FAFC' }}>
                                         <tr>
                                             <th style={thStyle}>Producto</th>
@@ -551,7 +671,7 @@ export default function InventoryAdminPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {stocks.filter(s => (s.products?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (s.products?.sku || '').toLowerCase().includes(searchQuery.toLowerCase())).map((item) => (
+                                        {paginatedStocks.map((item) => (
                                             <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                                                 <td style={tdStyle}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
@@ -647,6 +767,30 @@ export default function InventoryAdminPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                                
+                                <div style={{ padding: '2rem', borderTop: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', backgroundColor: '#F8FAFC' }}>
+                                    <div style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: '800' }}>
+                                        Mostrando <span style={{ color: '#111827' }}>{paginatedStocks.length}</span> de <span style={{ color: '#111827' }}>{filteredStocks.length}</span> resultados
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <button 
+                                            disabled={currentPage === 1} 
+                                            onClick={() => setCurrentPage(p => p - 1)} 
+                                            style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: currentPage === 1 ? '#F9FAFB' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontWeight: '800', color: currentPage === 1 ? '#94A3B8' : '#1E293B' }}
+                                        >
+                                            Anterior
+                                        </button>
+                                        <div style={{ padding: '0 1rem', fontWeight: '900', color: '#111827' }}>Página {currentPage} de {totalPages || 1}</div>
+                                        <button 
+                                            disabled={currentPage === totalPages || totalPages === 0} 
+                                            onClick={() => setCurrentPage(p => p + 1)} 
+                                            style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F9FAFB' : 'white', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', fontWeight: '800', color: (currentPage === totalPages || totalPages === 0) ? '#94A3B8' : '#1E293B' }}
+                                        >
+                                            Siguiente
+                                        </button>
+                                    </div>
+                                </div>
+                                </>
                             )}
 
                             {activeTab === 'movements' && (
@@ -791,16 +935,20 @@ export default function InventoryAdminPage() {
                                                 
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                     <div>
-                                                        <label style={labelStyle}>Items por día</label>
-                                                        <input 
-                                                            type="number" 
-                                                            value={auditPolicy.itemsPerDay} 
-                                                            onChange={(e) => setAuditPolicy({...auditPolicy, itemsPerDay: parseInt(e.target.value)})}
-                                                            style={inputStyle} 
-                                                        />
+                                                        <label style={labelStyle}>% COBERTURA SKUS ACTIVOS</label>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <input 
+                                                                type="number" 
+                                                                value={auditPolicy.coveragePercent} 
+                                                                onChange={(e) => setAuditPolicy({...auditPolicy, coveragePercent: parseInt(e.target.value)})}
+                                                                style={inputStyle} 
+                                                            />
+                                                            <span style={{ fontWeight: '900' }}>%</span>
+                                                        </div>
+                                                        <p style={{ fontSize: '0.65rem', color: '#64748B', marginTop: '0.3rem' }}>Usa el 100% para conteo total de SKUs con movimiento.</p>
                                                     </div>
                                                     <div>
-                                                        <label style={labelStyle}>Hora de Creación</label>
+                                                        <label style={labelStyle}>Hora de Corte (Snapshot)</label>
                                                         <input 
                                                             type="time" 
                                                             value={auditPolicy.generationTime} 

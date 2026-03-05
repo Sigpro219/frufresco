@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <style dangerouslySetInnerHTML={{ __html: `
           #nextjs-portal, 
@@ -72,7 +72,7 @@ export default function RootLayout({
           }, true);
         `}} />
       </head>
-      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }}>
+      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
         <ClientLayout>
           {children}
         </ClientLayout>

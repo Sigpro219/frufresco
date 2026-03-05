@@ -1,0 +1,91 @@
+﻿
+> frufresco@0.1.0 build
+> next build
+
+node.exe : ÔÜá `eslint` configuration in next.config.js is no longer supported. See more info here: 
+https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+En línea: 1 Carácter: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ÔÜá `eslint` co...xt-lint-options:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ÔÜá Invalid next.config.js options detected: 
+ÔÜá     Unrecognized key(s) in object: 'eslint'
+ÔÜá See more info here: https://nextjs.org/docs/messages/invalid-next-config
+Ôû▓ Next.js 16.1.3 (Turbopack)
+- Environments: .env.local
+
+ÔÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: 
+https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+Ô£ô Compiled successfully in 6.0s
+  Skipping validation of types
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/44) ...
+ProcurementPage rendering...
+  Generating static pages using 11 workers (11/44) 
+  Generating static pages using 11 workers (22/44) 
+  Generating static pages using 11 workers (33/44) 
+Ô£ô Generating static pages using 11 workers (44/44) in 1259.2ms
+  Finalizing page optimization ...
+
+Route (app)
+Ôöî ãÆ /
+Ôö£ Ôùï /_not-found
+Ôö£ Ôùï /admin/clients
+Ôö£ Ôùï /admin/commercial
+Ôö£ Ôùï /admin/commercial/billing
+Ôö£ ãÆ /admin/commercial/billing/print/[id]
+Ôö£ Ôùï /admin/commercial/cost-matrix
+Ôö£ Ôùï /admin/commercial/inventory
+Ôö£ Ôùï /admin/commercial/inventory/tasks
+Ôö£ Ôùï /admin/commercial/quotes
+Ôö£ ãÆ /admin/commercial/quotes/[id]
+Ôö£ Ôùï /admin/commercial/quotes/create
+Ôö£ Ôùï /admin/commercial/settings
+Ôö£ Ôùï /admin/dashboard
+Ôö£ Ôùï /admin/hr
+Ôö£ Ôùï /admin/master/products
+Ôö£ Ôùï /admin/orders
+Ôö£ ãÆ /admin/orders/[id]
+Ôö£ Ôùï /admin/orders/create
+Ôö£ Ôùï /admin/orders/loading
+Ôö£ Ôùï /admin/products
+Ôö£ Ôùï /admin/settings
+Ôö£ Ôùï /admin/strategy
+Ôö£ Ôùï /admin/transport
+Ôö£ ãÆ /api/payments/status
+Ôö£ ãÆ /api/payments/wompi/integrity
+Ôö£ ãÆ /api/payments/wompi/webhook
+Ôö£ ãÆ /api/transport/optimize
+Ôö£ Ôùï /b2b/dashboard
+Ôö£ Ôùï /b2b/register
+Ôö£ Ôùï /checkout
+Ôö£ Ôùï /checkout/result
+Ôö£ Ôùï /docs/test-letterhead
+Ôö£ Ôùï /login
+Ôö£ Ôùï /ops
+Ôö£ Ôùï /ops/compras
+Ôö£ Ôùï /ops/driver
+Ôö£ ãÆ /ops/driver/delivery/[id]
+Ôö£ ãÆ /ops/driver/route-map/[id]
+Ôö£ ãÆ /ops/driver/route/[id]
+Ôö£ Ôùï /ops/inventory
+Ôö£ Ôùï /ops/picking
+Ôö£ ãÆ /ops/picking/cliente/[id]
+Ôö£ Ôùï /ops/picking/dashboard
+Ôö£ Ôùï /ops/picking/terminal
+Ôö£ Ôùï /ops/recepcion
+Ôö£ Ôùï /ops/recogida
+Ôö£ Ôùï /payments/simulator
+Ôö£ ãÆ /products/[id]
+Ôö£ Ôùï /register
+Ôöö Ôùï /test-db
+
+
+ãÆ Proxy (Middleware)
+
+Ôùï  (Static)   prerendered as static content
+ãÆ  (Dynamic)  server-rendered on demand
+

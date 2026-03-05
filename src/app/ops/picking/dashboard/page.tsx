@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
+import { CATEGORY_MAP } from '@/lib/constants';
 
 // Types
 type Product = {
@@ -11,6 +12,8 @@ type Product = {
     name: string;
     category: string;
     unit_of_measure: string;
+    min_inventory_level?: number;
+    current_stock?: number;
 };
 
 type CellData = {
@@ -103,15 +106,29 @@ export default function PickingDashboard() {
 
             if (isMounted.current) setClients(formattedClients);
 
-            // 3. Fetch Products
+            // 3. Fetch Products with Stock Info
             const { data: prods } = await supabase
                 .from('products')
-                .select('id, name, category, unit_of_measure')
+                .select(`
+                    id, name, category, unit_of_measure, min_inventory_level,
+                    inventory_stocks (quantity, status)
+                `)
                 .order('category')
                 .order('name')
                 .abortSignal(signal as any);
+            
+            const processedProds = (prods || []).map((p: any) => {
+                const currentStock = (p.inventory_stocks as any[])
+                    ?.filter(s => s.status === 'available')
+                    .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0) || 0;
                 
-            if (isMounted.current) setProducts(prods as Product[] || []);
+                return {
+                    ...p,
+                    current_stock: currentStock
+                };
+            });
+                
+            if (isMounted.current) setProducts(processedProds as Product[]);
 
             // 4. Build Matrix
             const newMatrix: Record<string, Record<string, CellData>> = {};
@@ -399,6 +416,15 @@ export default function PickingDashboard() {
 
     if (loading) return <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: '2rem' }}>AGUARDE...</div>;
 
+    // Inventory Alerts Calculation
+    const inventoryAlerts = products
+        .filter(p => (p.min_inventory_level || 0) > 0 && (p.current_stock || 0) < (p.min_inventory_level || 0))
+        .map(p => ({
+            name: p.name,
+            current: p.current_stock || 0,
+            min: p.min_inventory_level || 0
+        }));
+
     return (
         <main style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -409,6 +435,11 @@ export default function PickingDashboard() {
                     style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#22C55E', fontWeight: '900', fontSize: '1.5rem', cursor: 'pointer' }}>
                     LOGISTICS PRO <span style={{ color: '#666' }}>|</span> <span style={{ color: '#fff' }}>PICKING</span>
                 </div>
+
+                {/* INVENTORY ALERTS BANNER - INSIDE HEADER OR BELOW? 
+                    User asked for a yellow alert or banner. Let's put it in the center of the header if there are few, or a marquee if many.
+                    Actually, let's put it below the header for better visibility.
+                */}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
@@ -476,6 +507,39 @@ export default function PickingDashboard() {
                     </div>
                 </div>
             </header>
+
+            {/* INVENTORY ALERT BANNER */}
+            {inventoryAlerts && inventoryAlerts.length > 0 && (
+                <div style={{ 
+                    backgroundColor: '#FEF3C7', 
+                    color: '#92400E', 
+                    padding: '0.6rem 2rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '1rem',
+                    borderBottom: '2px solid #F59E0B',
+                    zIndex: 100,
+                    fontWeight: '800',
+                    fontSize: '0.9rem',
+                    overflow: 'hidden'
+                }}>
+                    <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                    <div style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <div style={{ 
+                            display: 'inline-block', 
+                            animation: inventoryAlerts.length > 2 ? 'marqueeAlert 30s linear infinite' : 'none',
+                            paddingLeft: '100%'
+                        }}>
+                            <span style={{ marginRight: '2rem', color: '#B45309' }}>¡ATENCIÓN SECTOR PICKING! REVISAR ABASTECIMIENTO:</span>
+                            {inventoryAlerts.map((alert, idx) => (
+                                <span key={idx} style={{ marginRight: '3rem' }}>
+                                    La carga de <strong style={{ textDecoration: 'underline' }}>{alert.name}</strong> está por debajo del mínimo (Actual: {alert.current} | Mín: {alert.min})
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* SCROLLABLE GRID */}
             <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
@@ -600,7 +664,7 @@ export default function PickingDashboard() {
                                             position: 'sticky', left: 0 // Optional: Sticky category header? Maybe too much.
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
-                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{category.toUpperCase()}</span>
+                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{(CATEGORY_MAP[category] || category).toUpperCase()}</span>
 
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     {/* Mini Progress Bar Background */}
@@ -748,6 +812,10 @@ export default function PickingDashboard() {
                     0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
                     80% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
                     100% { transform: translate(-50%, -50%) scale(1); }
+                }
+                @keyframes marqueeAlert {
+                    from { transform: translateX(0); }
+                    to { transform: translateX(-100%); }
                 }
                 @keyframes pulseAlert {
                     0% { background-color: #EF4444; }

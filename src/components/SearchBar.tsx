@@ -1,78 +1,119 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
+import { Search, X } from 'lucide-react';
 
 function SearchBarContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [query, setQuery] = useState(searchParams.get('q') || '');
 
-    // Debounce logic could be added here, but for simplicity we'll search on Enter or Button click
-    // or just simple onChange for small delay.
+    // Debounce to avoid excessive router calls
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const currentQ = searchParams.get('q') || '';
+            if (query !== currentQ) {
+                const params = new URLSearchParams(searchParams.toString());
+                if (query) {
+                    params.set('q', query);
+                } else {
+                    params.delete('q');
+                }
+                router.replace(`/?${params.toString()}#catalog`, { scroll: false });
+            }
+        }, 400);
 
-    const handleSearch = (term: string) => {
-        setQuery(term);
+        return () => clearTimeout(timer);
+    }, [query, router, searchParams]);
+
+    const clearSearch = () => {
+        setQuery('');
         const params = new URLSearchParams(searchParams.toString());
-        if (term) {
-            params.set('q', term);
-        } else {
-            params.delete('q');
-        }
-
-        // El parámetro category se mantiene automáticamente al usar params de searchParams.toString()
-        router.replace(`/?${params.toString()}`);
+        params.delete('q');
+        router.replace(`/?${params.toString()}#catalog`, { scroll: false });
     };
 
     return (
-        <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', width: '100%' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '750px', margin: '0 auto 2.5rem' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                     type="text"
-                    placeholder="Buscar productos (ej: Mora, Tomate)..."
+                    placeholder="Buscar productos (ej: Tomate, Cebolla...)"
                     value={query}
-                    onChange={(e) => handleSearch(e.target.value)}
+                    onChange={(e) => setQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '1rem 3rem 1rem 1rem',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border)',
-                        fontSize: '1rem',
-                        boxShadow: 'var(--shadow-sm)',
+                        padding: '1.2rem 3.5rem 1.2rem 3.8rem',
+                        borderRadius: 'var(--radius-full)',
+                        border: '2px solid var(--border)',
+                        background: 'white',
+                        color: 'var(--text-main)',
+                        fontSize: '1.15rem',
+                        fontWeight: '500',
+                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
                         outline: 'none',
-                        transition: 'border-color 0.2s'
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
-                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                    onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                    onFocus={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--primary)';
+                        e.currentTarget.style.boxShadow = '0 15px 40px rgba(26, 77, 46, 0.12)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border)';
+                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.05)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                    }}
                 />
+                
+                <div style={{
+                    position: 'absolute',
+                    left: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: query ? 'var(--primary)' : 'var(--text-muted)',
+                    transition: 'color 0.3s ease',
+                    pointerEvents: 'none'
+                }}>
+                    <Search size={22} strokeWidth={2.5} />
+                </div>
+
                 {query && (
                     <button
-                        onClick={() => handleSearch('')}
+                        onClick={clearSearch}
                         style={{
                             position: 'absolute',
-                            right: '12px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
+                            right: '20px',
                             background: '#f3f4f6',
                             border: 'none',
                             borderRadius: '50%',
-                            width: '24px',
-                            height: '24px',
+                            width: '32px',
+                            height: '32px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: '#6b7280',
                             cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: 'bold',
-                            zIndex: 5
+                            transition: 'all 0.2s ease',
+                            padding: 0
                         }}
-                        title="Limpiar búsqueda"
                     >
-                        ✕
+                        <X size={18} strokeWidth={2.5} />
                     </button>
                 )}
             </div>
+            
+            <p style={{ 
+                textAlign: 'center', 
+                fontSize: '0.85rem', 
+                color: 'var(--text-muted)', 
+                marginTop: '0.75rem',
+                opacity: 0.8
+            }}>
+                💡 Tip: Puedes buscar múltiples productos separando por comas.
+            </p>
         </div>
     );
 }
@@ -80,7 +121,7 @@ function SearchBarContent() {
 export default function SearchBar() {
     return (
         <Suspense fallback={
-            <div style={{ marginBottom: '2rem', height: '58px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-md)' }}></div>
+            <div style={{ marginBottom: '2.5rem', height: '64px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-full)', maxWidth: '750px', margin: '0 auto' }}></div>
         }>
             <SearchBarContent />
         </Suspense>

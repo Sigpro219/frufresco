@@ -3,8 +3,20 @@ import Navbar from '../components/Navbar';
 import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
+import Image from 'next/image';
 import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
-import { Building2, ShoppingCart, Clock, Leaf, Gem, Flame } from 'lucide-react';
+import { LucideIcon, Building2, ShoppingCart, Timer, Sprout, Coins, Flame, Apple, Leaf, Carrot, Milk, Package, LayoutGrid } from 'lucide-react';
+import { CATEGORY_MAP } from '../lib/constants';
+
+const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
+  'FR': Apple,
+  'VE': Leaf,
+  'TU': Carrot,
+  'HO': Sprout,
+  'LA': Milk,
+  'DE': Package,
+  'Todos': LayoutGrid
+};
 
 // SEO Metadata
 export const metadata = {
@@ -19,14 +31,63 @@ export const dynamic = 'force-dynamic';
 export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   const { q, category } = await searchParams;
 
-  // 1. Fetch Featured Products (Top 10)
-  const { data: featuredProducts } = await supabase.from('products').select('*').eq('is_active', true).limit(10);
+  // 1. Fetch Featured Products (Top 10) - Balaceado por categorías
+  const { data: allVisibleResponse } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', true)
+    .eq('show_on_web', true)
+    .order('image_url', { ascending: false, nullsFirst: false }) // Priorizar no nulos en DB
+    .limit(250); 
+
+  const allVisible = allVisibleResponse || [];
+  const featuredProducts: Product[] = [];
+  const catCount: Record<string, number> = {};
+  
+  // Priorizar visualmente los que tienen foto y luego REVOLVER (Shuffle)
+  // para que el catálogo se vea vivo
+      // Seed estable por día para evitar hydration mismatches y ser "puro" según React
+      const dailySeed = new Date().getDate();
+      
+      const sortedByImage = [...allVisible].sort((a, b) => {
+          const hasA = a.image_url && a.image_url.trim().length > 5;
+          const hasB = b.image_url && b.image_url.trim().length > 5;
+          if (hasA && !hasB) return -1;
+          if (!hasA && hasB) return 1;
+          
+          // Shuffle pseudo-aleatorio estable por día
+          const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
+          const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
+          return (scoreA % 100) - (scoreB % 100);
+      });
+
+  if (allVisible.length > 0) {
+
+      // Intentamos tomar 1-2 de cada categoría para Featured
+      sortedByImage.forEach(p => {
+          if (!catCount[p.category]) catCount[p.category] = 0;
+          if (catCount[p.category] < 2 && featuredProducts.length < 10) {
+              featuredProducts.push(p);
+              catCount[p.category]++;
+          }
+      });
+
+      // Si faltan para completar 10, llenamos con el resto priorizando fotos
+      if (featuredProducts.length < 10) {
+          sortedByImage.forEach(p => {
+              if (!featuredProducts.find(f => f.id === p.id) && featuredProducts.length < 10) {
+                  featuredProducts.push(p);
+              }
+          });
+      }
+  }
 
   // 2. Fetch Unique Categories & Settings
   const { data: categoriesData } = await supabase
     .from('products')
     .select('category')
     .eq('is_active', true)
+    .eq('show_on_web', true)
     .not('category', 'is', null);
 
   const { data: appSettings } = await supabase
@@ -62,17 +123,50 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   let query = supabase
     .from('products')
     .select('*')
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('show_on_web', true);
 
   if (q) {
-    query = query.ilike('name', `%${q}%`);
+    const searchTerms = q.split(',')
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
+    
+    if (searchTerms.length > 0) {
+      if (searchTerms.length === 1) {
+        query = query.ilike('name', `%${searchTerms[0]}%`);
+      } else {
+        // Build OR filter for multiple terms
+        const orFilter = searchTerms
+          .map(term => `name.ilike.%${term}%`)
+          .join(',');
+        query = query.or(orFilter);
+      }
+    }
   }
 
   if (category && category !== 'Todos') {
     query = query.eq('category', category);
   }
 
-  const { data: products, error } = await query.order('name').limit(24);
+  const { data: rawProducts, error } = await query
+    .order('image_url', { ascending: false, nullsFirst: false }) // Prioridad DB (fotos primero)
+    .limit(250); 
+
+  // 4. Catálogo Dinámico: Shuffle total pero manteniendo fotos arriba
+  // Usamos el mismo dailySeed definido arriba para consistencia
+  const products = rawProducts ? [...rawProducts].sort((a, b) => {
+      // 1. Prioridad absoluta: tiene foto (URL válida)
+      const hasA = a.image_url && a.image_url.includes('http');
+      const hasB = b.image_url && b.image_url.includes('http');
+      
+      if (hasA && !hasB) return -1;
+      if (!hasA && hasB) return 1;
+      
+      // 2. Shuffle aleatorio estable por día entre iguales
+      const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
+      const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
+      return (scoreA % 100) - (scoreB % 100);
+  }) : [];
 
   return (
     <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
@@ -87,11 +181,27 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
         justifyContent: 'center',
         color: 'white',
         overflow: 'hidden',
-        background: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.5)), url(/hero_fresh_produce.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
         boxShadow: 'inset 0 -120px 100px -50px rgba(0,0,0,0.3)'
       }}>
+        {/* Optimized Hero Image */}
+        <Image 
+          src="/hero_fresh_produce.png"
+          alt="Fresh Produce Hero"
+          fill
+          priority
+          quality={85}
+          style={{ objectFit: 'cover', zIndex: 0 }}
+        />
+        {/* Overlay */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.5))',
+          zIndex: 1
+        }} />
         <div className="container" style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <h1 style={{
             fontFamily: 'var(--font-outfit), sans-serif',
@@ -173,7 +283,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 margin: '0 auto 1.5rem',
                 boxShadow: '0 10px 20px rgba(26, 77, 46, 0.1)'
               }}>
-                {i === 0 ? <Clock size={40} strokeWidth={1.5} /> : i === 1 ? <Leaf size={40} strokeWidth={1.5} /> : <Gem size={40} strokeWidth={1.5} />}
+                {i === 0 ? <Timer size={40} strokeWidth={2} /> : i === 1 ? <Sprout size={40} strokeWidth={2} /> : <Coins size={40} strokeWidth={2} />}
               </div>
               <h3 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '1.6rem', fontWeight: '800', marginBottom: '1rem', color: 'var(--primary-dark)' }}>{prop.title}</h3>
               <p style={{ color: 'var(--text-muted)', lineHeight: '1.7', fontSize: '1.05rem' }}>{prop.desc}</p>
@@ -207,15 +317,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 {featuredTitle.replace('🔥', '').trim()}
               </h2>
             </div>
-            <Link href="#catalog" style={{
-              color: 'var(--secondary)',
-              fontWeight: '700',
-              fontSize: '0.9rem',
-              textDecoration: 'none',
-              transition: 'all 0.2s'
-            }}>
-              Ver todo el catálogo →
-            </Link>
           </div>
 
           <FeaturedProductsCarousel products={featuredProducts || []} />
@@ -236,40 +337,95 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             marginTop: '1.5rem',
             flexWrap: 'wrap'
           }}>
-            {dynamicCategories.map((cat: string) => (
-              <Link
-                key={cat}
-                href={`/?${new URLSearchParams({
-                  ...Object.fromEntries(new URLSearchParams(String(q || ''))),
-                  category: cat
-                }).toString()}`}
-                className={`category-pill ${((!category && cat === 'Todos') || category === cat) ? 'active' : ''}`}
-                style={{
-                  padding: '0.8rem 1.8rem',
-                  fontSize: '1rem'
-                }}
-              >
-                {cat}
-              </Link>
-            ))}
+            {dynamicCategories.map((cat: string) => {
+              const Icon = CATEGORY_ICON_MAP[cat] || (cat === 'Todos' ? CATEGORY_ICON_MAP['Todos'] : null);
+              return (
+                <Link
+                  key={cat}
+                  href={`/?${new URLSearchParams({
+                    ...Object.fromEntries(new URLSearchParams(String(q || ''))),
+                    category: cat
+                  }).toString()}#catalog`}
+                  scroll={false}
+                  className={`category-pill ${((!category && cat === 'Todos') || category === cat) ? 'active' : ''}`}
+                  style={{
+                    padding: '0.8rem 1.8rem',
+                    fontSize: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem'
+                  }}
+                >
+                  {Icon && <Icon size={18} strokeWidth={2.5} />}
+                  {CATEGORY_MAP[cat] || cat}
+                </Link>
+              );
+            })}
           </div>
         </div>
 
         {products && products.length > 0 ? (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '2rem'
-          }}>
-            {products.map((product: Product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+          <div style={{ position: 'relative' }}>
+            <div 
+              id="catalog-scroll-area"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '2.5rem',
+                maxHeight: '850px', // Altura más humana (~2.5 filas visibles a la vez, invita a scrollear)
+                overflowY: 'auto',
+                padding: '1.5rem',
+                borderRadius: 'var(--radius-lg)',
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'var(--primary) transparent',
+                scrollBehavior: 'smooth',
+                border: '1px solid rgba(0,0,0,0.03)',
+                backgroundColor: '#ffffff'
+              }}
+              className="custom-scrollbar"
+            >
+              {products.map((product: Product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+            
+            {/* Fade Effect at the bottom */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '150px',
+              background: 'linear-gradient(to top, rgba(255,255,255,0.95), transparent)',
+              zIndex: 10,
+              pointerEvents: 'none',
+              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)'
+            }} />
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
             {error ? 'Error cargando productos' : 'No encontramos productos con ese nombre.'}
           </div>
         )}
+        
+        {/* CSS for custom scrollbar hidden globally */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: var(--primary);
+            border-radius: 20px;
+            border: 3px solid transparent;
+          }
+          .custom-scrollbar {
+            mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+          }
+        `}} />
       </section>
 
 
