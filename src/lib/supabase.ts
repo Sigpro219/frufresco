@@ -5,17 +5,21 @@ const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, ''
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase environment variables');
+const isUrlValid = supabaseUrl.startsWith('http');
+
+if (!isUrlValid) {
+    console.warn('⚠️ Supabase URL is missing or invalid. Check your Environment Variables in Vercel.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-    }
-});
+export const supabase = isUrlValid 
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        }
+    })
+    : null as any;
 
 export interface Product {
     id: string;
