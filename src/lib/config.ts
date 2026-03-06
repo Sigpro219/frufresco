@@ -1,4 +1,5 @@
 
+/** FruFresco Tenant #1 Deployment Trigger **/
 export const config = {
     brand: {
         name: process.env.NEXT_PUBLIC_APP_NAME || 'FruFresco',
