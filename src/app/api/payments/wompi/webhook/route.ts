@@ -3,10 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 // Initialize Supabase Admin Client to bypass RLS
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// Fallback to Anon key if Service key is missing (though RLS might block it), 
-// but primarily expect Service Key for webhooks.
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
