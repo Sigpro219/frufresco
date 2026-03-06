@@ -6,9 +6,17 @@ export async function updateSession(request: NextRequest) {
         request,
     })
 
+    const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+    const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+    if (!supabaseUrl.startsWith('http')) {
+        return supabaseResponse;
+    }
+
     const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        supabaseUrl,
+        supabaseAnonKey,
         {
             cookies: {
                 getAll() {

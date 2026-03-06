@@ -1,19 +1,47 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase environment variables');
+const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+const isUrlValid = supabaseUrl.startsWith('http');
+
+if (!isUrlValid) {
+    console.warn('⚠️ Supabase URL is missing or invalid. Check your Environment Variables in Vercel.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
+const createSafeClient = () => {
+    if (isUrlValid) {
+        return createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
     }
-});
+
+    // Proxy-based "Bunker" to prevent SSR/Build crashes when Env Vars are missing
+    const stub: any = new Proxy(() => stub, {
+        get: (target, prop) => {
+            if (prop === 'then') return (cb: any) => Promise.resolve(cb({ data: null, error: null }));
+            if (prop === 'auth') return { 
+                getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+                onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+                signOut: () => Promise.resolve(),
+                signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Supabase not configured' } })
+            };
+            if (prop === 'storage') return { from: () => stub };
+            return stub;
+        },
+        apply: () => stub
+    });
+
+    return stub;
+};
+
+export const supabase = createSafeClient();
 
 export interface Product {
     id: string;

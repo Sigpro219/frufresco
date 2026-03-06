@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // API route should use service role for data safety
+const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
+const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // This API serves as a proxy and data-transformer for the Google Maps Route Optimization API
 export async function POST(request: Request) {

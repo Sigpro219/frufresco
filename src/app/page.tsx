@@ -106,10 +106,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const featuredTitle = getSetting('home_featured_title', '🔥 Lo más vendido de la semana');
   const catalogTitle = getSetting('home_catalog_title', 'Nuestro Catálogo');
   
-  const valuePropsRaw = getSetting('value_proposition_items', '[]');
+  const valuePropsRaw = getSetting('value_proposition_items', '');
   let valueProps: { icon: string; title: string; desc: string }[] = [];
   try {
-      valueProps = JSON.parse(valuePropsRaw);
+      if (valuePropsRaw) {
+          valueProps = JSON.parse(valuePropsRaw);
+      }
+      // If it's an empty array or parsing failed, we use the hardcoded defaults
+      if (!Array.isArray(valueProps) || valueProps.length === 0) {
+          throw new Error('Fallback');
+      }
   } catch {
       valueProps = [
         { icon: '⏱️', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
