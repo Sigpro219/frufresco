@@ -49,10 +49,6 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 top: 0,
                 zIndex: 100
             }}>
-<<<<<<< HEAD
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={{ fontWeight: '900', fontSize: '1.2rem', color: 'var(--ops-primary)' }}>LOGISTICS <span style={{ color: '#fff' }}>PRO</span></span>
-=======
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                     <div style={{
                         backgroundColor: 'white',
@@ -75,7 +71,6 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                      <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'white' }}>
                         {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
                     </span>
->>>>>>> CORE
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <Link href="/">
