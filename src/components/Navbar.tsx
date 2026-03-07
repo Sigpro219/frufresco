@@ -15,6 +15,7 @@ export default function Navbar() {
     const { user, profile, signOut, loading } = useAuth();
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
+    const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -28,7 +29,7 @@ export default function Navbar() {
                 const { data: settings, error } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name']);
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_logosymbol_url', 'app_name']);
                     
                 if (!isMounted) return;
                 
@@ -41,6 +42,9 @@ export default function Navbar() {
 
                     const logoObj = settings.find(s => s.key === 'app_logo_url');
                     if (logoObj?.value) setDynamicLogo(logoObj.value);
+
+                    const symbolObj = settings.find(s => s.key === 'app_logosymbol_url');
+                    if (symbolObj?.value) setDynamicLogosymbol(symbolObj.value);
 
                     const nameObj = settings.find(s => s.key === 'app_name');
                     if (nameObj?.value) setAppName(nameObj.value);
@@ -111,6 +115,28 @@ export default function Navbar() {
                             (e.currentTarget as HTMLImageElement).src = "/logo.png";
                         }}
                     />
+                    {dynamicLogosymbol && (
+                        <div style={{
+                            marginLeft: '-15px',
+                            marginTop: '25px',
+                            backgroundColor: 'white',
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                            border: '2px solid white',
+                            zIndex: 1
+                        }}>
+                            <img 
+                                src={dynamicLogosymbol} 
+                                alt="symbol" 
+                                style={{ height: '18px', width: '18px', objectFit: 'contain' }} 
+                            />
+                        </div>
+                    )}
                     {/* Sync Indicator */}
                     <div style={{ 
                         marginLeft: '1rem', 

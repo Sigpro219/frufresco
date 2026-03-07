@@ -155,28 +155,18 @@ export default function AdminSettingsPage() {
               ]), 
               description: 'Los 3 pilares de valor que se muestran en el inicio' 
             },
-            {
-              key: 'b2b_page_content',
-              value: JSON.stringify({
-                badge: 'Exclusivo HORECA e Institucional BOG',
-                title: 'Tu Operación Merece \n Lo Mejor del Campo',
-                description: 'Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.',
-                benefits: [
-                  { icon: '🚀', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
-                  { icon: '💰', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
-                  { icon: '🥕', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
-                  { icon: '💳', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
-                ]
-              }),
-              description: 'Contenido dinámico de la página de registro B2B'
-            },
             { 
                 key: 'b2b_page_content', 
                 value: JSON.stringify({
-                    badge: 'Exclusivo HORECA',
-                    title: 'Tu Operación Merece \n Lo Mejor',
-                    description: 'Únete a los mejores restaurantes.',
-                    benefits: []
+                    badge: 'Exclusivo HORECA e Institucional BOG',
+                    title: 'Tu Operación Merece \n Lo Mejor del Campo',
+                    description: 'Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.',
+                    benefits: [
+                        { icon: '🚀', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
+                        { icon: '💰', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
+                        { icon: '🥕', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
+                        { icon: '💳', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
+                    ]
                 }), 
                 description: 'Contenido dinámico de la página de registro B2B' 
             },
@@ -477,7 +467,7 @@ export default function AdminSettingsPage() {
                                 />
                                 <ImageUpload 
                                     label="Logosímbolo (Ops)" 
-                                    description="Header de Operaciones."
+                                    description="Logo circular pequeño para portales internos."
                                     value={settings.find(s => s.key === 'app_logosymbol_url')?.value || ''}
                                     onUpload={(url) => handleUpdateSetting('app_logosymbol_url', url)}
                                     onClear={() => handleUpdateSetting('app_logosymbol_url', '')}
