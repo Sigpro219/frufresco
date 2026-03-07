@@ -18,6 +18,8 @@ export default function Navbar() {
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
     const [operationsOpen, setOperationsOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [settingsLoaded, setSettingsLoaded] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -55,7 +57,12 @@ export default function Navbar() {
             }
         };
         
-        checkSettings();
+        checkSettings().finally(() => {
+            if (isMounted) {
+                setSettingsLoaded(true);
+                setMounted(true);
+            }
+        });
 
         return () => {
             isMounted = false;
@@ -106,15 +113,41 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img 
-                        src={dynamicLogo || "/logo.png"} 
-                        alt={appName} 
-                        style={{ height: '80px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} 
-                        onError={(e) => {
-                            // Fallback if dynamic URL fails
-                            (e.currentTarget as HTMLImageElement).src = "/logo.png";
-                        }}
-                    />
+                    <div style={{ 
+                        height: '80px', 
+                        width: 'auto', 
+                        minWidth: '120px', 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        position: 'relative'
+                    }}>
+                        <img 
+                            src={dynamicLogo || "/logo.png"} 
+                            alt={appName} 
+                            style={{ 
+                                height: '80px', 
+                                width: 'auto', 
+                                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
+                                opacity: settingsLoaded ? 1 : 0,
+                                transition: 'opacity 0.2s ease-in-out'
+                            }} 
+                            onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                            }}
+                        />
+                        {!settingsLoaded && (
+                            <div style={{
+                                position: 'absolute',
+                                left: 0,
+                                height: '20px',
+                                width: '100px',
+                                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                backgroundSize: '200% 100%',
+                                animation: 'skeleton-loading 1.5s infinite',
+                                borderRadius: '4px'
+                            }} />
+                        )}
+                    </div>
                     {dynamicLogosymbol && (
                         <div style={{
                             marginLeft: '-15px',
@@ -128,7 +161,9 @@ export default function Navbar() {
                             justifyContent: 'center',
                             boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
                             border: '2px solid white',
-                            zIndex: 1
+                            zIndex: 1,
+                            opacity: settingsLoaded ? 1 : 0,
+                            transition: 'opacity 0.2s ease-in-out'
                         }}>
                             <img 
                                 src={dynamicLogosymbol} 
