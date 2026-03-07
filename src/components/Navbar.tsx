@@ -148,30 +148,6 @@ export default function Navbar() {
                             }} />
                         )}
                     </div>
-                    {dynamicLogosymbol && (
-                        <div style={{
-                            marginLeft: '-15px',
-                            marginTop: '25px',
-                            backgroundColor: 'white',
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                            border: '2px solid white',
-                            zIndex: 1,
-                            opacity: settingsLoaded ? 1 : 0,
-                            transition: 'opacity 0.2s ease-in-out'
-                        }}>
-                            <img 
-                                src={dynamicLogosymbol} 
-                                alt="symbol" 
-                                style={{ height: '18px', width: '18px', objectFit: 'contain' }} 
-                            />
-                        </div>
-                    )}
                     {/* Sync Indicator */}
                     <div style={{ 
                         marginLeft: '1rem', 
