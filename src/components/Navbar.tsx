@@ -526,6 +526,12 @@ export default function Navbar() {
                     )}
                 </div>
             </div>
+            <style jsx global>{`
+                @keyframes skeleton-loading {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+            `}</style>
         </header>
     );
 }
