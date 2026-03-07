@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, verifyConnectivity } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
@@ -102,6 +102,29 @@ export default function AdminSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [persisted, setPersisted] = useState(false);
     const [openSections, setOpenSections] = useState<string[]>(['operation']); // Por defecto abre Operación
+    const [connStatus, setConnStatus] = useState<{ ok: boolean, latency?: string, storageOk?: boolean, checked: boolean, checking: boolean }>({
+        ok: true, checked: false, checking: false
+    });
+
+    const checkHealth = async () => {
+        setConnStatus(prev => ({ ...prev, checking: true }));
+        const result = await verifyConnectivity();
+        setConnStatus({
+            ok: result.ok,
+            latency: result.latency,
+            storageOk: result.storageOk,
+            checked: true,
+            checking: false
+        });
+        
+        if (!result.ok) {
+            (window as any).showToast?.('⚠️ Error de conexión: ' + result.error, 'error');
+        } else if (!result.storageOk) {
+            (window as any).showToast?.('⚠️ Base de datos OK, pero Storage no responde', 'warning');
+        } else {
+            (window as any).showToast?.('⚡ Conexión exitosa (' + result.latency + ')', 'success');
+        }
+    };
 
     const toggleSection = (id: string) => {
         setOpenSections(prev => 
@@ -320,6 +343,58 @@ export default function AdminSettingsPage() {
                     <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza del Sistema</h1>
                     <p style={{ color: '#6B7280', marginTop: '0.5rem' }}>Control Maestro de parámetros globales.</p>
                 </header>
+
+                {/* --- CONNECTIVITY CHECKER --- */}
+                <div style={{ 
+                    marginBottom: '2rem', 
+                    padding: '1rem 1.5rem', 
+                    backgroundColor: connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#ECFDF5' : '#FEF2F2') : '#F3F4F6',
+                    borderRadius: '16px',
+                    border: `1px solid ${connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#10B981' : '#EF4444') : '#E5E7EB'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            borderRadius: '50%', 
+                            backgroundColor: connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#10B981' : '#EF4444') : '#9CA3AF',
+                            boxShadow: connStatus.checked && connStatus.ok ? '0 0 8px #10B981' : 'none'
+                        }} />
+                        <div>
+                            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '800', color: '#111827' }}>
+                                {connStatus.checking ? 'Verificando enlace...' : 
+                                 !connStatus.checked ? 'No se ha verificado la conexión' :
+                                 connStatus.ok && connStatus.storageOk ? 'Sistemas Operativos' :
+                                 !connStatus.ok ? 'Error de Conexión Base' : 'Error en Almacenamiento'}
+                            </p>
+                            {connStatus.checked && (
+                                <p style={{ margin: 0, fontSize: '0.7rem', color: '#6B7280' }}>
+                                    {connStatus.ok ? `Latencia: ${connStatus.latency} | Storage: ${connStatus.storageOk ? 'OK' : 'FAIL'}` : 'Verifica tu conexión o bloqueadores'}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <button 
+                        onClick={checkHealth}
+                        disabled={connStatus.checking}
+                        style={{
+                            padding: '6px 14px',
+                            backgroundColor: 'white',
+                            border: '1px solid #D1D5DB',
+                            borderRadius: '8px',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            cursor: connStatus.checking ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                        {connStatus.checking ? '⏳...' : '🧪 Probar Conexión'}
+                    </button>
+                </div>
 
                 {/* --- SECCIÓN 1: OPERACIÓN --- */}
                 <div style={{ marginBottom: '1.5rem' }}>

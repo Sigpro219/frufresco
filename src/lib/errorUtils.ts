@@ -19,6 +19,18 @@ export function diagnoseStorageError(error: any, bucketName: string) {
         console.error(diagnosis);
         return `Error de servidor (HTML). Verifica que el bucket "${bucketName}" exista y sea público.`;
     }
+
+    if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Load failed')) {
+        const diagnosis = `🌐 NETWORK DIAGNOSIS: The browser failed to reach the Supabase Storage API.
+        Possible causes:
+        1. An ad-blocker or tracker blocker is preventing the request.
+        2. Your internet connection is unstable or DNS is failing.
+        3. Supabase CORS configuration is blocking this request origin.
+        4. A VPN or Firewall is blocking the connection.`;
+        
+        console.error(diagnosis);
+        return `Error de conexión (Network). Verifica tu internet o desactiva bloqueadores de anuncios.`;
+    }
     
     return message;
 }

@@ -7,6 +7,7 @@ import { useAuth } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
 import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
+import { config } from '@/lib/config';
 
 export default function Navbar() {
     const { totalItems } = useCart();

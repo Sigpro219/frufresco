@@ -2,13 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 
-const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+// Extra sanitization to avoid common copy-paste errors
+const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL || '').split(' ')[0];
+const supabaseAnonKey = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').split(' ')[0];
 
 const isUrlValid = supabaseUrl.startsWith('http');
 
-if (!isUrlValid) {
-    console.warn('⚠️ Supabase URL is missing or invalid. Check your Environment Variables in Vercel.');
+if (!isUrlValid && typeof window !== 'undefined') {
+    console.warn('⚠️ Supabase URL is missing or invalid. Check your Environment Variables.');
 }
 
 const createSafeClient = () => {
@@ -30,9 +31,10 @@ const createSafeClient = () => {
                 getSession: () => Promise.resolve({ data: { session: null }, error: null }),
                 onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
                 signOut: () => Promise.resolve(),
-                signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Supabase not configured' } })
+                signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Supabase not configured' } }),
+                getUser: () => Promise.resolve({ data: { user: null }, error: null })
             };
-            if (prop === 'storage') return { from: () => stub };
+            if (prop === 'storage') return { from: () => stub, listBuckets: () => Promise.resolve({ data: [], error: { message: 'Supabase stub' } }) };
             return stub;
         },
         apply: () => stub
@@ -42,6 +44,34 @@ const createSafeClient = () => {
 };
 
 export const supabase = createSafeClient();
+
+/**
+ * Quick helper to verify connectivity to Supabase services
+ */
+export async function verifyConnectivity() {
+    try {
+        const start = Date.now();
+        const { data, error } = await supabase.from('app_settings').select('key').limit(1);
+        const latency = Date.now() - start;
+        
+        if (error) throw error;
+        
+        // Also check storage reachability
+        const { error: storageError } = await supabase.storage.listBuckets();
+        
+        return { 
+            ok: true, 
+            latency: `${latency}ms`,
+            storageOk: !storageError 
+        };
+    } catch (err: any) {
+        return { 
+            ok: false, 
+            error: err.message || 'Connection failed',
+            isNetworkError: err.message?.includes('fetch') || !navigator.onLine
+        };
+    }
+}
 
 export interface Product {
     id: string;

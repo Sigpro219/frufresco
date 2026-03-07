@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import OrderTracking from './OrderTracking';
 import { MapPin, Phone, Mail } from 'lucide-react';
-import { config } from '../lib/config';
+import { config } from '@/lib/config';
 
 export default function Footer() {
   const [appSettings, setAppSettings] = useState<{key: string, value: string}[] | null>(null);
