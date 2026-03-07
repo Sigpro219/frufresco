@@ -125,7 +125,6 @@ export default function Footer() {
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
           © {new Date().getFullYear()} {appName}. Todos los derechos reservados.
-          <span style={{ display: 'block', fontSize: '0.7rem', marginTop: '0.5rem', opacity: 0.6 }}>CORE System Sincronización OK</span>
         </div>
       </div>
     </footer>

@@ -8,7 +8,8 @@
     "dev:frufresco": "npx dotenv -e .env.tenant1_production -- next dev -p 3002",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync-core": "node scripts/update-sync.js && git add . && git commit -m \"Chore: sync core update\" && git push origin main -f && git branch -f CORE main && git push origin CORE -f"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

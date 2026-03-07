@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
 import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
 import { config } from '@/lib/config';
+import { SYNC_METADATA } from '@/lib/sync-status';
 
 export default function Navbar() {
     const { totalItems } = useCart();
@@ -110,6 +111,28 @@ export default function Navbar() {
                             (e.currentTarget as HTMLImageElement).src = "/logo.png";
                         }}
                     />
+                    {/* Sync Indicator */}
+                    <div style={{ 
+                        marginLeft: '1rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        padding: '4px 8px',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'rgba(0,0,0,0.03)',
+                        fontSize: '0.65rem',
+                        color: '#64748b',
+                        fontWeight: '600'
+                    }} title={`Última sincronización CORE: ${new Date(SYNC_METADATA.lastSync).toLocaleString()}`}>
+                        <div style={{ 
+                            width: '8px', 
+                            height: '8px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#10b981', // Verde por defecto indicando que está activo
+                            boxShadow: '0 0 8px #10b981'
+                        }}></div>
+                        <span>SYNC: {new Date(SYNC_METADATA.lastSync).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}</span>
+                    </div>
                 </Link>
 
                 {/* NAV LINKS */}
