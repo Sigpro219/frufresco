@@ -15,7 +15,6 @@ export default function Navbar() {
     const { user, profile, signOut, loading } = useAuth();
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
-    const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -31,7 +30,7 @@ export default function Navbar() {
                 const { data: settings, error } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_logosymbol_url', 'app_name']);
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name']);
                     
                 if (!isMounted) return;
                 
@@ -44,9 +43,6 @@ export default function Navbar() {
 
                     const logoObj = settings.find(s => s.key === 'app_logo_url');
                     if (logoObj?.value) setDynamicLogo(logoObj.value);
-
-                    const symbolObj = settings.find(s => s.key === 'app_logosymbol_url');
-                    if (symbolObj?.value) setDynamicLogosymbol(symbolObj.value);
 
                     const nameObj = settings.find(s => s.key === 'app_name');
                     if (nameObj?.value) setAppName(nameObj.value);
@@ -165,8 +161,8 @@ export default function Navbar() {
                             width: '8px', 
                             height: '8px', 
                             borderRadius: '50%', 
-                            backgroundColor: '#10b981', // Verde por defecto indicando que está activo
-                            boxShadow: '0 0 8px #10b981'
+                            backgroundColor: '#059669', // Verde esmeralda para forzar refresh
+                            boxShadow: '0 0 10px rgba(5, 150, 105, 0.4)'
                         }}></div>
                         <span>SYNC: {mounted ? new Date(SYNC_METADATA.lastSync).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
                     </div>
