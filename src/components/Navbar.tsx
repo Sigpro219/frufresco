@@ -184,7 +184,7 @@ export default function Navbar() {
                         fontSize: '0.65rem',
                         color: '#64748b',
                         fontWeight: '600'
-                    }} title={`Última sincronización CORE: ${new Date(SYNC_METADATA.lastSync).toLocaleString()}`}>
+                    }} title={mounted ? `Última sincronización CORE: ${new Date(SYNC_METADATA.lastSync).toLocaleString()}` : 'Cargando...'}>
                         <div style={{ 
                             width: '8px', 
                             height: '8px', 
@@ -192,7 +192,7 @@ export default function Navbar() {
                             backgroundColor: '#10b981', // Verde por defecto indicando que está activo
                             boxShadow: '0 0 8px #10b981'
                         }}></div>
-                        <span>SYNC: {new Date(SYNC_METADATA.lastSync).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}</span>
+                        <span>SYNC: {mounted ? new Date(SYNC_METADATA.lastSync).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
                     </div>
                 </Link>
 
