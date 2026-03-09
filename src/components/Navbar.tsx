@@ -20,6 +20,7 @@ export default function Navbar() {
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
+    const [themeConfig, setThemeConfig] = useState<{primary: string, secondary: string} | null>(null);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -41,7 +42,7 @@ export default function Navbar() {
                 const { data: settings, error } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles']);
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles', 'primary_color', 'secondary_color']);
                     
                 if (!isMounted) return;
                 
@@ -61,6 +62,15 @@ export default function Navbar() {
                     const rolesObj = settings.find((s: {key: string, value: string}) => s.key === 'system_roles');
                     if (rolesObj?.value) {
                         try { setRoles(JSON.parse(rolesObj.value)); } catch(e) { console.error(e); }
+                    }
+
+                    const primaryObj = settings.find((s: {key: string, value: string}) => s.key === 'primary_color');
+                    const secondaryObj = settings.find((s: {key: string, value: string}) => s.key === 'secondary_color');
+                    if (primaryObj?.value || secondaryObj?.value) {
+                        setThemeConfig({
+                            primary: primaryObj?.value || '#22c55e', // default green
+                            secondary: secondaryObj?.value || '#16a34a' // default dark green
+                        });
                     }
                 }
             } catch (err: unknown) {
@@ -127,15 +137,22 @@ export default function Navbar() {
     });
 
     return (
-        <header style={{
-            backgroundColor: 'rgba(251, 250, 245, 0.8)',
-            borderBottom: '1px solid rgba(0,0,0,0.05)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.3s ease'
-        }}>
+        <header 
+            style={{
+                backgroundColor: 'rgba(251, 250, 245, 0.8)',
+                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                position: 'sticky',
+                top: 0,
+                zIndex: 100,
+                backdropFilter: 'blur(20px)',
+                transition: 'all 0.3s ease',
+                ...(themeConfig ? {
+                    '--primary': themeConfig.primary,
+                    '--secondary': themeConfig.secondary,
+                    '--accent': `${themeConfig.primary}1A`
+                } as any : {})
+            }}
+        >
             <div className="container" style={{
                 height: '85px',
                 display: 'flex',
