@@ -172,18 +172,6 @@ export default function AdminSettingsPage() {
             },
             { key: 'store_status', value: 'open', description: 'Estado actual de la tienda (Abierto/Cerrado)' },
             { key: 'global_banner', value: '', description: 'Anuncio superior (ej: ¡Envíos gratis hoy!)' },
-            { 
-                key: 'picking_route_spaces', 
-                value: JSON.stringify({ 
-                    'Norte': '1-8', 
-                    'Centro': '9-16', 
-                    'Sur': '17-25',
-                    'Oriente': '26-33',
-                    'Occidente': '34-41',
-                    'Otros': '42-50'
-                }), 
-                description: 'Rangos de espacios (Cajas/Cubículos) asignados por zona de entrega' 
-            },
             { key: 'home_featured_title', value: '🔥 Lo más vendido de la semana', description: 'Título sección productos destacados' },
             { key: 'home_catalog_title', value: 'Nuestro Catálogo', description: 'Título sección catálogo general' },
             { key: 'contact_phone', value: '+57 300 123 4567', description: 'Teléfono de contacto (Footer)' },
