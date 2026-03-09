@@ -7,7 +7,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 
-const ROLES = [
+interface Role {
+    value: string;
+    label: string;
+    color?: string;
+}
+
+const DEFAULT_ROLES: Role[] = [
     { value: 'administrativo', label: 'Administrativo' },
     { value: 'web_admin', label: 'Administrador Web' },
     { value: 'comercial', label: 'Comercial' },
@@ -59,6 +65,7 @@ export default function KanbanTasksPage() {
     const [incompleteCount, setIncompleteCount] = useState(0);
     const [myOverdueTasks, setMyOverdueTasks] = useState<Task[]>([]);
     const [myPendingCount, setMyPendingCount] = useState(0);
+    const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
     const [maintenanceStats, setMaintenanceStats] = useState({ urgent: 0, upcoming: 0 });
     
     // Form state
@@ -106,14 +113,14 @@ export default function KanbanTasksPage() {
             // 4. Calculate Personal Stats
             if (tasksData && user) {
                 const now = new Date();
-                const myTasks = tasksData.filter(t => t.assigned_to === user.id);
-                const overdue = myTasks.filter(t => 
+                const myTasks = tasksData.filter((t: Task) => t.assigned_to === user.id);
+                const overdue = myTasks.filter((t: Task) => 
                     t.due_date && 
                     new Date(t.due_date) < now && 
                     t.status !== 'done' && 
                     t.status !== 'archived'
                 );
-                const pending = myTasks.filter(t => t.status === 'todo' || t.status === 'in_progress').length;
+                const pending = myTasks.filter((t: Task) => t.status === 'todo' || t.status === 'in_progress').length;
                 
                 setMyOverdueTasks(overdue);
                 setMyPendingCount(pending);
@@ -129,7 +136,7 @@ export default function KanbanTasksPage() {
                 let urgent = 0;
                 let upcoming = 0;
 
-                mData.forEach(t => {
+                mData.forEach((t: any) => { // Using any for maintenance data as its structure is complex
                     if (t.task_type === 'date' && t.next_due_date) {
                         const due = new Date(t.next_due_date);
                         const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -142,6 +149,24 @@ export default function KanbanTasksPage() {
                     }
                 });
                 setMaintenanceStats({ urgent, upcoming });
+            }
+
+            // 6. Fetch Roles from Command Center
+            const { data: settingsData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'system_roles')
+                .single();
+            
+            if (settingsData?.value) {
+                try {
+                    const parsedRoles = JSON.parse(settingsData.value);
+                    if (Array.isArray(parsedRoles)) {
+                        setRoles(parsedRoles);
+                    }
+                } catch (e) {
+                    console.error('Error parsing roles:', e);
+                }
             }
         } catch (err) {
             console.error('Error fetching Kanban data:', err);
@@ -207,11 +232,12 @@ export default function KanbanTasksPage() {
 
             window.showToast?.('Tarea creada exitosamente', 'success');
             setIsModalOpen(false);
-            setNewTask({ title: '', description: '', priority: '' as any, assigned_to: '', target_role: '', scheduled_start: '', due_date: '' });
+            setNewTask({ title: '', description: '', priority: 'medium', assigned_to: '', target_role: '', scheduled_start: '', due_date: '' });
             setTempFiles([]);
             fetchData();
-        } catch (err: any) {
-            alert('Error al crear tarea: ' + err.message);
+        } catch (err: unknown) {
+            const message = (err as { message?: string })?.message || 'Error desconocido';
+            alert('Error al crear tarea: ' + message);
         } finally {
             setUploading(false);
         }
@@ -226,7 +252,7 @@ export default function KanbanTasksPage() {
 
             if (error) throw error;
             fetchData();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error updating status:', err);
         }
     };
@@ -488,7 +514,7 @@ export default function KanbanTasksPage() {
                                                             <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#1E293B' }}>{task.profiles?.contact_name || 'Sin asignar'}</span>
                                                             {task.profiles?.role && (
                                                                 <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                                    {ROLES.find(r => r.value === task.profiles?.role)?.label || task.profiles.role}
+                                                                    {roles.find((r: Role) => r.value === task.profiles?.role)?.label || task.profiles?.role}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -615,7 +641,7 @@ export default function KanbanTasksPage() {
                                             style={inputStyle}
                                         >
                                             <option value="">Seleccionar rol...</option>
-                                            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                            {roles.map((r: Role) => <option key={r.value} value={r.value}>{r.label}</option>)}
                                         </select>
                                     </div>
                                     <div>

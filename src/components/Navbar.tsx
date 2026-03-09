@@ -19,7 +19,14 @@ export default function Navbar() {
     const [operationsOpen, setOperationsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
+    const [roles, setRoles] = useState<Role[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    interface Role {
+        value: string;
+        label: string;
+        permissions?: string[];
+    }
 
     useEffect(() => {
         let isMounted = true;
@@ -30,7 +37,7 @@ export default function Navbar() {
                 const { data: settings, error } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name']);
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles']);
                     
                 if (!isMounted) return;
                 
@@ -38,14 +45,19 @@ export default function Navbar() {
                     throw error;
                 }
                 if (settings) {
-                    const b2bObj = settings.find(s => s.key === 'enable_b2b_lead_capture');
+                    const b2bObj = settings.find((s: {key: string, value: string}) => s.key === 'enable_b2b_lead_capture');
                     if (b2bObj) setB2bEnabled(b2bObj.value === 'true');
 
-                    const logoObj = settings.find(s => s.key === 'app_logo_url');
+                    const logoObj = settings.find((s: {key: string, value: string}) => s.key === 'app_logo_url');
                     if (logoObj?.value) setDynamicLogo(logoObj.value);
 
-                    const nameObj = settings.find(s => s.key === 'app_name');
+                    const nameObj = settings.find((s: {key: string, value: string}) => s.key === 'app_name');
                     if (nameObj?.value) setAppName(nameObj.value);
+
+                    const rolesObj = settings.find((s: {key: string, value: string}) => s.key === 'system_roles');
+                    if (rolesObj?.value) {
+                        try { setRoles(JSON.parse(rolesObj.value)); } catch(e) { console.error(e); }
+                    }
                 }
             } catch (err: unknown) {
                 if (!isMounted) return;
@@ -87,6 +99,28 @@ export default function Navbar() {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [operationsOpen]);
+
+    const hasPermission = (moduleKey: string) => {
+        if (!roles.length || !profile?.role) return profile?.role === 'admin';
+        const userRole = roles.find(r => r.value === profile.role);
+        if (!userRole) return profile?.role === 'admin';
+        return userRole.permissions?.includes(moduleKey) || profile?.role === 'admin';
+    };
+
+    const shouldShowOperations = () => {
+        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center'];
+        return modules.some(m => hasPermission(m));
+    };
+
+    const dropdownLinkStyle = (color: string) => ({
+        display: 'block', 
+        padding: '10px 16px', 
+        color: color, 
+        fontWeight: '700',
+        textDecoration: 'none',
+        transition: 'background-color 0.2s',
+        fontSize: '0.9rem'
+    });
 
     return (
         <header style={{
@@ -207,217 +241,127 @@ export default function Navbar() {
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
-                    {user && (profile?.role === 'admin' || profile?.role === 'employee') && (
+                    {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2.5} /> Inicio
                             </Link>
-                            <Link href="/admin/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Settings size={18} strokeWidth={2.5} /> Admin
-                            </Link>
-                            <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Building2 size={18} strokeWidth={2.5} /> Canal B2B
-                            </Link>
+                            {hasPermission('dashboard') && (
+                                <Link href="/admin/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Settings size={18} strokeWidth={2.5} /> Admin
+                                </Link>
+                            )}
+                            {hasPermission('commercial') && (
+                                <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Building2 size={18} strokeWidth={2.5} /> Canal B2B
+                                </Link>
+                            )}
                             
                             {/* Dropdown Operaciones */}
-                            <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
-                                <span 
-                                    onClick={() => setOperationsOpen(!operationsOpen)}
-                                    style={{ 
-                                        fontWeight: '800', 
-                                        color: '#334155', 
-                                        cursor: 'pointer', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '6px',
-                                        padding: '8px 12px',
-                                        borderRadius: 'var(--radius-md)',
-                                        backgroundColor: operationsOpen ? '#F1F5F9' : 'transparent',
-                                        transition: 'background-color 0.2s',
-                                        fontSize: '1.05rem'
-                                    }}
-                                >
-                                    <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
-                                </span>
-                                {operationsOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        marginTop: '4px',
-                                        backgroundColor: 'white',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                        minWidth: '200px',
-                                        zIndex: 1000,
-                                        padding: '8px 0'
-                                    }}>
-                                        <Link href="/admin/orders/loading" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#0891B2', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            📋 Pedidos
-                                        </Link>
-                                        <Link href="/admin/transport" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#EA580C', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚛 Transporte
-                                        </Link>
-                                        <Link href="/admin/commercial/billing" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#6366F1', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            💰 Facturación
-                                        </Link>
-                                        <Link href="/admin/commercial"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#059669', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            💼 Comercial
-                                        </Link>
-                                        <Link href="/admin/hr"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#8B5CF6', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            👥 Talento Humano
-                                        </Link>
-                                        <Link href="/admin/commercial/inventory"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#0369A1', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            📦 Control de Inventarios
-                                        </Link>
-                                        <Link href="/ops/picking/dashboard" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#D97706', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚚 Despachos
-                                        </Link>
-                                        <Link href="/admin/strategy" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#7C3AED', 
-                                                fontWeight: '900',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s',
-                                                borderTop: '1px solid #F3F4F6'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🧠 Inteligencia & Estrategia
-                                        </Link>
+                            {shouldShowOperations() && (
+                                <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+                                    <span 
+                                        onClick={() => setOperationsOpen(!operationsOpen)}
+                                        style={{ 
+                                            fontWeight: '800', 
+                                            color: '#334155', 
+                                            cursor: 'pointer', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '6px',
+                                            padding: '8px 12px',
+                                            borderRadius: 'var(--radius-md)',
+                                            backgroundColor: operationsOpen ? '#F1F5F9' : 'transparent',
+                                            transition: 'background-color 0.2s',
+                                            fontSize: '1.05rem'
+                                        }}
+                                    >
+                                        <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+                                    </span>
+                                    {operationsOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            marginTop: '4px',
+                                            backgroundColor: 'white',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '8px',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                            minWidth: '200px',
+                                            zIndex: 1000,
+                                            padding: '8px 0'
+                                        }}>
+                                            {/* Links condicionales basados en permisos */}
+                                            {hasPermission('commercial') && (
+                                                <Link href="/admin/orders/loading" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#0891B2')}>
+                                                    📋 Pedidos
+                                                </Link>
+                                            )}
+                                            {hasPermission('transport') && (
+                                                <Link href="/admin/transport" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#EA580C')}>
+                                                    🚛 Transporte
+                                                </Link>
+                                            )}
+                                            {hasPermission('commercial') && (
+                                                <>
+                                                    <Link href="/admin/commercial/billing" 
+                                                        onClick={() => setOperationsOpen(false)}
+                                                        style={dropdownLinkStyle('#6366F1')}>
+                                                        💰 Facturación
+                                                    </Link>
+                                                    <Link href="/admin/commercial"
+                                                        onClick={() => setOperationsOpen(false)}
+                                                        style={dropdownLinkStyle('#059669')}>
+                                                        💼 Comercial
+                                                    </Link>
+                                                </>
+                                            )}
+                                            {hasPermission('hr') && (
+                                                <Link href="/admin/hr"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#8B5CF6')}>
+                                                    👥 Talento Humano
+                                                </Link>
+                                            )}
+                                            {hasPermission('inventory') && (
+                                                <Link href="/admin/commercial/inventory"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#0369A1')}>
+                                                    📦 Control de Inventarios
+                                                </Link>
+                                            )}
+                                            {hasPermission('transport') && (
+                                                <Link href="/ops/picking/dashboard" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#D97706')}>
+                                                    🚚 Despachos
+                                                </Link>
+                                            )}
+                                            
+                                            {hasPermission('dashboard') && (
+                                                <Link href="/admin/strategy" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#7C3AED'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
+                                                    🧠 Inteligencia & Estrategia
+                                                </Link>
+                                            )}
 
-                                        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }}></div>
-                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Segmentos y Canales</div>
-                                        <Link href="/admin/clients" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#334155', 
-                                                fontWeight: '700',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            👥 Gestión de Clientes
-                                        </Link>
-                                        <Link href="/b2b/dashboard" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#7C3AED', 
-                                                fontWeight: '900',
-                                                textDecoration: 'none',
-                                                backgroundColor: '#F5F3FF',
-                                                transition: 'background-color 0.2s',
-                                                margin: '4px 8px',
-                                                borderRadius: '6px'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}>
-                                            🛒 Portal Compras B2B
-                                        </Link>
-                                        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }}></div>
-                                        <Link href="/ops"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#10B981', 
-                                                fontWeight: '800',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚀 Portal Operativo
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
+                                            {hasPermission('transport') && (
+                                                <Link href="/ops" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#10B981'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
+                                                    🏭 Portal Operacional
+                                                </Link>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )}
                 </nav>

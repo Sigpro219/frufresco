@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import GlobalBanner from '@/components/GlobalBanner';
 import Footer from '@/components/Footer';
+import HelpDeskWidget from '@/components/HelpDeskWidget';
 import { Providers } from '@/app/providers';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             {!isOpsOrAdmin && <GlobalBanner />}
             {children}
             {!isOpsOrAdmin && <Footer />}
+            {isOpsOrAdmin && <HelpDeskWidget />}
         </Providers>
     );
 }

@@ -193,10 +193,10 @@ export default function AdminSettingsPage() {
             
             const merged = [...defaultSettings];
             if (data && data.length > 0) {
-                data.forEach(realS => {
+                data.forEach((realS: { key: string; value: string; description?: string }) => {
                     const idx = merged.findIndex(m => m.key === realS.key);
-                    if (idx !== -1) merged[idx] = realS;
-                    else merged.push(realS);
+                    if (idx !== -1) merged[idx] = { ...merged[idx], value: realS.value };
+                    else merged.push({ ...realS, description: realS.description || 'Auto-created' });
                 });
             }
             setSettings(merged);
