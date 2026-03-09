@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import ClientsModule from '@/components/ClientsModule';
 
 interface TrendItem {
     id: string;
@@ -31,6 +32,7 @@ interface DashboardStats {
 }
 
 export default function CommercialDashboard() {
+    const [activeMainTab, setActiveMainTab] = useState('dashboard');
     const [stats, setStats] = useState<DashboardStats>({
         topTrends: [],
         topModels: [],
@@ -179,6 +181,52 @@ export default function CommercialDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
             <Navbar />
+            
+            {/* MAIN TABS */}
+            <div style={{ backgroundColor: 'white', borderBottom: '1px solid #E2E8F0', padding: '0 2rem' }}>
+                <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '2rem' }}>
+                    <button 
+                        onClick={() => setActiveMainTab('dashboard')}
+                        style={{
+                            padding: '1.2rem 0',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeMainTab === 'dashboard' ? '#0F172A' : '#64748B',
+                            fontWeight: activeMainTab === 'dashboard' ? '800' : '600',
+                            fontSize: '1rem',
+                            cursor: 'pointer',
+                            borderBottom: activeMainTab === 'dashboard' ? '3px solid #0891B2' : '3px solid transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <span>📊</span> Dashboard Comercial
+                    </button>
+                    <button 
+                        onClick={() => setActiveMainTab('clients')}
+                        style={{
+                            padding: '1.2rem 0',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeMainTab === 'clients' ? '#0F172A' : '#64748B',
+                            fontWeight: activeMainTab === 'clients' ? '800' : '600',
+                            fontSize: '1rem',
+                            cursor: 'pointer',
+                            borderBottom: activeMainTab === 'clients' ? '3px solid #0891B2' : '3px solid transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <span>👥</span> Gestión de Clientes (CRM)
+                    </button>
+                </div>
+            </div>
+
+            {activeMainTab === 'dashboard' ? (
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 1rem' }}>
 
                 <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -333,8 +381,13 @@ export default function CommercialDashboard() {
                             </Link>
                         ))}
                     </div>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div style={{ height: 'calc(100vh - 140px)' }}>
+                    <ClientsModule />
+                </div>
+            )}
         </main>
     );
 }

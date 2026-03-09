@@ -179,9 +179,13 @@ export default function AdminSettingsPage() {
             { key: 'contact_address', value: 'Corabastos Bodega 123, Bogotá', description: 'Dirección física (Footer)' },
             { key: 'app_logo_url', value: '', description: 'URL del logo de la aplicación para Navbar y Footer' },
             { key: 'app_logosymbol_url', value: '', description: 'URL del logosímbolo pequeño para la página de OPS' },
-            { key: 'hero_image_url', value: '', description: 'URL de la imagen de fondo del Hero principal' },
             { key: 'app_name', value: 'FruFresco', description: 'Nombre oficial de la aplicación (SEO)' },
-            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' }
+            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' },
+            { key: 'provider_nit', value: '901.234.567-8', description: 'NIT de la Empresa para Documentos' },
+            { key: 'provider_legal_name', value: 'Logistics Pro S.A.S', description: 'Razón Social (Emisor de Documentos)' },
+            { key: 'provider_logo_url', value: '', description: 'Logo Oficial (Para Documentos y Facturas)' },
+            { key: 'primary_color', value: '#0891B2', description: 'Color Primario (Documentos y Detalles)' },
+            { key: 'secondary_color', value: '#10B981', description: 'Color Secundario (Acentos)' }
         ];
 
         if (error) {
@@ -531,6 +535,88 @@ export default function AdminSettingsPage() {
                                     <input type="text" defaultValue={setting.value} onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #D1D5DB' }} />
                                 </div>
                              ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* --- SECCIÓN 5: DOCUMENTOS Y MARCA CORPORATIVA --- */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <button 
+                        onClick={() => toggleSection('corporate')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
+                        <span style={{ fontSize: '1.5rem' }}>📄</span>
+                        <div style={{ textAlign: 'left', flex: 1 }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#111827', margin: 0 }}>Empresa y Documentos</h2>
+                            <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: 0 }}>NIT, colores corporativos y configuración para cotizaciones/facturas.</p>
+                        </div>
+                        <span style={{ transform: openSections.includes('corporate') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
+                    </button>
+                    {openSections.includes('corporate') && (
+                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: '1.2rem' }}>
+                                {/* Legal / Company Details */}
+                                <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Razón Social (Emisor)</h4>
+                                        <input 
+                                            type="text" 
+                                            defaultValue={settings.find(s => s.key === 'provider_legal_name')?.value || ''} 
+                                            onBlur={(e) => handleUpdateSetting('provider_legal_name', e.target.value)} 
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: 'bold' }} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>NIT / CC</h4>
+                                        <input 
+                                            type="text" 
+                                            defaultValue={settings.find(s => s.key === 'provider_nit')?.value || ''} 
+                                            onBlur={(e) => handleUpdateSetting('provider_nit', e.target.value)} 
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: 'bold' }} 
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ height: '100%' }}>
+                                    <ImageUpload 
+                                        label="Logo Legal para Documentos" 
+                                        description="Sobre-escribe el logo del navbar específicamente para PDF's"
+                                        value={settings.find(s => s.key === 'provider_logo_url')?.value || ''}
+                                        onUpload={(url) => handleUpdateSetting('provider_logo_url', url)}
+                                        onClear={() => handleUpdateSetting('provider_logo_url', '')}
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Color settings */}
+                            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Colores Dinámicos (Documentos)</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <input 
+                                            type="color" 
+                                            defaultValue={settings.find(s => s.key === 'primary_color')?.value || '#0891B2'} 
+                                            onBlur={(e) => handleUpdateSetting('primary_color', e.target.value)} 
+                                            style={{ width: '50px', height: '50px', cursor: 'pointer', border: 'none', padding: 0, borderRadius: '8px' }} 
+                                        />
+                                        <div>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', display: 'block' }}>Color Primario</label>
+                                            <span style={{ fontSize: '0.7rem', color: '#6B7280' }}>{settings.find(s => s.key === 'primary_color')?.value || '#0891B2'}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <input 
+                                            type="color" 
+                                            defaultValue={settings.find(s => s.key === 'secondary_color')?.value || '#10B981'} 
+                                            onBlur={(e) => handleUpdateSetting('secondary_color', e.target.value)} 
+                                            style={{ width: '50px', height: '50px', cursor: 'pointer', border: 'none', padding: 0, borderRadius: '8px' }} 
+                                        />
+                                        <div>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', display: 'block' }}>Color Secundario</label>
+                                            <span style={{ fontSize: '0.7rem', color: '#6B7280' }}>{settings.find(s => s.key === 'secondary_color')?.value || '#10B981'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

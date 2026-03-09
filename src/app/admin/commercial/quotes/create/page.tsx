@@ -21,17 +21,36 @@ export default function CreateQuotePage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [conversions, setConversions] = useState<any[]>([]);
 
+    // BRANDING & SETTINGS
+    const [appSettings, setAppSettings] = useState<Record<string, string>>({
+        provider_nit: '900.000.000-0',
+        provider_legal_name: '',
+        provider_logo_url: '',
+        app_name: 'FruFresco',
+        app_logo_url: '',
+        primary_color: '#111827',
+        secondary_color: '#6B7280'
+    });
+
     useEffect(() => {
         fetchInitialData();
     }, []);
 
     const fetchInitialData = async () => {
+        // 0. Settings / Branding
+        const { data: sData } = await supabase.from('app_settings').select('*');
+        if (sData) {
+            const settingsMap: Record<string, string> = {};
+            sData.forEach((s: any) => { settingsMap[s.key] = s.value; });
+            setAppSettings(prev => ({ ...prev, ...settingsMap }));
+        }
+
         // 1. Models
         const { data: mData } = await supabase.from('pricing_models').select('*').order('name');
         if (mData) setModels(mData);
 
-        // 2. Clients (B2B)
-        const { data: cData } = await supabase.from('profiles').select('id, company_name, pricing_model_id').eq('role', 'b2b_client').order('company_name');
+        // 2. Clients (B2B & B2C)
+        const { data: cData } = await supabase.from('profiles').select('id, company_name, contact_name, nit, phone, address, pricing_model_id, role').in('role', ['b2b_client', 'b2c_client']).order('company_name');
         if (cData) setClients(cData);
 
         // 3. Conversions
@@ -55,7 +74,7 @@ export default function CreateQuotePage() {
         setSelectedClientId(clientId);
         const client = clients.find(c => c.id === clientId);
         if (client) {
-            setClientName(client.company_name);
+            setClientName(client.company_name || client.contact_name || '');
             if (client.pricing_model_id) {
                 setSelectedModelId(client.pricing_model_id);
             }
@@ -271,6 +290,8 @@ export default function CreateQuotePage() {
         }
     };
 
+    const selectedClientInfo = clients.find(c => c.id === selectedClientId);
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
             <div className="no-print">
@@ -294,7 +315,9 @@ export default function CreateQuotePage() {
                             >
                                 <option value="">-- Cliente Manual --</option>
                                 {clients.map(c => (
-                                    <option key={c.id} value={c.id}>{c.company_name}</option>
+                                    <option key={c.id} value={c.id}>
+                                        {c.company_name || c.contact_name} {c.role === 'b2c_client' ? '(B2C)' : '(B2B)'}
+                                    </option>
                                 ))}
                             </select>
                         </div>
@@ -335,7 +358,7 @@ export default function CreateQuotePage() {
                             <button
                                 onClick={() => saveQuote(true)}
                                 disabled={saving}
-                                style={{ flex: 1.5, padding: '0.8rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                style={{ flex: 1.5, padding: '0.8rem', backgroundColor: appSettings.primary_color || '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                             >
                                 {saving ? '...' : '💾 Guardar'}
                             </button>
@@ -344,29 +367,42 @@ export default function CreateQuotePage() {
                 </div>
 
                 <div id="quote-document" style={{ backgroundColor: 'white', minHeight: '800px', padding: '3rem', borderRadius: '2px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3rem', borderBottom: '2px solid #111827', paddingBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3rem', borderBottom: `2px solid ${appSettings.primary_color || '#111827'}`, paddingBottom: '1rem' }}>
                         <div>
-                            <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '900', letterSpacing: '-1px' }}>
+                            <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '900', letterSpacing: '-1px', color: appSettings.primary_color || '#111827' }}>
                                 COTIZACIÓN {quoteNumber ? `#${quoteNumber}` : <span style={{ fontSize: '1rem', color: '#9CA3AF', verticalAlign: 'middle' }}>(Borrador)</span>}
                             </h1>
-                            <p style={{ color: '#6B7280', margin: '0.5rem 0' }}>Fecha: {new Date().toLocaleDateString()}</p>
+                            <p style={{ color: appSettings.secondary_color || '#6B7280', margin: '0.5rem 0' }}>Fecha: {new Date().toLocaleDateString()}</p>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#111827' }}>Logistics Pro S.A.S</div>
-                            <div style={{ color: '#6B7280', fontSize: '0.9rem' }}>Nit: 900.123.456-7</div>
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                            {(appSettings.provider_logo_url || appSettings.app_logo_url) && (
+                                <img src={appSettings.provider_logo_url || appSettings.app_logo_url} alt="Logo Documento" style={{ maxHeight: '60px', objectFit: 'contain' }} />
+                            )}
+                            <div style={{ marginTop: 'auto' }}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: appSettings.primary_color || '#111827' }}>{appSettings.provider_legal_name || appSettings.app_name || 'Empresa Emisora'}</div>
+                                <div style={{ color: appSettings.secondary_color || '#6B7280', fontSize: '0.9rem' }}>Nit: {appSettings.provider_nit || 'Sin NIT'}</div>
+                            </div>
                         </div>
                     </div>
 
                     <div style={{ marginBottom: '3rem' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#6B7280', textTransform: 'uppercase', fontWeight: 'bold' }}>Preparado para:</div>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>
+                        <div style={{ fontSize: '0.8rem', color: appSettings.secondary_color || '#6B7280', textTransform: 'uppercase', fontWeight: 'bold' }}>Preparado para:</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: appSettings.primary_color || '#111827' }}>
                             {clientName || 'Cliente General'}
                         </div>
+                        {selectedClientInfo && (
+                            <div style={{ marginTop: '0.8rem', color: '#4B5563', fontSize: '0.95rem', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: '0.5rem 2rem', borderLeft: `3px solid ${appSettings.primary_color}33`, paddingLeft: '1rem' }}>
+                                {selectedClientInfo.nit && <div><strong style={{ color: appSettings.primary_color }}>NIT/CC:</strong> {selectedClientInfo.nit}</div>}
+                                {selectedClientInfo.contact_name && selectedClientInfo.company_name && <div><strong style={{ color: appSettings.primary_color }}>Atención:</strong> {selectedClientInfo.contact_name}</div>}
+                                {selectedClientInfo.phone && <div><strong style={{ color: appSettings.primary_color }}>Teléfono:</strong> {selectedClientInfo.phone}</div>}
+                                {selectedClientInfo.address && <div><strong style={{ color: appSettings.primary_color }}>Dirección:</strong> {selectedClientInfo.address}</div>}
+                            </div>
+                        )}
                     </div>
 
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', marginBottom: '3rem' }}>
                         <thead>
-                            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                            <tr style={{ borderBottom: `2px solid ${appSettings.primary_color || '#111827'}`, color: appSettings.primary_color || '#111827' }}>
                                 <th style={{ padding: '1rem', width: '50%' }}>Producto</th>
                                 <th style={{ padding: '1rem', textAlign: 'center' }}>Cantidad</th>
                                 <th style={{ padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
@@ -392,7 +428,7 @@ export default function CreateQuotePage() {
                             ))}
                         </tbody>
                         <tfoot>
-                            <tr style={{ borderTop: '2px solid #111827' }}>
+                            <tr style={{ borderTop: `2px solid ${appSettings.primary_color || '#111827'}`, color: appSettings.primary_color || '#111827' }}>
                                 <td colSpan={2}></td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>TOTAL</td>
                                 <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem' }}>${items.reduce((sum, i) => sum + (Math.ceil(i.price) * i.quantity), 0).toLocaleString()}</td>
