@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../lib/cartContext';
 import { useAuth } from '../lib/authContext';
@@ -13,6 +14,9 @@ import { SYNC_METADATA } from '@/lib/sync-status';
 export default function Navbar() {
     const { totalItems } = useCart();
     const { user, profile, signOut, loading } = useAuth();
+    const pathname = usePathname();
+    // Cart only visible on shopping-context pages (not admin or ops)
+    const isShoppingContext = !pathname?.startsWith('/admin') && !pathname?.startsWith('/ops');
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
@@ -246,11 +250,6 @@ export default function Navbar() {
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2.5} /> Inicio
                             </Link>
-                            {hasPermission('dashboard') && (
-                                <Link href="/admin/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Settings size={18} strokeWidth={2.5} /> Admin
-                                </Link>
-                            )}
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <Building2 size={18} strokeWidth={2.5} /> Canal B2B
@@ -292,6 +291,15 @@ export default function Navbar() {
                                             zIndex: 1000,
                                             padding: '8px 0'
                                         }}>
+                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Administración</div>
+                                            {hasPermission('dashboard') && (
+                                                <Link href="/admin/dashboard" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#334155'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Settings size={14} strokeWidth={2.5} /> Panel Admin
+                                                </Link>
+                                            )}
+                                            <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }}></div>
                                             {/* Links condicionales basados en permisos */}
                                             {hasPermission('commercial') && (
                                                 <Link href="/admin/orders/loading" 
@@ -367,6 +375,7 @@ export default function Navbar() {
                 </nav>
 
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {isShoppingContext && (
                     <Link href="/checkout">
                         <button className="btn" style={{ 
                             border: '1px solid var(--border)', 
@@ -383,6 +392,7 @@ export default function Navbar() {
                             <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
                         </button>
                     </Link>
+                    )}
 
                     {!loading && (
                         user ? (
