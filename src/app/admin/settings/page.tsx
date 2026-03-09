@@ -181,9 +181,7 @@ export default function AdminSettingsPage() {
             { key: 'app_logosymbol_url', value: '', description: 'URL del logosímbolo pequeño para la página de OPS' },
             { key: 'hero_image_url', value: '', description: 'URL de la imagen de fondo del Hero principal' },
             { key: 'app_name', value: 'FruFresco', description: 'Nombre oficial de la aplicación (SEO)' },
-            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' },
-            { key: 'standard_units', value: 'Kg,G,Lb,Lt,Un,Atado,Bulto,Caja,Saco,Cubeta', description: 'Unidades oficiales de medida para todo el inventario' },
-            { key: 'suspended_units', value: '', description: 'Unidades desactivadas temporalmente' }
+            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' }
         ];
 
         if (error) {
@@ -233,77 +231,6 @@ export default function AdminSettingsPage() {
         setSaving(false);
     };
 
-    const getActiveUnits = () => {
-        const setting = settings.find(s => s.key === 'standard_units');
-        return setting?.value ? setting.value.split(',').filter((u: string) => u) : [];
-    };
-
-    const getSuspendedUnits = () => {
-        const setting = settings.find(s => s.key === 'suspended_units');
-        return setting?.value ? setting.value.split(',').filter((u: string) => u) : [];
-    };
-
-    const toggleUnitStatus = async (unit: string, currentStatus: 'active' | 'suspended') => {
-        const active = getActiveUnits();
-        const suspended = getSuspendedUnits();
-
-        if (currentStatus === 'active') {
-            const newActive = active.filter((u: string) => u !== unit).join(',');
-            const newSuspended = suspended.includes(unit) ? suspended.join(',') : [...suspended, unit].join(',');
-            await handleUpdateSetting('standard_units', newActive);
-            await handleUpdateSetting('suspended_units', newSuspended);
-        } else {
-            const newSuspended = suspended.filter((u: string) => u !== unit).join(',');
-            const newActive = active.includes(unit) ? active.join(',') : [...active, unit].join(',');
-            await handleUpdateSetting('suspended_units', newSuspended);
-            await handleUpdateSetting('standard_units', newActive);
-        }
-    };
-
-    const deleteUnitPermanently = async (unit: string, status: 'active' | 'suspended') => {
-        setSaving(true);
-        const { data: usageP, error: errP } = await supabase
-            .from('products')
-            .select('id')
-            .eq('unit_of_measure', unit)
-            .limit(1);
-
-        const { data: usageC, error: errC } = await supabase
-            .from('product_conversions')
-            .select('id')
-            .eq('from_unit', unit)
-            .limit(1);
-
-        if (errP || errC) {
-            (window as any).showToast?.('Error al verificar integridad: ' + (errP?.message || errC?.message), 'error');
-            setSaving(false);
-            return;
-        }
-
-        if ((usageP && usageP.length > 0) || (usageC && usageC.length > 0)) {
-            (window as any).showToast?.(`⚠️ BLOQUEADO: La unidad '${unit}' está en uso en productos o conversiones. No se puede borrar.`, 'error');
-            setSaving(false);
-            return;
-        }
-
-        if (!confirm(`¿Estás seguro de ELIMINAR '${unit}' permanentemente? Esta acción no se puede deshacer.`)) {
-            setSaving(false);
-            return;
-        }
-
-        const list = status === 'active' ? getActiveUnits() : getSuspendedUnits();
-        const newList = list.filter((u: string) => u !== unit).join(',');
-        await handleUpdateSetting(status === 'active' ? 'standard_units' : 'suspended_units', newList);
-        setSaving(false);
-    };
-
-    const addNewUnit = async (name: string) => {
-        const active = getActiveUnits();
-        const suspended = getSuspendedUnits();
-        if (active.includes(name) || suspended.includes(name)) return;
-        const newActive = [...active, name].join(',');
-        await handleUpdateSetting('standard_units', newActive);
-    };
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
@@ -608,38 +535,9 @@ export default function AdminSettingsPage() {
                     )}
                 </div>
 
-                {/* --- SECCIÓN 5: UNIDADES (GOBERNANZA) --- */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <button 
-                        onClick={() => toggleSection('units')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
-                        <span style={{ fontSize: '1.5rem' }}>📏</span>
-                        <div style={{ textAlign: 'left', flex: 1 }}>
-                            <h2 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#111827', margin: 0 }}>Unidades de Medida</h2>
-                            <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: 0 }}>Gobernanza global de unidades para inventario.</p>
-                        </div>
-                        <span style={{ transform: openSections.includes('units') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
-                    </button>
-                    {openSections.includes('units') && (
-                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px' }}>
-                             <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
-                                <input placeholder="+ Nueva unidad..." style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #DDD' }} onKeyDown={(e) => { if(e.key==='Enter' && e.currentTarget.value) { addNewUnit(e.currentTarget.value); e.currentTarget.value=''; } }} />
-                             </div>
-                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {getActiveUnits().map((u: string) => (
-                                    <div key={u} style={{ backgroundColor: 'white', padding: '6px 12px', borderRadius: '20px', border: '1px solid #0EA5E9', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontWeight: 'bold', color: '#0369A1' }}>{u}</span>
-                                        <button onClick={() => toggleUnitStatus(u, 'active')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444' }}>×</button>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-                    )}
-                </div>
-
                 <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #DBEAFE', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.85rem', color: '#1E40AF', margin: 0 }}>
-                        💡 <strong>TIP:</strong> Las unidades que marques como &quot;Suspendidas&quot; dejarán de aparecer como opciones al crear productos o conversiones, manteniendo la integridad histórica del sistema.
+                        💡 <strong>TIP:</strong> Los ajustes operativos del día a día se gestionan aquí. Para cambios estructurales contacta al Chief Engineer.
                     </p>
                 </div>
 
