@@ -61,8 +61,8 @@ function ImageUpload({
             
             <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                 {value ? (
-                    <div style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB' }}>
-                        <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' }}>
+                        <img src={value} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                         <button 
                             onClick={(e) => { e.preventDefault(); onClear(); }}
                             style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
