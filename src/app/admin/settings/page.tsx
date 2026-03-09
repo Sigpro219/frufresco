@@ -400,13 +400,13 @@ export default function AdminSettingsPage() {
                     </button>
                     {openSections.includes('operation') && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1rem', padding: '1rem', backgroundColor: '#F9FAFB', borderRadius: '16px' }}>
-                            {settings.filter(s => ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'picking_route_spaces'].includes(s.key)).map((setting) => (
+                            {settings.filter(s => ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules'].includes(s.key)).map((setting) => (
                                 <div key={setting.key} style={{ 
                                     backgroundColor: 'white', 
                                     borderRadius: '15px', 
                                     padding: '1rem', 
                                     border: '1px solid #E5E7EB',
-                                    gridColumn: setting.key === 'picking_route_spaces' ? 'span 2' : 'auto'
+                                    gridColumn: 'auto'
                                 }}>
                                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>
                                         {setting.key === 'delivery_fee' ? 'Costo de Envío' :
