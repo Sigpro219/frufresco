@@ -20,6 +20,7 @@ export default function Navbar() {
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
+    const [lastSyncDate, setLastSyncDate] = useState(SYNC_METADATA.lastSync);
     const [themeConfig, setThemeConfig] = useState<{primary: string, secondary: string} | null>(null);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -42,7 +43,7 @@ export default function Navbar() {
                 const { data: settings, error } = await supabase
                     .from('app_settings')
                     .select('key, value')
-                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles', 'primary_color', 'secondary_color']);
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles', 'primary_color', 'secondary_color', 'last_core_sync']);
                     
                 if (!isMounted) return;
                 
@@ -66,6 +67,10 @@ export default function Navbar() {
 
                     const primaryObj = settings.find((s: {key: string, value: string}) => s.key === 'primary_color');
                     const secondaryObj = settings.find((s: {key: string, value: string}) => s.key === 'secondary_color');
+                    const syncObj = settings.find((s: {key: string, value: string}) => s.key === 'last_core_sync');
+                    
+                    if (syncObj?.value) setLastSyncDate(syncObj.value);
+                    
                     if (primaryObj?.value || secondaryObj?.value) {
                         setThemeConfig({
                             primary: primaryObj?.value || '#22c55e', // default green
@@ -205,21 +210,36 @@ export default function Navbar() {
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '6px',
-                        padding: '4px 8px',
+                        padding: '6px 12px',
                         borderRadius: 'var(--radius-full)',
-                        backgroundColor: 'rgba(0,0,0,0.03)',
-                        fontSize: '0.65rem',
-                        color: '#64748b',
-                        fontWeight: '600'
-                    }} title={mounted ? `Última sincronización CORE: ${new Date(SYNC_METADATA.lastSync).toLocaleString()}` : 'Cargando...'}>
+                        backgroundColor: 'rgba(5, 150, 105, 0.08)',
+                        fontSize: '0.7rem',
+                        color: '#065f46',
+                        fontWeight: '800',
+                        border: '1px solid rgba(5, 150, 105, 0.2)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    }} title={mounted ? `Última sincronización: ${new Date(lastSyncDate).toLocaleString()}` : 'Cargando...'}>
                         <div style={{ 
                             width: '8px', 
                             height: '8px', 
                             borderRadius: '50%', 
-                            backgroundColor: '#059669', // Verde esmeralda para forzar refresh
-                            boxShadow: '0 0 10px rgba(5, 150, 105, 0.4)'
-                        }}></div>
-                        <span>SYNC: {mounted ? new Date(SYNC_METADATA.lastSync).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
+                            backgroundColor: '#10B981',
+                            position: 'relative',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <div style={{
+                                position: 'absolute',
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: '50%',
+                                backgroundColor: '#10B981',
+                                opacity: 0.6,
+                                animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
+                            }} />
+                        </div>
+                        <span>SYNC: {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
                     </div>
                 </Link>
 
@@ -473,6 +493,12 @@ export default function Navbar() {
                 @keyframes skeleton-loading {
                     0% { background-position: 200% 0; }
                     100% { background-position: -200% 0; }
+                }
+                @keyframes ping {
+                    75%, 100% {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
                 }
             `}</style>
         </header>
