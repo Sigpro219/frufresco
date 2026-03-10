@@ -37,11 +37,13 @@ export default function B2BDashboard() {
     const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
     const [isLoadingCategory, setIsLoadingCategory] = useState(false);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'order' | 'invoices' | 'consumption'>('order');
+    const [activeTab, setActiveTab] = useState<'order' | 'invoices' | 'consumption' | 'agreements'>('order');
     const [invoices, setInvoices] = useState<any[]>([]);
     const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
     const [consumptionData, setConsumptionData] = useState<any[]>([]);
     const [isLoadingConsumption, setIsLoadingConsumption] = useState(false);
+    const [agreements, setAgreements] = useState<any[]>([]);
+    const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
     const isMounted = useRef(true);
 
     const categories = Object.keys(CATEGORY_MAP);
@@ -418,6 +420,32 @@ export default function B2BDashboard() {
         fetchConsumption();
     }, [activeTab, profile?.company_name]);
 
+    // Fetch Agreements
+    useEffect(() => {
+        if (activeTab !== 'agreements' || !profile?.id) return;
+
+        const fetchAgreements = async () => {
+            setIsLoadingAgreements(true);
+            try {
+                const { data, error } = await supabase
+                    .from('quotes')
+                    .select('*, pricing_models!model_id(name)')
+                    .eq('client_id', profile.id)
+                    .eq('status', 'agreement')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                if (isMounted.current) setAgreements(data || []);
+            } catch (err) {
+                console.error("Error fetching agreements:", err);
+            } finally {
+                if (isMounted.current) setIsLoadingAgreements(false);
+            }
+        };
+
+        fetchAgreements();
+    }, [activeTab, profile?.id]);
+
     const handleClearOrder = () => {
         if (window.confirm('¿Estás seguro de que quieres borrar todo el pedido y empezar de cero?')) {
             setOrderItems([]);
@@ -593,6 +621,27 @@ export default function B2BDashboard() {
                         }}
                     >
                         <BarChart3 size={18} strokeWidth={2.5} /> Mi Consumo
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('agreements')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.8rem 1.5rem',
+                            borderRadius: 'var(--radius-full)',
+                            border: 'none',
+                            backgroundColor: activeTab === 'agreements' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
+                            color: activeTab === 'agreements' ? 'white' : 'var(--text-main)',
+                            fontWeight: '800',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: activeTab === 'agreements' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
+                            backdropFilter: 'blur(8px)'
+                        }}
+                    >
+                        <Rocket size={18} strokeWidth={2.5} /> Mis Acuerdos
                     </button>
                 </div>
 
@@ -1298,6 +1347,105 @@ export default function B2BDashboard() {
                                     fontWeight: '800',
                                     cursor: 'pointer'
                                 }}>Exportar Reporte</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* AGREEMENTS TAB */}
+                {activeTab === 'agreements' && (
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '2rem',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <h2 style={{ 
+                                margin: 0, 
+                                fontSize: '1.5rem', 
+                                fontWeight: '900', 
+                                fontFamily: 'var(--font-outfit), sans-serif',
+                                color: 'var(--text-main)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px'
+                            }}>
+                                <Rocket size={24} color="var(--primary)" /> Mis Acuerdos Comerciales
+                            </h2>
+                        </div>
+
+                        {isLoadingAgreements ? (
+                            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Cargando acuerdos...</p>
+                        ) : agreements.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
+                                {agreements.map((agreement) => (
+                                    <div key={agreement.id} style={{
+                                        border: '1px solid #F1F5F9',
+                                        borderRadius: '16px',
+                                        padding: '1.5rem',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        transition: 'all 0.2s',
+                                        backgroundColor: '#fff'
+                                    }}>
+                                        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                                            <div style={{ 
+                                                width: '56px', 
+                                                height: '56px', 
+                                                backgroundColor: '#F0FDF4', 
+                                                borderRadius: '12px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center',
+                                                color: 'var(--primary)',
+                                                border: '1px solid #DCFCE7'
+                                            }}>
+                                                <FileText size={28} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>
+                                                    Modelo de Precios Activo
+                                                </div>
+                                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-main)' }}>
+                                                    {agreement.pricing_models?.name || 'Acuerdo de Precios Personalizado'}
+                                                </h3>
+                                                <div style={{ display: 'flex', gap: '1rem', marginTop: '8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        📅 Válido hasta: <strong>{new Date(agreement.valid_until).toLocaleDateString()}</strong>
+                                                    </span>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        🏷️ Ref: <strong>{agreement.quote_number || 'N/A'}</strong>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ 
+                                                display: 'inline-block',
+                                                padding: '6px 14px',
+                                                borderRadius: 'var(--radius-full)',
+                                                backgroundColor: '#D1FAE5',
+                                                color: '#065F46',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '900',
+                                                textTransform: 'uppercase'
+                                            }}>
+                                                Vigente
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
+                                <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                    <Rocket size={32} color="#94A3B8" />
+                                </div>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin acuerdos activos</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0', fontWeight: '500' }}>Actualmente no tienes un modelo de precios fijo vinculado.</p>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Contacta a tu asesor comercial para activar beneficios institucionales.</p>
                             </div>
                         )}
                     </div>

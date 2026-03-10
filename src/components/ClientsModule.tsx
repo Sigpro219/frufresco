@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
+import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 
 declare global {
     interface Window {
@@ -30,6 +31,7 @@ interface Profile {
     latitude?: number;
     longitude?: number;
     geocoding_status?: string;
+    logistics_data?: LogisticsData;
     total_orders?: number;
     total_spent?: number;
     last_order?: string;
@@ -51,6 +53,7 @@ interface Lead {
     last_contact_date?: string;
     next_contact_date?: string;
     contact_count?: number;
+    logistics_data?: LogisticsData;
     created_at: string;
 }
 
@@ -118,17 +121,48 @@ export default function ClientsModule() {
             const { data: orderData } = await supabase
                 .from('orders')
                 .select('id, total, is_b2b');
+
+            // 6. Acuerdos Activos (Semáforo)
+            const { data: agreementData } = await supabase
+                .from('quotes')
+                .select('client_id, valid_until')
+                .eq('status', 'agreement')
+                .gte('valid_until', new Date().toISOString());
             
             setClientsB2B(b2bData || []);
             setLeads(leadData || []);
             setPricingModels(pmData || []);
             setClientsB2C(b2cData || []);
             setOrders(orderData || []);
+            setAllAgreements(agreementData || []);
         } catch (error) {
             console.error('Error fetching client data:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const [allAgreements, setAllAgreements] = useState<any[]>([]);
+
+    const getAgreementStatus = (clientId: string) => {
+        const clientAgreements = allAgreements.filter(a => a.client_id === clientId);
+        if (clientAgreements.length === 0) return 'none';
+        
+        const now = new Date();
+        const fifteenDaysFromNow = new Date();
+        fifteenDaysFromNow.setDate(now.getDate() + 15);
+        
+        // Prioridad: Green > Yellow > None
+        const hasActive = clientAgreements.some(a => new Date(a.valid_until) > fifteenDaysFromNow);
+        if (hasActive) return 'active';
+        
+        const hasWarning = clientAgreements.some(a => {
+            const expiry = new Date(a.valid_until);
+            return expiry >= now && expiry <= fifteenDaysFromNow;
+        });
+        if (hasWarning) return 'warning';
+        
+        return 'none';
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
@@ -471,6 +505,7 @@ export default function ClientsModule() {
                                             onUpdatePricingModel={handleUpdatePricingModel}
                                             onViewDetails={() => handleViewDetails(client)}
                                             onEdit={() => handleEditClient(client)}
+                                            agreementStatus={getAgreementStatus(client.id)}
                                         />
                                     ))}
                                 </div>
@@ -744,7 +779,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask }: { 
+function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, agreementStatus }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -753,7 +788,8 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     onViewDetails?: () => void,
     onEdit?: () => void,
     onRegisterContact?: () => void,
-    onScheduleTask?: (date: string) => void
+    onScheduleTask?: (date: string) => void,
+    agreementStatus?: 'active' | 'warning' | 'none'
 }) {
     const isB2B = type === 'b2b';
     const isB2C = type === 'b2c';
@@ -785,20 +821,62 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
             position: 'relative',
             overflow: 'hidden'
         }}>
-            {/* Tag / Status */}
+            {/* Tag / Status Area */}
             <div style={{ 
                 position: 'absolute', 
                 top: '1.5rem', 
                 right: '1.5rem',
-                padding: '0.4rem 0.8rem',
-                borderRadius: '8px',
-                fontSize: '0.7rem',
-                fontWeight: '900',
-                backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
-                color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
-                textTransform: 'uppercase'
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: '0.6rem',
+                zIndex: 2
             }}>
-                {isB2B ? 'Institucional' : isB2C ? 'Consumidor' : 'Prospecto'}
+                <div style={{ 
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    fontWeight: '900',
+                    backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
+                    color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
+                    textTransform: 'uppercase'
+                }}>
+                    {isB2B ? 'Institucional' : isB2C ? 'Consumidor' : 'Prospecto'}
+                </div>
+
+                {/* TRAFFIC LIGHT (Semáforo) - Moved below tag */}
+                {isB2B && agreementStatus && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'rgba(248, 250, 252, 0.9)',
+                        padding: '4px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    }}>
+                        <div style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            backgroundColor: 
+                                agreementStatus === 'active' ? '#10B981' : 
+                                agreementStatus === 'warning' ? '#F59E0B' : '#94A3B8',
+                            boxShadow: agreementStatus !== 'none' ? `0 0 8px ${agreementStatus === 'active' ? '#10B98166' : '#F59E0B66'}` : 'none'
+                        }} />
+                        <span style={{ 
+                            fontSize: '0.6rem', 
+                            fontWeight: '800', 
+                            color: '#475569',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02rem'
+                        }}>
+                            {agreementStatus === 'active' ? 'Acuerdo Activo' : 
+                             agreementStatus === 'warning' ? 'Por Vencer' : 'Sin Acuerdo'}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Header */}
@@ -870,13 +948,29 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         )}
                     </div>
                 )}
-                {isB2B && profileData && (
-                    <InfoRow icon="💳" label="Crédito" value={`$${(profileData.credit_limit || 0).toLocaleString()} | ${profileData.payment_terms || 'Contado'}`} />
-                )}
+
                 {isB2B && profileData && profileData.delivery_restrictions && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'block', marginBottom: '0.2rem' }}>⚠️ RESTRICCIONES</span>
-                        <span style={{ fontSize: '0.8rem', color: '#92400E' }}>{profileData.delivery_restrictions}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#92400E', display: 'block', marginBottom: '0.4rem' }}>{profileData.delivery_restrictions}</span>
+                        
+                        {profileData.logistics_data && profileData.logistics_data.windows && profileData.logistics_data.windows.length > 0 && (
+                            <div style={{ 
+                                backgroundColor: '#FEF3C7', 
+                                padding: '0.6rem', 
+                                borderRadius: '8px', 
+                                border: '1px solid #F59E0B',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginTop: '0.5rem'
+                            }}>
+                                <span style={{ fontSize: '1.2rem' }}>🤖</span>
+                                <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
+                                    FRANJA ESTRUCTURADA: {formatTimeWindow(profileData.logistics_data)}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
                 {isB2C && profileData && profileData.total_orders !== undefined && (
@@ -1066,6 +1160,33 @@ function EmptyState({ text }: { text: string }) {
 
 function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profile, onClose: () => void, pricingModels: PricingModel[] }) {
     const selectedModel = pricingModels.find((m: PricingModel) => m.id === client.pricing_model_id);
+    const [agreements, setAgreements] = useState<any[]>([]);
+    const [loadingAgreements, setLoadingAgreements] = useState(true);
+
+    useEffect(() => {
+        const fetchAgreements = async () => {
+            if (client.role !== 'b2b_client') {
+                setLoadingAgreements(false);
+                return;
+            }
+            setLoadingAgreements(true);
+            try {
+                const { data, error } = await supabase
+                    .from('quotes')
+                    .select('*, pricing_models!model_id(name)')
+                    .eq('client_id', client.id)
+                    .eq('status', 'agreement')
+                    .order('created_at', { ascending: false });
+                
+                if (data) setAgreements(data);
+            } catch (err) {
+                console.error('Error fetching client agreements:', err);
+            } finally {
+                setLoadingAgreements(false);
+            }
+        };
+        fetchAgreements();
+    }, [client.id, client.role]);
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
@@ -1099,10 +1220,8 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                         </section>
 
                         <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>💳 Datos Financieros</h4>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🆔 Identificación Fiscal</h4>
                             <ModalRow label="NIT" value={client.nit} />
-                            <ModalRow label="Límite Crédito" value={`$${(client.credit_limit || 0).toLocaleString()}`} />
-                            <ModalRow label="Términos" value={client.payment_terms} />
                         </section>
 
                          <section>
@@ -1126,6 +1245,49 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                                 <p style={{ fontSize: '0.85rem', color: '#6B7280', marginTop: '0.5rem', fontStyle: 'italic' }}>&quot;{selectedModel.description}&quot;</p>
                             )}
                         </section>
+
+                        {client.role === 'b2b_client' && (
+                            <section style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span>🤝</span> Acuerdos Comerciales Vigentes
+                                </h4>
+                                
+                                {loadingAgreements ? (
+                                    <p style={{ color: '#94A3B8', fontSize: '0.9rem', fontStyle: 'italic' }}>Buscando acuerdos...</p>
+                                ) : agreements.length > 0 ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+                                        {agreements.map(agreement => (
+                                            <div key={agreement.id} style={{ 
+                                                backgroundColor: '#F8FAFC', 
+                                                padding: '1.2rem', 
+                                                borderRadius: '16px', 
+                                                border: '1px solid #E2E8F0',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '0.5rem'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>
+                                                        {agreement.pricing_models?.name || 'Contrato Personalizado'}
+                                                    </div>
+                                                    <span style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', backgroundColor: '#D1FAE5', color: '#065F46', borderRadius: '20px', fontWeight: '900' }}>VIGENTE</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                                                    Ref: <span style={{ fontWeight: '700' }}>{agreement.quote_number || 'N/A'}</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    📅 Expira: <span style={{ color: '#0369A1', fontWeight: '700' }}>{new Date(agreement.valid_until).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '20px', border: '1px dashed #E2E8F0' }}>
+                                        <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.9rem', fontWeight: '600' }}>Este cliente no tiene acuerdos comerciales (precios fijos) activos.</p>
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
                         {(client as unknown as Lead).status && (
                             <section>
@@ -1176,6 +1338,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
         credit_limit: editData?.credit_limit || 0,
         payment_terms: editData?.payment_terms || 'Contado',
         delivery_restrictions: editData?.delivery_restrictions || '',
+        logistics_data: editData?.logistics_data || null,
         latitude: editData?.latitude || '',
         longitude: editData?.longitude || '',
         geocoding_status: editData?.geocoding_status || 'manual'
@@ -1186,36 +1349,51 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
         e.preventDefault();
         setSaving(true);
         try {
+            // Revertimos a una extracción controlada pero completa
+            const { credit_limit, payment_terms, geocoding_status, ...coreData } = formData;
+            
+            const payload: any = {
+                ...coreData,
+                latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
+                longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
+                logistics_data: formData.logistics_data,
+                // Si el ID del modelo de precios es una cadena vacía, lo enviamos como null
+                pricing_model_id: formData.pricing_model_id === '' ? null : formData.pricing_model_id
+            };
+
+            console.log('--- INTENTO DE GUARDADO (Payload Sanitized) ---');
+            console.log('Payload:', JSON.stringify(payload, null, 2));
+
             if (isEdit) {
-                const { error } = await supabase
+                const { error, status, statusText } = await supabase
                     .from('profiles')
-                    .update({
-                        ...formData,
-                        latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
-                        longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null
-                    })
+                    .update(payload)
                     .eq('id', (editData as Profile).id);
-                if (error) throw error;
+                
+                if (error) {
+                    const fullError = JSON.stringify({ error, status, statusText }, null, 2);
+                    console.error('DETALLES SUPABASE:', fullError);
+                    throw new Error(`DB Error [${error.code}]: ${error.message} (${fullError})`);
+                }
                 window.showToast?.('Base de datos actualizada', 'success');
             } else {
                 const targetRole = (editData as unknown as Profile)?.role || 'b2b_client';
-                const { error } = await supabase
+                const { error, status, statusText } = await supabase
                     .from('profiles')
-                    .insert([{ 
-                        ...formData, 
-                        role: targetRole,
-                        latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
-                        longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null
-                    }]);
-                if (error) throw error;
+                    .insert([{ ...payload, role: targetRole }]);
+                
+                if (error) {
+                    const fullError = JSON.stringify({ error, status, statusText }, null, 2);
+                    console.error('DETALLES SUPABASE:', fullError);
+                    throw new Error(`DB Error [${error.code}]: ${error.message} (${fullError})`);
+                }
                 window.showToast?.('Cliente creado con éxito', 'success');
             }
             onRefresh();
             onClose();
-        } catch (err: unknown) {
-            console.error(err);
-            const message = err instanceof Error ? err.message : 'Error desconocido';
-            window.showToast?.('Error: ' + message, 'error');
+        } catch (err: any) {
+            console.error('ERROR COMPLETO:', err);
+            window.showToast?.(err.message || 'Error desconocido', 'error');
         } finally {
             setSaving(false);
         }
@@ -1237,15 +1415,52 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                     {/* SECCIÓN MUESTRA EL ESPACIO PARA RESTRICCIONES SIEMPRE */}
                     <section style={{ gridColumn: '1 / -1', backgroundColor: '#FFFBEB', padding: '1.5rem', borderRadius: '24px', border: '1px solid #FEF3C7' }}>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#92400E', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>⚠️</span> RESTRICCIONES DE ENTREGA (LOGÍSTICA)
-                        </h4>
-                        <textarea 
-                            value={formData.delivery_restrictions}
-                            onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})}
-                            placeholder="Indica aquí si hay horarios específicos, muelles de carga, o si se requiere algún equipo especial para la entrega..."
-                            style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: '1px solid #FEF3C7', minHeight: '100px', outline: 'none', backgroundColor: 'white', fontSize: '1rem', fontWeight: '600' }}
-                        />
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#92400E', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>⚠️</span> RESTRICCIONES DE ENTREGA (LOGÍSTICA)
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
+                                        const parsed = await parseLogisticsText(formData.delivery_restrictions);
+                                        setFormData({...formData, logistics_data: parsed});
+                                        window.showToast?.('IA: Restricción estructurada correctamente', 'success');
+                                    }}
+                                    style={{ 
+                                        backgroundColor: '#F59E0B', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        padding: '0.4rem 1rem', 
+                                        borderRadius: '10px', 
+                                        fontSize: '0.75rem', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <span>🪄</span> Convertir a Franja IA
+                                </button>
+                            </h4>
+                            <textarea 
+                                value={formData.delivery_restrictions}
+                                onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})}
+                                placeholder="Indica aquí si hay horarios específicos, muelles de carga, o si se requiere algún equipo especial para la entrega..."
+                                style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: '1px solid #FEF3C7', minHeight: '80px', outline: 'none', backgroundColor: 'white', fontSize: '1rem', fontWeight: '600' }}
+                            />
+                            {formData.logistics_data && (
+                                <div style={{ marginTop: '0.8rem', padding: '0.8rem', backgroundColor: '#FEF3C7', borderRadius: '12px', border: '1px solid #F59E0B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>📦</span>
+                                    <div>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#92400E', display: 'block' }}>FRANJA ESTRUCTURADA (PARA RUTA)</label>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#B45309' }}>
+                                            {formatTimeWindow(formData.logistics_data)}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                     </section>
 
                     {/* SECCIÓN DATOS BÁSICOS */}
@@ -1301,20 +1516,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                                     ))}
                                 </select>
                             </div>
-                            <FormField label="Cupo de Crédito ($)" type="number" value={formData.credit_limit} onChange={(v: string) => setFormData({...formData, credit_limit: parseFloat(v) || 0})} />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Términos de Pago</label>
-                                <select 
-                                    value={formData.payment_terms} 
-                                    onChange={(e) => setFormData({...formData, payment_terms: e.target.value})}
-                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                >
-                                    <option value="Contado">Contado</option>
-                                    <option value="Crédito 8 días">Crédito 8 días</option>
-                                    <option value="Crédito 15 días">Crédito 15 días</option>
-                                    <option value="Crédito 30 días">Crédito 30 días</option>
-                                </select>
-                            </div>
+                            {/* Cupo de Crédito y Términos eliminados a petición */}
+
                         </div>
                     </section>
                     
