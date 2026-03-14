@@ -380,7 +380,7 @@ export default function TransportControlTower() {
                             </div>
                         </div>
                     ) : activeTab === 'planner' ? (
-                        <div style={{ height: 'calc(100vh - 380px)', overflow: 'hidden' }}>
+                        <div style={{ height: 'calc(100vh - 380px)', minHeight: '650px', overflow: 'hidden' }}>
                            <RoutePlanner />
                         </div>
                     ) : activeTab === 'fleet' ? (

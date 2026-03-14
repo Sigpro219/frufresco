@@ -294,9 +294,22 @@ export default function HRManagement() {
         reader.readAsArrayBuffer(file);
     };
 
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
     const sortedUsers = [...users].filter(u => {
-        const matchesSearch = (u.contact_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-                             (u.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+        const terms = searchTerm.split(',').map(t => normalize(t.trim())).filter(Boolean);
+        const roleInfo = roles.find(r => r.value === u.role);
+        const haystack = normalize([
+            u.contact_name || '',
+            u.phone || '',
+            u.email || '',
+            u.role || '',
+            roleInfo?.label || '',
+            u.specialty || '',
+            u.address || '',
+            u.is_active ? 'activo' : 'archivado'
+        ].join(' '));
+        const matchesSearch = terms.length === 0 || terms.some(term => haystack.includes(term));
         const matchesRole = filterRole === 'all' ? (u.role !== 'b2b_client') : (u.role === filterRole);
         return matchesSearch && matchesRole;
     }).sort((a, b) => {
@@ -379,13 +392,25 @@ export default function HRManagement() {
                     border: '1px solid #E5E7EB', marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap'
                 }}>
                     <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>🔍</span>
+                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }}>🔍</span>
                         <input 
-                            placeholder="Buscar por nombre o celular..."
+                            placeholder="Buscar por nombre, rol, email, teléfono... (separa criterios con comas)"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                            style={{ width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.5rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontSize: '0.9rem', boxSizing: 'border-box' }}
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)',
+                                    background: '#E2E8F0', border: 'none', color: '#64748B',
+                                    width: '22px', height: '22px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', padding: 0
+                                }}
+                            >✕</button>
+                        )}
                     </div>
                     <select 
                         value={filterRole}

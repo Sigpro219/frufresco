@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
@@ -281,11 +281,17 @@ export default function ClientsModule() {
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
         if (!searchTerm) return data;
+
+        const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
+        if (searchTerms.length === 0) return data;
+
         return data.filter(item => 
-            fields.some(field => {
-                const value = (item as Record<string, unknown>)[field];
-                return String(value || '').toLowerCase().includes(searchTerm.toLowerCase());
-            })
+            searchTerms.every(term => 
+                fields.some(field => {
+                    const value = (item as Record<string, unknown>)[field];
+                    return String(value || '').toLowerCase().includes(term);
+                })
+            )
         );
     };
 
@@ -327,7 +333,7 @@ export default function ClientsModule() {
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{ 
                                     width: '100%', 
-                                    padding: '1rem 1.2rem 1rem 3.2rem', 
+                                    padding: '1rem 3.2rem 1rem 3.2rem', 
                                     borderRadius: '18px', 
                                     border: '1px solid #E2E8F0', 
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
@@ -335,6 +341,35 @@ export default function ClientsModule() {
                                     outline: 'none'
                                 }}
                             />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '1rem',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: '#E2E8F0',
+                                        border: 'none',
+                                        color: '#64748B',
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 'bold',
+                                        transition: 'background 0.2s',
+                                    }}
+                                    onMouseOver={(e) => (e.currentTarget.style.background = '#CBD5E1')}
+                                    onMouseOut={(e) => (e.currentTarget.style.background = '#E2E8F0')}
+                                    title="Limpiar búsqueda"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
                     )}
                 </header>
@@ -496,7 +531,7 @@ export default function ClientsModule() {
                                     </button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'city', 'municipality', 'department', 'address']).map(client => (
+                                    {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
                                         <ClientCard 
                                             key={client.id} 
                                             type="b2b" 
@@ -536,7 +571,7 @@ export default function ClientsModule() {
                                     </button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2C, ['contact_name', 'phone', 'email', 'address', 'municipality', 'department']).map((client, idx) => (
+                                    {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map((client, idx) => (
                                         <ClientCard 
                                             key={client.id || idx} 
                                             type="b2c" 
@@ -569,7 +604,7 @@ export default function ClientsModule() {
                                     </div>
                                 )}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'notes', 'business_type']).map(lead => (
+                                    {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
                                     <ClientCard 
                                         key={lead.id} 
                                         type="lead" 
@@ -844,7 +879,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     {isB2B ? 'Institucional' : isB2C ? 'Consumidor' : 'Prospecto'}
                 </div>
 
-                {/* TRAFFIC LIGHT (Semáforo) - Moved below tag */}
+                {/* TRAFFIC LIGHT (Semáforo Comercial) */}
                 {isB2B && agreementStatus && (
                     <div style={{
                         display: 'flex',
@@ -874,6 +909,38 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         }}>
                             {agreementStatus === 'active' ? 'Acuerdo Activo' : 
                              agreementStatus === 'warning' ? 'Por Vencer' : 'Sin Acuerdo'}
+                        </span>
+                    </div>
+                )}
+
+                {/* GPS INDICATOR (Gerencia Visual) */}
+                {(isB2B || isB2C) && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        padding: '4px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid',
+                        borderColor: (profileData?.latitude && profileData?.longitude) ? '#A7F3D0' : '#FECACA',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    }}>
+                        <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: (profileData?.latitude && profileData?.longitude) ? '#10B981' : '#EF4444',
+                            boxShadow: `0 0 6px ${(profileData?.latitude && profileData?.longitude) ? '#10B98188' : '#EF444488'}`
+                        }} />
+                        <span style={{ 
+                            fontSize: '0.6rem', 
+                            fontWeight: '900', 
+                            color: (profileData?.latitude && profileData?.longitude) ? '#059669' : '#B91C1C',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02rem'
+                        }}>
+                            {(profileData?.latitude && profileData?.longitude) ? 'GPS OK' : 'FALTA GPS'}
                         </span>
                     </div>
                 )}
@@ -1204,50 +1271,115 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                         {client.role !== 'b2c_client' && client.razon_social && <p style={{ color: '#6B7280', fontSize: '1.2rem' }}>{client.razon_social}</p>}
                     </header>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>📍 Información Geográfica</h4>
-                            <ModalRow label="Dirección" value={client.address} />
-                            <ModalRow label="Municipio" value={client.municipality || client.city} />
-                            <ModalRow label="Departamento" value={client.department} />
-                        </section>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2.5rem' }}>
+                        {/* COLUMNA IZQUIERDA: EMPRESA, GEOGRAFÍA */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            {/* EMPRESA Y COMERCIAL */}
+                            <section>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🏢 Identidad y Perfil Comercial
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <ModalRow label="NIT" value={client.nit} />
+                                    <ModalRow 
+                                        label="Modelo" 
+                                        value={client.role === 'b2c_client' ? 'Modelo B2C (Estándar)' : (selectedModel?.name || 'No asignado')} 
+                                    />
+                                    <ModalRow 
+                                        label="Margen Base" 
+                                        value={client.role === 'b2c_client' ? 'Diferencial x Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : 'N/A')} 
+                                    />
+                                </div>
+                                {(client.role !== 'b2c_client' && selectedModel?.description) && (
+                                    <p style={{ fontSize: '0.85rem', color: '#6B7280', marginTop: '0.8rem', fontStyle: 'italic', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: '8px' }}>&quot;{selectedModel.description}&quot;</p>
+                                )}
+                            </section>
 
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>👤 Contacto Comercial</h4>
-                            <ModalRow label="Nombre" value={client.contact_name} />
-                            <ModalRow label="Teléfono" value={client.phone} />
-                            <ModalRow label="Email" value={client.email} />
-                        </section>
+                            {/* GEOGRAFÍA Y RUTEO */}
+                            <section>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📍 Ubicación y Geocercas
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <ModalRow label="Dirección de Entrega" value={client.address} />
+                                    </div>
+                                    <ModalRow label="Municipio/Ciudad" value={client.municipality || client.city} />
+                                    <ModalRow label="Departamento" value={client.department} />
+                                    <div style={{ gridColumn: '1 / -1', padding: '1rem', backgroundColor: (client.latitude && client.longitude) ? '#F0FDF4' : '#FEF2F2', borderRadius: '12px', border: `1px solid ${(client.latitude && client.longitude) ? '#BBF7D0' : '#FECACA'}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                        <ModalRow label="Latitud" value={client.latitude?.toString() || '---'} />
+                                        <ModalRow label="Longitud" value={client.longitude?.toString() || '---'} />
+                                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '800', color: (client.latitude && client.longitude) ? '#059669' : '#DC2626' }}>
+                                            {(client.latitude && client.longitude) ? '✅ GPS VERIFICADO Y ACTIVO' : '⚠️ SIN COORDENADAS GPS'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
 
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🆔 Identificación Fiscal</h4>
-                            <ModalRow label="NIT" value={client.nit} />
-                        </section>
+                        {/* COLUMNA DERECHA: CONTACTO, LOGÍSTICA, LEAD */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            {/* CONTACTO */}
+                            <section>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#F59E0B', borderBottom: '2px solid #FEF3C7', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📞 Contacto Principal
+                                </h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <ModalRow label="Responsable Principal" value={client.contact_name} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <ModalRow label="Teléfono Directo" value={client.phone} />
+                                        <ModalRow label="Correo Electrónico" value={client.email} />
+                                    </div>
+                                </div>
+                            </section>
 
-                         <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🌍 Geolocalización</h4>
-                            <ModalRow label="Latitud" value={client.latitude?.toString() || 'Punto no asignado'} />
-                            <ModalRow label="Longitud" value={client.longitude?.toString() || 'Punto no asignado'} />
-                            <ModalRow label="Estado" value={client.geocoding_status === 'success' ? '✅ Verificado' : '⏳ Pendiente/Manual'} />
-                        </section>
-
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1rem' }}>📈 Configuración Comercial</h4>
-                            <ModalRow 
-                                label="Modelo" 
-                                value={client.role === 'b2c_client' ? 'Modelo B2C (Estándar)' : (selectedModel?.name || 'No asignado')} 
-                            />
-                            <ModalRow 
-                                label="Margen Base" 
-                                value={client.role === 'b2c_client' ? 'Diferencial x Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : 'N/A')} 
-                            />
-                            {(client.role !== 'b2c_client' && selectedModel?.description) && (
-                                <p style={{ fontSize: '0.85rem', color: '#6B7280', marginTop: '0.5rem', fontStyle: 'italic' }}>&quot;{selectedModel.description}&quot;</p>
+                            {/* RESTRICCIONES MANUALES */}
+                            {client.delivery_restrictions && (
+                                <section>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#EF4444', borderBottom: '2px solid #FEE2E2', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        ⚠️ Restricciones Especiales
+                                    </h4>
+                                    <div style={{ padding: '1.2rem', backgroundColor: '#FEF2F2', borderRadius: '16px', border: '1px solid #FECACA' }}>
+                                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#991B1B', fontWeight: '600' }}>
+                                            {client.delivery_restrictions}
+                                        </p>
+                                    </div>
+                                </section>
                             )}
-                        </section>
 
-                        {client.role === 'b2b_client' && (
-                            <section style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
+                            {/* LOGÍSTICA IA */}
+                            {client.logistics_data && (
+                                <section>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#8B5CF6', borderBottom: '2px solid #EDE9FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        🚚 Reglas de Logística (IA)
+                                    </h4>
+                                    <div style={{ padding: '1.2rem', backgroundColor: '#F5F3FF', borderRadius: '16px', border: '1px solid #DDD6FE' }}>
+                                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#5B21B6', fontWeight: '800' }}>
+                                            {formatTimeWindow(client.logistics_data)}
+                                        </p>
+                                    </div>
+                                </section>
+                            )}
+                            
+                            {/* LEAD INFO */}
+                            {(client as unknown as Lead).status && (
+                                <section>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#6366F1', borderBottom: '2px solid #E0E7FF', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🔥 Perfilamiento de Prospecto</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <ModalRow label="Tipo de Negocio" value={(client as unknown as Lead).business_type} />
+                                        <ModalRow label="Tamaño / Escala" value={(client as unknown as Lead).business_size} />
+                                        <ModalRow label="Contactos Realizados" value={(client as unknown as Lead).contact_count || 0} />
+                                        <ModalRow label="Último Contacto" value={(client as unknown as Lead).last_contact_date ? new Date(String((client as unknown as Lead).last_contact_date)).toLocaleDateString() : 'Nunca'} />
+                                    </div>
+                                </section>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ACUERDOS COMERCIALES (FULL WIDTH AL FINAL) */}
+                    {client.role === 'b2b_client' && (
+                        <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '2px dashed #E2E8F0' }}>
+                            <section>
                                 <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span>🤝</span> Acuerdos Comerciales Vigentes
                                 </h4>
@@ -1287,23 +1419,6 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                                     </div>
                                 )}
                             </section>
-                        )}
-
-                        {(client as unknown as Lead).status && (
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#6366F1', borderBottom: '2px solid #E0E7FF', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🔥 Perfilamiento de Prospecto</h4>
-                                <ModalRow label="Tipo de Negocio" value={(client as unknown as Lead).business_type} />
-                                <ModalRow label="Tamaño / Escala" value={(client as unknown as Lead).business_size} />
-                                <ModalRow label="Contactos Realizados" value={(client as unknown as Lead).contact_count || 0} />
-                                <ModalRow label="Último Contacto" value={(client as unknown as Lead).last_contact_date ? new Date(String((client as unknown as Lead).last_contact_date)).toLocaleString() : 'Nunca'} />
-                            </section>
-                        )}
-                    </div>
-
-                    {client.delivery_restrictions && (
-                        <div style={{ marginTop: '2rem', padding: '1.5rem', backgroundColor: '#FFFBEB', borderRadius: '16px', border: '1px solid #FEF3C7' }}>
-                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#92400E', fontSize: '0.9rem', fontWeight: '800' }}>⚠️ RESTRICCIONES DE ENTREGA</h4>
-                            <p style={{ margin: 0, color: '#B45309' }}>{client.delivery_restrictions}</p>
                         </div>
                     )}
                 </div>
@@ -1322,7 +1437,9 @@ function ModalRow({ label, value }: { label: string, value?: string | number | n
 }
 
 function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null }) {
-    const isEdit = !!editData;
+    const isEdit = !!editData && !!editData.id;
+    const role = (editData as any)?.role || 'b2b_client';
+    const isB2C = role === 'b2c_client';
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
         razon_social: editData?.razon_social || '',
@@ -1345,18 +1462,121 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
     });
     const [saving, setSaving] = useState(false);
 
+    const [geocoding, setGeocoding] = useState(false);
+    const mapRef = useRef<HTMLDivElement>(null);
+    const mapInstance = useRef<google.maps.Map | null>(null);
+    const markerInstance = useRef<google.maps.Marker | null>(null);
+
+    // Initialización / Actualización del Mapa Interactivo
+    useEffect(() => {
+        if (!mapRef.current || !window.google) return;
+
+        const latVal = parseFloat(String(formData.latitude));
+        const lngVal = parseFloat(String(formData.longitude));
+        
+        // Bogotá center generic coords if null
+        const lat = !isNaN(latVal) ? latVal : 4.6097;
+        const lng = !isNaN(lngVal) ? lngVal : -74.0817; 
+
+        if (!mapInstance.current) {
+            mapInstance.current = new window.google.maps.Map(mapRef.current, {
+                center: { lat, lng },
+                zoom: 16,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: false
+            });
+
+            markerInstance.current = new window.google.maps.Marker({
+                position: { lat, lng },
+                map: mapInstance.current,
+                draggable: true,
+                animation: window.google.maps.Animation.DROP
+            });
+
+            // Sincronizar el arrastre del marcador con el formulario
+            markerInstance.current.addListener('dragend', () => {
+                if (!markerInstance.current) return;
+                const pos = markerInstance.current.getPosition();
+                if (!pos) return;
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: pos.lat().toFixed(7),
+                    longitude: pos.lng().toFixed(7),
+                    geocoding_status: 'manual'
+                }));
+            });
+
+            // Click en mapa para mover marcador
+            mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
+                const pos = e.latLng;
+                if (!pos || !markerInstance.current) return;
+                markerInstance.current.setPosition(pos);
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: pos.lat().toFixed(7),
+                    longitude: pos.lng().toFixed(7),
+                    geocoding_status: 'manual'
+                }));
+            });
+        } else {
+            // Solo actualizamos posición si no estamos en modo "Manual" (para no romper la interacción del usuario)
+            if (formData.geocoding_status === 'verified') {
+                const newPos = { lat, lng };
+                mapInstance.current?.setCenter(newPos);
+                markerInstance.current?.setPosition(newPos);
+            }
+        }
+    }, [formData.latitude, formData.longitude, formData.geocoding_status]);
+
+    const handleGeocode = async () => {
+        if (!formData.address) {
+            window.showToast?.('Ingresa una dirección primero', 'info');
+            return;
+        }
+        
+        setGeocoding(true);
+        try {
+            // Refinamos la búsqueda restringiendo a Colombia y usando el municipio
+            const addressQuery = `${formData.address}, ${formData.municipality || 'Bogotá'}, Colombia`;
+            const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+            
+            const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressQuery)}&key=${apiKey}`);
+            const data = await response.json();
+            
+            if (data.status === 'OK' && data.results[0]) {
+                const { lat, lng } = data.results[0].geometry.location;
+                setFormData({
+                    ...formData,
+                    latitude: lat.toFixed(7),
+                    longitude: lng.toFixed(7),
+                    geocoding_status: 'verified'
+                });
+                window.showToast?.('Ubicación detectada', 'success');
+            } else {
+                window.showToast?.('No encontramos el punto exacto. Prueba ajustando el mapa manualmente.', 'info');
+            }
+        } catch (err) {
+            console.error('Geocoding error:', err);
+            window.showToast?.('Error al conectar con Google Maps', 'error');
+        } finally {
+            setGeocoding(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         try {
             // Revertimos a una extracción controlada pero completa
-            const { credit_limit, payment_terms, geocoding_status, ...coreData } = formData;
+            const { credit_limit: _cl, payment_terms: _pt, geocoding_status: _gs, ...coreData } = formData;
             
             const payload: any = {
                 ...coreData,
                 latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
                 longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
                 logistics_data: formData.logistics_data,
+                geocoding_status: formData.geocoding_status,
                 // Si el ID del modelo de precios es una cadena vacía, lo enviamos como null
                 pricing_model_id: formData.pricing_model_id === '' ? null : formData.pricing_model_id
             };
@@ -1377,7 +1597,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                 }
                 window.showToast?.('Base de datos actualizada', 'success');
             } else {
-                const targetRole = (editData as unknown as Profile)?.role || 'b2b_client';
+                const targetRole = role;
                 const { error, status, statusText } = await supabase
                     .from('profiles')
                     .insert([{ ...payload, role: targetRole }]);
@@ -1405,7 +1625,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                         <h2 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: 0 }}>
-                            {isEdit ? `Editando: ${editData.company_name}` : 'Nuevo Cliente Institucional'}
+                            {isEdit ? `Editando: ${editData?.company_name || editData?.contact_name || 'Cliente'}` : (isB2C ? 'Nuevo Consumidor Final' : 'Nuevo Cliente Institucional')}
                         </h2>
                         <p style={{ color: '#6B7280', margin: '0.5rem 0' }}>Gestiona la información comercial y logística del cliente.</p>
                     </div>
@@ -1415,89 +1635,290 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                     {/* SECCIÓN MUESTRA EL ESPACIO PARA RESTRICCIONES SIEMPRE */}
                     <section style={{ gridColumn: '1 / -1', backgroundColor: '#FFFBEB', padding: '1.5rem', borderRadius: '24px', border: '1px solid #FEF3C7' }}>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#92400E', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span>⚠️</span> RESTRICCIONES DE ENTREGA (LOGÍSTICA)
-                                </div>
-                                <button 
-                                    type="button"
-                                    onClick={async () => {
-                                        if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
-                                        const parsed = await parseLogisticsText(formData.delivery_restrictions);
-                                        setFormData({...formData, logistics_data: parsed});
-                                        window.showToast?.('IA: Restricción estructurada correctamente', 'success');
-                                    }}
-                                    style={{ 
-                                        backgroundColor: '#F59E0B', 
-                                        color: 'white', 
-                                        border: 'none', 
-                                        padding: '0.4rem 1rem', 
-                                        borderRadius: '10px', 
-                                        fontSize: '0.75rem', 
-                                        fontWeight: '800', 
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <span>🪄</span> Convertir a Franja IA
-                                </button>
-                            </h4>
-                            <textarea 
-                                value={formData.delivery_restrictions}
-                                onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})}
-                                placeholder="Indica aquí si hay horarios específicos, muelles de carga, o si se requiere algún equipo especial para la entrega..."
-                                style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: '1px solid #FEF3C7', minHeight: '80px', outline: 'none', backgroundColor: 'white', fontSize: '1rem', fontWeight: '600' }}
-                            />
-                            {formData.logistics_data && (
-                                <div style={{ marginTop: '0.8rem', padding: '0.8rem', backgroundColor: '#FEF3C7', borderRadius: '12px', border: '1px solid #F59E0B', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '1.2rem' }}>📦</span>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#92400E', display: 'block' }}>FRANJA ESTRUCTURADA (PARA RUTA)</label>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#B45309' }}>
-                                            {formatTimeWindow(formData.logistics_data)}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                    </section>
-
-                    {/* SECCIÓN DATOS BÁSICOS */}
-                    <section style={{ gridColumn: '1 / -1' }}>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>DATOS DE LA EMPRESA</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
-                            <FormField label="Nombre Comercial" value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
-                            <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} />
-                            <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>CONTACTO</h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                            <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
-                            <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
-                        </div>
-                    </section>
-
-                    <section>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>UBICACIÓN</h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                            <FormField label="Dirección" value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} required />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <FormField label="Municipio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} />
-                                <FormField label="Dpto" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#92400E', margin: 0 }}>RESTRICCIONES Y OPERACIÓN LOGÍSTICA</h4>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', backgroundColor: '#F0F9FF', padding: '1rem', borderRadius: '12px', border: '1px solid #BAE6FD' }}>
-                                <FormField label="Latitud" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v})} />
-                                <FormField label="Longitud" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v})} />
-                                <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: '0.7rem', color: '#0369A1', fontWeight: '700' }}>
-                                    💡 Las coordenadas permiten optimizar las rutas de despacho automáticamente.
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
+                                    const parsed = parseLogisticsText(formData.delivery_restrictions);
+                                    setFormData({ ...formData, logistics_data: parsed });
+                                    window.showToast?.('IA: Franja actualizada según el texto', 'info');
+                                }}
+                                style={{ 
+                                    backgroundColor: '#F59E0B', 
+                                    color: 'white', 
+                                    border: 'none', 
+                                    padding: '0.4rem 1rem', 
+                                    borderRadius: '10px', 
+                                    fontSize: '0.75rem', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <span>🪄</span> Autodiagnóstico IA
+                            </button>
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem' }}>
+                            <div>
+                                <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Instrucciones Naturales (Voz o Texto)</label>
+                                <textarea 
+                                    value={formData.delivery_restrictions}
+                                    onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})}
+                                    placeholder="Ej: 'Entregar todos los días antes de las 9:30 AM, menos los jueves'..."
+                                    style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: '1px solid #FEF3C7', minHeight: '120px', outline: 'none', backgroundColor: 'white', fontSize: '1rem', fontWeight: '600', color: '#1F2937' }}
+                                />
+                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.65rem', color: '#B45309', fontWeight: '600' }}>
+                                    💡 Tip: Escribe las restricciones y usa el botón de la varita para que la IA proponga la franja.
                                 </p>
                             </div>
+
+                            <div style={{ 
+                                padding: '1.2rem', 
+                                backgroundColor: 'white', 
+                                borderRadius: '20px', 
+                                border: '1px solid #FEF3C7',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1.2rem'
+                            }}>
+                                {/* Días */}
+                                <div>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.8rem', display: 'block' }}>Días Permitidos</label>
+                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                        {[
+                                            { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' }, 
+                                            { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
+                                        ].map(day => {
+                                            const isActive = formData.logistics_data?.days?.includes(day.id);
+                                            return (
+                                                <button
+                                                    key={day.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const currentDays = formData.logistics_data?.days || [];
+                                                        const newDays = isActive 
+                                                            ? currentDays.filter(d => d !== day.id)
+                                                            : [...currentDays, day.id].sort();
+                                                        
+                                                        setFormData({
+                                                            ...formData,
+                                                            logistics_data: {
+                                                                ...(formData.logistics_data || { windows: [{ startTime: '04:30', endTime: '12:00' }], parsing_date: new Date().toISOString() }),
+                                                                days: newDays
+                                                            }
+                                                        });
+                                                    }}
+                                                    style={{
+                                                        width: '32px',
+                                                        height: '32px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        backgroundColor: isActive ? '#F59E0B' : '#F9FAFB',
+                                                        color: isActive ? 'white' : '#9CA3AF',
+                                                        fontWeight: '900',
+                                                        fontSize: '0.75rem',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {day.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Horario Selectores */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.6rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'block' }}>Inicio (Min 04:30)</label>
+                                        <input 
+                                            type="time" 
+                                            min="04:30"
+                                            max="19:00"
+                                            value={formData.logistics_data?.windows?.[0]?.startTime || '04:30'} 
+                                            onChange={(e) => {
+                                                const newWindows = [{ 
+                                                    startTime: e.target.value, 
+                                                    endTime: formData.logistics_data?.windows?.[0]?.endTime || '12:00' 
+                                                }];
+                                                setFormData({
+                                                    ...formData,
+                                                    logistics_data: {
+                                                        ...(formData.logistics_data || { days: [1,2,3,4,5,6], parsing_date: new Date().toISOString() }),
+                                                        windows: newWindows
+                                                    }
+                                                });
+                                            }}
+                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.6rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'block' }}>Fin (Max 19:00)</label>
+                                        <input 
+                                            type="time" 
+                                            min="04:30"
+                                            max="19:00"
+                                            value={formData.logistics_data?.windows?.[0]?.endTime || '12:00'} 
+                                            onChange={(e) => {
+                                                const newWindows = [{ 
+                                                    startTime: formData.logistics_data?.windows?.[0]?.startTime || '04:30', 
+                                                    endTime: e.target.value 
+                                                }];
+                                                setFormData({
+                                                    ...formData,
+                                                    logistics_data: {
+                                                        ...(formData.logistics_data || { days: [1,2,3,4,5,6], parsing_date: new Date().toISOString() }),
+                                                        windows: newWindows
+                                                    }
+                                                });
+                                            }}
+                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Resumen Visual */}
+                                <div style={{ 
+                                    padding: '0.8rem', 
+                                    backgroundColor: '#FEF3C7', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #FDE68A',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '1.2rem' }}>🚚</span>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
+                                        {formData.logistics_data ? formatTimeWindow(formData.logistics_data) : 'Define una restricción operativa'}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </section>
+
+                    {/* SECCIÓN DATOS BÁSICOS Y CONTACTO */}
+                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
+                        <section>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
+                                {isB2C ? '👤 DATOS PERSONALES' : '🏢 DATOS DE LA EMPRESA'}
+                            </h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <FormField label={isB2C ? "Apodo / Nombre Visible" : "Nombre Comercial"} value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
+                                {!isB2C && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} />
+                                        <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
+                                    </div>
+                                )}
+                                {isB2C && (
+                                    <FormField label="Cédula / Documento (Opcional)" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
+                                )}
+                            </div>
+                        </section>
+
+                        <section>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>📞 CONTACTO PRINCIPAL</h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
+                                <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* SECCIÓN GEOGRÁFICA Y LOGÍSTICA MEJORADA */}
+                     <section style={{ gridColumn: '1 / -1' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
+                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>📍 LOCALIZACIÓN OPERATIVA</h4>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button 
+                                    type="button"
+                                    onClick={handleGeocode}
+                                    disabled={geocoding}
+                                    style={{ 
+                                        backgroundColor: '#3B82F6', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        padding: '0.5rem 1.2rem', 
+                                        borderRadius: '12px', 
+                                        fontSize: '0.8rem', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
+                                </button>
+                            </div>
+                         </div>
+
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN DE ENTREGA</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.address} 
+                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                        placeholder="Ej: Calle 72 # 10-03..."
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600' }}
+                                    />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <FormField label="Ciudad/Mnpio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} />
+                                    <FormField label="Departamento" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} />
+                                </div>
+                                
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', display: 'block', marginBottom: '1rem', letterSpacing: '0.5px' }}>GEOCERCAS (LAT/LNG)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <FormField label="LAT" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} />
+                                        <FormField label="LNG" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} />
+                                    </div>
+                                    <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px', color: formData.geocoding_status === 'verified' ? '#059669' : '#D97706', fontSize: '0.7rem', fontWeight: '800' }}>
+                                        {formData.geocoding_status === 'verified' ? '✅ COORDENADAS VERIFICADAS POR GOOGLE' : '⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)'}
+                                    </div>
+                                </div>
+
+                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', border: '1px solid #FEF3C7', fontSize: '0.7rem', color: '#92400E', fontWeight: '700' }}>
+                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
+                                </div>
+                            </div>
+
+                            <div style={{ 
+                                height: '400px', 
+                                width: '100%', 
+                                borderRadius: '24px', 
+                                overflow: 'hidden', 
+                                border: '4px solid white',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                                position: 'relative',
+                                background: '#E2E8F0'
+                            }}>
+                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
+                                {!formData.latitude && (
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', zIndex: 1, textAlign: 'center', padding: '2rem' }}>
+                                        <div>
+                                            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
+                                            <div style={{ fontWeight: '800', color: '#1E40AF' }}>Esperando dirección...</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Usa el pin inteligente o arrastra el mapa.</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                         </div>
+                     </section>
 
                     {/* SECCIÓN COMERCIAL Y FINANCIERA */}
                     <section style={{ gridColumn: '1 / -1' }}>

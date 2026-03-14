@@ -27,6 +27,7 @@ interface Vehicle {
     model: string;
     vehicle_type: string;
     capacity_kg: number;
+    max_crates_capacity?: number;
     status: 'available' | 'on_route' | 'maintenance' | 'inactive';
     driver_id?: string;
     current_odometer: number;
@@ -60,6 +61,7 @@ export default function FleetManagement() {
         model: '',
         vehicle_type: 'Furgón',
         capacity_kg: 1000,
+        max_crates_capacity: 0,
         current_odometer: 0
     });
     const [loading, setLoading] = useState(true);
@@ -67,6 +69,17 @@ export default function FleetManagement() {
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [vehicleIssues, setVehicleIssues] = useState<VehicleIssue[]>([]);
+    const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+    const [fleetSearch, setFleetSearch] = useState('');
+    const [editForm, setEditForm] = useState<{
+        plate: string;
+        brand: string;
+        model: string;
+        vehicle_type: string;
+        capacity_kg: number;
+        max_crates_capacity: number;
+        current_odometer: number;
+    } | null>(null);
 
     const fetchDrivers = useCallback(async () => {
         try {
@@ -101,7 +114,7 @@ export default function FleetManagement() {
             if (error) throw error;
 
             // 2. Fetch active routes for these vehicles to calculate progress and dynamic avg
-            const plates = vehiclesData?.map(v => v.plate) || [];
+            const plates = vehiclesData?.map((v: any) => v.plate) || [];
             const { data: routesData } = await supabase
                 .from('routes')
                 .select('id, vehicle_plate, status, total_orders, start_time, theoretical_distance_km, route_stops(status)')
@@ -109,7 +122,7 @@ export default function FleetManagement() {
                 .order('start_time', { ascending: false });
 
             // 3. Enrich vehicles with route data and calculate dynamic avg_daily_km
-            const enrichedVehicles = vehiclesData?.map(v => {
+            const enrichedVehicles = vehiclesData?.map((v: any) => {
                 const vRoutes = (routesData as Route[])?.filter(r => r.vehicle_plate === v.plate) || [];
                 const activeRoute = vRoutes.find(r => r.status === 'in_transit' || r.status === 'loading');
                 
@@ -127,7 +140,7 @@ export default function FleetManagement() {
                 return {
                     ...v,
                     avg_daily_km: dynamicAvg,
-                    maintenance_schedules: v.maintenance_schedules?.sort((a: any, b: any) => 
+                    maintenance_schedules: v.maintenance_schedules?.sort((a: {next_due_km?: number}, b: {next_due_km?: number}) => 
                         (a.next_due_km || 999999) - (b.next_due_km || 999999)
                     ),
                     active_route: activeRoute ? {
@@ -219,10 +232,41 @@ export default function FleetManagement() {
             if (error) throw error;
             setShowAdd(false);
             fetchVehicles();
-            setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Furgón', capacity_kg: 1000, current_odometer: 0 });
+            setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Furgón', capacity_kg: 1000, max_crates_capacity: 0, current_odometer: 0 });
         } catch (err) {
             console.error('Error adding vehicle:', err);
             alert('Error al agregar vehículo.');
+        }
+    };
+
+    const openEditVehicle = (v: Vehicle) => {
+        setEditingVehicle(v);
+        setEditForm({
+            plate: v.plate,
+            brand: v.brand,
+            model: v.model,
+            vehicle_type: v.vehicle_type,
+            capacity_kg: v.capacity_kg,
+            max_crates_capacity: v.max_crates_capacity || 0,
+            current_odometer: v.current_odometer
+        });
+    };
+
+    const handleUpdateVehicle = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingVehicle || !editForm) return;
+        try {
+            const { error } = await supabase
+                .from('fleet_vehicles')
+                .update(editForm)
+                .eq('id', editingVehicle.id);
+            if (error) throw error;
+            setEditingVehicle(null);
+            setEditForm(null);
+            fetchVehicles();
+        } catch (err) {
+            console.error('Error al actualizar vehículo:', err);
+            alert('Error al guardar los cambios.');
         }
     };
 
@@ -247,6 +291,27 @@ export default function FleetManagement() {
         }
     };
 
+    // Multi-term intelligent filtering (OR logic — any term matches)
+    const normalizeFleet = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const filteredVehicles = (() => {
+        const terms = fleetSearch.split(',').map(t => normalizeFleet(t.trim())).filter(Boolean);
+        if (terms.length === 0) return vehicles;
+        return vehicles.filter(v => {
+            const haystack = normalizeFleet([
+                v.plate,
+                v.brand,
+                v.model,
+                v.vehicle_type,
+                v.status,
+                v.driver?.contact_name || '',
+                String(v.capacity_kg),
+                String(v.max_crates_capacity || 0),
+                String(v.current_odometer)
+            ].join(' '));
+            return terms.some(term => haystack.includes(term));
+        });
+    })();
+
     return (
         <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -258,7 +323,39 @@ export default function FleetManagement() {
                         </p>
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {/* Search bar */}
+                    <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#A0AEC0', pointerEvents: 'none' }}>🔍</span>
+                        <input
+                            placeholder="Buscar placa, marca, conductor, estado..."
+                            value={fleetSearch}
+                            onChange={e => setFleetSearch(e.target.value)}
+                            style={{
+                                padding: '0.6rem 2.8rem 0.6rem 2.4rem',
+                                borderRadius: '12px',
+                                border: '1px solid #E5E7EB',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                width: '300px',
+                                color: '#374151',
+                                outline: 'none',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
+                            }}
+                        />
+                        {fleetSearch && (
+                            <button
+                                onClick={() => setFleetSearch('')}
+                                style={{
+                                    position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)',
+                                    background: '#E2E8F0', border: 'none', color: '#64748B',
+                                    width: '20px', height: '20px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer', fontSize: '0.65rem', fontWeight: 'bold', padding: 0
+                                }}
+                            >✕</button>
+                        )}
+                    </div>
                     <button 
                         onClick={loadData}
                         disabled={loading}
@@ -316,6 +413,10 @@ export default function FleetManagement() {
                             <input type="number" required placeholder="Ej: 1500" value={newVehicle.capacity_kg} onChange={e => setNewVehicle({...newVehicle, capacity_kg: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
                         </div>
                         <div>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>CAPACIDAD (CANASTILLAS)</label>
+                            <input type="number" required placeholder="Ej: 50" value={newVehicle.max_crates_capacity} onChange={e => setNewVehicle({...newVehicle, max_crates_capacity: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
+                        </div>
+                        <div>
                             <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>ODÓMETRO INICIAL (KM)</label>
                             <input type="number" value={newVehicle.current_odometer} onChange={e => setNewVehicle({...newVehicle, current_odometer: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
                         </div>
@@ -355,16 +456,16 @@ export default function FleetManagement() {
                                     </td>
                                 </tr>
                             ))
-                        ) : vehicles.length === 0 ? (
+                        ) : filteredVehicles.length === 0 ? (
                             <tr>
-                                <td colSpan={6} style={{ padding: '4rem', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚛</div>
-                                    <h3 style={{ color: '#6B7280', margin: 0 }}>No hay vehículos registrados</h3>
-                                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>Da clic en &quot;Registrar Vehículo&quot; para iniciar la flota.</p>
+                                <td colSpan={7} style={{ padding: '4rem', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
+                                    <h3 style={{ color: '#6B7280', margin: 0 }}>Sin resultados para &quot;{fleetSearch}&quot;</h3>
+                                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>Prueba con otro término. Puedes separar criterios por comas.</p>
                                 </td>
                             </tr>
                         ) : (
-                            vehicles.map(v => {
+                            filteredVehicles.map(v => {
                                 const nextMaint = v.maintenance_schedules?.[0];
                                 const isUrgent = nextMaint && (
                                     (nextMaint.task_type === 'km' && (nextMaint.next_due_km - v.current_odometer <= 500)) ||
@@ -374,13 +475,35 @@ export default function FleetManagement() {
                                 return (
                                     <tr key={v.id} style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }} onClick={() => fetchVehicleDetails(v)}>
                                         <td style={{ padding: '1rem' }}>
-                                            <div style={{ fontWeight: '900', color: '#111827', fontSize: '1rem' }}>{v.plate}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ fontWeight: '900', color: '#111827', fontSize: '1rem' }}>{v.plate}</span>
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); openEditVehicle(v); }}
+                                                    title="Editar vehículo"
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.75rem',
+                                                        padding: '0.1rem 0.2rem',
+                                                        borderRadius: '6px',
+                                                        lineHeight: 1,
+                                                        color: '#94A3B8',
+                                                        transition: 'color 0.2s',
+                                                        flexShrink: 0
+                                                    }}
+                                                    onMouseOver={e => (e.currentTarget.style.color = '#0891B2')}
+                                                    onMouseOut={e => (e.currentTarget.style.color = '#94A3B8')}
+                                                >
+                                                    ✏️
+                                                </button>
+                                            </div>
                                             <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700' }}>
                                                 {v.brand} {v.model}
                                             </div>
                                         </td>
                                         <td style={{ padding: '1rem' }}>
-                                            <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{v.capacity_kg?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KG</span></div>
+                                            <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{v.capacity_kg?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KG</span> • <span style={{ color: '#0F766E' }}>{v.max_crates_capacity || 0} <span style={{ color: '#94A3B8' }}>CANASTAS</span></span></div>
                                             <div style={{ fontSize: '0.7rem', color: '#0891B2', fontWeight: '900' }}>{v.vehicle_type.toUpperCase()}</div>
                                         </td>
                                         <td style={{ padding: '1rem' }}>
@@ -441,6 +564,76 @@ export default function FleetManagement() {
                     </tbody>
                 </table>
             </div>
+
+            {/* Edit Vehicle Modal */}
+            {editingVehicle && editForm && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '2rem'
+                }}>
+                    <div style={{
+                        backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '700px',
+                        padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative'
+                    }}>
+                        <button
+                            onClick={() => { setEditingVehicle(null); setEditForm(null); }}
+                            style={{ position: 'absolute', right: '1.5rem', top: '1.5rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' }}
+                        >✕</button>
+
+                        <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
+                            ✏️ Editando: <span style={{ color: '#0891B2' }}>{editingVehicle.plate}</span>
+                        </h3>
+                        <p style={{ margin: '0 0 2rem', color: '#64748B', fontSize: '0.85rem' }}>Modifica los datos del vehículo y guarda los cambios.</p>
+
+                        <form onSubmit={handleUpdateVehicle}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>PLACA</label>
+                                    <input required value={editForm.plate} onChange={e => setEditForm({...editForm, plate: e.target.value.toUpperCase()})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>MARCA</label>
+                                    <input required value={editForm.brand} onChange={e => setEditForm({...editForm, brand: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>MODELO (AÑO / LÍNEA)</label>
+                                    <input required value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>TIPO DE CARROCERÍA</label>
+                                    <select value={editForm.vehicle_type} onChange={e => setEditForm({...editForm, vehicle_type: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', backgroundColor: 'white', boxSizing: 'border-box' }}>
+                                        <option value="Furgón">Furgón</option>
+                                        <option value="Camión">Camión</option>
+                                        <option value="Turbo">Turbo</option>
+                                        <option value="Refrigerado">Refrigerado</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>CAPACIDAD (KG)</label>
+                                    <input type="number" required value={editForm.capacity_kg} onChange={e => setEditForm({...editForm, capacity_kg: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>CAPACIDAD (CANASTILLAS)</label>
+                                    <input type="number" required value={editForm.max_crates_capacity} onChange={e => setEditForm({...editForm, max_crates_capacity: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>ODÓMETRO (KM)</label>
+                                    <input type="number" value={editForm.current_odometer} onChange={e => setEditForm({...editForm, current_odometer: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                            </div>
+                            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                                <button type="button" onClick={() => { setEditingVehicle(null); setEditForm(null); }} style={{ padding: '0.9rem 2rem', borderRadius: '14px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '700', cursor: 'pointer', color: '#374151' }}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" style={{ padding: '0.9rem 2.5rem', borderRadius: '14px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '900', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)' }}>
+                                    💾 Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Vehicle Details Modal */}
             {selectedVehicle && (
