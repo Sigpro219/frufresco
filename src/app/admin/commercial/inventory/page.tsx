@@ -181,7 +181,7 @@ export default function InventoryAdminPage() {
                         .select(`
                             id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id,
                             inventory_stocks!product_id (
-                                id, quantity, status, warehouse_id, updated_at,
+                                *,
                                 warehouses (name)
                             )
                         `)
@@ -769,7 +769,7 @@ export default function InventoryAdminPage() {
                                         </thead>
                                         <tbody>
                                             {paginatedStocks.map((item) => (
-                                                <tr key={item.id} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                <tr key={item.id || `stock-${item.product_id}-${item.status}`} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                                             <div style={{ width: '48px', height: '48px', backgroundColor: '#F3F4F6', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E5E7EB' }}>
