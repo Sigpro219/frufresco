@@ -104,24 +104,41 @@ export default function ProductCard({ product }: { product: Product }) {
                         </button>
                     </div>
 
-                    {/* BADGE - Hidden for now, ready for future use (e.g., OFFSET or specific categories) */}
-                    {/*
+                    {/* BADGES DE ETIQUETAS (TAGS) */}
                     <div style={{ 
                         position: 'absolute', 
                         top: '12px', 
                         right: '12px', 
-                        backgroundColor: 'white', 
-                        padding: '4px 10px', 
-                        borderRadius: '20px',
-                        fontSize: '0.7rem',
-                        fontWeight: '700',
-                        color: 'var(--primary)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
                         zIndex: 10
                     }}>
-                        FRESCO
+                        {product.tags?.map((tag, i) => {
+                            // Colores según el tag (lógica simple)
+                            const isPromo = tag.toLowerCase().includes('oferta') || tag.toLowerCase().includes('descuento');
+                            const isFresh = tag.toLowerCase().includes('fresco') || tag.toLowerCase().includes('viva');
+                            
+                            return (
+                                <div key={i} style={{ 
+                                    backgroundColor: isPromo ? 'rgba(239, 68, 68, 0.9)' : isFresh ? 'rgba(16, 185, 129, 0.9)' : 'rgba(255, 255, 255, 0.85)', 
+                                    padding: '4px 10px', 
+                                    borderRadius: '50px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: '800',
+                                    color: (isPromo || isFresh) ? 'white' : 'var(--primary-dark)',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                    backdropFilter: 'blur(4px)',
+                                    WebkitBackdropFilter: 'blur(4px)',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    border: '1px solid rgba(255,255,255,0.2)'
+                                }}>
+                                    {tag}
+                                </div>
+                            );
+                        })}
                     </div>
-                    */}
                 </Link>
 
                 {/* CONTENT */}

@@ -61,10 +61,20 @@ export default function RoutePlanner() {
                 setParams(pMap);
             }
 
-            const { data: orderData, error: oErr } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('status', 'approved'); 
+            // 2. Fetch Orders (with conditional cutoff)
+            const { data: settings } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
+            const cutoffEnabled = settings?.value !== 'false';
+
+            let query = supabase.from('orders').select('*').eq('status', 'approved');
+
+            if (cutoffEnabled) {
+                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+                const targetDate = now.toISOString().split('T')[0];
+                query = query.eq('delivery_date', targetDate);
+                console.log(`🔍 Route Planner filtered for operational date: ${targetDate}`);
+            }
+
+            const { data: orderData, error: oErr } = await query;
 
             if (!isMounted.current) return;
             if (oErr) throw oErr;
@@ -310,7 +320,7 @@ export default function RoutePlanner() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                             <span style={{ fontSize: '0.75rem', color: '#1E293B', fontWeight: '800' }}>📦 {order.total_weight_kg} kg</span>
                                             <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: '700', backgroundColor: '#F1F5F9', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
-                                                🧺 {Math.ceil(order.total_weight_kg / values.avg_kg_per_crate)}
+                                                🧺 {Math.ceil(order.total_weight_kg / params.avg_kg_per_crate)}
                                             </span>
                                         </div>
                                     </div>

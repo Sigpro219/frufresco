@@ -6,6 +6,7 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -167,7 +168,7 @@ export default function OrderDetailPage() {
         const deliveryDate = new Date(order.delivery_date + 'T00:00:00');
         const cutoffDate = new Date(deliveryDate);
         cutoffDate.setDate(deliveryDate.getDate() - 1);
-        cutoffDate.setHours(20, 0, 0, 0); // 8 PM of the day before
+        cutoffDate.setHours(ADMIN_EDIT_CUTOFF_HOUR, 0, 0, 0);
 
         // If it's already the delivery day or past 8 PM of the day before
         return bogotaNow.getTime() < cutoffDate.getTime();

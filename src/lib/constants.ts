@@ -8,6 +8,10 @@ export const CATEGORY_MAP: Record<string, string> = {
     'DE': 'Despensa'
 };
 
+// Business Logic Cutoff Rules
+export const DEFAULT_CUTOFF_HOUR = 17; // 5:00 PM - Sale cut for tomorrow delivery
+export const ADMIN_EDIT_CUTOFF_HOUR = 20; // 8:00 PM - Admin edit lock for next day delivery
+
 
 export const REVERSE_CATEGORY_MAP: Record<string, string> = {
     'Frutas': 'FR',

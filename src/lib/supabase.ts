@@ -95,4 +95,6 @@ export interface Product {
     theoretical_shrinkage_pct?: number;
     allowed_waste_reasons?: string[];
     iva_rate?: number;
+    tags?: string[];
+    keywords?: string;
 }

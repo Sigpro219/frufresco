@@ -45,6 +45,7 @@ export default function TransportControlTower() {
         completedToday: 0,
         totalNovedades: 0
     });
+    const [appName, setAppName] = useState('Logistics Pro');
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -115,6 +116,17 @@ export default function TransportControlTower() {
                     totalNovedades: novedadesCount
                 });
             }
+
+            // Fetch app name for dynamic branding
+            const { data: nameData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'app_short_name')
+                .single();
+            
+            if (nameData?.value && isMounted.current) {
+                setAppName(nameData.value);
+            }
         } catch (err: unknown) {
             if (isAbortError(err)) return; // Silently handle aborts
             if (!isMounted.current) return;
@@ -136,34 +148,73 @@ export default function TransportControlTower() {
         };
     }, [fetchTransportData]);
 
+    const [scrolled, setScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setScrolled(window.scrollY > 50);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
     return (
         <main style={{ 
-            minHeight: '100vh', 
+            minHeight: '150vh', 
             backgroundColor: '#F9FAFB', 
             color: '#111827',
             fontFamily: 'apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
         }}>
             <style jsx global>{`
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+                
+                :root {
+                    --accent: #0891B2;
+                    --accent-glow: rgba(8, 145, 178, 0.15);
+                    --glass-bg: rgba(255, 255, 255, 0.7);
+                    --glass-border: rgba(255, 255, 255, 0.5);
+                    --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+                }
+
                 @keyframes pulse-cyan {
                     0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.4); }
                     70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(8, 145, 178, 0); }
                     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 145, 178, 0); }
                 }
+                
+                @keyframes slide-in {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
                 .live-pulse {
-                    width: 8px;
-                    height: 8px;
+                    width: 10px;
+                    height: 10px;
                     background: #0891B2;
                     border-radius: 50%;
                     display: inline-block;
                     margin-right: 8px;
                     animation: pulse-cyan 2s infinite;
                 }
-                .premium-card {
-                    background: white;
-                    border: 1px solid #E5E7EB;
+                
+                .glass-card {
+                    background: var(--glass-bg);
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
+                    border: 1px solid var(--glass-border);
                     border-radius: 24px;
-                    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+                    box-shadow: var(--card-shadow);
                 }
+
+                .premium-nav-item {
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .premium-nav-item:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                }
+
                 ::-webkit-scrollbar { width: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }
                 ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
@@ -173,92 +224,155 @@ export default function TransportControlTower() {
             <Navbar />
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem' }}>
-                <header style={{ 
-                    marginBottom: '2rem', 
+                <div style={{ 
+                    marginBottom: '1rem', 
                     display: 'flex', 
                     flexDirection: 'column',
-                    gap: '1.5rem',
-                    padding: '2rem',
-                    background: 'white',
+                    gap: '1rem',
+                    padding: '1.5rem 2.5rem',
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
                     borderRadius: '32px',
-                    border: '1px solid #E5E7EB',
-                    boxShadow: '0 4px 20px -5px rgba(0,0,0,0.05)'
+                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 10px 30px -10px rgba(0,0,0,0.04)',
+                    position: 'relative',
+                    overflow: 'hidden'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
-                                <span className="live-pulse"></span>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#0891B2', letterSpacing: '0.15rem' }}>DASHBOARD OPERATIVO</span>
+                    {/* Decorative Background Element */}
+                    <div style={{ 
+                        position: 'absolute', top: '-10%', right: '-5%', width: '300px', height: '300px', 
+                        background: 'radial-gradient(circle, rgba(8, 145, 178, 0.03) 0%, transparent 70%)',
+                        zIndex: 0
+                    }}></div>
+                    
+                    {/* Header & Stats Section - Hidden on Scroll */}
+                    <div style={{ 
+                        maxHeight: scrolled ? '0px' : '400px', 
+                        opacity: scrolled ? 0 : 1, 
+                        overflow: 'hidden', 
+                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                        pointerEvents: scrolled ? 'none' : 'auto',
+                        marginBottom: scrolled ? '0rem' : '1.5rem'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1, padding: '1rem 0' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
+                                    <span className="live-pulse"></span>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0891B2', letterSpacing: '0.15rem', textTransform: 'uppercase' }}>CENTRO DE MANDO</span>
+                                </div>
+                                <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.1rem', lineHeight: 1 }}>
+                                    Torre de <span style={{ color: '#0891B2' }}>Control</span>
+                                </h1>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
+                                    <p style={{ color: '#64748B', fontSize: '0.9rem', fontWeight: '500', margin: 0 }}>Rutas estratégicas <span style={{ color: '#0F172A', fontWeight: '700' }}>{appName}</span>.</p>
+                                </div>
                             </div>
-                            <h1 style={{ fontSize: '2.8rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.07rem', lineHeight: 1 }}>
-                                Torre de <span style={{ color: '#0891B2' }}>Control</span>
-                            </h1>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
-                                <p style={{ color: '#64748B', fontSize: '1.1rem', fontWeight: '500', margin: 0 }}>Gestión centralizada de rutas y flota <span style={{ color: '#111827', fontWeight: '700' }}>Logistics Pro</span>.</p>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <StatBox label="EN TRÁNSITO" value={stats.totalActive} color="#0891B2" icon="⚡" bg="linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%)" />
+                                    <StatBox label="ENTREGAS" value={stats.completedToday} color="#10B981" icon="✨" bg="linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)" />
+                                    <StatBox label="ALERTAS" value={stats.totalNovedades} color="#EF4444" icon="🔥" bg="linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)" />
+                                </div>
+                                
                                 <button 
                                     onClick={() => fetchTransportData()}
                                     disabled={loading}
                                     style={{ 
-                                        padding: '0.4rem 0.8rem', borderRadius: '10px', 
-                                        backgroundColor: 'white', color: '#0891B2', border: '1px solid #0891B2', 
-                                        fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer',
-                                        transition: 'all 0.2s', opacity: loading ? 0.5 : 1
+                                        padding: '0.7rem', borderRadius: '14px', 
+                                        backgroundColor: 'white', color: '#64748B', border: '1px solid #E2E8F0', 
+                                        fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', opacity: loading ? 0.5 : 1,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                     }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.color = '#0F172A';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.backgroundColor = 'white';
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.color = '#64748B';
+                                    }}
+                                    title="Actualizar Datos"
                                 >
-                                    {loading ? 'Sincronizando...' : '🔃 Sincronizar Todo'}
+                                    <span style={{ fontSize: '1.2rem', animation: loading ? 'spin 1s linear infinite' : 'none', display: 'inline-block' }}>{loading ? '⌛' : '🔄'}</span> 
                                 </button>
                             </div>
                         </div>
-
-                        <div style={{ display: 'flex', gap: '1.2rem' }}>
-                            <StatBox label="ACTIVAS" value={stats.totalActive} color="#0891B2" icon="⚡" bg="rgba(8, 145, 178, 0.05)" />
-                            <StatBox label="ENTREGAS" value={stats.completedToday} color="#10B981" icon="✅" bg="rgba(16, 185, 129, 0.05)" />
-                            <StatBox label="NOVEDADES" value={stats.totalNovedades} color="#EF4444" icon="🚨" bg="rgba(239, 68, 68, 0.05)" />
-                        </div>
                     </div>
-                    
-                    <div style={{ 
-                        height: '1px', 
-                        background: 'linear-gradient(to right, #F3F4F6, transparent)', 
-                        width: '100%' 
-                    }}></div>
 
-                    <nav style={{ display: 'flex', gap: '0.8rem' }}>
+                    {/* Sticky Navigation Area (Nested inside the header but with sticky behavior) */}
+                    <nav style={{ 
+                        position: 'sticky', 
+                        top: '0px', 
+                        zIndex: 10, 
+                        display: 'flex', 
+                        gap: '0.8rem', 
+                        flexWrap: 'wrap',
+                        backgroundColor: scrolled ? 'rgba(255, 255, 255, 0.9)' : 'transparent',
+                        backdropFilter: scrolled ? 'blur(8px)' : 'none',
+                        margin: '0 -1rem',
+                        padding: '0.5rem 1rem',
+                        borderRadius: scrolled ? '16px' : '0',
+                        transition: 'all 0.3s ease'
+                    }}>
                         {[
-                            { id: 'map', label: 'Monitor de Google Maps', icon: '📍' },
-                            { id: 'planner', label: 'Planeador Inteligente', icon: '📅' },
-                            { id: 'fleet', label: 'Gestión de Flota', icon: '🚛' },
-                            { id: 'drivers_panel', label: 'Panel de Conductores', icon: '🪪' },
-                            { id: 'kpis', label: 'KPIs de Desempeño', icon: '📊' },
-                            { id: 'maintenance', label: 'Estado de Taller', icon: '🛠️' }
+                            { id: 'map', label: 'Monitor Global', icon: '🌍' },
+                            { id: 'planner', label: 'Planeación', icon: '🧭' },
+                            { id: 'fleet', label: 'Flota', icon: '🚛' },
+                            { id: 'drivers_panel', label: 'Conductores', icon: '👥' },
+                            { id: 'maintenance', label: 'Mantenimiento', icon: '🛠️' },
+                            { id: 'kpis', label: 'Insights / KPIs', icon: '📈' }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as 'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis')}
+                                className="premium-nav-item"
                                 style={{
-                                    background: activeTab === tab.id ? '#111827' : 'transparent',
+                                    background: activeTab === tab.id ? '#0F172A' : '#FFFFFF',
                                     border: '1px solid',
-                                    borderColor: activeTab === tab.id ? '#111827' : '#E5E7EB',
-                                    padding: '0.8rem 1.5rem',
-                                    borderRadius: '16px',
-                                    fontSize: '0.85rem',
+                                    borderColor: activeTab === tab.id ? '#0F172A' : '#E2E8F0',
+                                    padding: '0.6rem 1.2rem',
+                                    borderRadius: '14px',
+                                    fontSize: '0.75rem',
                                     fontWeight: '700',
                                     color: activeTab === tab.id ? 'white' : '#64748B',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem'
+                                    gap: '0.6rem',
+                                    boxShadow: activeTab === tab.id ? '0 8px 12px -3px rgba(15, 23, 42, 0.2)' : 'none',
+                                    transform: activeTab === tab.id ? 'translateY(-1px)' : 'none',
+                                    transition: 'all 0.2s ease'
                                 }}
                             >
-                                <span>{tab.icon}</span>
-                                {tab.label}
+                                <span style={{ fontSize: '1rem', filter: activeTab === tab.id ? 'none' : 'grayscale(1)' }}>{tab.icon}</span>
+                                <span style={{ letterSpacing: '0.01rem' }}>{tab.label.toUpperCase()}</span>
                             </button>
                         ))}
                     </nav>
-                </header>
+                </div>
 
-                <div className="premium-card" style={{ padding: '1.5rem', minHeight: 'calc(100vh - 350px)', position: 'relative' }}>
+                <div className="glass-card" style={{ 
+                    padding: '1.5rem', 
+                    minHeight: 'calc(100vh - 150px)', 
+                    position: 'relative', 
+                    overflow: 'visible', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    marginTop: '0.5rem'
+                }}>
+                    {/* Background Soft Glow */}
+                    <div style={{ 
+                        position: 'absolute', bottom: '-20%', left: '-10%', width: '600px', height: '600px', 
+                        background: 'radial-gradient(circle, rgba(8, 145, 178, 0.05) 0%, transparent 70%)',
+                        zIndex: 0
+                    }}></div>
+                    
+                    <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
                     {loading && (
                         <div style={{ 
                             position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', 
@@ -272,14 +386,14 @@ export default function TransportControlTower() {
                         </div>
                     )}
                     {activeTab === 'map' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: '100%' }}>
-                            {/* Feed Sidebar */}
-                            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 380px)' }}>
-                                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#374151' }}>FLUJO DE RUTAS</h3>
-                                    <span style={{ fontSize: '0.7rem', color: '#6B7280' }}>{activeRoutes.length} TOTAL</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+                            {/* Feed Sidebar - Natural Scroll */}
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>ESTADO DE RUTAS</h3>
+                                    <span style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '600' }}>{activeRoutes.length} ACTIVAS</span>
                                 </div>
-                                <div style={{ flex: 1, overflowY: 'auto' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {activeRoutes.map(route => {
                                         const total = route.route_stops.length;
                                         const done = route.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
@@ -290,9 +404,11 @@ export default function TransportControlTower() {
                                             <div key={route.id} style={{ 
                                                 padding: '1.2rem', 
                                                 borderRadius: '20px', 
-                                                backgroundColor: isInTransit ? '#F0FDFA' : '#F9FAFB',
-                                                border: isInTransit ? '1px solid #99F6E4' : '1px solid #F3F4F6',
-                                                marginBottom: '1rem',
+                                                backgroundColor: isInTransit ? '#FFFFFF' : '#F9FAFB',
+                                                border: isInTransit ? '1px solid #0891B2' : '1px solid #F3F4F6',
+                                                marginBottom: '0.5rem',
+                                                boxShadow: isInTransit ? '0 10px 15px -3px rgba(8, 145, 178, 0.1)' : 'none',
+                                                transition: 'all 0.3s ease'
                                             }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
                                                     <div>
@@ -301,7 +417,7 @@ export default function TransportControlTower() {
                                                     </div>
                                                     <span style={{ 
                                                         fontSize: '0.6rem', fontWeight: '900', padding: '0.3rem 0.6rem', borderRadius: '20px',
-                                                        backgroundColor: isInTransit ? '#0D9488' : '#6B7280',
+                                                        backgroundColor: isInTransit ? '#0891B2' : '#6B7280',
                                                         color: 'white', letterSpacing: '0.05rem'
                                                     }}>{route.status.toUpperCase()}</span>
                                                 </div>
@@ -318,16 +434,45 @@ export default function TransportControlTower() {
                                 </div>
                             </div>
 
-                            {/* Map Main */}
-                            <div style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid #E5E7EB', position: 'relative' }}>
+                            {/* Sticky Map Main */}
+                            <div style={{ 
+                                borderRadius: '24px', 
+                                overflow: 'hidden', 
+                                border: '1px solid #E2E8F0', 
+                                position: 'sticky', 
+                                top: '100px', 
+                                height: 'calc(100vh - 160px)',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                                transition: 'all 0.3s ease'
+                            }}>
                                 {apiKey ? (
                                     <APIProvider apiKey={apiKey}>
                                         <Map
-                                            defaultCenter={{ lat: 4.6097, lng: -74.0817 }}
-                                            defaultZoom={12}
+                                            defaultCenter={{ lat: 4.6300, lng: -74.1530 }}
+                                            defaultZoom={13}
                                             mapId={MAP_ID}
                                             style={{ width: '100%', height: '100%' }}
                                         >
+                                            {/* Fixed Warehouse Marker: Corabastos Puerta 2 */}
+                                            <AdvancedMarker position={{ lat: 4.6300, lng: -74.1530 }} title="Bodega - Puerta 2 Corabastos">
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <div style={{ 
+                                                        backgroundColor: '#0F172A', 
+                                                        color: 'white', 
+                                                        padding: '4px 10px', 
+                                                        borderRadius: '12px', 
+                                                        fontSize: '0.7rem', 
+                                                        fontWeight: '800', 
+                                                        marginBottom: '4px',
+                                                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                                                        border: '1px solid rgba(255,255,255,0.2)'
+                                                    }}>
+                                                        📦 BODEGA CORABASTOS
+                                                    </div>
+                                                    <Pin background={'#0F172A'} glyphColor={'white'} borderColor={'#000000'} scale={1.4} />
+                                                </div>
+                                            </AdvancedMarker>
+
                                             {activeRoutes.filter(r => r.status === 'in_transit' || r.status === 'loading').map((r, i) => {
                                                 const total = r.route_stops.length;
                                                 const doneStops = r.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed');
@@ -380,7 +525,7 @@ export default function TransportControlTower() {
                             </div>
                         </div>
                     ) : activeTab === 'planner' ? (
-                        <div style={{ height: 'calc(100vh - 380px)', minHeight: '650px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', overflow: 'hidden' }}>
                            <RoutePlanner />
                         </div>
                     ) : activeTab === 'fleet' ? (
@@ -388,7 +533,7 @@ export default function TransportControlTower() {
                     ) : activeTab === 'drivers_panel' ? (
                         <ConductorPanel />
                     ) : activeTab === 'kpis' ? (
-                        <div style={{ height: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+                        <div style={{ height: '100%', overflowY: 'auto' }}>
                             <ControlTowerKPIs />
                         </div>
                     ) : (
@@ -396,29 +541,49 @@ export default function TransportControlTower() {
                     )}
                 </div>
             </div>
-        </main>
+        </div>
+    </main>
     );
 }
 
 function StatBox({ label, value, color, icon, bg }: { label: string, value: number, color: string, icon: string, bg: string }) {
     return (
         <div style={{ 
-            padding: '1.5rem 2.5rem', 
+            padding: '0.8rem 1.5rem', 
             textAlign: 'left', 
-            minWidth: '180px', 
+            minWidth: '160px', 
             borderRadius: '24px',
-            backgroundColor: bg,
-            border: `1px solid ${color}20`,
+            background: bg,
+            border: `1px solid ${color}30`,
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.3rem',
-            boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-                <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1rem' }}>{label}</span>
+            gap: '0.2rem',
+            boxShadow: `0 10px 20px -10px ${color}40`,
+            position: 'relative',
+            overflow: 'hidden',
+            transition: 'transform 0.3s ease'
+        }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-5px)'}
+           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+            
+            {/* Subtle Inner Glow */}
+            <div style={{ 
+                position: 'absolute', top: '-20px', right: '-20px', width: '60px', height: '60px', 
+                backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: '50%', filter: 'blur(20px)'
+            }}></div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', position: 'relative', zIndex: 1 }}>
+                <span style={{ 
+                    fontSize: '1rem', 
+                    backgroundColor: 'rgba(255,255,255,0.5)', 
+                    width: '28px', height: '28px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    borderRadius: '8px' 
+                }}>{icon}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#1E293B', letterSpacing: '0.08rem', textTransform: 'uppercase', opacity: 0.7 }}>{label}</span>
             </div>
-            <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', lineHeight: '1', letterSpacing: '-0.05rem' }}>{value}</div>
+            <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#0F172A', lineHeight: '1', letterSpacing: '-0.08rem', position: 'relative', zIndex: 1 }}>
+                {value}
+            </div>
         </div>
     );
 }

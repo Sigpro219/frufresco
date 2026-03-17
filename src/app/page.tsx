@@ -139,15 +139,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       .filter(term => term.length > 0);
     
     if (searchTerms.length > 0) {
-      if (searchTerms.length === 1) {
-        query = query.ilike('name', `%${searchTerms[0]}%`);
-      } else {
-        // Build OR filter for multiple terms
-        const orFilter = searchTerms
-          .map(term => `name.ilike.%${term}%`)
-          .join(',');
-        query = query.or(orFilter);
-      }
+      // Búsqueda inteligente: Nombre, Descripción o Keywords
+      const conditions = searchTerms.flatMap(term => [
+        `name.ilike.%${term}%`,
+        `description.ilike.%${term}%`,
+        `keywords.ilike.%${term}%`,
+        `tags.cs.{${term}}`
+      ]);
+      query = query.or(conditions.join(','));
     }
   }
 

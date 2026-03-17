@@ -309,6 +309,27 @@ export default function AdminProductsPage() {
     }, [filteredProducts, currentPage]);
 
     const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+    
+    // CALCULAR SUGERENCIAS INTELIGENTES POR CATEGORÍA
+    const categorySuggestions = useMemo(() => {
+        const counts: Record<string, Record<string, number>> = {};
+        products.forEach(p => {
+            const cat = p.category || 'Otros';
+            if (!counts[cat]) counts[cat] = {};
+            p.tags?.forEach(tag => {
+                counts[cat][tag] = (counts[cat][tag] || 0) + 1;
+            });
+        });
+        
+        const suggestions: Record<string, string[]> = {};
+        Object.entries(counts).forEach(([cat, tagCounts]) => {
+            suggestions[cat] = Object.entries(tagCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(e => e[0]);
+        });
+        return suggestions;
+    }, [products]);
 
     // Resetear a página 1 cuando cambia filtro o búsqueda
     useEffect(() => {
@@ -621,6 +642,7 @@ export default function AdminProductsPage() {
                                     </th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRODUCTO</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>CATEGORÍA</th>
+                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ETIQUETAS & BÚSQUEDA</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRECIO</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>VARIANTES</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ESTADO</th>
@@ -731,6 +753,122 @@ export default function AdminProductsPage() {
                                             }}>
                                                 {CATEGORY_MAP[product.category] || product.category}
                                             </span>
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'center', minWidth: '220px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {/* Tags Input */}
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                    {product.tags?.map((tag, i) => (
+                                                        <span key={i} style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            padding: '2px 8px', 
+                                                            backgroundColor: 'var(--accent)', 
+                                                            color: 'var(--primary-dark)', 
+                                                            borderRadius: '12px',
+                                                            fontWeight: '700',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            {tag}
+                                                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => {
+                                                                const newTags = product.tags?.filter(t => t !== tag) || [];
+                                                                updateProductField(product.id, 'tags', newTags);
+                                                            }} />
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <div style={{ position: 'relative' }}>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Añadir tag..."
+                                                        style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%' }}
+                                                        onFocus={(e) => {
+                                                            const box = e.currentTarget.nextElementSibling as HTMLElement;
+                                                            if (box) box.style.display = 'flex';
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            // Delay to allow clicking suggestions
+                                                            setTimeout(() => {
+                                                                const box = e.target.nextElementSibling as HTMLElement;
+                                                                if (box) box.style.display = 'none';
+                                                            }, 200);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ',') {
+                                                                e.preventDefault();
+                                                                const val = e.currentTarget.value.trim().replace(',', '');
+                                                                if (val) {
+                                                                    const newTags = Array.from(new Set([...(product.tags || []), val]));
+                                                                    updateProductField(product.id, 'tags', newTags);
+                                                                    e.currentTarget.value = '';
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                    {/* Sugerencias Flotantes */}
+                                                    <div style={{ 
+                                                        display: 'none', 
+                                                        position: 'absolute', 
+                                                        bottom: '100%', 
+                                                        left: 0, 
+                                                        right: 0, 
+                                                        backgroundColor: 'white', 
+                                                        border: '1px solid #E5E7EB', 
+                                                        borderRadius: '8px', 
+                                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                                                        zIndex: 20,
+                                                        padding: '8px',
+                                                        flexDirection: 'column',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px' }}>Sugerencias</div>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                            {(categorySuggestions[product.category] || []).filter(t => !product.tags?.includes(t)).length > 0 ? (
+                                                                (categorySuggestions[product.category] || [])
+                                                                    .filter(t => !product.tags?.includes(t))
+                                                                    .map(tag => (
+                                                                        <button 
+                                                                            key={tag}
+                                                                            onClick={() => {
+                                                                                const newTags = Array.from(new Set([...(product.tags || []), tag]));
+                                                                                updateProductField(product.id, 'tags', newTags);
+                                                                            }}
+                                                                            style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #EEF2FF', backgroundColor: '#F5F7FF', cursor: 'pointer', fontWeight: '600' }}
+                                                                        >
+                                                                            + {tag}
+                                                                        </button>
+                                                                    ))
+                                                            ) : (
+                                                                ['Fresco', 'Oferta', 'Premium', 'Directo'].filter(t => !product.tags?.includes(t)).map(tag => (
+                                                                    <button 
+                                                                        key={tag}
+                                                                        onClick={() => {
+                                                                            const newTags = Array.from(new Set([...(product.tags || []), tag]));
+                                                                            updateProductField(product.id, 'tags', newTags);
+                                                                        }}
+                                                                        style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #F3F4F6', backgroundColor: '#F9FAFB', cursor: 'pointer', fontWeight: '600' }}
+                                                                    >
+                                                                        + {tag}
+                                                                    </button>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Keywords Input */}
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Keywords (ej: ensalada, verde...)"
+                                                    defaultValue={product.keywords || ''}
+                                                    style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%', fontStyle: 'italic' }}
+                                                    onBlur={(e) => {
+                                                        if (e.target.value !== (product.keywords || '')) {
+                                                            updateProductField(product.id, 'keywords', e.target.value);
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'center' }}>
                                             <div style={{ fontWeight: '900', fontSize: '1.25rem', color: '#111827' }}>

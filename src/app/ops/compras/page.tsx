@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
-import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
+import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 
 interface ProcurementTask {
   id: string;
@@ -109,7 +109,6 @@ export default function ProcurementPage() {
   // - Hora >= 18:00 (6 PM) -> Objetivo: MAÑANA.
   // - Hora < 18:00 (Antes de 6 PM) -> Objetivo: HOY (seguimos viendo lo de ayer a las 6pm).
   const getTargetDeliveryDate = async (signal?: AbortSignal) => {
-    // Check Global Cutoff Switch
     try {
       const { data: settings } = await supabase
         .from("app_settings")
@@ -118,63 +117,33 @@ export default function ProcurementPage() {
         .abortSignal(signal as any)
         .single();
 
-      const cutoffEnabled = settings?.value !== "false"; // Default to TRUE if missing or weird value
+      const cutoffEnabled = settings?.value !== "false";
 
       const now = new Date(
         new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }),
       );
 
+      // If rules are disabled, we return TODAY so it usually matches the header, 
+      // but the fetch logic will ignore it.
       if (!cutoffEnabled) {
-        console.log(
-          "🛑 Cutoff Rules DISABLED: Consolidating for TODAY/TOMORROW naturally.",
-        );
-        // If rules disabled, we assume we want to see orders for "Tomorrow" relative to execution
-        // OR we could default to "Today". Let's use Today as default base, but usually consolidation looks ahead.
-        // However, test script makes orders for TOMORROW.
-        // Let's stick to standard logic but ignoring the hour check if disabled?
-        // Actually, if disabled, we should probably just return TOMORROW always if that's where test data is?
-        // OR better: standard logic but assume hour is always 20 (late) or 0 (early)?
-
-        // USER REQUEST: "Quitamos todas las limitaciones de tiempo".
-        // Simplest: Default to TODAY. But test data is TOMORROW.
-        // Let's match OrderLoading logic: If disabled, trust the user selection or default to TODAY.
-        // But this function returns a single string.
-
-        // If I return TODAY, and his orders are TOMORROW, he won't see them.
-        // Test script puts orders at `CURRENT_DATE + 1`.
-
-        // Let's force it to return TOMORROW if rules are disabled, ensuring they see the test data?
-        // No, the user said "remove limitations".
-
-        // Let's make it return TOMORROW so it matches the test script regardless of time.
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
+        return now.toISOString().split("T")[0];
       }
 
       const currentHour = now.getHours();
 
-      if (currentHour >= 18) {
-        // Ya pasó el corte de hoy, empezamos la operación de MAÑANA
+      if (currentHour >= DEFAULT_CUTOFF_HOUR) {
+        // After 5 PM, start tomorrow's operation
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
         return tomorrow.toISOString().split("T")[0];
       } else {
-        // Todavía es temprano (madrugada/día), seguimos trabajando lo de HOY
+        // Before 5 PM, keep working today's operation
         return now.toISOString().split("T")[0];
       }
     } catch (e) {
       if (isAbortError(e)) return "";
-      console.error(
-        "Error reading cutoff settings, defaulting to standard rules",
-        e,
-      );
+      console.error("Error reading cutoff settings", e);
       const now = new Date();
-      if (now.getHours() >= 18) {
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
-      }
       return now.toISOString().split("T")[0];
     }
   };
@@ -197,12 +166,19 @@ export default function ProcurementPage() {
     if (isMounted.current) setTargetDateLabel(targetDate);
 
     try {
-      // 1. Cargamos las tareas base (SIN FILTRO DE FECHA - DESACTIVADO TEMPORALMENTE)
-      const { data: rawTasks, error: tErr } = await supabase
-        .from("procurement_tasks")
-        .select("*")
-        // .eq('delivery_date', targetDate) // Filtro desactivado por petición del usuario
-        .order("delivery_date", { ascending: true }) // Primero lo más viejo/próximo
+      // Check rules again for fetch
+      const { data: cutoffData } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
+      const cutoffEnabled = cutoffData?.value !== 'false';
+
+      // 1. Load tasks
+      let query = supabase.from("procurement_tasks").select("*");
+      
+      if (cutoffEnabled) {
+        query = query.eq('delivery_date', targetDate);
+      }
+
+      const { data: rawTasks, error: tErr } = await query
+        .order("delivery_date", { ascending: true })
         .order("created_at", { ascending: false })
         .abortSignal(signal as any);
 
@@ -253,13 +229,16 @@ export default function ProcurementPage() {
           };
         });
 
-        // 4. Aplicar filtro de categoría
+        // 4. Aplicar filtro de categoría (Soporta nombre y código mapeado)
         if (
           finalCategory &&
           finalCategory !== "Ver Todo" &&
           finalCategory !== ""
         ) {
-          formatted = formatted.filter((t) => t.category === finalCategory);
+          const mappedCode = REVERSE_CATEGORY_MAP[finalCategory] || finalCategory;
+          formatted = formatted.filter(
+            (t) => t.category === finalCategory || t.category === mappedCode
+          );
         }
 
         // 5. Ordenamiento Inteligente: Parciales (En Proceso) primero, luego pendientes, al final completados

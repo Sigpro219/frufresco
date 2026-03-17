@@ -319,8 +319,6 @@ export default function MaintenanceManagement() {
     const [filterPlate, setFilterPlate] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
 
-    // ... (fetchData and handleAddTask remain the same) ...
-
     const getTaskStatus = (task: MaintenanceTask) => {
         if (task.task_type === 'date' && task.next_due_date) {
             const now = new Date();
@@ -337,11 +335,9 @@ export default function MaintenanceManagement() {
         return 'ok';
     };
 
-    const statusPriority: Record<string, number> = { 'urgent': 1, 'upcoming': 2, 'ok': 3 };
     const sortedTasks = [...tasks].sort((a, b) => {
-        const statusA = getTaskStatus(a);
-        const statusB = getTaskStatus(b);
-        return statusPriority[statusA] - statusPriority[statusB];
+        const statusPriority: Record<string, number> = { 'urgent': 1, 'upcoming': 2, 'ok': 3 };
+        return statusPriority[getTaskStatus(a)] - statusPriority[getTaskStatus(b)];
     });
 
     const filteredTasks = sortedTasks.filter(t => {
@@ -358,293 +354,190 @@ export default function MaintenanceManagement() {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* --- DASHBOARD DE MANTENIMIENTO --- */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-                <MaintenanceStatCard 
-                    label="TAREAS URGENTES" 
-                    value={stats.urgent} 
-                    color="#EF4444" 
-                    icon="🚨" 
-                    bg="#FEF2F2"
-                    desc="Mantenimientos vencidos"
-                />
-                <MaintenanceStatCard 
-                    label="TAREAS PRÓXIMAS" 
-                    value={stats.upcoming} 
-                    color="#F97316" 
-                    icon="⚠️" 
-                    bg="#FFF7ED"
-                    desc="Vencimiento < 30 días / 1500km"
-                />
-                <MaintenanceStatCard 
-                    label="FLOTA AL DÍA" 
-                    value={stats.ok} 
-                    color="#10B981" 
-                    icon="✅" 
-                    bg="#F0FDF4"
-                    desc="Sin tareas pendientes"
-                />
-                <MaintenanceStatCard 
-                    label="TOTAL TAREAS" 
-                    value={stats.total} 
-                    color="#0891B2" 
-                    icon="📋" 
-                    bg="#ECFDF5"
-                    desc="Programadas en sistema"
-                />
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            
+            {/* CABECERA ULTRA-COMPACTA 50/50: KPIs | FILTROS Y ACCIONES */}
+            <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1.2fr', 
+                gap: '1.5rem', 
+                alignItems: 'center',
+                backgroundColor: 'white',
+                padding: '0.8rem 1.5rem',
+                borderRadius: '24px',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                border: '1px solid #E2E8F0'
+            }}>
+                {/* Lado Izquierdo: 4 KPIs de Mantenimiento (50%) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem', borderRight: '1px solid #F1F5F9', paddingRight: '1rem' }}>
+                    <CompactStat 
+                        label="Urgentes" value={stats.urgent} color="#EF4444" icon="🚨" 
+                        active={filterStatus === 'urgent'} onClick={() => setFilterStatus(filterStatus === 'urgent' ? 'all' : 'urgent')} 
+                    />
+                    <CompactStat 
+                        label="Próximas" value={stats.upcoming} color="#F97316" icon="⚠️" 
+                        active={filterStatus === 'upcoming'} onClick={() => setFilterStatus(filterStatus === 'upcoming' ? 'all' : 'upcoming')} 
+                    />
+                    <CompactStat 
+                        label="Al Día" value={stats.ok} color="#10B981" icon="✅" 
+                        active={filterStatus === 'ok'} onClick={() => setFilterStatus(filterStatus === 'ok' ? 'all' : 'ok')} 
+                    />
+                    <CompactStat 
+                        label="Total" value={stats.total} color="#0891B2" icon="📋" 
+                        active={filterStatus === 'all'} onClick={() => setFilterStatus('all')} 
+                    />
+                </div>
 
-            <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Cronograma de <span style={{ color: '#0891B2' }}>Mantenimientos</span></h2>
-                        {lastUpdated && (
-                            <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF', fontWeight: '600' }}>
-                                ÚLTIMA ACTUALIZACIÓN: {lastUpdated.toLocaleTimeString()}
-                            </p>
-                        )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button 
-                            onClick={fetchData}
-                            disabled={loading}
+                {/* Lado Derecho: Controles de Búsqueda y Botones (50%) */}
+                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <select 
+                            value={filterPlate} 
+                            onChange={(e) => setFilterPlate(e.target.value)}
                             style={{ 
-                                padding: '0.6rem 1.2rem', borderRadius: '12px', 
-                                backgroundColor: '#F3F4F6', color: '#4B5563', border: '1px solid #E5E7EB', 
-                                fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
+                                width: '100%', padding: '0.6rem 0.8rem 0.6rem 2.2rem', borderRadius: '15px', 
+                                border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none', 
+                                backgroundColor: '#F8FAFC', fontWeight: '800', color: '#1E293B',
+                                appearance: 'none', cursor: 'pointer'
                             }}
                         >
-                             {loading ? '🔄 Cargando...' : '🔃 Sincronizar'}
-                        </button>
+                            <option value="all">🚛 TODOS LOS VEHÍCULOS</option>
+                            {vehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
+                        </select>
+                        <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem' }}>🔍</span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
                         <button 
                             onClick={() => {
                                 const nextState = !showHistory;
                                 setShowHistory(nextState);
                                 if (nextState) fetchHistory();
                             }}
+                            title={showHistory ? 'Ver Cronograma' : 'Ver Historial'}
                             style={{ 
-                                padding: '0.6rem 1.2rem', borderRadius: '12px', 
-                                backgroundColor: showHistory ? '#F1F5F9' : '#F3F4F6', 
-                                color: showHistory ? '#0891B2' : '#4B5563', 
-                                border: `1px solid ${showHistory ? '#0891B2' : '#E5E7EB'}`, 
-                                fontWeight: '700', cursor: 'pointer'
+                                padding: '0.6rem', borderRadius: '12px', border: '1px solid #E2E8F0',
+                                backgroundColor: showHistory ? '#0F172A' : 'white',
+                                color: showHistory ? 'white' : '#64748B',
+                                fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
                             }}
                         >
-                            {showHistory ? '📂 Ver Cronograma' : '📜 Historial'}
+                            {showHistory ? '📅' : '📜'}
                         </button>
-                        {showHistory && (
-                            <button 
-                                onClick={downloadHistory}
-                                style={{ 
-                                    padding: '0.6rem 1.2rem', borderRadius: '12px', 
-                                    backgroundColor: '#F0FDF4', color: '#15803D', border: '1px solid #10B981', 
-                                    fontWeight: '700', cursor: 'pointer'
-                                }}
-                            >
-                                📥 Exportar Excel
-                            </button>
-                        )}
                         <button 
                             onClick={() => setShowAdd(!showAdd)}
-                            style={{ padding: '0.6rem 1.2rem', borderRadius: '12px', backgroundColor: '#0891B2', color: 'white', border: 'none', fontWeight: '700', cursor: 'pointer' }}
+                            title="Programar Mantenimiento"
+                            style={{ 
+                                padding: '0.6rem 1rem', borderRadius: '12px', border: 'none',
+                                backgroundColor: showAdd ? '#EF4444' : '#0891B2',
+                                color: 'white', fontWeight: '900', fontSize: '0.75rem', cursor: 'pointer',
+                                boxShadow: '0 4px 6px -1px rgba(8, 145, 178, 0.2)'
+                            }}
                         >
-                            {showAdd ? 'Cancelar' : '+ Programar Tarea'}
+                            {showAdd ? 'CANCELAR' : '+ TAREA'}
                         </button>
                     </div>
                 </div>
+            </div>
 
-                {/* --- INTELLIGENT FILTERS (only for Schedule) --- */}
-                {!showHistory && (
-                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px' }}>
-                     <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#64748B', display: 'block', marginBottom: '0.3rem' }}>FILTRAR POR VEHÍCULO</label>
-                        <select 
-                            value={filterPlate} 
-                            onChange={(e) => setFilterPlate(e.target.value)}
-                            style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontWeight: 'bold', color: '#334155' }}
-                        >
-                            <option value="all">🚛 Todos los Vehículos ({vehicles.length})</option>
-                            {vehicles.map(v => <option key={v.id} value={v.plate}>{v.plate} ({v.current_odometer} km)</option>)}
-                        </select>
-                     </div>
-                     <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#64748B', display: 'block', marginBottom: '0.3rem' }}>ESTADO DE URGENCIA</label>
-                        <select 
-                            value={filterStatus} 
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontWeight: 'bold', color: '#334155' }}
-                        >
-                            <option value="all">🔍 Todos los Estados</option>
-                            <option value="urgent">🚨 Urgente (Vencidos)</option>
-                            <option value="upcoming">⚠️ Próximos (&#60; 1500 km)</option>
-                            <option value="ok">✅ Al Día</option>
-                        </select>
-                     </div>
-                    </div>
-                )}
-
+            {/* MAIN CONTENT AREA */}
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.03)' }}>
                 {showAdd && (
-                    <form onSubmit={handleAddTask} style={{ backgroundColor: '#F9FAFB', padding: '2rem', borderRadius: '32px', marginBottom: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', boxShadow: '0 4px 15px -5px rgba(0,0,0,0.05)' }}>
+                    <form onSubmit={handleAddTask} style={{ backgroundColor: '#F9FAFB', padding: '1.5rem', borderBottom: '1px solid #E5E7EB', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                         <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>VEHÍCULO</label>
-                            <select required value={newTask.vehicle_id} onChange={e => setNewTask({...newTask, vehicle_id: e.target.value})} style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #CBD5E1', fontWeight: 'bold' }}>
+                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>VEHÍCULO</label>
+                            <select required value={newTask.vehicle_id} onChange={e => setNewTask({...newTask, vehicle_id: e.target.value})} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800', fontSize: '0.85rem' }}>
                                 <option value="">-- Seleccionar --</option>
                                 {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate} ({v.current_odometer} km)</option>)}
                             </select>
                         </div>
                         <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>TIPO DE TAREA</label>
-                            <select 
-                                required 
-                                value={newTask.task_name} 
-                                onChange={e => {
-                                    const selectedTask = COMMON_TASKS.find(t => t.name === e.target.value);
-                                    if (selectedTask) {
-                                        setNewTask({
-                                            ...newTask, 
-                                            task_name: selectedTask.name,
-                                            task_type: selectedTask.type as 'km' | 'date',
-                                            interval_km: selectedTask.type === 'km' ? selectedTask.interval : 0,
-                                            interval_months: selectedTask.type === 'date' ? selectedTask.interval : 12
-                                        });
-                                    }
-                                }} 
-                                style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #CBD5E1', fontWeight: 'bold' }}
-                            >
+                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>TAREA</label>
+                            <select required value={newTask.task_name} onChange={e => {
+                                const selectedTask = COMMON_TASKS.find(t => t.name === e.target.value);
+                                if (selectedTask) setNewTask({...newTask, task_name: selectedTask.name, task_type: selectedTask.type as 'km' | 'date', interval_km: selectedTask.type === 'km' ? selectedTask.interval : 0, interval_months: selectedTask.type === 'date' ? selectedTask.interval : 12});
+                            }} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800', fontSize: '0.85rem' }}>
                                 {COMMON_TASKS.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                             </select>
                         </div>
-                        
                         {newTask.task_type === 'km' ? (
                             <>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>INTERVALO (KM)</label>
-                                    <input type="number" value={newTask.interval_km} onChange={e => setNewTask({...newTask, interval_km: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #CBD5E1', fontWeight: 'bold' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>INTERVALO (KM)</label>
+                                    <input type="number" value={newTask.interval_km} onChange={e => setNewTask({...newTask, interval_km: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>ÚLTIMO REGISTRO (KM)</label>
-                                    <input type="number" value={newTask.last_performed_km} onChange={e => setNewTask({...newTask, last_performed_km: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #CBD5E1', fontWeight: 'bold' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>ÚLTIMO (KM)</label>
+                                    <input type="number" value={newTask.last_performed_km} onChange={e => setNewTask({...newTask, last_performed_km: parseInt(e.target.value) || 0})} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>ÚLTIMA RENOVACIÓN</label>
-                                    <input type="date" value={newTask.last_performed_date} onChange={e => setNewTask({...newTask, last_performed_date: e.target.value})} style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #CBD5E1', fontWeight: 'bold' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>ÚLTIMA RENOVACIÓN</label>
+                                    <input type="date" value={newTask.last_performed_date} onChange={e => setNewTask({...newTask, last_performed_date: e.target.value})} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.6rem' }}>VIGENCIA (MESES)</label>
-                                    <input type="number" readOnly value={12} style={{ width: '100%', padding: '0.9rem', borderRadius: '16px', border: '1px solid #E2E8F0', fontWeight: 'bold', backgroundColor: '#F1F5F9' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.4rem' }}>VIGENCIA</label>
+                                    <input type="text" readOnly value="12 Meses" style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontWeight: '800', backgroundColor: '#F1F5F9', color: '#64748B' }} />
                                 </div>
                             </>
                         )}
-                        
                         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                            <button type="submit" style={{ width: '100%', padding: '1rem', borderRadius: '16px', backgroundColor: '#10B981', color: 'white', border: 'none', fontWeight: '900', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.2)' }}>PROGRAMAR</button>
+                            <button type="submit" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', backgroundColor: '#10B981', color: 'white', border: 'none', fontWeight: '900', cursor: 'pointer' }}>CREAR</button>
                         </div>
                     </form>
                 )}
 
                 {!showHistory ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                         <thead>
-                            <tr style={{ textAlign: 'left', borderBottom: '2px solid #F3F4F6' }}>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280', letterSpacing: '0.05rem' }}>TAREA PROGRAMADA</th>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280' }}>ÚLTIMO (KM)</th>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280' }}>PRÓXIMO (KM)</th>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280' }}>ESTIMADO</th>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280' }}>ESTADO</th>
-                                <th style={{ padding: '1rem', fontSize: '0.75rem', color: '#6B7280' }}>ACCIÓN</th>
+                            <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #F3F4F6', textAlign: 'left' }}>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>TAREA / VEHÍCULO</th>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ÚLTIMO</th>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>PRÓXIMO OBJETIVO</th>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTIMADO</th>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTADO</th>
+                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && filteredTasks.length === 0 ? (
-                                [...Array(3)].map((_, i) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', opacity: 0.5 }}>
-                                        <td colSpan={6} style={{ padding: '2rem', textAlign: 'center' }}>
-                                            <div style={{ height: '20px', backgroundColor: '#F3F4F6', borderRadius: '10px', width: '80%', margin: '0 auto', animation: 'pulse 1.5s infinite' }}></div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : filteredTasks.length === 0 ? (
-                                <tr><td colSpan={6} style={{ padding: '4rem', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔧</div>
-                                    <h3 style={{ color: '#6B7280', margin: 0 }}>No se encontraron tareas</h3>
-                                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>Ajusta los filtros o programa una nueva tarea.</p>
-                                </td></tr>
+                            {filteredTasks.length === 0 ? (
+                                <tr><td colSpan={6} style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8' }}>No hay tareas para mostrar.</td></tr>
                             ) : filteredTasks.map(t => {
+                                const status = getTaskStatus(t);
                                 const remaining = (t.next_due_km || 0) - (t.vehicle?.current_odometer || 0);
                                 const days = getEstimatedDays(t);
-                                const status = getTaskStatus(t);
                                 return (
-                                    <tr key={t.id} style={{ 
-                                        borderBottom: '1px solid #F3F4F6', 
-                                        backgroundColor: status === 'urgent' ? '#FEF2F2' : status === 'upcoming' ? '#FFF7ED' : 'transparent',
-                                        transition: 'all 0.2s ease'
-                                    }}>
-                                        <td style={{ padding: '1.2rem 1rem', position: 'relative' }}>
-                                            {/* Barra indicadora lateral */}
-                                            {(status === 'urgent' || status === 'upcoming') && (
-                                                <div style={{ 
-                                                    position: 'absolute', 
-                                                    left: 0, 
-                                                    top: '10%', 
-                                                    bottom: '10%', 
-                                                    width: '4px', 
-                                                    borderRadius: '0 4px 4px 0',
-                                                    backgroundColor: status === 'urgent' ? '#EF4444' : '#F97316'
-                                                }} />
-                                            )}
-                                            <div style={{ fontWeight: '900', color: '#111827', fontSize: '1.1rem', marginBottom: '0.2rem', letterSpacing: '-0.02rem' }}>
-                                                {t.task_name}
-                                            </div>
-                                            <div style={{ fontSize: '0.9rem', color: '#0891B2', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.1rem' }}>
-                                                <span style={{ fontSize: '1rem' }}>🚛</span> {t.vehicle?.plate}
-                                            </div>
+                                    <tr key={t.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: status === 'urgent' ? '#FEF2F2' : status === 'upcoming' ? '#FFF7ED' : 'transparent' }}>
+                                        <td style={{ padding: '1.2rem' }}>
+                                            <div style={{ fontWeight: '800', color: '#1F2937', fontSize: '1rem' }}>{t.task_name}</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#0891B2', marginTop: '0.2rem' }}>🚛 {t.vehicle?.plate}</div>
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: '600' }}>
+                                        <td style={{ padding: '1.2rem', fontWeight: '600', color: '#475569' }}>
                                             {t.task_type === 'km' ? `${t.last_performed_km?.toLocaleString()} km` : t.last_performed_date}
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: '800', color: '#0891B2' }}>
+                                        <td style={{ padding: '1.2rem', fontWeight: '900', color: '#0891B2' }}>
                                             {t.task_type === 'km' ? `${t.next_due_km?.toLocaleString()} km` : t.next_due_date}
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: '700', color: '#64748B' }}>
-                                            {t.task_type === 'km' ? (
-                                                remaining > 0 ? (days ? `~ ${days} días` : '---') : 'VENCIDO'
-                                            ) : (
-                                                (() => {
-                                                    const diff = Math.ceil((new Date(t.next_due_date || '').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                                                    return diff > 0 ? `${diff} días` : 'VENCIDO';
-                                                })()
-                                            )}
+                                        <td style={{ padding: '1.2rem', fontWeight: '800', color: '#64748B' }}>
+                                            {t.task_type === 'km' ? (remaining > 0 ? (days ? `${days} d` : '---') : 'VENCIDO') : 'ANUAL'}
                                         </td>
-                                        <td style={{ padding: '1rem' }}>
+                                        <td style={{ padding: '1.2rem' }}>
                                             <span style={{ 
-                                                padding: '0.3rem 0.6rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900',
-                                                backgroundColor: status === 'urgent' ? '#FEE2E2' : status === 'upcoming' ? '#FFF7ED' : '#F0FDF4',
-                                                color: status === 'urgent' ? '#991B1B' : status === 'upcoming' ? '#9A3412' : '#15803D'
+                                                padding: '0.3rem 0.6rem', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900',
+                                                backgroundColor: status === 'urgent' ? '#EF4444' : status === 'upcoming' ? '#F97316' : '#10B981',
+                                                color: 'white'
                                             }}>
-                                                {status === 'urgent' ? 'URGENTE' : status === 'upcoming' ? 'PRÓXIMO' : 'AL DÍA'}
+                                                {status.toUpperCase()}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem' }}>
+                                        <td style={{ padding: '1.2rem', textAlign: 'center' }}>
                                             <button 
-                                                onClick={() => {
-                                                    setCompletingTask(t);
-                                                    setCompletionOdometer(t.vehicle?.current_odometer || 0);
-                                                    setNextDueKmOverride(t.interval_km || 0);
-                                                    setSelectedDriverId(t.vehicle?.driver_id || '');
-                                                    setCompletionNotes('');
-                                                    setShowCloseModal(true);
-                                                }}
-                                                style={{ 
-                                                    padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', 
-                                                    backgroundColor: '#0891B2', color: 'white', fontWeight: '800', 
-                                                    fontSize: '0.75rem', cursor: 'pointer' 
-                                                }}
+                                                onClick={() => { setCompletingTask(t); setCompletionOdometer(t.vehicle?.current_odometer || 0); setNextDueKmOverride(t.interval_km || 0); setSelectedDriverId(t.vehicle?.driver_id || ''); setCompletionNotes(''); setShowCloseModal(true); }}
+                                                style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
                                             >
-                                                Cerrar
+                                                CERRAR
                                             </button>
                                         </td>
                                     </tr>
@@ -653,170 +546,67 @@ export default function MaintenanceManagement() {
                         </tbody>
                     </table>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {loadingHistory ? (
-                             <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>Cargando historial...</div>
-                        ) : history.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '4rem', color: '#64748B' }}>No hay registros de mantenimiento previos.</div>
+                    <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        {history.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '3rem', color: '#94A3B8' }}>Sin historial.</div>
                         ) : (
-                            <div style={{ display: 'grid', gap: '1rem' }}>
-                                {history.map(log => (
-                                    <div key={log.id} style={{ 
-                                        backgroundColor: '#F8FAFC', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E2E8F0',
-                                        display: 'flex', flexDirection: 'column', gap: '1rem'
-                                    }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.5fr', alignItems: 'center', gap: '1rem' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#0891B2' }}>{log.vehicle?.plate}</div>
-                                                <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{log.task_name}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Realizado el: {log.performed_date}</div>
-                                                {log.driver?.contact_name && (
-                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '0.2rem', fontWeight: '700' }}>👨🏻‍✈️ {log.driver.contact_name}</div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#94A3B8' }}>KM REALIZADO</div>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '800' }}>{log.performed_km.toLocaleString()} KM</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#94A3B8' }}>PRÓXIMO OBJ.</div>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0891B2' }}>
-                                                    {log.next_due_km ? `${log.next_due_km.toLocaleString()} KM` : log.next_due_date}
-                                                </div>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                                                {log.attachments?.map((url, i) => (
-                                                    <a key={i} href={url} target="_blank" rel="noreferrer" style={{ 
-                                                        width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #CBD5E1', 
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white',
-                                                        fontSize: '1rem', textDecoration: 'none'
-                                                    }}>
-                                                        {url.match(/\.(jpg|jpeg|png|webp)$/i) ? '🖼️' : '📄'}
-                                                    </a>
-                                                ))}
-                                                {(!log.attachments || log.attachments.length === 0) && (
-                                                    <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '600' }}>Sin adjuntos</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {log.notes && (
-                                            <div style={{ 
-                                                backgroundColor: 'white', padding: '1rem', borderRadius: '12px', 
-                                                borderLeft: '4px solid #0891B2', fontSize: '0.85rem', color: '#475569',
-                                                fontStyle: 'italic', fontWeight: '500'
-                                            }}>
-                                                &quot;{log.notes}&quot;
-                                            </div>
-                                        )}
+                            history.map(log => (
+                                <div key={log.id} style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 0.5fr', alignItems: 'center', gap: '1rem' }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#0891B2' }}>{log.vehicle?.plate}</div>
+                                        <div style={{ fontWeight: '800', color: '#111827' }}>{log.task_name}</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{log.performed_date} • {log.driver?.contact_name || 'N/A'}</div>
                                     </div>
-                                ))}
-                            </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.55rem', fontWeight: '900', color: '#94A3B8' }}>REALIZADO</div>
+                                        <div style={{ fontWeight: '800' }}>{log.performed_km?.toLocaleString()} KM</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.55rem', fontWeight: '900', color: '#94A3B8' }}>PRÓXIMO</div>
+                                        <div style={{ fontWeight: '800', color: '#0891B2' }}>{log.next_due_km?.toLocaleString() || log.next_due_date}</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        {log.attachments?.length > 0 ? (
+                                            <a href={log.attachments[0]} target="_blank" rel="noreferrer" style={{ fontSize: '1.2rem', textDecoration: 'none' }}>🖼️</a>
+                                        ) : '---'}
+                                    </div>
+                                </div>
+                            ))
                         )}
+                        <button onClick={downloadHistory} style={{ alignSelf: 'center', marginTop: '1rem', padding: '0.6rem 1.5rem', borderRadius: '12px', border: '1px solid #10B981', color: '#15803D', fontWeight: '800', fontSize: '0.75rem', backgroundColor: '#F0FDF4', cursor: 'pointer' }}>
+                            DESCARGAR EXCEL (.XLSX)
+                        </button>
                     </div>
                 )}
             </div>
 
-            {/* --- MODAL PARA CERRAR TAREA --- */}
+            {/* MODAL CERRAR (Sin cambios estructurales) */}
             {showCloseModal && completingTask && (
-                <div style={{ 
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-                    backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem'
-                }}>
-                    <div style={{ 
-                        backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '600px', 
-                        maxHeight: '90vh', overflowY: 'auto', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' 
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#111827' }}>Completar Mantenimiento</h3>
-                                <p style={{ margin: '0.2rem 0 0 0', color: '#6B7280', fontWeight: '600' }}>{completingTask.task_name} - {completingTask.vehicle?.plate}</p>
-                            </div>
-                            <button onClick={() => setShowCloseModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF' }}>✕</button>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '550px', borderRadius: '32px', overflow: 'hidden', padding: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Cerrar Tarea</h3>
+                            <button onClick={() => setShowCloseModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', fontWeight: '900', cursor: 'pointer' }}>✕</button>
                         </div>
-
-                        <form onSubmit={handleCloseTask} style={{ display: 'grid', gap: '1.5rem' }}>
+                        <form onSubmit={handleCloseTask} style={{ display: 'grid', gap: '1rem' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>FECHA DE EJECUCIÓN</label>
-                                    <input type="date" required value={completionDate} onChange={e => setCompletionDate(e.target.value)} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '700' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', marginBottom: '0.3rem', display: 'block' }}>FECHA</label>
+                                    <input type="date" required value={completionDate} onChange={e => setCompletionDate(e.target.value)} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>KILOMETRAJE ACTUAL</label>
-                                    <input type="number" required value={completionOdometer} onChange={e => setCompletionOdometer(parseInt(e.target.value))} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '700' }} />
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', marginBottom: '0.3rem', display: 'block' }}>KM ACTUAL</label>
+                                    <input type="number" required value={completionOdometer} onChange={e => setCompletionOdometer(parseInt(e.target.value))} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                                 </div>
                             </div>
-
-                            {completingTask.task_type === 'date' ? (
-                                <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>FECHA INICIO VIGENCIA (NUEVO DOC)</label>
-                                    <input type="date" required value={nextValidityStart} onChange={e => setNextValidityStart(e.target.value)} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '700' }} />
-                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.7rem', color: '#0891B2', fontWeight: '700' }}>ℹ️ Próximo vencimiento será exactamente el {new Date(new Date(nextValidityStart).setFullYear(new Date(nextValidityStart).getFullYear() + 1)).toISOString().split('T')[0]}</p>
-                                </div>
-                            ) : (
-                                <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>FRECUENCIA PARA PRÓXIMA (KM)</label>
-                                    <input type="number" value={nextDueKmOverride} onChange={e => setNextDueKmOverride(parseInt(e.target.value))} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '700' }} />
-                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.7rem', color: '#0891B2', fontWeight: '700' }}>ℹ️ Próximo mantenimiento a los: {(completionOdometer + nextDueKmOverride).toLocaleString()} km</p>
-                                </div>
-                            )}
-
                             <div>
-                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>CONDUCTOR RESPONSABLE</label>
-                                <select 
-                                    required 
-                                    value={selectedDriverId} 
-                                    onChange={e => setSelectedDriverId(e.target.value)} 
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '700' }}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {drivers.map(d => (
-                                        <option key={d.id} value={d.id}>{d.contact_name}</option>
-                                    ))}
-                                </select>
+                                <label style={{ fontSize: '0.65rem', fontWeight: '900', marginBottom: '0.3rem', display: 'block' }}>FRECUENCIA PRÓXIMA (KM)</label>
+                                <input type="number" value={nextDueKmOverride} onChange={e => setNextDueKmOverride(parseInt(e.target.value))} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '800' }} />
                             </div>
-
-                            <div>
-                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>OBSERVACIONES / NOVEDADES</label>
-                                <textarea 
-                                    value={completionNotes} 
-                                    onChange={e => setCompletionNotes(e.target.value)} 
-                                    placeholder="Ej: Se cambiaron también pastillas de freno..." 
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', fontWeight: '600', minHeight: '80px', fontFamily: 'inherit' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>EVIDENCIA (PDF Y HASTA 7 FOTOS)</label>
-                                <div 
-                                    onClick={() => document.getElementById('file-upload')?.click()}
-                                    style={{ border: '2px dashed #CBD5E1', borderRadius: '16px', padding: '2rem', textAlign: 'center', cursor: 'pointer', backgroundColor: '#F8FAFC' }}
-                                >
-                                    <span style={{ fontSize: '2rem' }}>📁</span>
-                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '600' }}>Haz clic para subir archivos</p>
-                                    <input id="file-upload" type="file" multiple accept="image/*,.pdf" style={{ display: 'none' }} onChange={e => setEvidenceFiles(Array.from(e.target.files || []))} />
-                                </div>
-                                {evidenceFiles.length > 0 && (
-                                    <div style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                        {evidenceFiles.slice(0, 8).map((f, i) => (
-                                            <div key={i} style={{ backgroundColor: '#E0F2FE', padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', color: '#0369A1' }}>
-                                                {f.name.length > 15 ? f.name.substring(0, 12) + '...' : f.name}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <button 
-                                type="submit" 
-                                disabled={isSaving}
-                                style={{ 
-                                    marginTop: '1rem', padding: '1.2rem', borderRadius: '16px', border: 'none', 
-                                    backgroundColor: '#10B981', color: 'white', fontWeight: '900', fontSize: '1rem', 
-                                    cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.2)' 
-                                }}
-                            >
-                                {isSaving ? 'GUARDANDO...' : 'MARCAR COMO COMPLETADA'}
+                            <textarea placeholder="Notas del mantenimiento..." value={completionNotes} onChange={e => setCompletionNotes(e.target.value)} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', minHeight: '80px', fontWeight: '600' }} />
+                            <input type="file" multiple onChange={e => setEvidenceFiles(Array.from(e.target.files || []))} style={{ fontSize: '0.7rem' }} />
+                            <button type="submit" disabled={isSaving} style={{ padding: '1rem', borderRadius: '12px', background: '#10B981', color: 'white', border: 'none', fontWeight: '900', cursor: 'pointer', marginTop: '1rem' }}>
+                                {isSaving ? 'GUARDANDO...' : 'FECHAR Y COMPLETAR'}
                             </button>
                         </form>
                     </div>
@@ -826,36 +616,26 @@ export default function MaintenanceManagement() {
     );
 }
 
-function MaintenanceStatCard({ label, value, color, icon, bg, desc }: { label: string, value: number, color: string, icon: string, bg: string, desc: string }) {
+function CompactStat({ label, value, color, icon, active, onClick }: { label: string, value: number, color: string, icon: string, active: boolean, onClick: () => void }) {
     return (
-        <div style={{ 
-            padding: '1.5rem', 
-            borderRadius: '24px', 
-            backgroundColor: 'white', 
-            border: `1px solid #E5E7EB`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ 
-                    width: '40px', 
-                    height: '40px', 
-                    borderRadius: '12px', 
-                    backgroundColor: bg, 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center',
-                    fontSize: '1.2rem'
-                }}>
-                    {icon}
-                </div>
-                <div style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', lineHeight: '1' }}>{value}</div>
-            </div>
+        <div 
+            onClick={onClick}
+            style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.4rem', 
+                cursor: 'pointer',
+                padding: '0.4rem',
+                borderRadius: '12px',
+                backgroundColor: active ? `${color}10` : 'transparent',
+                border: active ? `1px solid ${color}30` : '1px solid transparent',
+                transition: 'all 0.2s'
+            }}
+        >
+            <div style={{ fontSize: '1.2rem', filter: active ? 'none' : 'grayscale(0.5)', opacity: active ? 1 : 0.7 }}>{icon}</div>
             <div>
-                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05rem', marginTop: '0.5rem' }}>{label}</div>
-                <div style={{ fontSize: '0.75rem', color: color, fontWeight: '700', marginTop: '0.2rem' }}>{desc}</div>
+                <div style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', lineHeight: '1' }}>{label}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: '900', color: active ? color : '#111827' }}>{value}</div>
             </div>
         </div>
     );

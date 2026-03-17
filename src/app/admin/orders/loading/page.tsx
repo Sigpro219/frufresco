@@ -727,7 +727,7 @@ export default function OrderLoadingPage() {
                             </thead>
                             <tbody>
                                 {orders.map((order) => {
-                                    const isB2B = order.type?.startsWith('b2b') || order.profile?.role === 'b2b';
+                                    const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
                                     const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
                                     const friendlyId = getFriendlyOrderId(order);
 
