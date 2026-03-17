@@ -356,7 +356,7 @@ export default function CommandCenter() {
                         <p style={{ color: '#6B7280', fontSize: '1rem', marginTop: '8px' }}>Consola Maestra de Gobernanza del Motor FruFresco CORE.</p>
                     </div>
                     <button 
-                        onClick={() => router.push('/admin')}
+                        onClick={() => router.push('/admin/dashboard')}
                         style={{ 
                             display: 'flex', alignItems: 'center', gap: '8px', 
                             padding: '10px 20px', backgroundColor: 'white', border: '1px solid #E5E7EB', 
