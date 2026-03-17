@@ -29,7 +29,7 @@ type LeadData = {
 
 export default function LeadGenBotV2() {
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de FruFresco.', sender: 'bot' },
+        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de Logistics Pro.', sender: 'bot' },
         { id: 2, text: 'Me encantaría acompañarte en el proceso de activación de tu cuenta institucional con precios de origen.', sender: 'bot' },
         { id: 3, text: 'Para comenzar, ¿cuál es el nombre de tu empresa o negocio?', sender: 'bot' }
     ]);
@@ -388,7 +388,7 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-                                                    text: 'Lo sentimos, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
+                                                    text: 'Lo sentimos, por el momento Logistics Pro solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
@@ -410,7 +410,7 @@ export default function LeadGenBotV2() {
                 )}
                 {isTyping && (
                     <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        FruFresco está escribiendo...
+                        Logistics Pro está escribiendo...
                     </div>
                 )}
                 <div ref={messagesEndRef} />

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
     id: string;
@@ -24,6 +25,7 @@ interface InventoryItem {
         base_price: number;
         is_active: boolean;
         min_inventory_level: number;
+        accounting_id?: number | null;
     };
     warehouses: {
         name: string;
@@ -37,9 +39,12 @@ interface Movement {
     type: 'entry' | 'exit' | 'adjustment' | 'transfer';
     status_to: string;
     notes?: string;
+    evidence_url?: string;
+    admin_decision?: string;
     created_at: string;
     products: {
         name: string;
+        sku?: string;
     };
 }
 
@@ -57,33 +62,107 @@ interface RandomTask {
     }[];
 }
 
+// --- UI THEME & STYLES ---
+const THEME = {
+    colors: {
+        bg: '#F9FAFB',
+        surface: 'white',
+        border: '#E5E7EB',
+        textMain: '#111827',
+        textSecondary: '#64748B',
+        primary: '#2563EB',
+        primaryHover: '#1D4ED8',
+        accent: '#111827',
+        success: '#10B981',
+        error: '#EF4444'
+    },
+    radius: {
+        sm: '8px',
+        md: '12px',
+        lg: '16px',
+        xl: '24px'
+    },
+    shadow: {
+        sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        md: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+        lg: '0 10px 15px -3px rgb(37, 99, 235, 0.2)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.1)'
+    }
+};
+
+const styles = {
+    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain },
+    container: { maxWidth: '1440px', margin: '0 auto', padding: '0.75rem' },
+    header: { display: 'flex' as const, justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1rem' },
+    titleArea: { flex: 1 },
+    title: { fontSize: '1.5rem', fontWeight: '900', letterSpacing: '-0.025em', margin: 0, color: THEME.colors.textMain },
+    subtitle: { color: THEME.colors.textSecondary, fontSize: '0.85rem', marginTop: '0.1rem' },
+    actions: { display: 'flex' as const, gap: '0.5rem' },
+    kpiGrid: { display: 'grid' as const, gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' },
+    controlBar: { 
+        display: 'flex' as const, 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '1rem', 
+        backgroundColor: THEME.colors.surface, 
+        padding: '0.5rem 0.75rem', 
+        borderRadius: THEME.radius.lg, 
+        border: `1px solid ${THEME.colors.border}`,
+        boxShadow: THEME.shadow.sm
+    },
+    tableContainer: { 
+        backgroundColor: THEME.colors.surface, 
+        borderRadius: THEME.radius.xl, 
+        border: `1px solid ${THEME.colors.border}`, 
+        boxShadow: THEME.shadow.md, 
+        overflow: 'hidden',
+        position: 'relative' as const
+    },
+    table: { width: '100%', borderCollapse: 'collapse' as const },
+    stickyHeader: { 
+        position: 'sticky' as const, 
+        top: '-1px', // Slight offset to ensure no gap
+        backgroundColor: '#F8FAFC', 
+        zIndex: 10,
+        boxShadow: '0 2px 4px -2px rgba(0,0,0,0.1)'
+    },
+    th: { padding: '0.6rem 0.75rem', textAlign: 'left' as const, fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '900', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+    td: { padding: '0.6rem 0.75rem', fontSize: '0.8rem', borderBottom: `1px solid #F1F5F9` },
+    input: { width: '100%', padding: '0.7rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', fontWeight: '700', boxSizing: 'border-box' as const },
+    label: { display: 'block', fontSize: '0.65rem', fontWeight: '900', color: THEME.colors.textSecondary, textTransform: 'uppercase' as const, marginBottom: '0.3rem' },
+    badge: (bg: string, color: string) => ({ backgroundColor: bg, color, padding: '0.2rem 0.6rem', borderRadius: '100px', fontSize: '0.7rem', fontWeight: '800' })
+};
+
 export default function InventoryAdminPage() {
     const [stocks, setStocks] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'stock' | 'movements' | 'random_tasks' | 'settings'>('stock');
+    const [activeTab, setActiveTab] = useState<'stock' | 'movements' | 'random_tasks' | 'settings' | 'novedades'>('stock');
     const [movements, setMovements] = useState<Movement[]>([]);
     const [randomTasks, setRandomTasks] = useState<RandomTask[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<{ id: string, name: string } | null>(null);
     const [stockStatusFilter, setStockStatusFilter] = useState<'available' | 'returned' | 'in_process' | 'all'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
     const [avgCosts, setAvgCosts] = useState<Record<string, number>>({});
     interface ScoredItem {
         item: any; // Using any for the complex Supabase nested join object for now, but typed at usage
         score: number;
     }
     const [auditPolicy, setAuditPolicy] = useState({
-        itemsPerDay: 5,
-        alertThreshold: 5,
+        coveragePercent: 100, // Now 100% by default
+        alertThreshold: 3, // Stricter threshold (3%)
         prioritizeHighValue: true,
         prioritizeHighRotation: true,
         prioritizePerishables: true,
         prioritizeCriticalStock: true,
         excludeAuditedRecently: true,
         autoEnabled: true,
-        generationTime: '08:00'
+        generationTime: '09:30' // Cut-off at 09:30 AM
     });
     const [generatingAudit, setGeneratingAudit] = useState(false);
+    const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
+    const ITEMS_PER_PAGE = 50;
     const isMounted = useRef(true);
 
     const fetchData = useCallback(async (signal?: AbortSignal) => {
@@ -91,57 +170,63 @@ export default function InventoryAdminPage() {
         try {
             if (activeTab === 'stock') {
                 // Fetch from products to ensure ALL master items are visible
-                let query = supabase
-                    .from('products')
-                    .select(`
-                        id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level,
-                        inventory_stocks (
-                            id, quantity, status, warehouse_id, updated_at,
-                            warehouses (name)
-                        )
-                    `)
-                    .eq('is_active', true)
-                    .order('name');
-                
-                if (signal) query = query.abortSignal(signal);
+                let allProducts: any[] = [];
+                let from = 0;
+                const limit = 1000;
+                let hasMore = true;
 
-                const { data: productsData, error } = await query;
-                if (!isMounted.current) return;
-                if (error) throw error;
+                while (hasMore) {
+                    let query = supabase
+                        .from('products')
+                        .select(`
+                            id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id,
+                            inventory_stocks!product_id (
+                                id, quantity, status, warehouse_id, updated_at,
+                                warehouses (name)
+                            )
+                        `)
+                        .eq('is_active', true)
+                        .order('accounting_id', { ascending: true })
+                        .range(from, from + limit - 1);
+                    
+                    if (signal) query = query.abortSignal(signal);
+
+                    const { data: batch, error } = await query;
+                    if (!isMounted.current) return;
+                    if (error) throw error;
+
+                    if (batch && batch.length > 0) {
+                        allProducts = [...allProducts, ...batch];
+                        from += limit;
+                        if (batch.length < limit) hasMore = false;
+                    } else {
+                        hasMore = false;
+                    }
+                }
 
                 // Flatten the products and their stocks into InventoryItem structure
-                const flattenedStocks: any[] = (productsData || []).flatMap(p => {
+                const flattenedStocks: any[] = allProducts.flatMap(p => {
                     const statusStocks = p.inventory_stocks || [];
                     
-                    // Filter stocks by status if a filter is active
-                    const filtered = stockStatusFilter === 'all' 
-                        ? statusStocks 
-                        : statusStocks.filter((s: any) => s.status === stockStatusFilter);
-
-                    if (filtered.length > 0) {
-                        return filtered.map((s: any) => ({
+                    if (statusStocks.length > 0) {
+                        return statusStocks.map((s: any) => ({
                             ...s,
                             product_id: p.id,
                             products: p
                         }));
                     }
 
-                    // If no stock record exists for this product (or for the filtered status),
-                    // but we want global visibility (especially for 'all' or 'available' views)
-                    if (stockStatusFilter === 'all' || stockStatusFilter === 'available') {
-                        return [{
-                            id: `virtual-${p.id}`,
-                            product_id: p.id,
-                            warehouse_id: 'default',
-                            status: stockStatusFilter === 'all' ? 'available' : stockStatusFilter,
-                            quantity: 0,
-                            updated_at: new Date().toISOString(),
-                            products: p,
-                            warehouses: { name: 'Bodega Principal' }
-                        }];
-                    }
-
-                    return [];
+                    // Virtual stock if none exists
+                    return [{
+                        id: `virtual-${p.id}`,
+                        product_id: p.id,
+                        warehouse_id: 'default',
+                        status: 'available',
+                        quantity: 0,
+                        updated_at: new Date().toISOString(),
+                        products: p,
+                        warehouses: { name: 'Bodega Principal' }
+                    }];
                 });
 
                 // --- NEW: Calculate Average Costs from Purchases ---
@@ -153,13 +238,13 @@ export default function InventoryAdminPage() {
                 const { data: convData } = await supabase.from('product_conversions').select('*');
 
                 const costsMap: Record<string, number> = {};
-                if (purchasesData && productsData) {
+                if (purchasesData && allProducts) {
                     const grouped: Record<string, number[]> = {};
                     purchasesData.forEach(p => {
                         if (!p.product_id) return;
                         if (!grouped[p.product_id]) grouped[p.product_id] = [];
                         if (grouped[p.product_id].length < 3) { // Use window of 3 as in matrix
-                            const product = productsData.find(pd => pd.id === p.product_id);
+                            const product = allProducts.find(pd => pd.id === p.product_id);
                             let normalizedPrice = p.unit_price;
                             
                             if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
@@ -232,69 +317,86 @@ export default function InventoryAdminPage() {
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [activeTab, stockStatusFilter]);
+    }, [activeTab]);
 
     const handleGenerateAudit = useCallback(async (isAuto: boolean = false) => {
         try {
             if (!isAuto) setGeneratingAudit(true);
             
-            // 0. Check if already generated for today (safety for auto-calls)
             const today = new Date().toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            // 0. Check for today's snapshot
             const { data: existing } = await supabase
                 .from('inventory_random_tasks')
                 .select('id')
                 .eq('scheduled_date', today);
             
             if (existing && existing.length > 0) {
-                if (!isAuto) alert('Ya se ha generado una auditoría para el día de hoy.');
+                if (!isAuto) alert('El corte de inventario (09:30 AM) ya fue procesado para hoy.');
                 return;
             }
 
-            // 1. Fetch current stock and products
+            // 1. Identify Active SKUs (Movement in last 30 days)
+            const { data: recentMvt } = await supabase
+                .from('inventory_movements')
+                .select('product_id')
+                .gte('created_at', thirtyDaysAgo.toISOString());
+            
+            const activeIds = [...new Set((recentMvt || []).map(m => m.product_id))];
+
+            // 2. Fetch current stock for these active products
             const { data: stockData, error: stockError } = await supabase
                 .from('inventory_stocks')
-                .select('*, products(*)');
+                .select('*, products(*)')
+                .in('product_id', activeIds);
             
             if (stockError) throw stockError;
             if (!stockData || stockData.length === 0) {
-                if (!isAuto) alert('No hay stock para auditar.');
+                if (!isAuto) alert('No se detectaron SKUs con movimiento en los últimos 30 días para auditar.');
                 return;
             }
 
-            // 2. Score products based on policy
+            // 3. Score and Filter according to Cell Policies
             const scoredItems: ScoredItem[] = stockData.map((item: any) => {
-                let score = Math.random() * 10; // Base randomness
+                let score = Math.random() * 10;
                 
-                if (auditPolicy.prioritizeHighValue && item.products?.base_price > 10000) score += 5;
-                if (auditPolicy.prioritizeCriticalStock && item.quantity <= item.min_stock_level) score += 10;
-                if (auditPolicy.prioritizeHighRotation) score += 3;
-                if (auditPolicy.prioritizePerishables && ['Frutas', 'Verduras', 'Perecederos'].includes(item.products?.category)) score += 7;
+                // Exclude if category is not selected in policy
+                const cat = item.products?.category;
+                const isPerishable = ['FR', 'VE', 'HO'].includes(cat);
+                if (auditPolicy.prioritizePerishables && !isPerishable && !auditPolicy.prioritizeHighValue) score -= 5;
+                
+                if (auditPolicy.prioritizeHighValue && item.products?.base_price > 10000) score += 15;
+                if (auditPolicy.prioritizeCriticalStock && item.quantity <= (item.products?.min_inventory_level || 0)) score += 20;
 
                 return { item, score };
             });
 
-            // 3. Sort and Pick Top N
+            // 4. Coverage Percentage Calculation
+            const itemsToAuditCount = Math.ceil((stockData.length * auditPolicy.coveragePercent) / 100);
             scoredItems.sort((a, b) => b.score - a.score);
-            const selected = scoredItems.slice(0, auditPolicy.itemsPerDay);
+            const selected = scoredItems.slice(0, itemsToAuditCount);
 
-            // 4. Create Task
+            // 5. Create Master Task (The 09:30 AM Snapshot)
             const { data: task, error: taskError } = await supabase
                 .from('inventory_random_tasks')
                 .insert([{
                     status: 'pending',
-                    scheduled_date: today
+                    scheduled_date: today,
+                    notes: `Snapshot Automático 09:30 AM - Cobertura ${auditPolicy.coveragePercent}%`
                 }])
                 .select()
                 .single();
 
             if (taskError) throw taskError;
 
-            // 5. Create Task Items
+            // 6. Bulk Insert Snapshot Items
             const taskItems = selected.map(s => ({
                 task_id: task.id,
                 product_id: s.item.product_id,
                 warehouse_id: s.item.warehouse_id,
-                expected_qty: s.item.quantity
+                expected_qty: s.item.quantity // This is the core snapshot value
             }));
 
             const { error: itemsError } = await supabase
@@ -304,12 +406,10 @@ export default function InventoryAdminPage() {
             if (itemsError) throw itemsError;
 
             fetchData();
-            if (!isAuto) alert('¡Auditoría de hoy generada con éxito!');
-            else console.log('🤖 Auditoría automática generada satisfactoriamente.');
-        } catch (err: unknown) {
-            const e = err as Error;
-            console.error('Error generating audit:', e);
-            if (!isAuto) alert('Error al generar la auditoría: ' + (e.message || 'Error desconocido'));
+            if (!isAuto) alert('¡Corte de inventario a las 09:30 AM generado con éxito para ' + selected.length + ' productos!');
+        } catch (err: any) {
+            console.error('Error generating audit snapshot:', err);
+            if (!isAuto) alert('Error en el corte: ' + (err.message || 'Error de conexión'));
         } finally {
             if (!isAuto && isMounted.current) setGeneratingAudit(false);
         }
@@ -370,312 +470,451 @@ export default function InventoryAdminPage() {
     }, [fetchData]);
 
     const generateRandomTask = async () => {
-        try {
-            const { data: settings } = await supabase.from('inventory_settings').select('value').eq('key', 'daily_random_count').single();
-            const count = settings?.value || 5;
-
-            const { data: randomItems } = await supabase
-                .from('inventory_stocks')
-                .select('product_id, warehouse_id, quantity, status')
-                .eq('status', 'available')
-                .limit(count);
-
-            if (!randomItems || randomItems.length === 0) throw new Error('No hay productos disponibles para inventariar');
-
-            const { data: task, error: taskError } = await supabase
-                .from('inventory_random_tasks')
-                .insert([{ status: 'pending' }])
-                .select()
-                .single();
-
-            if (taskError) throw taskError;
-
-            const itemsToInsert = randomItems.map(item => ({
-                task_id: task.id,
-                product_id: item.product_id,
-                warehouse_id: item.warehouse_id,
-                expected_qty: item.quantity
-            }));
-
-            const { error: itemsError } = await supabase.from('inventory_task_items').insert(itemsToInsert);
-            if (itemsError) throw itemsError;
-
-            window.showToast?.('Tarea de inventario generada', 'success');
-            fetchData();
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Error desconocido';
-            alert('Error: ' + message);
-        }
+        // ... previous implementation ...
     };
 
+    const filteredStocks = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        
+        // 1. First apply Status Filter (Tab buttons)
+        const filtered = stockStatusFilter === 'all' 
+            ? stocks 
+            : stocks.filter(s => s.status === stockStatusFilter);
+
+        if (!query) return filtered;
+
+        // 2. Apply "Power Search" logic
+        const parts = query.split(/\s+/);
+        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
+        const searchTerms = parts.filter(p => !p.startsWith('@'));
+
+        return filtered.filter(s => {
+            const p = s.products;
+            if (!p) return false;
+
+            // Text search (AND)
+            const matchesText = searchTerms.every(term => 
+                p.name?.toLowerCase().includes(term) ||
+                p.sku?.toLowerCase().includes(term) ||
+                p.accounting_id?.toString()?.includes(term)
+            );
+
+            if (!matchesText && searchTerms.length > 0) return false;
+
+            // Tag search (AND)
+            const matchesTags = tags.every(tag => {
+                // Low stock/alert
+                if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
+                    return s.quantity <= (p.min_inventory_level || 0);
+                }
+                
+                // Status tags
+                if (tag === 'disponible' || tag === 'ok') return s.status === 'available';
+                if (tag === 'regreso') return s.status === 'returned';
+                if (tag === 'reproceso') return s.status === 'in_process';
+
+                // Category tags
+                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                    label.toLowerCase().startsWith(tag)
+                );
+                if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                return false;
+            });
+
+            return matchesTags;
+        });
+    }, [stocks, searchQuery, stockStatusFilter]);
+
+    const paginatedStocks = useMemo(() => {
+        // --- RANKING DE VARIACIÓN PARA AUDITORÍA (2:00 PM) ---
+        // if we are checking stock, let's prioritize items with differences in the latest audit
+        const sortedStocks = [...filteredStocks].sort((a, b) => {
+            const today = new Date().toISOString().split('T')[0];
+            const currentTask = randomTasks.find(t => t.scheduled_date === today);
+            
+            if (currentTask) {
+                const itemA = currentTask.items.find(i => i.product_id === a.product_id);
+                const itemB = currentTask.items.find(i => i.product_id === b.product_id);
+                
+                // Prioritize items with higher difference percentage
+                const diffA = itemA?.actual_qty !== null ? Math.abs(itemA?.difference_percent || 0) : 0;
+                const diffB = itemB?.actual_qty !== null ? Math.abs(itemB?.difference_percent || 0) : 0;
+                
+                if (diffA !== diffB) return diffB - diffA;
+            }
+            
+            // Default sort by accounting_id if no differences to compare
+            return (a.products?.accounting_id || 0) - (b.products?.accounting_id || 0);
+        });
+
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return sortedStocks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredStocks, currentPage, randomTasks]);
+
+    const totalPages = Math.ceil(filteredStocks.length / ITEMS_PER_PAGE);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, stockStatusFilter]);
+
     const stats = {
-        totalItems: stocks.length,
-        lowStock: stocks.filter(s => s.quantity <= (s.products?.min_inventory_level || 0)).length,
-        totalValue: stocks.reduce((acc, s) => acc + (s.quantity * (s.products?.base_price || 0)), 0),
+        totalItems: stocks.length, // total monitored
+        lowStock: stocks.filter(s => (s.products?.min_inventory_level || 0) > 0 && s.quantity < (s.products?.min_inventory_level || 0)).length,
+        totalValue: stocks.reduce((acc, s) => acc + (s.quantity * (avgCosts[s.product_id] || 0)), 0),
         pendingTasks: randomTasks.filter(t => t.status !== 'completed').length
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+        <main style={styles.main}>
             <Navbar />
             <Toast />
 
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem' }}>
-                    <div>
-                        <Link href="/admin/commercial" style={{ color: '#6B7280', textDecoration: 'none', fontWeight: '600', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }}>
-                            ← Panel Comercial
-                        </Link>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0 }}>📦 Control Maestro de Inventarios</h1>
-                        <p style={{ color: '#6B7280', fontSize: '1.1rem', marginTop: '0.4rem' }}>Consolidación multi-estado, trazabilidad total y auditoría a ciegas.</p>
+            <div style={styles.container}>
+                <div style={styles.header}>
+                    <div style={styles.titleArea}>
+                        <h1 style={styles.title}>Control Maestro de Inventarios</h1>
+                        <p style={styles.subtitle}>Consolidación multi-estado, trazabilidad total y auditoría inteligente.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
                         <Link href="/admin/master/products" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    backgroundColor: '#2563EB', 
-                                    color: 'white', 
+                                    padding: '0.6rem 1.4rem', 
+                                    borderRadius: '100px', 
                                     border: 'none', 
-                                    padding: '1rem 1.5rem', 
-                                    borderRadius: '14px', 
+                                    background: `linear-gradient(135deg, ${THEME.colors.primary}, #3B82F6)`, 
+                                    color: 'white', 
                                     fontWeight: '800', 
+                                    fontSize: '0.85rem', 
                                     cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.8rem',
-                                    boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1D4ED8'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2563EB'}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 99, 235, 0.3)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.2)'; }}
                             >
-                                <span>📚</span> Catálogo Maestro
+                                Catálogo Maestro
                             </button>
                         </Link>
                         <Link href="/admin/commercial/inventory/tasks" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    backgroundColor: '#F8FAFC', 
-                                    color: '#1E293B', 
-                                    border: '1px solid #E2E8F0', 
-                                    padding: '1rem 1.5rem', 
-                                    borderRadius: '14px', 
+                                    padding: '0.6rem 1.4rem', 
+                                    borderRadius: '100px', 
+                                    border: `1.5px solid ${THEME.colors.border}`, 
+                                    background: 'white', 
+                                    color: THEME.colors.textMain, 
                                     fontWeight: '800', 
+                                    fontSize: '0.85rem', 
                                     cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.8rem',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
                             >
-                                <span>📋</span> Tareas Administrativas
+                                Tareas Administrativas
                             </button>
                         </Link>
                         {activeTab === 'random_tasks' && (
                             <button 
                                 onClick={generateRandomTask}
-                                style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '1rem 1.5rem', borderRadius: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                style={{ 
+                                    padding: '0.6rem 1.4rem', 
+                                    borderRadius: '100px', 
+                                    border: 'none', 
+                                    background: THEME.colors.accent, 
+                                    color: 'white', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.85rem', 
+                                    cursor: 'pointer', 
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                             >
-                                🎲 Generar Tarea Aleatoria
+                                Generar Tarea
                             </button>
                         )}
                     </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                    <KPICard title="Items Monitoreados" value={stats.totalItems} icon="📦" color="#E0F2FE" textColor="#0369A1" subtitle="Cruzado con catálogo" />
-                    <KPICard title="Alertas de Stock" value={stats.lowStock} icon="🚩" color="#FEE2E2" textColor="#991B1B" subtitle="Bajo nivel mínimo" />
-                    <KPICard title="Valor en Libros" value={`$${Math.round(stats.totalValue).toLocaleString()}`} icon="💰" color="#DCFCE7" textColor="#15803D" subtitle="Costo base total" />
-                    <KPICard title="Tareas Pendientes" value={stats.pendingTasks} icon="📋" color="#FEF3C7" textColor="#92400E" subtitle="Auditoría de piso" />
+                    <KPICard title="Items Monitoreados" value={stats.totalItems} color="#E0F2FE" subtitle="Cruzado con catálogo" />
+                    <KPICard title="Alertas de Stock" value={stats.lowStock} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
+                    <KPICard title="Valor en Libros" value={`$${Math.round(stats.totalValue).toLocaleString()}`} color="#DCFCE7" subtitle="Costo base total" />
+                    <KPICard title="Tareas Pendientes" value={stats.pendingTasks} color="#FEF3C7" subtitle="Auditoría de piso" />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', backgroundColor: 'white', padding: '0.75rem', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
-                    <div style={{ display: 'flex', gap: '0.3rem' }}>
-                        <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} label="Consolidado" icon="📊" />
-                        <TabButton active={activeTab === 'movements'} onClick={() => setActiveTab('movements')} label="Movimientos" icon="🔄" />
-                        <TabButton active={activeTab === 'random_tasks'} onClick={() => setActiveTab('random_tasks')} label="Auditoría/Random" icon="🎲" />
-                        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Políticas" icon="⚙️" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', backgroundColor: 'white', padding: '0.6rem 1rem', borderRadius: '16px', border: '1px solid #E5E7EB', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.1rem', flexShrink: 0 }}>
+                        <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} label="Consolidado" icon="" />
+                        <TabButton active={activeTab === 'movements'} onClick={() => setActiveTab('movements')} label="Movimientos" icon="" />
+                        <TabButton active={activeTab === 'random_tasks'} onClick={() => setActiveTab('random_tasks')} label="Auditoría" icon="" />
+                        <TabButton active={activeTab === 'novedades'} onClick={() => setActiveTab('novedades')} label="Novedades" icon="" />
+                        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Políticas" icon="" />
                     </div>
                     
-                    <div style={{ position: 'relative', width: '400px' }}>
+                    <div style={{ position: 'relative', flex: 1, maxWidth: '600px' }}>
                         <input 
                             type="text" 
-                            placeholder="Buscar producto o SKU..." 
+                            placeholder="Buscar por nombre, SKU o categoría..." 
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.95rem' }}
+                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                            style={{ width: '100%', padding: '0.7rem 2.8rem 0.7rem 2.5rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '600' }}
                         />
-                        <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
+                        <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '1rem' }}>🔍</span>
+                        
+                        {searchQuery && (
+                            <button 
+                                onClick={() => setSearchQuery('')}
+                                style={{ position: 'absolute', right: '2.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#94A3B8' }}
+                            >
+                                ✕
+                            </button>
+                        )}
+                        
+                        <button 
+                            onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
+                            style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#3B82F6' }}
+                        >
+                            ℹ️
+                        </button>
+
+                        {isInfoGuideOpen && (
+                            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.8rem', width: '300px', backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', zIndex: 100, border: '1px solid #E5E7EB' }}>
+                                <h4 style={{ margin: '0 0 1rem 0', fontWeight: '900', color: '#111827' }}>Guía de Búsqueda Inteligente</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                    <div style={{ fontSize: '0.8rem' }}>
+                                        <code style={{ color: '#2563EB', fontWeight: '800', backgroundColor: '#EFF6FF', padding: '2px 4px', borderRadius: '4px' }}>@bajo</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Bajo stock mín.</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem' }}>
+                                        <code style={{ color: '#059669', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '2px 4px', borderRadius: '4px' }}>@disponible</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Solo stock venta</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem' }}>
+                                        <code style={{ color: '#D97706', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 4px', borderRadius: '4px' }}>@regreso</code>
+                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Devoluciones</span>
+                                    </div>
+                                    <div style={{ padding: '0.6rem', backgroundColor: '#F8FAFC', borderRadius: '10px', fontSize: '0.7rem', color: '#64748B' }}>
+                                        💡 Ej: <strong>Tomate @bajo</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
+                        {activeTab === 'stock' && (
+                            <>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary }}>
+                                    {filteredStocks.length} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>items</span>
+                                </div>
+                                <select 
+                                    value={stockStatusFilter}
+                                    onChange={(e) => { setStockStatusFilter(e.target.value as any); setCurrentPage(1); }}
+                                    style={{ 
+                                        padding: '0.6rem 1.2rem', 
+                                        borderRadius: '10px', 
+                                        border: '1px solid #E2E8F0', 
+                                        backgroundColor: '#F8FAFC',
+                                        color: '#1E293B',
+                                        fontWeight: '800',
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value="all">Ver Todos</option>
+                                    <option value="available">Disponible</option>
+                                    <option value="returned">Devuelto</option>
+                                    <option value="in_process">En Proceso</option>
+                                </select>
+                            </>
+                        )}
+                        {activeTab === 'movements' && (
+                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary }}>
+                                {movements.length} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>registros</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {activeTab === 'stock' && (
-                    <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem' }}>
-                        {(['all', 'available', 'returned', 'in_process'] as const).map(status => (
-                            <button 
-                                key={status}
-                                onClick={() => setStockStatusFilter(status)}
-                                style={{ 
-                                    padding: '0.5rem 1rem', borderRadius: '100px', border: '1px solid #E5E7EB',
-                                    backgroundColor: stockStatusFilter === status ? '#111827' : 'white',
-                                    color: stockStatusFilter === status ? 'white' : '#64748B',
-                                    fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer'
-                                }}
-                            >
-                                {status === 'all' ? 'Ver Todos' : status === 'available' ? '✅ Disponible' : status === 'returned' ? '🚛 Regreso' : '⚙️ Reproceso'}
-                            </button>
-                        ))}
-                    </div>
-                )}
 
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+
+                <div style={styles.tableContainer}>
                     {loading ? (
-                        <div style={{ padding: '8rem', textAlign: 'center' }}>🔄 Cargando...</div>
+                        <div style={{ padding: '10rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+                            <div style={{ fontSize: '2.5rem', animation: 'spin 2s linear infinite' }}>🔄</div>
+                            <div style={{ fontWeight: '800', color: THEME.colors.textSecondary, fontSize: '1.1rem' }}>Sincronizando inventarios maestros...</div>
+                        </div>
                     ) : (
                         <>
                             {activeTab === 'stock' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ backgroundColor: '#F8FAFC' }}>
-                                        <tr>
-                                            <th style={thStyle}>Producto</th>
-                                            <th style={thStyle}>Estado</th>
-                                            <th style={thStyle}>Mínimo</th>
-                                            <th style={thStyle}>Costo Prom.</th>
-                                            <th style={thStyle}>Valor Inv.</th>
-                                            <th style={thStyle}>Unidad</th>
-                                            <th style={thStyle}>Cantidad</th>
-                                            <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {stocks.filter(s => (s.products?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (s.products?.sku || '').toLowerCase().includes(searchQuery.toLowerCase())).map((item) => (
-                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={tdStyle}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                                        <div style={{ width: '40px', height: '40px', backgroundColor: '#F3F4F6', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                            {item.products?.image_url ? (
-                                                                <img 
-                                                                    src={item.products.image_url} 
-                                                                    alt={item.products.name} 
-                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                                                />
-                                                            ) : (
-                                                                <span style={{ fontSize: '1.2rem' }}>📦</span>
-                                                            )}
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ fontWeight: '800' }}>{item.products?.name || 'Desconocido'}</div>
-                                                            <code style={{ fontSize: '0.7rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1px 4px', borderRadius: '3px' }}>
-                                                                {item.products?.sku || 'S/N'}
-                                                            </code>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td style={tdStyle}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                        <span style={badgeStyle(
-                                                            item.status === 'available' ? '#DCFCE7' : item.status === 'returned' ? '#E0F2FE' : '#F3E8FF',
-                                                            item.status === 'available' ? '#166534' : item.status === 'returned' ? '#0369A1' : '#7E22CE'
-                                                        )}>
-                                                            {item.status.toUpperCase()}
-                                                        </span>
-                                                        {item.products?.is_active === false && (
-                                                            <span style={{
-                                                                fontSize: '0.65rem',
-                                                                backgroundColor: '#FEF2F2',
-                                                                color: '#991B1B',
-                                                                padding: '2px 8px',
-                                                                borderRadius: '10px',
-                                                                fontWeight: '800',
-                                                                border: '1px solid #FECACA',
-                                                                textAlign: 'center'
-                                                            }}>
-                                                                🚩 MASTER OFF
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td style={{ 
-                                                    ...tdStyle, 
-                                                    textAlign: 'center',
-                                                    backgroundColor: item.products?.min_inventory_level > 0 ? '#FEF2F2' : 'transparent',
-                                                    borderLeft: item.products?.min_inventory_level > 0 ? '3px solid #EF4444' : 'none'
-                                                }}>
-                                                    {item.products?.min_inventory_level > 0 ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                            <span style={{ fontWeight: '900', color: '#B91C1C', fontSize: '1rem' }}>
-                                                                {item.products.min_inventory_level}
-                                                            </span>
-                                                            {item.quantity <= item.products.min_inventory_level && (
-                                                                <span title="Bajo el mínimo crítico" style={{ fontSize: '0.8rem' }}>⚠️</span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span style={{ color: '#94A3B8', fontSize: '0.8rem' }}>—</span>
-                                                    )}
-                                                </td>
-                                                <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                                    <div style={{ fontWeight: '700', color: '#059669', fontSize: '0.9rem' }}>
-                                                        {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id]).toLocaleString()}` : '—'}
-                                                    </div>
-                                                </td>
-                                                <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                                    <div style={{ fontWeight: '900', color: '#111827', fontSize: '0.95rem' }}>
-                                                        {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id] * item.quantity).toLocaleString()}` : '—'}
-                                                    </div>
-                                                </td>
-                                                <td style={tdStyle}>
-                                                    <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: '600' }}>
-                                                        {item.products.unit_of_measure}
-                                                    </span>
-                                                </td>
-                                                <td style={tdStyle}>
-                                                    <div style={{ fontSize: '1.1rem', fontWeight: '900' }}>{item.quantity}</div>
-                                                </td>
-                                                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                                                    <button 
-                                                        onClick={() => { setSelectedProduct({id: item.product_id, name: item.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
-                                                        style={{ backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '0.5rem 0.8rem', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
-                                                    >
-                                                        Ajustar
-                                                    </button>
-                                                </td>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={styles.table}>
+                                        <thead style={styles.stickyHeader}>
+                                            <tr>
+                                                <th style={styles.th}>Producto</th>
+                                                <th style={styles.th}>Estado</th>
+                                                <th style={{ ...styles.th, textAlign: 'center' }}>Stock Mín.</th>
+                                                <th style={{ ...styles.th, textAlign: 'center' }}>Costo Prom.</th>
+                                                <th style={{ ...styles.th, textAlign: 'center' }}>Valor Inv.</th>
+                                                <th style={styles.th}>Unidad</th>
+                                                <th style={styles.th}>Cantidad</th>
+                                                <th style={{ ...styles.th, textAlign: 'right' }}>Acciones</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedStocks.map((item) => (
+                                                <tr key={item.id} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                            <div style={{ width: '48px', height: '48px', backgroundColor: '#F3F4F6', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E5E7EB' }}>
+                                                                {item.products?.image_url ? (
+                                                                    <img 
+                                                                        src={item.products.image_url} 
+                                                                        alt={item.products.name} 
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                    />
+                                                                ) : (
+                                                                    <span style={{ fontSize: '1.4rem' }}>📦</span>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ fontWeight: '800', fontSize: '1rem', color: THEME.colors.textMain }}>{item.products?.name || 'Desconocido'}</div>
+                                                                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
+                                                                    <code style={{ fontSize: '0.7rem', color: THEME.colors.primary, backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                        {item.products?.sku || 'S/N'}
+                                                                    </code>
+                                                                    {item.products?.accounting_id && (
+                                                                        <code style={{ fontSize: '0.7rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                            ID: {item.products.accounting_id}
+                                                                        </code>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                            <span style={styles.badge(
+                                                                item.status === 'available' ? '#DCFCE7' : item.status === 'returned' ? '#E0F2FE' : '#F3E8FF',
+                                                                item.status === 'available' ? '#166534' : item.status === 'returned' ? '#0369A1' : '#7E22CE'
+                                                            )}>
+                                                                {item.status.toUpperCase()}
+                                                            </span>
+                                                            {item.products?.is_active === false && (
+                                                                <span style={{
+                                                                    fontSize: '0.65rem',
+                                                                    backgroundColor: '#FEF2F2',
+                                                                    color: '#991B1B',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: '10px',
+                                                                    fontWeight: '900',
+                                                                    border: '1px solid #FECACA',
+                                                                    textAlign: 'center',
+                                                                    letterSpacing: '0.05em'
+                                                                }}>
+                                                                    🚩 MASTER OFF
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ 
+                                                        ...styles.td, 
+                                                        textAlign: 'center',
+                                                        backgroundColor: item.products?.min_inventory_level > 0 ? '#FFF1F2' : 'transparent',
+                                                    }}>
+                                                        {item.products?.min_inventory_level > 0 ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                <span style={{ fontWeight: '900', color: THEME.colors.error, fontSize: '1.1rem' }}>
+                                                                    {item.products.min_inventory_level}
+                                                                </span>
+                                                                {item.quantity <= item.products.min_inventory_level && (
+                                                                    <span title="Bajo el mínimo crítico">🚩</span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ ...styles.td, textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '800', color: '#059669', fontSize: '0.95rem' }}>
+                                                            {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id]).toLocaleString()}` : '—'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ ...styles.td, textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.05rem' }}>
+                                                            {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id] * item.quantity).toLocaleString()}` : '—'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <span style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                                                            {item.products.unit_of_measure}
+                                                        </span>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ fontSize: '1.25rem', fontWeight: '900', color: item.quantity <= (item.products?.min_inventory_level || 0) ? THEME.colors.error : THEME.colors.textMain }}>
+                                                            {item.quantity}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ ...styles.td, textAlign: 'right' }}>
+                                                        <button 
+                                                            onClick={() => { setSelectedProduct({id: item.product_id, name: item.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
+                                                            style={{ 
+                                                                backgroundColor: THEME.colors.accent, 
+                                                                color: 'white',
+                                                                border: 'none', 
+                                                                padding: '0.6rem 1.2rem', 
+                                                                borderRadius: THEME.radius.md, 
+                                                                fontWeight: '800', 
+                                                                cursor: 'pointer',
+                                                                transition: 'transform 0.1s, opacity 0.2s',
+                                                                fontSize: '0.85rem'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                                                        >
+                                                            Ajustar
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
 
                             {activeTab === 'movements' && (
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead style={{ backgroundColor: '#F8FAFC' }}>
                                         <tr>
-                                            <th style={thStyle}>Fecha</th>
-                                            <th style={thStyle}>Producto</th>
-                                            <th style={thStyle}>Tipo</th>
-                                            <th style={thStyle}>Estado Destino</th>
-                                            <th style={thStyle}>Cantidad</th>
-                                            <th style={thStyle}>Notas</th>
+                                            <th style={styles.th}>Fecha</th>
+                                            <th style={styles.th}>Producto</th>
+                                            <th style={styles.th}>Tipo</th>
+                                            <th style={styles.th}>Estado Destino</th>
+                                            <th style={styles.th}>Cantidad</th>
+                                            <th style={styles.th}>Notas</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {movements.filter(m => (m.products?.name || 'Desconocido').toLowerCase().includes(searchQuery.toLowerCase())).map((m) => (
                                             <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={tdStyle}>{new Date(m.created_at).toLocaleString()}</td>
-                                                <td style={tdStyle}><strong>{m.products?.name || 'Producto Desconocido'}</strong></td>
-                                                <td style={tdStyle}>
-                                                    <span style={badgeStyle(m.quantity > 0 ? '#DCFCE7' : '#FEE2E2', m.quantity > 0 ? '#166534' : '#991B1B')}>
+                                                <td style={styles.td}>{new Date(m.created_at).toLocaleString()}</td>
+                                                <td style={styles.td}><strong>{m.products?.name || 'Producto Desconocido'}</strong></td>
+                                                <td style={styles.td}>
+                                                    <span style={styles.badge(m.quantity > 0 ? '#DCFCE7' : '#FEE2E2', m.quantity > 0 ? '#166534' : '#991B1B')}>
                                                         {m.type.toUpperCase()}
                                                     </span>
                                                 </td>
-                                                <td style={tdStyle}>{m.status_to || 'available'}</td>
-                                                <td style={{ ...tdStyle, fontWeight: '900', color: m.quantity > 0 ? '#10B981' : '#EF4444' }}>
+                                                <td style={styles.td}>{m.status_to || 'available'}</td>
+                                                <td style={{ ...styles.td, fontWeight: '900', color: m.quantity > 0 ? '#10B981' : '#EF4444' }}>
                                                     {m.quantity > 0 ? '+' : ''}{m.quantity}
                                                 </td>
-                                                <td style={tdStyle}>{m.notes || '-'}</td>
+                                                <td style={styles.td}>{m.notes || '-'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -718,36 +957,36 @@ export default function InventoryAdminPage() {
                                                         <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B' }}>FECHA PLANIFICADA: {task.scheduled_date}</span>
                                                         <div style={{ fontWeight: '900', color: '#111827', fontSize: '1.1rem' }}>Auditoría Aleatoria #{task.id.split('-')[0]}</div>
                                                     </div>
-                                                    <span style={badgeStyle(task.status === 'completed' ? '#DCFCE7' : '#FEF3C7', task.status === 'completed' ? '#166534' : '#92400E')}>
+                                                    <span style={styles.badge(task.status === 'completed' ? '#DCFCE7' : '#FEF3C7', task.status === 'completed' ? '#166534' : '#92400E')}>
                                                         {task.status.toUpperCase()}
                                                     </span>
                                                 </div>
                                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                                     <thead>
                                                         <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'white' }}>
-                                                            <th style={{ ...thStyle, fontSize: '0.7rem' }}>Producto</th>
-                                                            <th style={{ ...thStyle, fontSize: '0.7rem' }}>Stock Sistema</th>
-                                                            <th style={{ ...thStyle, fontSize: '0.7rem' }}>Físico (Conteo Ciego)</th>
-                                                            <th style={{ ...thStyle, fontSize: '0.7rem' }}>Diferencia %</th>
-                                                            <th style={{ ...thStyle, fontSize: '0.7rem', textAlign: 'right' }}>Estado</th>
+                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Producto</th>
+                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Stock Sistema</th>
+                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Físico (Conteo Ciego)</th>
+                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Diferencia %</th>
+                                                            <th style={{ ...styles.th, fontSize: '0.7rem', textAlign: 'right' }}>Estado</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {task.items.map(item => (
                                                             <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'white' }}>
-                                                                <td style={tdStyle}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
-                                                                <td style={tdStyle}>{item.expected_qty}</td>
-                                                                <td style={tdStyle}>
+                                                                <td style={styles.td}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
+                                                                <td style={styles.td}>{item.expected_qty}</td>
+                                                                <td style={styles.td}>
                                                                     {item.actual_qty !== null ? (
                                                                         <span style={{ fontWeight: '900' }}>{item.actual_qty}</span>
                                                                     ) : (
                                                                         <button style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer' }}>Ingresar Conteo</button>
                                                                     )}
                                                                 </td>
-                                                                <td style={{ ...tdStyle, color: item.difference_percent > auditPolicy.alertThreshold ? '#EF4444' : '#10B981', fontWeight: '800' }}>
+                                                                <td style={{ ...styles.td, color: item.difference_percent > auditPolicy.alertThreshold ? '#EF4444' : '#10B981', fontWeight: '800' }}>
                                                                     {item.actual_qty !== null ? `${item.difference_percent.toFixed(1)}%` : '-'}
                                                                 </td>
-                                                                <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                                <td style={{ ...styles.td, textAlign: 'right' }}>
                                                                     <span style={{ 
                                                                         display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.6rem', borderRadius: '8px', 
                                                                         fontSize: '0.7rem', fontWeight: '800',
@@ -791,32 +1030,36 @@ export default function InventoryAdminPage() {
                                                 
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                     <div>
-                                                        <label style={labelStyle}>Items por día</label>
-                                                        <input 
-                                                            type="number" 
-                                                            value={auditPolicy.itemsPerDay} 
-                                                            onChange={(e) => setAuditPolicy({...auditPolicy, itemsPerDay: parseInt(e.target.value)})}
-                                                            style={inputStyle} 
-                                                        />
+                                                        <label style={styles.label}>% COBERTURA SKUS ACTIVOS</label>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <input 
+                                                                type="number" 
+                                                                value={auditPolicy.coveragePercent} 
+                                                                onChange={(e) => setAuditPolicy({...auditPolicy, coveragePercent: parseInt(e.target.value)})}
+                                                                style={styles.input} 
+                                                            />
+                                                            <span style={{ fontWeight: '900' }}>%</span>
+                                                        </div>
+                                                        <p style={{ fontSize: '0.65rem', color: '#64748B', marginTop: '0.3rem' }}>Usa el 100% para conteo total de SKUs con movimiento.</p>
                                                     </div>
                                                     <div>
-                                                        <label style={labelStyle}>Hora de Creación</label>
+                                                        <label style={styles.label}>Hora de Corte (Snapshot)</label>
                                                         <input 
                                                             type="time" 
                                                             value={auditPolicy.generationTime} 
                                                             onChange={(e) => setAuditPolicy({...auditPolicy, generationTime: e.target.value})}
-                                                            style={inputStyle} 
+                                                            style={styles.input} 
                                                         />
                                                     </div>
                                                 </div>
 
                                                 <div>
-                                                    <label style={labelStyle}>Umbral de Alerta (%)</label>
+                                                    <label style={styles.label}>Umbral de Alerta (%)</label>
                                                     <input 
                                                         type="number" 
                                                         value={auditPolicy.alertThreshold} 
                                                         onChange={(e) => setAuditPolicy({...auditPolicy, alertThreshold: parseInt(e.target.value)})}
-                                                        style={inputStyle} 
+                                                        style={styles.input} 
                                                     />
                                                 </div>
                                             </div>
@@ -858,33 +1101,142 @@ export default function InventoryAdminPage() {
                                     </div>
                                 </div>
                             )}
+
+                            {activeTab === 'novedades' && (
+                                <div style={{ padding: '0' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead style={styles.stickyHeader}>
+                                            <tr>
+                                                <th style={styles.th}>Fecha</th>
+                                                <th style={styles.th}>Producto / SKU</th>
+                                                <th style={styles.th}>Evidencia (Ruta)</th>
+                                                <th style={styles.th}>Decisión Bodega</th>
+                                                <th style={styles.th}>Cant.</th>
+                                                <th style={styles.th}>Notas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {movements
+                                                .filter(m => m.status_to === 'returned' || m.admin_decision)
+                                                .filter(m => (m.products?.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                                                .map((m) => (
+                                                <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                                    <td style={styles.td}>{new Date(m.created_at).toLocaleDateString()}</td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ fontWeight: '800' }}>{m.products?.name}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{m.products?.sku}</div>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        {m.evidence_url ? (
+                                                            <div style={{ position: 'relative', width: '80px', height: '60px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0', cursor: 'zoom-in' }} onClick={() => window.open(m.evidence_url, '_blank')}>
+                                                                <img src={m.evidence_url} alt="Evidencia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                <div style={{ position: 'absolute', bottom: 0, right: 0, padding: '2px 4px', background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '0.6rem' }}>🔍</div>
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontStyle: 'italic' }}>Sin foto</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        {m.admin_decision ? (
+                                                            <span style={styles.badge(
+                                                                m.admin_decision === 'inventory' ? '#DCFCE7' : m.admin_decision === 'waste' ? '#FEE2E2' : '#DBEAFE',
+                                                                m.admin_decision === 'inventory' ? '#166534' : m.admin_decision === 'waste' ? '#991B1B' : '#1E40AF'
+                                                            )}>
+                                                                {m.admin_decision.toUpperCase()}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ ...styles.badge('#FEF3C7', '#92400E'), animation: 'pulse 2s infinite' }}>PENDIENTE</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ ...styles.td, fontWeight: '900' }}>{Math.abs(m.quantity)}</td>
+                                                    <td style={{ ...styles.td, fontSize: '0.8rem', color: '#64748B', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={m.notes}>
+                                                        {m.notes || '-'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {movements.filter(m => m.status_to === 'returned' || m.admin_decision).length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
+                                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍃</div>
+                                            <h3 style={{ fontWeight: '900', color: '#1E293B' }}>Sin novedades registradas</h3>
+                                            <p style={{ color: '#64748B' }}>Los retornos marcados por conductores aparecerán aquí.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
+                {activeTab === 'stock' && (
+                    <div style={{ padding: '2.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.25rem', backgroundColor: '#F8FAFC' }}>
+                        <div style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary, fontWeight: '800' }}>
+                            Página <span style={{ color: THEME.colors.textMain }}>{currentPage}</span> de <span style={{ color: THEME.colors.textMain }}>{totalPages || 1}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <button 
+                                disabled={currentPage === 1} 
+                                onClick={() => setCurrentPage(p => p - 1)} 
+                                style={{ padding: '0.8rem 1.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: currentPage === 1 ? '#F9FAFB' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontWeight: '800', color: currentPage === 1 ? '#94A3B8' : THEME.colors.textMain, transition: 'all 0.2s' }}
+                            >
+                                Anterior
+                            </button>
+                            <button 
+                                disabled={currentPage === totalPages || totalPages === 0} 
+                                onClick={() => setCurrentPage(p => p + 1)} 
+                                style={{ padding: '0.8rem 1.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F9FAFB' : 'white', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', fontWeight: '800', color: (currentPage === totalPages || totalPages === 0) ? '#94A3B8' : THEME.colors.textMain, transition: 'all 0.2s' }}
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Adjustment Modal */}
+                           {/* Adjustment Modal */}
             {isMovementModalOpen && selectedProduct && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '450px', padding: '2rem' }}>
-                        <h2 style={{ margin: 0, fontWeight: '900' }}>Ajuste de Inventario</h2>
-                        <p style={{ color: '#64748B' }}>{selectedProduct.name}</p>
-                        <div style={{ margin: '1.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <select id="adj_type" style={inputStyle}>
-                                <option value="adjustment">⚙️ Ajuste Manual (Inventario físico)</option>
-                                <option value="entry">✚ Entrada por Devolución/Compra</option>
-                                <option value="exit">➖ Salida por Merma/Daño</option>
-                            </select>
-                            <select id="adj_status" style={inputStyle}>
-                                <option value="available">✅ Disponible para venta</option>
-                                <option value="returned">🚛 En camión (Devuelto)</option>
-                                <option value="in_process">⚙️ En Reproceso</option>
-                            </select>
-                            <input id="adj_qty" type="number" placeholder="Cantidad..." style={inputStyle} />
-                            <textarea id="adj_notes" placeholder="Motivo/Observación..." style={{ ...inputStyle, minHeight: '80px' }} />
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, width: '100%', maxWidth: '480px', padding: '2.5rem', boxShadow: THEME.shadow.xl }}>
+                        <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.75rem', color: THEME.colors.textMain }}>Ajuste de Inventario</h2>
+                        <p style={{ color: THEME.colors.textSecondary, marginBottom: '2rem', fontSize: '1rem', fontWeight: '600' }}>{selectedProduct.name}</p>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div>
+                                <label style={styles.label}>TIPO DE MOVIMIENTO</label>
+                                <select id="adj_type" style={styles.input}>
+                                    <option value="adjustment">⚙️ Ajuste Manual (Inventario físico)</option>
+                                    <option value="entry">✚ Entrada por Devolución/Compra</option>
+                                    <option value="exit">➖ Salida por Merma/Daño</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={styles.label}>ESTADO DESTINO</label>
+                                <select id="adj_status" style={styles.input}>
+                                    <option value="available">✅ Disponible para venta</option>
+                                    <option value="returned">🚛 En camión (Devuelto)</option>
+                                    <option value="in_process">⚙️ En Reproceso</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={styles.label}>CANTIDAD</label>
+                                <input id="adj_qty" type="number" placeholder="0.00" style={styles.input} />
+                            </div>
+
+                            <div>
+                                <label style={styles.label}>MOTIVO / OBSERVACIONES</label>
+                                <textarea id="adj_notes" placeholder="Describa el motivo del ajuste..." style={{ ...styles.input, minHeight: '100px', resize: 'none' }} />
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={() => setIsMovementModalOpen(false)} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '800' }}>Cancelar</button>
+
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+                            <button 
+                                onClick={() => setIsMovementModalOpen(false)} 
+                                style={{ flex: 1, padding: '1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '800', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
                             <button 
                                 onClick={() => {
                                     const qtyInput = document.getElementById('adj_qty') as HTMLInputElement;
@@ -898,8 +1250,9 @@ export default function InventoryAdminPage() {
                                     const notes = notesText.value;
                                     
                                     if(qty) handleApplyMovement(selectedProduct.id, qty, type, status, notes);
+                                    else alert('Por favor ingrese una cantidad válida');
                                 }}
-                                style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#111827', color: 'white', fontWeight: '800' }}
+                                style={{ flex: 1.5, padding: '1rem', borderRadius: THEME.radius.md, border: 'none', background: THEME.colors.accent, color: 'white', fontWeight: '800', cursor: 'pointer' }}
                             >
                                 Guardar Ajuste
                             </button>
@@ -907,39 +1260,69 @@ export default function InventoryAdminPage() {
                     </div>
                 </div>
             )}
+
+            <style jsx global>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </main>
     );
 }
 
-const thStyle: React.CSSProperties = { padding: '1rem 1.5rem', textAlign: 'left', fontSize: '0.8rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' };
-const tdStyle: React.CSSProperties = { padding: '1rem 1.5rem', fontSize: '0.9rem' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '700', boxSizing: 'border-box' };
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', marginBottom: '0.4rem' };
-const badgeStyle = (bg: string, color: string): React.CSSProperties => ({ backgroundColor: bg, color, padding: '0.2rem 0.6rem', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '900' });
-
-function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: string | number, icon: string, color: string, textColor: string, subtitle: string }) {
+function KPICard({ title, value, color, subtitle }: { title: string, value: string | number, color: string, subtitle: string }) {
     return (
-        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ backgroundColor: color, width: '50px', height: '50px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>{icon}</div>
-            <div>
-                <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>{title}</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: '900', color: textColor }}>{value}</div>
-                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '600' }}>{subtitle}</div>
+        <div style={{ 
+            backgroundColor: 'white', 
+            padding: '0.85rem', 
+            borderRadius: THEME.radius.xl, 
+            border: `1px solid ${THEME.colors.border}`,
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.25rem',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            position: 'relative',
+            overflow: 'hidden'
+        }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = THEME.shadow.md; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)'; }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', backgroundColor: color }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <span style={{ color: THEME.colors.textSecondary, fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain }}>{value}</span>
+            </div>
+            <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                {subtitle}
             </div>
         </div>
     );
 }
 
-function TabButton({ active, onClick, label, icon }: { active: boolean, onClick: () => void, label: string, icon: string }) {
+function TabButton({ active, onClick, label, icon }: { active: boolean, onClick: () => void, label: string, icon?: string }) {
     return (
         <button 
             onClick={onClick}
             style={{ 
-                display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', borderRadius: '12px', border: 'none', 
-                backgroundColor: active ? '#F1F5F9' : 'transparent', color: active ? '#1E293B' : '#64748B', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
+                display: 'flex', 
+                alignItems: 'center', 
+                padding: '0.4rem 0.6rem', 
+                borderRadius: THEME.radius.md, 
+                border: 'none', 
+                backgroundColor: active ? THEME.colors.accent : 'transparent', 
+                color: active ? 'white' : THEME.colors.textSecondary, 
+                fontWeight: '800', 
+                cursor: 'pointer', 
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap'
             }}
+            onMouseEnter={(e) => { if(!active) e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
+            onMouseLeave={(e) => { if(!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
         >
-            <span>{icon}</span> {label}
+            {icon && <span style={{ fontSize: '1rem', marginRight: '0.4rem' }}>{icon}</span>}
+            {label}
         </button>
     );
 }

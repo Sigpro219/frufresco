@@ -37,7 +37,10 @@ export default function ControlTowerKPIs() {
             if (isMounted.current) {
                 setRoutes(data || []);
             }
-        } catch (err) {
+        } catch (err: unknown) {
+            const isAbortError = err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'));
+            if (isAbortError) return;
+            
             console.error('Error fetching KPI data:', err);
         } finally {
             if (isMounted.current) setLoading(false);
@@ -119,7 +122,7 @@ export default function ControlTowerKPIs() {
             </div>
 
             <div style={{ fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px' }}>
-                💡 Las métricas "Magic" se basan en la planificación teórica de Google Maps, mientras que las "Manuales" reflejan el despacho tradicional.
+                💡 Las métricas &quot;Magic&quot; se basan en la planificación teórica de Google Maps, mientras que las &quot;Manuales&quot; reflejan el despacho tradicional.
             </div>
         </div>
     );

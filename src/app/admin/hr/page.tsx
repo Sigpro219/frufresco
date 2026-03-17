@@ -18,7 +18,13 @@ interface Profile {
     avatar_url?: string;
 }
 
-const ROLES = [
+interface Role {
+    value: string;
+    label: string;
+    color?: string;
+}
+
+const DEFAULT_ROLES: Role[] = [
     { value: 'administrativo', label: 'Administrativo', color: '#64748B' },
     { value: 'web_admin', label: 'Administrador Web', color: '#3B82F6' },
     { value: 'comercial', label: 'Comercial', color: '#8B5CF6' },
@@ -37,6 +43,7 @@ const SPECIALTIES = [
 
 export default function HRManagement() {
     const [users, setUsers] = useState<Profile[]>([]);
+    const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRole, setFilterRole] = useState('all');
@@ -55,12 +62,29 @@ export default function HRManagement() {
     });
 
     useEffect(() => {
-        fetchUsers();
+        fetchData();
     }, []);
 
-    const fetchUsers = async () => {
+    const fetchData = async () => {
         try {
             setLoading(true);
+            
+            // 1. Load Roles from Settings
+            const { data: settingsData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'system_roles')
+                .single();
+            
+            if (settingsData?.value) {
+                try {
+                    setRoles(JSON.parse(settingsData.value));
+                } catch (e) {
+                    console.error('Error parsing roles:', e);
+                }
+            }
+
+            // 2. Load Users
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -69,7 +93,7 @@ export default function HRManagement() {
             if (error) throw error;
             setUsers(data || []);
         } catch (err) {
-            console.error('Error:', err);
+            console.error('Error fetching HR data:', err);
         } finally {
             setLoading(false);
         }
@@ -102,7 +126,7 @@ export default function HRManagement() {
             if (editingUser?.id === userId) setEditingUser(null); 
             
             alert('¡Cambios guardados con éxito!');
-            await fetchUsers(); // Force refresh from DB
+            await fetchData(); // Force refresh from DB
         } catch (err: any) {
             console.error('Update Error:', err);
             alert(`Error al actualizar: ${err?.message || 'Error desconocido'}`);
@@ -133,8 +157,10 @@ export default function HRManagement() {
             setShowAdd(false);
             setNewUser({ contact_name: '', email: '', phone: '', role: 'warehouse_aux', specialty: 'Bodega', is_active: true });
             alert('¡Colaborador registrado exitosamente! Recuerda invitarlo por email desde Supabase Auth.');
-        } catch (err: any) {
-            alert(`Error al registrar: ${err.message}`);
+            await fetchData();
+        } catch (err: unknown) {
+            const message = (err as { message?: string })?.message || 'Error desconocido';
+            alert(`Error al registrar: ${message}`);
         }
     };
 
@@ -169,7 +195,7 @@ export default function HRManagement() {
             if (error) throw error;
             
             alert('Proceso de limpieza finalizado. Se han eliminado los colaboradores permitidos.');
-            await fetchUsers();
+            await fetchData();
         } catch (err: unknown) {
             console.error('Error clearing library:', err);
             const message = (err as { message?: string })?.message || 'Error desconocido';
@@ -195,7 +221,7 @@ export default function HRManagement() {
         XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Colaboradores');
 
         // Add a sheet with roles for reference
-        const refWs = XLSX.utils.json_to_sheet(ROLES.map(r => ({ 'ID de Rol': r.value, 'Nombre de Rol': r.label })));
+        const refWs = XLSX.utils.json_to_sheet(roles.map((r: Role) => ({ 'ID de Rol': r.value, 'Nombre de Rol': r.label })));
         XLSX.utils.book_append_sheet(wb, refWs, 'Roles Disponibles');
 
         XLSX.writeFile(wb, 'Plantilla_Colaboradores_Frubana.xlsx');
@@ -225,7 +251,7 @@ export default function HRManagement() {
                     
                     // Try to map label to value if explicit value not found
                     let finalRole = rawRole;
-                    const matchedRole = ROLES.find(r => 
+                    const matchedRole = roles.find((r: Role) => 
                         r.value.toLowerCase() === rawRole.toLowerCase() || 
                         r.label.toLowerCase() === rawRole.toLowerCase()
                     );
@@ -255,7 +281,7 @@ export default function HRManagement() {
                     if (error) throw error;
                     alert('¡Carga masiva completada con éxito!');
                     setShowBulkModal(false);
-                    await fetchUsers();
+                    await fetchData();
                 }
             } catch (err: unknown) {
                 console.error('Bulk Upload Error:', err);
@@ -268,9 +294,22 @@ export default function HRManagement() {
         reader.readAsArrayBuffer(file);
     };
 
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
     const sortedUsers = [...users].filter(u => {
-        const matchesSearch = (u.contact_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-                             (u.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+        const terms = searchTerm.split(',').map(t => normalize(t.trim())).filter(Boolean);
+        const roleInfo = roles.find(r => r.value === u.role);
+        const haystack = normalize([
+            u.contact_name || '',
+            u.phone || '',
+            u.email || '',
+            u.role || '',
+            roleInfo?.label || '',
+            u.specialty || '',
+            u.address || '',
+            u.is_active ? 'activo' : 'archivado'
+        ].join(' '));
+        const matchesSearch = terms.length === 0 || terms.some(term => haystack.includes(term));
         const matchesRole = filterRole === 'all' ? (u.role !== 'b2b_client') : (u.role === filterRole);
         return matchesSearch && matchesRole;
     }).sort((a, b) => {
@@ -353,13 +392,25 @@ export default function HRManagement() {
                     border: '1px solid #E5E7EB', marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap'
                 }}>
                     <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>🔍</span>
+                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }}>🔍</span>
                         <input 
-                            placeholder="Buscar por nombre o celular..."
+                            placeholder="Buscar por nombre, rol, email, teléfono... (separa criterios con comas)"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                            style={{ width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.5rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontSize: '0.9rem', boxSizing: 'border-box' }}
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)',
+                                    background: '#E2E8F0', border: 'none', color: '#64748B',
+                                    width: '22px', height: '22px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', padding: 0
+                                }}
+                            >✕</button>
+                        )}
                     </div>
                     <select 
                         value={filterRole}
@@ -367,7 +418,7 @@ export default function HRManagement() {
                         style={{ padding: '0.8rem 1rem', borderRadius: '14px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', minWidth: '180px' }}
                     >
                         <option value="all">Todos los Roles</option>
-                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
 
                     <select 
@@ -394,7 +445,7 @@ export default function HRManagement() {
                         </thead>
                         <tbody>
                             {sortedUsers.map((user: Profile) => {
-                                const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#6B7280' };
+                                const roleInfo = roles.find(r => r.value === user.role) || { label: user.role, color: '#6B7280' };
                                 return (
                                     <tr key={user.id} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s', opacity: user.is_active ? 1 : 0.6 }}>
                                         <td style={{ padding: '1.2rem' }}>
@@ -506,7 +557,7 @@ export default function HRManagement() {
                                     onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
                                     style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '700' }}
                                 >
-                                    {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
 
@@ -597,7 +648,7 @@ export default function HRManagement() {
                                 onChange={e => setNewUser({...newUser, role: e.target.value})}
                                 style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }}
                             >
-                                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                             </select>
                             <select 
                                 value={newUser.specialty}

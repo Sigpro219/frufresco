@@ -1,16 +1,130 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, verifyConnectivity } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { diagnoseStorageError } from '@/lib/errorUtils';
+
+function ImageUpload({ 
+    label, 
+    value, 
+    onUpload, 
+    onClear,
+    description,
+    bucket = 'branding'
+}: { 
+    label: string, 
+    value: string, 
+    onUpload: (url: string) => void, 
+    onClear: () => void,
+    description?: string,
+    bucket?: string
+}) {
+    const [uploading, setUploading] = useState(false);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setUploading(true);
+
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file);
+
+            if (uploadError) {
+                diagnoseStorageError(uploadError, bucket);
+                throw uploadError;
+            }
+
+            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            onUpload(publicUrl);
+            (window as any).showToast?.('Imagen subida con éxito', 'success');
+        } catch (err: any) {
+            console.error('Upload error:', err);
+            (window as any).showToast?.('Error al subir: ' + err.message, 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+            <h4 style={{ margin: '0 0 4px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>{label}</h4>
+            {description && <p style={{ margin: '0 0 12px 0', fontSize: '0.7rem', color: '#6B7280' }}>{description}</p>}
+            
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                {value ? (
+                    <div style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' }}>
+                        <img src={value} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                        <button 
+                            onClick={(e) => { e.preventDefault(); onClear(); }}
+                            style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            ×
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ width: '100px', height: '100px', borderRadius: '12px', border: '2px dashed #D1D5DB', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB', color: '#9CA3AF', fontSize: '1.5rem' }}>
+                        🖼️
+                    </div>
+                )}
+                
+                <div style={{ flex: 1 }}>
+                    <label style={{ 
+                        display: 'inline-block', 
+                        padding: '8px 16px', 
+                        backgroundColor: uploading ? '#9CA3AF' : '#111827', 
+                        color: 'white', 
+                        borderRadius: '8px', 
+                        cursor: uploading ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        transition: 'all 0.2s'
+                    }}>
+                        {uploading ? 'Subiendo...' : value ? 'Cambiar Imagen' : 'Subir Imagen'}
+                        <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploading} style={{ display: 'none' }} />
+                    </label>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '0.65rem', color: '#9CA3AF' }}>PNG, JPG o WEBP. Máx 2MB.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function AdminSettingsPage() {
     const [settings, setSettings] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [persisted, setPersisted] = useState(false);
     const [openSections, setOpenSections] = useState<string[]>(['operation']); // Por defecto abre Operación
+    const [connStatus, setConnStatus] = useState<{ ok: boolean, latency?: string, storageOk?: boolean, checked: boolean, checking: boolean }>({
+        ok: true, checked: false, checking: false
+    });
+
+    const checkHealth = async () => {
+        setConnStatus(prev => ({ ...prev, checking: true }));
+        const result = await verifyConnectivity();
+        setConnStatus({
+            ok: result.ok,
+            latency: result.latency,
+            storageOk: result.storageOk,
+            checked: true,
+            checking: false
+        });
+        
+        if (!result.ok) {
+            (window as any).showToast?.('⚠️ Error de conexión: ' + result.error, 'error');
+        } else if (!result.storageOk) {
+            (window as any).showToast?.('⚠️ Base de datos OK, pero Storage no responde', 'warning');
+        } else {
+            (window as any).showToast?.('⚡ Conexión exitosa (' + result.latency + ')', 'success');
+        }
+    };
 
     const toggleSection = (id: string) => {
         setOpenSections(prev => 
@@ -41,53 +155,37 @@ export default function AdminSettingsPage() {
               ]), 
               description: 'Los 3 pilares de valor que se muestran en el inicio' 
             },
-            {
-              key: 'b2b_page_content',
-              value: JSON.stringify({
-                badge: 'Exclusivo HORECA e Institucional BOG',
-                title: 'Tu Operación Merece \n Lo Mejor del Campo',
-                description: 'Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.',
-                benefits: [
-                  { icon: '🚀', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
-                  { icon: '💰', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
-                  { icon: '🥕', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
-                  { icon: '💳', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
-                ]
-              }),
-              description: 'Contenido dinámico de la página de registro B2B'
-            },
             { 
                 key: 'b2b_page_content', 
                 value: JSON.stringify({
-                    badge: 'Exclusivo HORECA',
-                    title: 'Tu Operación Merece \n Lo Mejor',
-                    description: 'Únete a los mejores restaurantes.',
-                    benefits: []
+                    badge: 'Exclusivo HORECA e Institucional BOG',
+                    title: 'Tu Operación Merece \n Lo Mejor del Campo',
+                    description: 'Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.',
+                    benefits: [
+                        { icon: '🚀', title: 'Entrega AM', desc: 'Todo listo antes de abrir cocina.' },
+                        { icon: '💰', title: 'Precios Justos', desc: 'Ahorro directo sin intermediarios.' },
+                        { icon: '🥕', title: 'Frescura Total', desc: 'Cosechado ayer, entregado hoy.' },
+                        { icon: '💳', title: 'Crédito B2B', desc: 'Paga a 15 o 30 días fácil.' }
+                    ]
                 }), 
                 description: 'Contenido dinámico de la página de registro B2B' 
             },
             { key: 'store_status', value: 'open', description: 'Estado actual de la tienda (Abierto/Cerrado)' },
             { key: 'global_banner', value: '', description: 'Anuncio superior (ej: ¡Envíos gratis hoy!)' },
-            { 
-                key: 'picking_route_spaces', 
-                value: JSON.stringify({ 
-                    'Norte': '1-8', 
-                    'Centro': '9-16', 
-                    'Sur': '17-25',
-                    'Oriente': '26-33',
-                    'Occidente': '34-41',
-                    'Otros': '42-50'
-                }), 
-                description: 'Rangos de espacios (Cajas/Cubículos) asignados por zona de entrega' 
-            },
             { key: 'home_featured_title', value: '🔥 Lo más vendido de la semana', description: 'Título sección productos destacados' },
             { key: 'home_catalog_title', value: 'Nuestro Catálogo', description: 'Título sección catálogo general' },
             { key: 'contact_phone', value: '+57 300 123 4567', description: 'Teléfono de contacto (Footer)' },
             { key: 'contact_email', value: 'contacto@frufresco.com', description: 'Email de contacto (Footer)' },
             { key: 'contact_address', value: 'Corabastos Bodega 123, Bogotá', description: 'Dirección física (Footer)' },
-            { key: 'footer_description', value: 'Llevando la frescura del campo a tu negocio con calidad garantizada y precios justos.', description: 'Texto descriptivo en el pie de página' },
-            { key: 'standard_units', value: 'Kg,G,Lb,Lt,Un,Atado,Bulto,Caja,Saco,Cubeta', description: 'Unidades oficiales de medida para todo el inventario' },
-            { key: 'suspended_units', value: '', description: 'Unidades desactivadas temporalmente' }
+            { key: 'app_logo_url', value: '', description: 'URL del logo de la aplicación para Navbar y Footer' },
+            { key: 'app_logosymbol_url', value: '', description: 'URL del logosímbolo pequeño para la página de OPS' },
+            { key: 'app_name', value: 'FruFresco', description: 'Nombre oficial de la aplicación (SEO)' },
+            { key: 'app_short_name', value: 'FruFresco', description: 'Nombre corto (Navbar/Mobile)' },
+            { key: 'provider_nit', value: '901.234.567-8', description: 'NIT de la Empresa para Documentos' },
+            { key: 'provider_legal_name', value: 'Logistics Pro S.A.S', description: 'Razón Social (Emisor de Documentos)' },
+            { key: 'provider_logo_url', value: '', description: 'Logo Oficial (Para Documentos y Facturas)' },
+            { key: 'primary_color', value: '#0891B2', description: 'Color Primario (Documentos y Detalles)' },
+            { key: 'secondary_color', value: '#10B981', description: 'Color Secundario (Acentos)' }
         ];
 
         if (error) {
@@ -99,10 +197,10 @@ export default function AdminSettingsPage() {
             
             const merged = [...defaultSettings];
             if (data && data.length > 0) {
-                data.forEach(realS => {
+                data.forEach((realS: { key: string; value: string; description?: string }) => {
                     const idx = merged.findIndex(m => m.key === realS.key);
-                    if (idx !== -1) merged[idx] = realS;
-                    else merged.push(realS);
+                    if (idx !== -1) merged[idx] = { ...merged[idx], value: realS.value };
+                    else merged.push({ ...realS, description: realS.description || 'Auto-created' });
                 });
             }
             setSettings(merged);
@@ -137,77 +235,6 @@ export default function AdminSettingsPage() {
         setSaving(false);
     };
 
-    const getActiveUnits = () => {
-        const setting = settings.find(s => s.key === 'standard_units');
-        return setting?.value ? setting.value.split(',').filter((u: string) => u) : [];
-    };
-
-    const getSuspendedUnits = () => {
-        const setting = settings.find(s => s.key === 'suspended_units');
-        return setting?.value ? setting.value.split(',').filter((u: string) => u) : [];
-    };
-
-    const toggleUnitStatus = async (unit: string, currentStatus: 'active' | 'suspended') => {
-        const active = getActiveUnits();
-        const suspended = getSuspendedUnits();
-
-        if (currentStatus === 'active') {
-            const newActive = active.filter((u: string) => u !== unit).join(',');
-            const newSuspended = suspended.includes(unit) ? suspended.join(',') : [...suspended, unit].join(',');
-            await handleUpdateSetting('standard_units', newActive);
-            await handleUpdateSetting('suspended_units', newSuspended);
-        } else {
-            const newSuspended = suspended.filter((u: string) => u !== unit).join(',');
-            const newActive = active.includes(unit) ? active.join(',') : [...active, unit].join(',');
-            await handleUpdateSetting('suspended_units', newSuspended);
-            await handleUpdateSetting('standard_units', newActive);
-        }
-    };
-
-    const deleteUnitPermanently = async (unit: string, status: 'active' | 'suspended') => {
-        setSaving(true);
-        const { data: usageP, error: errP } = await supabase
-            .from('products')
-            .select('id')
-            .eq('unit_of_measure', unit)
-            .limit(1);
-
-        const { data: usageC, error: errC } = await supabase
-            .from('product_conversions')
-            .select('id')
-            .eq('from_unit', unit)
-            .limit(1);
-
-        if (errP || errC) {
-            (window as any).showToast?.('Error al verificar integridad: ' + (errP?.message || errC?.message), 'error');
-            setSaving(false);
-            return;
-        }
-
-        if ((usageP && usageP.length > 0) || (usageC && usageC.length > 0)) {
-            (window as any).showToast?.(`⚠️ BLOQUEADO: La unidad '${unit}' está en uso en productos o conversiones. No se puede borrar.`, 'error');
-            setSaving(false);
-            return;
-        }
-
-        if (!confirm(`¿Estás seguro de ELIMINAR '${unit}' permanentemente? Esta acción no se puede deshacer.`)) {
-            setSaving(false);
-            return;
-        }
-
-        const list = status === 'active' ? getActiveUnits() : getSuspendedUnits();
-        const newList = list.filter((u: string) => u !== unit).join(',');
-        await handleUpdateSetting(status === 'active' ? 'standard_units' : 'suspended_units', newList);
-        setSaving(false);
-    };
-
-    const addNewUnit = async (name: string) => {
-        const active = getActiveUnits();
-        const suspended = getSuspendedUnits();
-        if (active.includes(name) || suspended.includes(name)) return;
-        const newActive = [...active, name].join(',');
-        await handleUpdateSetting('standard_units', newActive);
-    };
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
@@ -226,6 +253,58 @@ export default function AdminSettingsPage() {
                     <p style={{ color: '#6B7280', marginTop: '0.5rem' }}>Control Maestro de parámetros globales.</p>
                 </header>
 
+                {/* --- CONNECTIVITY CHECKER --- */}
+                <div style={{ 
+                    marginBottom: '2rem', 
+                    padding: '1rem 1.5rem', 
+                    backgroundColor: connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#ECFDF5' : '#FEF2F2') : '#F3F4F6',
+                    borderRadius: '16px',
+                    border: `1px solid ${connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#10B981' : '#EF4444') : '#E5E7EB'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            borderRadius: '50%', 
+                            backgroundColor: connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#10B981' : '#EF4444') : '#9CA3AF',
+                            boxShadow: connStatus.checked && connStatus.ok ? '0 0 8px #10B981' : 'none'
+                        }} />
+                        <div>
+                            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: '800', color: '#111827' }}>
+                                {connStatus.checking ? 'Verificando enlace...' : 
+                                 !connStatus.checked ? 'No se ha verificado la conexión' :
+                                 connStatus.ok && connStatus.storageOk ? 'Sistemas Operativos' :
+                                 !connStatus.ok ? 'Error de Conexión Base' : 'Error en Almacenamiento'}
+                            </p>
+                            {connStatus.checked && (
+                                <p style={{ margin: 0, fontSize: '0.7rem', color: '#6B7280' }}>
+                                    {connStatus.ok ? `Latencia: ${connStatus.latency} | Storage: ${connStatus.storageOk ? 'OK' : 'FAIL'}` : 'Verifica tu conexión o bloqueadores'}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <button 
+                        onClick={checkHealth}
+                        disabled={connStatus.checking}
+                        style={{
+                            padding: '6px 14px',
+                            backgroundColor: 'white',
+                            border: '1px solid #D1D5DB',
+                            borderRadius: '8px',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            cursor: connStatus.checking ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                        {connStatus.checking ? '⏳...' : '🧪 Probar Conexión'}
+                    </button>
+                </div>
+
                 {/* --- SECCIÓN 1: OPERACIÓN --- */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <button 
@@ -240,13 +319,13 @@ export default function AdminSettingsPage() {
                     </button>
                     {openSections.includes('operation') && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1rem', padding: '1rem', backgroundColor: '#F9FAFB', borderRadius: '16px' }}>
-                            {settings.filter(s => ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'picking_route_spaces'].includes(s.key)).map((setting) => (
+                            {settings.filter(s => ['store_status', 'delivery_fee', 'min_order_hogar', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules'].includes(s.key)).map((setting) => (
                                 <div key={setting.key} style={{ 
                                     backgroundColor: 'white', 
                                     borderRadius: '15px', 
                                     padding: '1rem', 
                                     border: '1px solid #E5E7EB',
-                                    gridColumn: setting.key === 'picking_route_spaces' ? 'span 2' : 'auto'
+                                    gridColumn: 'auto'
                                 }}>
                                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>
                                         {setting.key === 'delivery_fee' ? 'Costo de Envío' :
@@ -296,6 +375,42 @@ export default function AdminSettingsPage() {
                     </button>
                     {openSections.includes('design') && (
                         <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            {/* Nueva Sección Marca */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '1rem' }}>
+                                <ImageUpload 
+                                    label="Logo Principal" 
+                                    description="Navbar y Footer."
+                                    value={settings.find(s => s.key === 'app_logo_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('app_logo_url', url)}
+                                    onClear={() => handleUpdateSetting('app_logo_url', '')}
+                                />
+                                <ImageUpload 
+                                    label="Logosímbolo (Ops)" 
+                                    description="Logo circular pequeño para portales internos."
+                                    value={settings.find(s => s.key === 'app_logosymbol_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('app_logosymbol_url', url)}
+                                    onClear={() => handleUpdateSetting('app_logosymbol_url', '')}
+                                />
+                                <ImageUpload 
+                                    label="Imagen del Hero" 
+                                    description="Fondo página inicio."
+                                    value={settings.find(s => s.key === 'hero_image_url')?.value || ''}
+                                    onUpload={(url) => handleUpdateSetting('hero_image_url', url)}
+                                    onClear={() => handleUpdateSetting('hero_image_url', '')}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Nombre de la App</h4>
+                                    <input type="text" defaultValue={settings.find(s => s.key === 'app_name')?.value || ''} onBlur={(e) => handleUpdateSetting('app_name', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
+                                </div>
+                                <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
+                                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Nombre Corto</h4>
+                                    <input type="text" defaultValue={settings.find(s => s.key === 'app_short_name')?.value || ''} onBlur={(e) => handleUpdateSetting('app_short_name', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
+                                </div>
+                            </div>
+
                             {settings.filter(s => ['global_banner', 'hero_title', 'hero_description'].includes(s.key)).map((setting) => (
                                 <div key={setting.key} style={{ backgroundColor: 'white', borderRadius: '15px', padding: '1.2rem', border: '1px solid #E5E7EB' }}>
                                     <h4 style={{ margin: '0 0 8px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>{setting.description}</h4>
@@ -424,38 +539,91 @@ export default function AdminSettingsPage() {
                     )}
                 </div>
 
-                {/* --- SECCIÓN 5: UNIDADES (GOBERNANZA) --- */}
+                {/* --- SECCIÓN 5: DOCUMENTOS Y MARCA CORPORATIVA --- */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <button 
-                        onClick={() => toggleSection('units')}
+                        onClick={() => toggleSection('corporate')}
                         style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
-                        <span style={{ fontSize: '1.5rem' }}>📏</span>
+                        <span style={{ fontSize: '1.5rem' }}>📄</span>
                         <div style={{ textAlign: 'left', flex: 1 }}>
-                            <h2 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#111827', margin: 0 }}>Unidades de Medida</h2>
-                            <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: 0 }}>Gobernanza global de unidades para inventario.</p>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#111827', margin: 0 }}>Empresa y Documentos</h2>
+                            <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: 0 }}>NIT, colores corporativos y configuración para cotizaciones/facturas.</p>
                         </div>
-                        <span style={{ transform: openSections.includes('units') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
+                        <span style={{ transform: openSections.includes('corporate') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
                     </button>
-                    {openSections.includes('units') && (
-                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px' }}>
-                             <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
-                                <input placeholder="+ Nueva unidad..." style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #DDD' }} onKeyDown={(e) => { if(e.key==='Enter' && e.currentTarget.value) { addNewUnit(e.currentTarget.value); e.currentTarget.value=''; } }} />
-                             </div>
-                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {getActiveUnits().map(u => (
-                                    <div key={u} style={{ backgroundColor: 'white', padding: '6px 12px', borderRadius: '20px', border: '1px solid #0EA5E9', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontWeight: 'bold', color: '#0369A1' }}>{u}</span>
-                                        <button onClick={() => toggleUnitStatus(u, 'active')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444' }}>×</button>
+                    {openSections.includes('corporate') && (
+                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: '1.2rem' }}>
+                                {/* Legal / Company Details */}
+                                <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Razón Social (Emisor)</h4>
+                                        <input 
+                                            type="text" 
+                                            defaultValue={settings.find(s => s.key === 'provider_legal_name')?.value || ''} 
+                                            onBlur={(e) => handleUpdateSetting('provider_legal_name', e.target.value)} 
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: 'bold' }} 
+                                        />
                                     </div>
-                                ))}
-                             </div>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>NIT / CC</h4>
+                                        <input 
+                                            type="text" 
+                                            defaultValue={settings.find(s => s.key === 'provider_nit')?.value || ''} 
+                                            onBlur={(e) => handleUpdateSetting('provider_nit', e.target.value)} 
+                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: 'bold' }} 
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ height: '100%' }}>
+                                    <ImageUpload 
+                                        label="Logo Legal para Documentos" 
+                                        description="Sobre-escribe el logo del navbar específicamente para PDF's"
+                                        value={settings.find(s => s.key === 'provider_logo_url')?.value || ''}
+                                        onUpload={(url) => handleUpdateSetting('provider_logo_url', url)}
+                                        onClear={() => handleUpdateSetting('provider_logo_url', '')}
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Color settings */}
+                            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.75rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>Colores Dinámicos (Documentos)</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <input 
+                                            type="color" 
+                                            defaultValue={settings.find(s => s.key === 'primary_color')?.value || '#0891B2'} 
+                                            onBlur={(e) => handleUpdateSetting('primary_color', e.target.value)} 
+                                            style={{ width: '50px', height: '50px', cursor: 'pointer', border: 'none', padding: 0, borderRadius: '8px' }} 
+                                        />
+                                        <div>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', display: 'block' }}>Color Primario</label>
+                                            <span style={{ fontSize: '0.7rem', color: '#6B7280' }}>{settings.find(s => s.key === 'primary_color')?.value || '#0891B2'}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <input 
+                                            type="color" 
+                                            defaultValue={settings.find(s => s.key === 'secondary_color')?.value || '#10B981'} 
+                                            onBlur={(e) => handleUpdateSetting('secondary_color', e.target.value)} 
+                                            style={{ width: '50px', height: '50px', cursor: 'pointer', border: 'none', padding: 0, borderRadius: '8px' }} 
+                                        />
+                                        <div>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', display: 'block' }}>Color Secundario</label>
+                                            <span style={{ fontSize: '0.7rem', color: '#6B7280' }}>{settings.find(s => s.key === 'secondary_color')?.value || '#10B981'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
 
                 <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #DBEAFE', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.85rem', color: '#1E40AF', margin: 0 }}>
-                        💡 <strong>TIP:</strong> Las unidades que marques como "Suspendidas" dejarán de aparecer como opciones al crear productos o conversiones, manteniendo la integridad histórica del sistema.
+                        💡 <strong>TIP:</strong> Los ajustes operativos del día a día se gestionan aquí. Para cambios estructurales contacta al Chief Engineer.
                     </p>
                 </div>
 

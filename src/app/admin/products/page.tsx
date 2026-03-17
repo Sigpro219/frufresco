@@ -1,13 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, Product } from '@/lib/supabase';
-import { useAuth } from '@/lib/authContext';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import VariantModal from '@/components/VariantModal';
 import CreateProductModal from '@/components/CreateProductModal';
+import { CATEGORY_MAP } from '@/lib/constants';
+import { 
+    Search,
+    ChevronLeft,
+    ChevronRight,
+    X,
+    Info,
+    Eye,
+    EyeOff,
+    Image as ImageIcon,
+    Filter
+} from 'lucide-react';
 
 export default function AdminProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -15,42 +26,62 @@ export default function AdminProductsPage() {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const { user, profile } = useAuth();
+    const [currentPage, setCurrentPage] = useState(1);
+    const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
+    const ITEMS_PER_PAGE = 50;
 
-    // Bypass de seguridad para desarrollo habilitado
-    const fetchProducts = async () => {
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        if ((window as any).showToast) {
+            (window as any).showToast(message, type);
+        } else {
+            console.warn(`Toast Fallback [${type}]: ${message}`);
+        }
+    }, []);
+
+    const fetchProducts = useCallback(async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('products')
-                .select('*')
-                .order('name');
-            if (error) {
-                console.error('Products fetch error:', error);
-                showToast('Error al cargar catálogo', 'error');
-            } else if (data) {
-                setProducts(data);
+            let allProducts: Product[] = [];
+            let from = 0;
+            const limit = 1000;
+            let hasMore = true;
+
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('show_on_web', true)
+                    .order('accounting_id', { ascending: true })
+                    .range(from, from + limit - 1);
+                
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    allProducts = [...allProducts, ...data];
+                    from += limit;
+                    if (data.length < limit) hasMore = false;
+                } else {
+                    hasMore = false;
+                }
             }
+
+            setProducts(allProducts);
         } catch (err) {
             console.error('Unexpected fetch error:', err);
+            showToast('Falla en la carga del catálogo completo', 'error');
         } finally {
             setLoading(false);
         }
-    };
+    }, [showToast]);
 
     const [savingId, setSavingId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'hidden'>('all');
+    const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
     useEffect(() => {
         fetchProducts();
-    }, []);
-
-    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-        if ((window as any).showToast) {
-            (window as any).showToast(message, type);
-        }
-    };
+    }, [fetchProducts]);
 
     const updateProductField = async (id: string, field: keyof Product, value: string | number | boolean | any[] | null) => {
         // No guardar si el valor es el mismo para ahorrar peticiones
@@ -210,17 +241,100 @@ export default function AdminProductsPage() {
         noImage: products.filter(p => !p.image_url).length
     };
 
-    const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const filteredProducts = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        
+        let filtered = products;
 
-        const matchesStatus = statusFilter === 'all' ||
-            (statusFilter === 'active' && p.is_active) ||
-            (statusFilter === 'hidden' && !p.is_active);
+        // Filtro por Tab (Estado de Visibilidad)
+        if (statusFilter === 'active') {
+            filtered = filtered.filter(p => p.is_active);
+        } else if (statusFilter === 'hidden') {
+            filtered = filtered.filter(p => !p.is_active);
+        }
 
-        return matchesSearch && matchesStatus;
-    });
+        // Filtro por Categoría (Botones Rápidos)
+        if (categoryFilter !== 'all') {
+            filtered = filtered.filter(p => p.category === categoryFilter);
+        }
+
+        if (!query) return filtered;
+
+        // Separar términos normales de etiquetas con @
+        const parts = query.split(/\s+/);
+        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
+        const searchTerms = parts.filter(p => !p.startsWith('@'));
+
+        return filtered.filter(p => {
+            // 1. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
+            const matchesText = searchTerms.every(term => 
+                p.name?.toLowerCase().includes(term) ||
+                p.sku?.toLowerCase().includes(term)
+            );
+
+            if (!matchesText && searchTerms.length > 0) return false;
+
+            // 2. Lógica de ETIQUETAS (AND: debe cumplir todos los filtros @)
+            const matchesTags = tags.every(tag => {
+                // Filtro IVA (@19, @19%, @0...)
+                if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
+                    const rate = parseInt(tag.replace('%', ''));
+                    return (p.iva_rate ?? 19) === rate;
+                }
+
+                // Filtro Web/Active (@web, @virtual, @oculto)
+                if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
+                if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
+
+                // Filtro Categoría (@frutas, @despensa...)
+                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                    label.toLowerCase().startsWith(tag)
+                );
+                if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                // Filtro Logística/Compras (@alistamiento, @equipo...)
+                if (p.buying_team?.toLowerCase().includes(tag)) return true;
+                if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+
+                return false;
+            });
+
+            return matchesTags;
+        });
+    }, [products, searchQuery, statusFilter, categoryFilter]);
+
+    const paginatedProducts = useMemo(() => {
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredProducts, currentPage]);
+
+    const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+    
+    // CALCULAR SUGERENCIAS INTELIGENTES POR CATEGORÍA
+    const categorySuggestions = useMemo(() => {
+        const counts: Record<string, Record<string, number>> = {};
+        products.forEach(p => {
+            const cat = p.category || 'Otros';
+            if (!counts[cat]) counts[cat] = {};
+            p.tags?.forEach(tag => {
+                counts[cat][tag] = (counts[cat][tag] || 0) + 1;
+            });
+        });
+        
+        const suggestions: Record<string, string[]> = {};
+        Object.entries(counts).forEach(([cat, tagCounts]) => {
+            suggestions[cat] = Object.entries(tagCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(e => e[0]);
+        });
+        return suggestions;
+    }, [products]);
+
+    // Resetear a página 1 cuando cambia filtro o búsqueda
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, statusFilter, categoryFilter]);
 
 
 
@@ -229,17 +343,31 @@ export default function AdminProductsPage() {
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
             <Navbar />
 
+
+            {loading && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(255,255,255,0.7)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 2000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: '1rem'
+                }}>
+                    <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #4F46E5', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                    <div style={{ fontWeight: '700', color: '#4F46E5' }}>Cargando catálogo...</div>
+                </div>
+            )}
+
             <style>{`
-                @keyframes pulse {
-                    0% { opacity: 0.3; }
-                    50% { opacity: 1; }
-                    100% { opacity: 0.3; }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
                 }
             `}</style>
-            {/* ... existing code ... */}
-
-
-
             <Toast />
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/dashboard" style={{
@@ -260,26 +388,22 @@ export default function AdminProductsPage() {
                         <p style={{ color: '#6B7280', fontSize: '1.2rem' }}>Administra los precios comerciales, fotos y visibilidad pública de tus productos.</p>
                         <div style={{ marginTop: '0.8rem' }}>
                             <Link href="/admin/master/products" style={{ 
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
                                 color: 'white', 
                                 fontWeight: '700', 
                                 textDecoration: 'none', 
                                 fontSize: '0.9rem',
                                 backgroundColor: '#4F46E5',
-                                padding: '0.5rem 1.2rem',
-                                borderRadius: '8px',
+                                padding: '0.6rem 1.5rem',
+                                borderRadius: '12px',
                                 border: 'none',
-                                boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
+                                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
+                                transition: 'all 0.2s'
                             }}>
-                                🏗️ Ir al Maestro Técnico (Editar Datos)
+                                Ir al Maestro Técnico (Editar Datos)
                             </Link>
-                        </div>
-                        <div style={{ marginTop: '0.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            <span style={{ backgroundColor: '#EEF2FF', color: '#4F46E5', padding: '0.2rem 0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '700' }}>
-                                👤 {profile?.company_name || user?.email?.split('@')[0] || 'Usuario'}
-                            </span>
-                            <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '700' }}>
-                                🛡️ Acceso de Desarrollo Habilitado
-                            </span>
                         </div>
                     </div>
                     {savingId && (
@@ -350,38 +474,73 @@ export default function AdminProductsPage() {
                     gap: '1.5rem',
                     marginBottom: '2rem'
                 }}>
-                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                        {[
-                            { id: 'all', label: 'Todos', count: stats.total },
-                            { id: 'active', label: 'Activos', count: stats.active },
-                            { id: 'hidden', label: 'Ocultos', count: stats.hidden }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setStatusFilter(tab.id as any)}
-                                style={{
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    backgroundColor: statusFilter === tab.id ? '#F3F4F6' : 'transparent',
-                                    color: statusFilter === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-                                    fontWeight: statusFilter === tab.id ? '800' : '600',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                }}
-                            >
-                                {tab.label}
-                                <span style={{ fontSize: '0.75rem', backgroundColor: statusFilter === tab.id ? 'var(--primary)' : '#E5E7EB', color: statusFilter === tab.id ? 'white' : 'inherit', padding: '2px 8px', borderRadius: '10px' }}>
-                                    {tab.count}
-                                </span>
-                            </button>
-                        ))}
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '1rem', 
+                        borderBottom: '1px solid var(--border)', 
+                        paddingBottom: '0.8rem', 
+                        flexWrap: 'wrap', 
+                        alignItems: 'center' 
+                    }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {[
+                                { id: 'all', label: 'Todos' },
+                                { id: 'active', label: 'Activos' },
+                                { id: 'hidden', label: 'Ocultos' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setStatusFilter(tab.id as any)}
+                                    style={{
+                                        padding: '0.5rem 1.2rem',
+                                        borderRadius: '12px',
+                                        border: 'none',
+                                        backgroundColor: statusFilter === tab.id ? '#111827' : 'transparent',
+                                        color: statusFilter === tab.id ? 'white' : '#6B7280',
+                                        fontWeight: statusFilter === tab.id ? '800' : '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        fontSize: '0.9rem'
+                                    }}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ width: '1px', height: '24px', backgroundColor: '#E5E7EB', margin: '0 0.5rem' }}></div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {Object.entries(CATEGORY_MAP).map(([id, label]) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setCategoryFilter(categoryFilter === id ? 'all' : id)}
+                                    style={{
+                                        padding: '0.4rem 1rem',
+                                        borderRadius: '20px',
+                                        border: categoryFilter === id ? '2px solid #111827' : '1px solid #E5E7EB',
+                                        backgroundColor: categoryFilter === id ? '#EEF2FF' : 'white',
+                                        color: categoryFilter === id ? '#111827' : '#6B7280',
+                                        fontWeight: categoryFilter === id ? '800' : '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        fontSize: '0.85rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
+                            <div style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
+                                <Search size={22} />
+                            </div>
                             <input
                                 type="text"
                                 placeholder="Buscar por nombre, SKU o categoría..."
@@ -391,12 +550,12 @@ export default function AdminProductsPage() {
                                     width: '100%',
                                     padding: '1.2rem 3.5rem 1.2rem 3.5rem',
                                     borderRadius: '12px',
-                                    border: '1px solid var(--border)',
+                                    border: '1px solid #D1D5DB',
                                     fontSize: '1.1rem',
-                                    boxShadow: 'var(--shadow-sm)'
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                    transition: 'all 0.2s'
                                 }}
                             />
-                            <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem', opacity: 0.4 }}>🔍</span>
                             {searchQuery && (
                                 <button
                                     onClick={() => setSearchQuery('')}
@@ -406,28 +565,57 @@ export default function AdminProductsPage() {
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         border: 'none',
-                                        background: '#eee',
-                                        borderRadius: '50%',
-                                        width: '24px',
-                                        height: '24px',
+                                        background: 'none',
+                                        color: '#9CA3AF',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontWeight: 'bold',
-                                        fontSize: '0.8rem'
+                                        padding: '4px'
                                     }}
                                 >
-                                    ✕
+                                    <X size={20} />
                                 </button>
                             )}
                         </div>
 
-                        <div style={{ backgroundColor: '#F3F4F6', padding: '1rem 1.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: '1rem', color: '#6B7280' }}>
-                            <span style={{ fontSize: '1.5rem' }}>ℹ️</span>
-                            <div style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                                La creación de nuevos productos y códigos SKU se realiza desde el <strong>Módulo Maestro</strong>.
+                        <div style={{ position: 'relative' }}>
+                            <div 
+                                onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
+                                style={{ 
+                                    color: isInfoGuideOpen ? 'white' : '#2563EB', 
+                                    cursor: 'pointer',
+                                    backgroundColor: isInfoGuideOpen ? '#2563EB' : '#EFF6FF',
+                                    padding: '1rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid #BFDBFE',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <Info size={24} />
                             </div>
+                            {isInfoGuideOpen && (
+                                <div style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: '120%',
+                                    width: '300px',
+                                    backgroundColor: 'white',
+                                    borderRadius: '16px',
+                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                                    border: '1px solid #E5E7EB',
+                                    padding: '1.5rem',
+                                    zIndex: 100
+                                }}>
+                                    <h4 style={{ margin: '0 0 1rem 0', color: '#111827', fontSize: '1rem', fontWeight: '800' }}>💡 Tips de Búsqueda</h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontSize: '0.85rem' }}>
+                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@web</code> Solo en tienda</div>
+                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@19%</code> Filtrar por IVA</div>
+                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@fruta</code> Por categoría</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -442,18 +630,19 @@ export default function AdminProductsPage() {
                             <thead>
                                 <tr style={{ borderBottom: '2px solid var(--border)' }}>
                                     <th style={{ padding: '1rem', width: '50px', textAlign: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.length === filteredProducts.length && filteredProducts.length > 0}
-                                            onChange={(e) => {
-                                                if (e.target.checked) setSelectedIds(filteredProducts.map(p => p.id));
-                                                else setSelectedIds([]);
-                                            }}
-                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                        />
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) setSelectedIds(paginatedProducts.map(p => p.id));
+                                                    else setSelectedIds([]);
+                                                }}
+                                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                            />
                                     </th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRODUCTO</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>CATEGORÍA</th>
+                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ETIQUETAS & BÚSQUEDA</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRECIO</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>VARIANTES</th>
                                     <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ESTADO</th>
@@ -461,8 +650,8 @@ export default function AdminProductsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredProducts.map((product) => (
-                                    <tr key={product.id} style={{ borderBottom: '1px solid var(--border)', height: '110px', backgroundColor: selectedIds.includes(product.id) ? '#F9FAFB' : 'transparent' }}>
+                                {paginatedProducts.map((product) => (
+                                    <tr key={product.id} style={{ borderBottom: '1px solid var(--border)', height: '110px', backgroundColor: selectedIds.includes(product.id) ? '#F9FAFB' : 'transparent', transition: 'background-color 0.2s' }}>
                                         <td style={{ padding: '1rem', textAlign: 'center' }}>
                                             <input
                                                 type="checkbox"
@@ -483,36 +672,39 @@ export default function AdminProductsPage() {
                                                 style={{
                                                     width: '80px',
                                                     height: '80px',
-                                                    borderRadius: '8px',
+                                                    borderRadius: '12px',
                                                     overflow: 'hidden',
                                                     backgroundColor: '#eee',
                                                     flexShrink: 0,
                                                     boxShadow: 'var(--shadow-sm)',
                                                     cursor: 'pointer',
                                                     position: 'relative',
-                                                    transition: 'transform 0.2s'
+                                                    transition: 'all 0.2s',
+                                                    border: '1px solid #E5E7EB'
                                                 }}
-                                                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                             >
-                                                {product.image_url && <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                {product.image_url ? (
+                                                    <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                ) : (
+                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+                                                        <ImageIcon size={30} />
+                                                    </div>
+                                                )}
                                                 <div style={{
                                                     position: 'absolute',
                                                     inset: 0,
-                                                    backgroundColor: 'rgba(0,0,0,0.3)',
+                                                    backgroundColor: 'rgba(0,0,0,0.4)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     opacity: 0,
                                                     transition: 'opacity 0.2s',
-                                                    color: 'white',
-                                                    fontSize: '1.2rem'
+                                                    color: 'white'
                                                 }}
-                                                    className="image-hover"
                                                     onMouseOver={(e) => (e.currentTarget as HTMLElement).style.opacity = '1'}
                                                     onMouseOut={(e) => (e.currentTarget as HTMLElement).style.opacity = '0'}
                                                 >
-                                                    📷
+                                                    <ImageIcon size={24} />
                                                 </div>
                                                 <input
                                                     id={`file-${product.id}`}
@@ -526,137 +718,286 @@ export default function AdminProductsPage() {
                                                     }}
                                                 />
                                             </div>
-                                            <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <div style={{ width: '100%', fontWeight: '700', fontSize: '1.3rem', color: '#111827', padding: '4px 0' }}>
+                                            <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#111827' }}>
                                                     {product.name}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span style={{ fontSize: '0.9rem', color: '#1E3A8A', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SKU:</span>
-                                                    <span style={{ fontSize: '1.05rem', color: '#1E40AF', fontWeight: '800' }}>{product.sku}</span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '700' }}>{product.sku}</span>
+                                                    {product.iva_rate !== undefined && (
+                                                        <span style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            padding: '2px 6px', 
+                                                            borderRadius: '6px',
+                                                            backgroundColor: product.iva_rate === 0 ? '#DCFCE7' : product.iva_rate === 5 ? '#DBEAFE' : '#FFEDD5',
+                                                            color: product.iva_rate === 0 ? '#166534' : product.iva_rate === 5 ? '#1E40AF' : '#9A3412',
+                                                            fontWeight: '800'
+                                                        }}>
+                                                            IVA {product.iva_rate}%
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div style={{ width: '100%', fontSize: '0.85rem', color: '#6B7280', padding: '4px 0', minHeight: '40px' }}>
-                                                    {product.description || 'Sin descripción técnica registrada.'}
+                                                <div style={{ fontSize: '0.85rem', color: '#6B7280', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                                    {product.description || 'Sin descripción técnica.'}
                                                 </div>
-                                                {product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0 && (
-                                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                                        {product.options_config.map((opt: any, idx: number) => (
-                                                            <span key={idx} style={{
-                                                                fontSize: '0.75rem',
-                                                                backgroundColor: '#EEF2FF',
-                                                                padding: '1px 6px',
-                                                                borderRadius: '6px',
-                                                                color: '#4F46E5',
-                                                                fontWeight: '700',
-                                                                textTransform: 'lowercase'
-                                                            }}>
-                                                                ({opt.name} {opt.values?.length || 0})
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem' }}>
-                                            <div style={{ 
-                                                padding: '0.6rem 1.2rem', 
-                                                borderRadius: '20px', 
-                                                fontSize: '0.9rem', 
+                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                            <span style={{ 
+                                                fontSize: '0.85rem', 
+                                                fontWeight: '800', 
+                                                padding: '4px 12px', 
                                                 backgroundColor: '#F3F4F6', 
-                                                color: '#374151', 
-                                                fontWeight: '700',
-                                                textAlign: 'center',
-                                                display: 'inline-block',
-                                                minWidth: '120px'
+                                                borderRadius: '20px',
+                                                color: '#374151'
                                             }}>
-                                                {product.category}
+                                                {CATEGORY_MAP[product.category] || product.category}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'center', minWidth: '220px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {/* Tags Input */}
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                    {product.tags?.map((tag, i) => (
+                                                        <span key={i} style={{ 
+                                                            fontSize: '0.7rem', 
+                                                            padding: '2px 8px', 
+                                                            backgroundColor: 'var(--accent)', 
+                                                            color: 'var(--primary-dark)', 
+                                                            borderRadius: '12px',
+                                                            fontWeight: '700',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            {tag}
+                                                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => {
+                                                                const newTags = product.tags?.filter(t => t !== tag) || [];
+                                                                updateProductField(product.id, 'tags', newTags);
+                                                            }} />
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <div style={{ position: 'relative' }}>
+                                                    <input 
+                                                        type="text"
+                                                        placeholder="Añadir tag..."
+                                                        style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%' }}
+                                                        onFocus={(e) => {
+                                                            const box = e.currentTarget.nextElementSibling as HTMLElement;
+                                                            if (box) box.style.display = 'flex';
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            // Delay to allow clicking suggestions
+                                                            setTimeout(() => {
+                                                                const box = e.target.nextElementSibling as HTMLElement;
+                                                                if (box) box.style.display = 'none';
+                                                            }, 200);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ',') {
+                                                                e.preventDefault();
+                                                                const val = e.currentTarget.value.trim().replace(',', '');
+                                                                if (val) {
+                                                                    const newTags = Array.from(new Set([...(product.tags || []), val]));
+                                                                    updateProductField(product.id, 'tags', newTags);
+                                                                    e.currentTarget.value = '';
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                    {/* Sugerencias Flotantes */}
+                                                    <div style={{ 
+                                                        display: 'none', 
+                                                        position: 'absolute', 
+                                                        bottom: '100%', 
+                                                        left: 0, 
+                                                        right: 0, 
+                                                        backgroundColor: 'white', 
+                                                        border: '1px solid #E5E7EB', 
+                                                        borderRadius: '8px', 
+                                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                                                        zIndex: 20,
+                                                        padding: '8px',
+                                                        flexDirection: 'column',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px' }}>Sugerencias</div>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                            {(categorySuggestions[product.category] || []).filter(t => !product.tags?.includes(t)).length > 0 ? (
+                                                                (categorySuggestions[product.category] || [])
+                                                                    .filter(t => !product.tags?.includes(t))
+                                                                    .map(tag => (
+                                                                        <button 
+                                                                            key={tag}
+                                                                            onClick={() => {
+                                                                                const newTags = Array.from(new Set([...(product.tags || []), tag]));
+                                                                                updateProductField(product.id, 'tags', newTags);
+                                                                            }}
+                                                                            style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #EEF2FF', backgroundColor: '#F5F7FF', cursor: 'pointer', fontWeight: '600' }}
+                                                                        >
+                                                                            + {tag}
+                                                                        </button>
+                                                                    ))
+                                                            ) : (
+                                                                ['Fresco', 'Oferta', 'Premium', 'Directo'].filter(t => !product.tags?.includes(t)).map(tag => (
+                                                                    <button 
+                                                                        key={tag}
+                                                                        onClick={() => {
+                                                                            const newTags = Array.from(new Set([...(product.tags || []), tag]));
+                                                                            updateProductField(product.id, 'tags', newTags);
+                                                                        }}
+                                                                        style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #F3F4F6', backgroundColor: '#F9FAFB', cursor: 'pointer', fontWeight: '600' }}
+                                                                    >
+                                                                        + {tag}
+                                                                    </button>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Keywords Input */}
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Keywords (ej: ensalada, verde...)"
+                                                    defaultValue={product.keywords || ''}
+                                                    style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%', fontStyle: 'italic' }}
+                                                    onBlur={(e) => {
+                                                        if (e.target.value !== (product.keywords || '')) {
+                                                            updateProductField(product.id, 'keywords', e.target.value);
+                                                        }
+                                                    }}
+                                                />
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem' }}>
-                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                            <div style={{ fontWeight: '800', fontSize: '1.3rem', color: '#111827' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                            <div style={{ fontWeight: '900', fontSize: '1.25rem', color: '#111827' }}>
                                                 ${product.base_price?.toLocaleString()}
                                             </div>
-                                            </div>
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
                                             <button
                                                 onClick={() => setSelectedProduct(product)}
                                                 style={{
-                                                    padding: '0.8rem 1.2rem',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    border: '1px solid var(--primary)',
-                                                    backgroundColor: 'transparent',
-                                                    color: 'var(--primary)',
+                                                    padding: '0.6rem 1rem',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid #E5E7EB',
+                                                    backgroundColor: 'white',
+                                                    color: '#111827',
                                                     cursor: 'pointer',
-                                                    fontSize: '1.05rem',
+                                                    fontSize: '0.9rem',
                                                     fontWeight: '700',
-                                                    whiteSpace: 'nowrap'
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem'
                                                 }}
                                             >
-                                                🧶 Variantes
+                                                <Filter size={16} /> 
+                                                <span>Ver Variantes</span>
+                                                {product.variants && (product.variants as any[]).length > 0 && (
+                                                    <span style={{
+                                                        marginLeft: '4px',
+                                                        backgroundColor: '#4F46E5',
+                                                        color: 'white',
+                                                        fontSize: '0.75rem',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '12px',
+                                                        fontWeight: '800'
+                                                    }}>
+                                                        {(product.variants as any[]).length}
+                                                    </span>
+                                                )}
                                             </button>
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
                                             <span style={{
-                                                color: product.is_active ? '#10B981' : '#EF4444',
-                                                fontWeight: '700',
-                                                display: 'flex',
+                                                color: product.is_active ? '#059669' : '#DC2626',
+                                                fontWeight: '800',
+                                                fontSize: '0.9rem',
+                                                display: 'inline-flex',
                                                 alignItems: 'center',
-                                                gap: '0.6rem',
-                                                fontSize: '1.1rem',
-                                                whiteSpace: 'nowrap'
+                                                gap: '6px'
                                             }}>
-                                                <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: product.is_active ? '#10B981' : '#EF4444' }}></div>
-                                                {product.is_active ? 'Activo' : 'OFF'}
+                                                {product.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
+                                                {product.is_active ? 'Visible' : 'Oculto'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem', textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                                                {product.is_active ? (
-                                                    <button
-                                                        onClick={() => toggleActive(product.id, product.is_active)}
-                                                        style={{
-                                                            padding: '0.8rem 1.5rem',
-                                                            borderRadius: 'var(--radius-md)',
-                                                            border: '1px solid var(--border)',
-                                                            backgroundColor: 'white',
-                                                            color: 'inherit',
-                                                            cursor: 'pointer',
-                                                            fontSize: '1.05rem',
-                                                            fontWeight: '700',
-                                                            transition: 'all 0.2s',
-                                                            minWidth: '120px'
-                                                        }}
-                                                    >
-                                                        🚫 Ocultar
-                                                    </button>
-                                                ) : (
-                                                    <div style={{
-                                                        padding: '0.8rem 1.5rem',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        backgroundColor: '#FEE2E2',
-                                                        color: '#991B1B',
-                                                        fontSize: '0.9rem',
-                                                        fontWeight: '800',
-                                                        textAlign: 'center',
-                                                        border: '1px dashed #EF4444',
-                                                        opacity: 0.8,
-                                                        minWidth: '120px'
-                                                    }}>
-                                                        🔒 Bloqueado
-                                                    </div>
-                                                )}
-                                            </div>
+                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                            <button
+                                                onClick={() => toggleActive(product.id, product.is_active)}
+                                                style={{
+                                                    padding: '0.6rem 1.2rem',
+                                                    borderRadius: '10px',
+                                                    border: 'none',
+                                                    backgroundColor: product.is_active ? '#F3F4F6' : '#DCFCE7',
+                                                    color: product.is_active ? '#4B5563' : '#166534',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '800',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {product.is_active ? 'Ocultar' : 'Activar'}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        {products.length === 0 && !loading && (
-                            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                No hay productos registrados en el catálogo.
+                        {/* PAGINACIÓN */}
+                        <div style={{ 
+                            padding: '1.5rem', 
+                            borderTop: '1px solid #E5E7EB', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            backgroundColor: '#F9FAFB'
+                        }}>
+                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '600' }}>
+                                Mostrando <span style={{ color: '#111827' }}>{paginatedProducts.length}</span> de <span style={{ color: '#111827' }}>{filteredProducts.length}</span> resultados
+                            </span>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(prev => prev - 1)}
+                                    style={{
+                                        padding: '0.6rem 1rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid #E5E7EB',
+                                        backgroundColor: currentPage === 1 ? '#F3F4F6' : 'white',
+                                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: '700',
+                                        color: currentPage === 1 ? '#9CA3AF' : '#374151'
+                                    }}
+                                >
+                                    <ChevronLeft size={18} /> Anterior
+                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', color: '#6B7280', fontWeight: '700', fontSize: '0.9rem', padding: '0 1rem' }}>
+                                    Página {currentPage} de {totalPages || 1}
+                                </div>
+                                <button
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => setCurrentPage(prev => prev + 1)}
+                                    style={{
+                                        padding: '0.6rem 1rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid #E5E7EB',
+                                        backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F3F4F6' : 'white',
+                                        cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: '700',
+                                        color: (currentPage === totalPages || totalPages === 0) ? '#9CA3AF' : '#374151'
+                                    }}
+                                >
+                                    Siguiente <ChevronRight size={18} />
+                                </button>
                             </div>
-                        )}
+                        </div>
                     </div>
                 </div>
 

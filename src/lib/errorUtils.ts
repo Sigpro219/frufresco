@@ -1,3 +1,40 @@
+/**
+ * Centrally diagnoses Supabase Storage errors, specifically detection of 
+ * HTML response (Unexpected token <) which indicates a configuration or proxy issue.
+ */
+export function diagnoseStorageError(error: any, bucketName: string) {
+    if (!error) return null;
+    
+    const message = error.message || String(error);
+    console.error(`🚨 Storage Error [${bucketName}]:`, error);
+
+    if (message.includes('Unexpected token') || message.includes('<html')) {
+        const diagnosis = `💡 DIAGNOSIS: The server returned HTML instead of JSON. 
+        Possible causes:
+        1. The bucket "${bucketName}" does not exist in Supabase.
+        2. The bucket "${bucketName}" is private but being accessed without a session.
+        3. A proxy, firewall, or ad-blocker is intercepting the request.
+        4. Supabase Project URL is incorrect or paused.`;
+        
+        console.error(diagnosis);
+        return `Error de servidor (HTML). Verifica que el bucket "${bucketName}" exista y sea público.`;
+    }
+
+    if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Load failed')) {
+        const diagnosis = `🌐 NETWORK DIAGNOSIS: The browser failed to reach the Supabase Storage API.
+        Possible causes:
+        1. An ad-blocker or tracker blocker is preventing the request.
+        2. Your internet connection is unstable or DNS is failing.
+        3. Supabase CORS configuration is blocking this request origin.
+        4. A VPN or Firewall is blocking the connection.`;
+        
+        console.error(diagnosis);
+        return `Error de conexión (Network). Verifica tu internet o desactiva bloqueadores de anuncios.`;
+    }
+    
+    return message;
+}
+
 export function isAbortError(err: unknown): boolean {
     if (!err) return false;
     
@@ -27,5 +64,21 @@ export function isAbortError(err: unknown): boolean {
 
 export function logError(context: string, err: unknown) {
     if (isAbortError(err)) return;
-    console.error(`❌ [${context}]`, err);
+    
+    // Better object representation for the console if it looks like an empty object {}
+    if (err && typeof err === 'object' && !('message' in err) && !('stack' in err)) {
+        try {
+            const str = JSON.stringify(err);
+            if (str === '{}') {
+                // If it's literally {}, maybe it's a non-enumerable Error or similar
+                console.error(`❌ [${context}]`, err);
+            } else {
+                console.error(`❌ [${context}]`, str);
+            }
+        } catch (e) {
+            console.error(`❌ [${context}]`, err);
+        }
+    } else {
+        console.error(`❌ [${context}]`, err);
+    }
 }

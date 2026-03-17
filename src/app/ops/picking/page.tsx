@@ -77,19 +77,16 @@ export default function PickingExecutionPage() {
                 .from('app_settings')
                 .select('value')
                 .eq('key', 'enable_cutoff_rules')
-                .single()
-                .abortSignal(signal as any);
+                .single();
             
             const cutoffEnabled = settings?.value !== 'false';
 
             if (cutoffEnabled) {
-                // Apply strict daily filter if enabled
-                // For example, picking only for "today's" orders or similar logic if applicable.
-                // Currently fetching ALL non-cancelled. If we need to filter by date/cutoff, add here.
-                // If picking logic relies on specific statuses that depend on procurement consolidation,
-                // then the upstream switch in Compras might be enough.
-                // However, adding a log or explicit filter if needed:
-                // query = query.gte('created_at', todayStart)...
+                // Determine operational date (Bogota)
+                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+                const targetDate = now.toISOString().split('T')[0];
+                query = query.eq('delivery_date', targetDate);
+                console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
             } else {
                  console.log("🛑 Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
             }

@@ -20,6 +20,20 @@ export default function QuoteDetailPage() {
     const [clientResults, setClientResults] = useState<any[]>([]);
     const [selectedClient, setSelectedClient] = useState<any>(null);
 
+    // Conversion Modal
+    const [showConversionModal, setShowConversionModal] = useState(false);
+    const [conversionType, setConversionType] = useState<'order' | 'agreement'>('order');
+    const [deliveryDate, setDeliveryDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    });
+    const [validUntilDate, setValidUntilDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().split('T')[0];
+    });
+
     useEffect(() => {
         if (params.id) fetchQuoteDetails();
     }, [params.id]);
@@ -39,10 +53,10 @@ export default function QuoteDetailPage() {
         }
         setQuote(qData);
 
-        // Load Items
+        // Load Items (Joins product to get the name)
         const { data: iData } = await supabase
             .from('quote_items')
-            .select('*')
+            .select('*, products(name)')
             .eq('quote_id', params.id);
 
         if (iData) setItems(iData);
@@ -50,12 +64,26 @@ export default function QuoteDetailPage() {
     };
 
     // --- CONVERSION LOGIC ---
-    const handleConvertClick = () => {
+    const handleConvertClick = async () => {
         if (quote.status === 'converted') return alert('Esta cotización ya fue convertida.');
+        if (quote.status === 'agreement') return alert('Esta cotización ya es un Acuerdo Comercial activo.');
 
-        // If we already have a profile_id linked, go straight to conversion
-        if (quote.profile_id) {
-            confirmConversion(quote.profile_id);
+        // If we already have a client_id linked, fetch full profile to have role/address
+        if (quote.client_id) {
+            setConverting(true);
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id, company_name, contact_name, phone, address, role')
+                .eq('id', quote.client_id)
+                .single();
+            
+            setConverting(false);
+            if (profile) {
+                setSelectedClient(profile);
+                setShowConversionModal(true);
+            } else {
+                setShowClientModal(true);
+            }
         } else {
             // Need to link to a real user
             setShowClientModal(true);
@@ -69,79 +97,82 @@ export default function QuoteDetailPage() {
         }
         const { data } = await supabase
             .from('profiles')
-            .select('id, business_name, email')
-            .ilike('business_name', `%${term}%`)
+            .select('id, company_name, contact_name, phone, address, role')
+            .ilike('company_name', `%${term}%`)
             .limit(5);
         if (data) setClientResults(data);
     };
 
-    const confirmConversion = async (profileId: string) => {
-        if (!confirm('¿Crear un PEDIDO REAL basado en esta cotización?')) return;
+    const submitConversion = async () => {
+        if (!selectedClient) return;
         setConverting(true);
 
         try {
-            // 1. Calculate Delivery Date (Tomorrow by default or same validity logic?)
-            // Usually Orders are for "Tomorrow" if before cut-off. Let's assume standard logic or just "Tomorrow".
-            const deliveryDate = new Date();
-            deliveryDate.setDate(deliveryDate.getDate() + 1); // Default delivery tomorrow
+            if (conversionType === 'order') {
+                // 1. Create Order
+                const { data: order, error: oErr } = await supabase
+                    .from('orders')
+                    .insert({
+                        profile_id: selectedClient.id,
+                        customer_name: selectedClient.company_name || selectedClient.contact_name,
+                        customer_phone: selectedClient.phone || '',
+                        status: 'pending_approval',
+                        delivery_date: deliveryDate,
+                        subtotal: quote.subtotal_amount || 0,
+                        total: quote.total_amount || 0,
+                        type: selectedClient.role === 'b2c_client' ? 'b2c_wompi' : 'b2b_credit', 
+                        origin_source: 'web',
+                        shipping_address: selectedClient.address || 'Dirección no especificada'
+                    })
+                    .select()
+                    .single();
 
-            // 2. Create Order
-            const { data: order, error: oErr } = await supabase
-                .from('orders')
-                .insert({
-                    profile_id: profileId,
-                    status: 'pending_approval',
-                    delivery_date: deliveryDate.toISOString().split('T')[0],
-                    total_amount: quote.total_amount,
-                    order_type: 'B2B', // Assuming standard B2B
-                    shipping_address: 'Dirección del Cliente' // Placeholder needed? Or fetch from profile? Orders schema might imply it.
-                })
-                .select()
-                .single();
+                if (oErr) throw oErr;
 
-            if (oErr) throw oErr;
+                // 2. Create Order Items
+                const { error: iErr } = await supabase.from('order_items').insert(
+                    items.map(qi => ({
+                        order_id: order.id,
+                        product_id: qi.product_id,
+                        quantity: qi.quantity_estimated || 1,
+                        unit_price: (qi.final_price || 0) * (1 + ((qi.iva_rate || 0) / 100)),
+                        variant_label: '' 
+                    }))
+                );
 
-            // 3. Create Order Items
-            const orderItems = items.map(qi => ({
-                order_id: order.id,
-                product_id: qi.product_id, // Assuming UUID match
-                quantity: qi.quantity,
-                unit_price: qi.unit_price,
-                total_price: qi.total_price,
-                product_name: qi.product_name || 'Desconocido' // Fallback
-            }));
+                if (iErr) throw iErr;
 
-            // We need to check orders_items schema. 
-            // Usually products info is linked via product_id.
-            // Simplified insert:
-            const { error: iErr } = await supabase.from('order_items').insert(
-                items.map(qi => ({
-                    order_id: order.id,
-                    product_id: qi.product_id,
-                    quantity: qi.quantity,
-                    unit_price: qi.unit_price,
-                    total_price: qi.total_price,
-                    variant_label: '' // No variants in quotes? If quotes supported variants we'd need them.
-                }))
-            );
+                // 3. Update Quote Status
+                await supabase
+                    .from('quotes')
+                    .update({ status: 'converted', client_id: selectedClient.id, order_id: order.id }) 
+                    .eq('id', quote.id);
 
-            if (iErr) throw iErr;
+                alert('✅ ¡Pedido Creado Exitosamente!');
+                router.push(`/admin/orders/${order.id}`); 
 
-            // 4. Update Quote Status
-            await supabase
-                .from('quotes')
-                .update({ status: 'converted', profile_id: profileId }) // Link it if it wasn't
-                .eq('id', quote.id);
-
-            alert('✅ ¡Pedido Creado Exitosamente!');
-            router.push(`/admin/orders/${order.id}`); // Go to the new order
+            } else {
+                // Commercial Agreement Flow
+                await supabase
+                    .from('quotes')
+                    .update({ 
+                        status: 'agreement', 
+                        client_id: selectedClient.id, 
+                        valid_until: new Date(validUntilDate).toISOString(),
+                        notes: (quote.notes || '') + '\n[CONVERTIDO A ACUERDO COMERCIAL]'
+                    })
+                    .eq('id', quote.id);
+                
+                alert('✅ ¡Acuerdo Comercial Registrado!');
+                setShowConversionModal(false);
+                fetchQuoteDetails();
+            }
 
         } catch (err: any) {
             console.error(err);
-            alert('Error al convertir: ' + err.message);
+            alert('Error al procesar: ' + err.message);
         } finally {
             setConverting(false);
-            setShowClientModal(false);
         }
     };
 
@@ -171,8 +202,16 @@ export default function QuoteDetailPage() {
                         <div style={{ marginBottom: '1rem' }}>Total Ofertado</div>
 
                         {quote.status === 'converted' ? (
-                            <button disabled style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                ✓ CONVERTIDA A PEDIDO
+                            <Link href={quote.order_id ? `/admin/orders/${quote.order_id}` : '/admin/orders'} style={{ textDecoration: 'none' }}>
+                                <button style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #10B981', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    ✓ CONVERTIDA A PEDIDO
+                                    <span style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>Ver documento →</span>
+                                </button>
+                            </Link>
+                        ) : quote.status === 'agreement' ? (
+                            <button disabled style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #3B82F6', padding: '0.8rem 1.5rem', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                🤝 ACUERDO COMERCIAL
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>(Vigente)</span>
                             </button>
                         ) : (
                             <button
@@ -195,6 +234,7 @@ export default function QuoteDetailPage() {
                                 <th style={{ padding: '1rem' }}>Cant</th>
                                 <th style={{ padding: '1rem' }}>Costo Base</th>
                                 <th style={{ padding: '1rem' }}>Margen</th>
+                                <th style={{ padding: '1rem', textAlign: 'center' }}>IVA</th>
                                 <th style={{ padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
                                 <th style={{ padding: '1rem', textAlign: 'right' }}>Total</th>
                             </tr>
@@ -202,15 +242,39 @@ export default function QuoteDetailPage() {
                         <tbody>
                             {items.map(item => (
                                 <tr key={item.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.product_name}</td>
-                                    <td style={{ padding: '1rem' }}>{item.quantity} {item.unit}</td>
-                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${item.cost_basis?.toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{item.margin_percent}%</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${item.unit_price?.toLocaleString()}</td>
-                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${item.total_price?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{item.products?.name || 'Producto'}</td>
+                                    <td style={{ padding: '1rem' }}>{item.quantity_estimated} {item.unit || ''}</td>
+                                    <td style={{ padding: '1rem', color: '#6B7280' }}>${item.base_cost?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', color: '#2563EB', fontWeight: 'bold' }}>{item.margin_applied}%</td>
+                                    <td style={{ padding: '1rem', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>{item.iva_rate || 0}%</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${item.final_price?.toLocaleString()}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>${((item.quantity_estimated || 0) * (item.final_price || 0) * (1 + ((item.iva_rate || 0)/100)))?.toLocaleString()}</td>
                                 </tr>
                             ))}
                         </tbody>
+                        <tfoot>
+                            <tr style={{ borderTop: '2px solid #E5E7EB' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>Subtotal antes de impuestos</td>
+                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>
+                                    ${(quote?.subtotal_amount || items.reduce((sum, i) => sum + ((i.quantity_estimated || 0) * (i.final_price || 0)), 0)).toLocaleString()}
+                                </td>
+                            </tr>
+                            <tr style={{ color: '#4B5563' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>Impuestos</td>
+                                <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
+                                    ${(items.reduce((sum, i) => sum + ((i.quantity_estimated || 0) * (i.final_price || 0)) * ((i.iva_rate || 0) / 100), 0)).toLocaleString()}
+                                </td>
+                            </tr>
+                            <tr style={{ backgroundColor: '#F9FAFB' }}>
+                                <td colSpan={5}></td>
+                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900' }}>Total</td>
+                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.5rem', color: '#059669' }}>
+                                    ${(quote?.total_amount || 0).toLocaleString()}
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -240,8 +304,8 @@ export default function QuoteDetailPage() {
                                             onClick={() => setSelectedClient(c)}
                                             style={{ padding: '0.8rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', backgroundColor: selectedClient?.id === c.id ? '#EFF6FF' : 'white' }}
                                         >
-                                            <div style={{ fontWeight: 'bold' }}>{c.business_name}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{c.email}</div>
+                                            <div style={{ fontWeight: 'bold' }}>{c.company_name || c.contact_name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{c.address} • {c.phone}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -251,11 +315,79 @@ export default function QuoteDetailPage() {
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                             <button onClick={() => setShowClientModal(false)} style={{ padding: '0.8rem', background: 'none', border: '1px solid #D1D5DB', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
                             <button
-                                onClick={() => selectedClient && confirmConversion(selectedClient.id)}
+                                onClick={() => {
+                                    if(selectedClient) {
+                                        setShowClientModal(false);
+                                        setShowConversionModal(true);
+                                    }
+                                }}
                                 disabled={!selectedClient || converting}
                                 style={{ padding: '0.8rem 1.5rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: !selectedClient ? 0.5 : 1 }}
                             >
-                                Confirmar y Crear Pedido
+                                Continuar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CONVERSION TYPE */}
+            {showConversionModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', width: '500px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h2 style={{ marginTop: 0 }}>Opciones de Conversión</h2>
+                        <p style={{ color: '#4B5563', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                            Cliente destino: <strong>{selectedClient?.company_name || selectedClient?.contact_name || quote.client_name || 'Desconocido'}</strong>
+                        </p>
+
+                        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '1rem', border: `2px solid ${conversionType === 'order' ? '#0891B2' : '#E5E7EB'}`, borderRadius: '8px', cursor: 'pointer', backgroundColor: conversionType === 'order' ? '#ECFEFF' : 'white' }}>
+                                <input type="radio" value="order" checked={conversionType === 'order'} onChange={() => setConversionType('order')} style={{ width: '20px', height: '20px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '900', color: '#111827' }}>Pedido Único (Entrega Inmediata)</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>Crea una orden de despacho estándar basada en esta cotización.</div>
+                                </div>
+                            </label>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '1rem', border: `2px solid ${conversionType === 'agreement' ? '#0891B2' : '#E5E7EB'}`, borderRadius: '8px', cursor: 'pointer', backgroundColor: conversionType === 'agreement' ? '#ECFEFF' : 'white' }}>
+                                <input type="radio" value="agreement" checked={conversionType === 'agreement'} onChange={() => setConversionType('agreement')} style={{ width: '20px', height: '20px' }} />
+                                <div>
+                                    <div style={{ fontWeight: '900', color: '#111827' }}>Acuerdo Comercial (Bloqueo B2B)</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>Congela los precios temporalmente sin generar un pedido aún.</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        {conversionType === 'order' ? (
+                            <div style={{ marginBottom: '1.5rem', backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Fecha de Entrega Deseada:</label>
+                                <input 
+                                    type="date" 
+                                    value={deliveryDate} 
+                                    onChange={e => setDeliveryDate(e.target.value)}
+                                    style={{ width: '100%', padding: '0.8rem', border: '1px solid #D1D5DB', borderRadius: '6px', fontWeight: 'bold' }}
+                                />
+                            </div>
+                        ) : (
+                            <div style={{ marginBottom: '1.5rem', backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: '#92400E' }}>Validez del Acuerdo (Vencimiento):</label>
+                                <input 
+                                    type="date" 
+                                    value={validUntilDate} 
+                                    onChange={e => setValidUntilDate(e.target.value)}
+                                    style={{ width: '100%', padding: '0.8rem', border: '1px solid #FCD34D', borderRadius: '6px', fontWeight: 'bold' }}
+                                />
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                            <button onClick={() => setShowConversionModal(false)} style={{ padding: '0.8rem', background: 'none', border: '1px solid #D1D5DB', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
+                            <button
+                                onClick={submitConversion}
+                                disabled={converting}
+                                style={{ padding: '0.8rem 1.5rem', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                                {converting ? 'Procesando...' : (conversionType === 'order' ? '🚀 Crear Pedido' : '🤝 Activar Acuerdo')}
                             </button>
                         </div>
                     </div>

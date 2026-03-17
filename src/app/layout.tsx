@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <style dangerouslySetInnerHTML={{ __html: `
           #nextjs-portal, 
@@ -68,11 +68,11 @@ export default function RootLayout({
               window.location.href = '/login?error=reset';
               return;
             }
-            if (isAbort(e.error) || isAbort(e.message)) e.stopImmediatePropagation();
           }, true);
         `}} />
+        <script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} async defer></script>
       </head>
-      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }}>
+      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
         <ClientLayout>
           {children}
         </ClientLayout>

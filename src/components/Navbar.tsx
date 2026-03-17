@@ -1,20 +1,38 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { config } from '@/lib/config';
 import { useCart } from '../lib/cartContext';
 import { useAuth } from '../lib/authContext';
 
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
 import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
+import { config } from '@/lib/config';
+import { SYNC_METADATA } from '@/lib/sync-status';
 
 export default function Navbar() {
     const { totalItems } = useCart();
     const { user, profile, signOut, loading } = useAuth();
+    const pathname = usePathname();
+    // Cart only visible on shopping-context pages (not admin or ops)
+    const isShoppingContext = !pathname?.startsWith('/admin') && !pathname?.startsWith('/ops');
     const [b2bEnabled, setB2bEnabled] = useState(false);
+    const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
+    const [appName, setAppName] = useState(config.brand.name);
+    const [lastSyncDate, setLastSyncDate] = useState(SYNC_METADATA.lastSync);
+    const [themeConfig, setThemeConfig] = useState<{primary: string, secondary: string} | null>(null);
     const [operationsOpen, setOperationsOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [settingsLoaded, setSettingsLoaded] = useState(false);
+    const [roles, setRoles] = useState<Role[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    interface Role {
+        value: string;
+        label: string;
+        permissions?: string[];
+    }
 
     useEffect(() => {
         let isMounted = true;
@@ -22,19 +40,43 @@ export default function Navbar() {
         // Chequear configuración al montar
         const checkSettings = async () => {
             try {
-                const { data, error } = await supabase
+                const { data: settings, error } = await supabase
                     .from('app_settings')
-                    .select('value')
-                    .eq('key', 'enable_b2b_lead_capture')
-                    .single();
+                    .select('key, value')
+                    .in('key', ['enable_b2b_lead_capture', 'app_logo_url', 'app_name', 'system_roles', 'primary_color', 'secondary_color', 'last_core_sync']);
                     
                 if (!isMounted) return;
                 
                 if (error) {
                     throw error;
                 }
-                if (data) {
-                    setB2bEnabled(data.value === 'true');
+                if (settings) {
+                    const b2bObj = settings.find((s: {key: string, value: string}) => s.key === 'enable_b2b_lead_capture');
+                    if (b2bObj) setB2bEnabled(b2bObj.value === 'true');
+
+                    const logoObj = settings.find((s: {key: string, value: string}) => s.key === 'app_logo_url');
+                    if (logoObj?.value) setDynamicLogo(logoObj.value);
+
+                    const nameObj = settings.find((s: {key: string, value: string}) => s.key === 'app_name');
+                    if (nameObj?.value) setAppName(nameObj.value);
+
+                    const rolesObj = settings.find((s: {key: string, value: string}) => s.key === 'system_roles');
+                    if (rolesObj?.value) {
+                        try { setRoles(JSON.parse(rolesObj.value)); } catch(e) { console.error(e); }
+                    }
+
+                    const primaryObj = settings.find((s: {key: string, value: string}) => s.key === 'primary_color');
+                    const secondaryObj = settings.find((s: {key: string, value: string}) => s.key === 'secondary_color');
+                    const syncObj = settings.find((s: {key: string, value: string}) => s.key === 'last_core_sync');
+                    
+                    if (syncObj?.value) setLastSyncDate(syncObj.value);
+                    
+                    if (primaryObj?.value || secondaryObj?.value) {
+                        setThemeConfig({
+                            primary: primaryObj?.value || '#22c55e', // default green
+                            secondary: secondaryObj?.value || '#16a34a' // default dark green
+                        });
+                    }
                 }
             } catch (err: unknown) {
                 if (!isMounted) return;
@@ -42,12 +84,23 @@ export default function Navbar() {
             }
         };
         
-        checkSettings();
+        checkSettings().finally(() => {
+            if (isMounted) {
+                setSettingsLoaded(true);
+                setMounted(true);
+            }
+        });
 
         return () => {
             isMounted = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (appName && typeof document !== 'undefined') {
+            document.title = `${appName} | Proveedor de Alimentos`;
+        }
+    }, [appName]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -66,16 +119,45 @@ export default function Navbar() {
         };
     }, [operationsOpen]);
 
+    const hasPermission = (moduleKey: string) => {
+        if (!roles.length || !profile?.role) return profile?.role === 'admin';
+        const userRole = roles.find(r => r.value === profile.role);
+        if (!userRole) return profile?.role === 'admin';
+        return userRole.permissions?.includes(moduleKey) || profile?.role === 'admin';
+    };
+
+    const shouldShowOperations = () => {
+        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center'];
+        return modules.some(m => hasPermission(m));
+    };
+
+    const dropdownLinkStyle = (color: string) => ({
+        display: 'block', 
+        padding: '10px 16px', 
+        color: color, 
+        fontWeight: '700',
+        textDecoration: 'none',
+        transition: 'background-color 0.2s',
+        fontSize: '0.9rem'
+    });
+
     return (
-        <header style={{
-            backgroundColor: 'rgba(251, 250, 245, 0.8)',
-            borderBottom: '1px solid rgba(0,0,0,0.05)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            backdropFilter: 'blur(20px)',
-            transition: 'all 0.3s ease'
-        }}>
+        <header 
+            style={{
+                backgroundColor: 'rgba(251, 250, 245, 0.8)',
+                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                position: 'sticky',
+                top: 0,
+                zIndex: 100,
+                backdropFilter: 'blur(20px)',
+                transition: 'all 0.3s ease',
+                ...(themeConfig ? {
+                    '--primary': themeConfig.primary,
+                    '--secondary': themeConfig.secondary,
+                    '--accent': `${themeConfig.primary}1A`
+                } as any : {})
+            }}
+        >
             <div className="container" style={{
                 height: '85px',
                 display: 'flex',
@@ -87,7 +169,78 @@ export default function Navbar() {
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                    <img src="/logo.png" alt={config.brand.logoAlt} style={{ height: '70px', width: 'auto', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))' }} />
+                    <div style={{ 
+                        height: '80px', 
+                        width: 'auto', 
+                        minWidth: '120px', 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        position: 'relative'
+                    }}>
+                        <img 
+                            src={dynamicLogo || "/logo.png"} 
+                            alt={appName} 
+                            style={{ 
+                                height: '80px', 
+                                width: 'auto', 
+                                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.05))',
+                                opacity: settingsLoaded ? 1 : 0,
+                                transition: 'opacity 0.2s ease-in-out'
+                            }} 
+                            onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                            }}
+                        />
+                        {!settingsLoaded && (
+                            <div style={{
+                                position: 'absolute',
+                                left: 0,
+                                height: '20px',
+                                width: '100px',
+                                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                backgroundSize: '200% 100%',
+                                animation: 'skeleton-loading 1.5s infinite',
+                                borderRadius: '4px'
+                            }} />
+                        )}
+                    </div>
+                    {/* Sync Indicator */}
+                    <div style={{ 
+                        marginLeft: '1rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-full)',
+                        backgroundColor: 'rgba(5, 150, 105, 0.08)',
+                        fontSize: '0.7rem',
+                        color: '#065f46',
+                        fontWeight: '800',
+                        border: '1px solid rgba(5, 150, 105, 0.2)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    }} title={mounted ? `Última sincronización: ${new Date(lastSyncDate).toLocaleString()}` : 'Cargando...'}>
+                        <div style={{ 
+                            width: '8px', 
+                            height: '8px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#10B981',
+                            position: 'relative',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <div style={{
+                                position: 'absolute',
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: '50%',
+                                backgroundColor: '#10B981',
+                                opacity: 0.6,
+                                animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
+                            }} />
+                        </div>
+                        <span>SYNC: {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
+                    </div>
                 </Link>
 
                 {/* NAV LINKS */}
@@ -129,222 +282,137 @@ export default function Navbar() {
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
-                    {user && (profile?.role === 'admin' || profile?.role === 'employee') && (
+                    {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2.5} /> Inicio
                             </Link>
-                            <Link href="/admin/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Settings size={18} strokeWidth={2.5} /> Admin
-                            </Link>
-                            <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Building2 size={18} strokeWidth={2.5} /> Canal B2B
-                            </Link>
+                            {hasPermission('commercial') && (
+                                <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Building2 size={18} strokeWidth={2.5} /> Canal B2B
+                                </Link>
+                            )}
                             
                             {/* Dropdown Operaciones */}
-                            <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
-                                <span 
-                                    onClick={() => setOperationsOpen(!operationsOpen)}
-                                    style={{ 
-                                        fontWeight: '800', 
-                                        color: '#334155', 
-                                        cursor: 'pointer', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '6px',
-                                        padding: '8px 12px',
-                                        borderRadius: 'var(--radius-md)',
-                                        backgroundColor: operationsOpen ? '#F1F5F9' : 'transparent',
-                                        transition: 'background-color 0.2s',
-                                        fontSize: '1.05rem'
-                                    }}
-                                >
-                                    <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
-                                </span>
-                                {operationsOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        marginTop: '4px',
-                                        backgroundColor: 'white',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                        minWidth: '200px',
-                                        zIndex: 1000,
-                                        padding: '8px 0'
-                                    }}>
-                                        <Link href="/admin/orders/loading" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#0891B2', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            📋 Pedidos
-                                        </Link>
-                                        <Link href="/admin/transport" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#EA580C', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚛 Transporte
-                                        </Link>
-                                        <Link href="/admin/commercial/billing" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#6366F1', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            💰 Facturación
-                                        </Link>
-                                        <Link href="/admin/commercial"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#059669', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            💼 Comercial
-                                        </Link>
-                                        <Link href="/admin/hr"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#8B5CF6', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            👥 Talento Humano
-                                        </Link>
-                                        <Link href="/admin/commercial/inventory"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#0369A1', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            📦 Control de Inventarios
-                                        </Link>
-                                        <Link href="/ops/picking/dashboard" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#D97706', 
-                                                fontWeight: '600',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚚 Despachos
-                                        </Link>
-                                        <Link href="/admin/strategy" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#7C3AED', 
-                                                fontWeight: '900',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s',
-                                                borderTop: '1px solid #F3F4F6'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🧠 Inteligencia & Estrategia
-                                        </Link>
+                            {shouldShowOperations() && (
+                                <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+                                    <span 
+                                        onClick={() => setOperationsOpen(!operationsOpen)}
+                                        style={{ 
+                                            fontWeight: '800', 
+                                            color: '#334155', 
+                                            cursor: 'pointer', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '6px',
+                                            padding: '8px 12px',
+                                            borderRadius: 'var(--radius-md)',
+                                            backgroundColor: operationsOpen ? '#F1F5F9' : 'transparent',
+                                            transition: 'background-color 0.2s',
+                                            fontSize: '1.05rem'
+                                        }}
+                                    >
+                                        <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+                                    </span>
+                                    {operationsOpen && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            marginTop: '4px',
+                                            backgroundColor: 'white',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '8px',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                            minWidth: '200px',
+                                            zIndex: 1000,
+                                            padding: '8px 0'
+                                        }}>
+                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Administración</div>
+                                            {hasPermission('dashboard') && (
+                                                <Link href="/admin/dashboard" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#334155'), display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Settings size={14} strokeWidth={2.5} /> Panel Admin
+                                                </Link>
+                                            )}
+                                            <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }}></div>
+                                            {/* Links condicionales basados en permisos */}
+                                            {hasPermission('commercial') && (
+                                                <Link href="/admin/orders/loading" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#0891B2')}>
+                                                    📋 Pedidos
+                                                </Link>
+                                            )}
+                                            {hasPermission('transport') && (
+                                                <Link href="/admin/transport" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#EA580C')}>
+                                                    🚛 Transporte
+                                                </Link>
+                                            )}
+                                            {hasPermission('commercial') && (
+                                                <>
+                                                    <Link href="/admin/commercial/billing" 
+                                                        onClick={() => setOperationsOpen(false)}
+                                                        style={dropdownLinkStyle('#6366F1')}>
+                                                        💰 Facturación
+                                                    </Link>
+                                                    <Link href="/admin/commercial"
+                                                        onClick={() => setOperationsOpen(false)}
+                                                        style={dropdownLinkStyle('#059669')}>
+                                                        💼 Comercial
+                                                    </Link>
+                                                </>
+                                            )}
+                                            {hasPermission('hr') && (
+                                                <Link href="/admin/hr"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#8B5CF6')}>
+                                                    👥 Talento Humano
+                                                </Link>
+                                            )}
+                                            {hasPermission('inventory') && (
+                                                <Link href="/admin/commercial/inventory"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#0369A1')}>
+                                                    📦 Control de Inventarios
+                                                </Link>
+                                            )}
+                                            {hasPermission('transport') && (
+                                                <Link href="/ops/picking/dashboard" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle('#D97706')}>
+                                                    🚚 Despachos
+                                                </Link>
+                                            )}
+                                            
+                                            {hasPermission('dashboard') && (
+                                                <Link href="/admin/strategy" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#7C3AED'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
+                                                    🧠 Inteligencia & Estrategia
+                                                </Link>
+                                            )}
 
-                                        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }}></div>
-                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Segmentos y Canales</div>
-                                        <Link href="/admin/clients" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#334155', 
-                                                fontWeight: '700',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            👥 Gestión de Clientes
-                                        </Link>
-                                        <Link href="/b2b/dashboard" 
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#7C3AED', 
-                                                fontWeight: '900',
-                                                textDecoration: 'none',
-                                                backgroundColor: '#F5F3FF',
-                                                transition: 'background-color 0.2s',
-                                                margin: '4px 8px',
-                                                borderRadius: '6px'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDE9FE'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F5F3FF'}>
-                                            🛒 Portal Compras B2B
-                                        </Link>
-                                        <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }}></div>
-                                        <Link href="/ops"
-                                            onClick={() => setOperationsOpen(false)}
-                                            style={{ 
-                                                display: 'block', 
-                                                padding: '10px 16px', 
-                                                color: '#10B981', 
-                                                fontWeight: '800',
-                                                textDecoration: 'none',
-                                                transition: 'background-color 0.2s'
-                                            }} 
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                            🚀 Portal Operativo
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
+                                            {hasPermission('transport') && (
+                                                <Link href="/ops" 
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={{ ...dropdownLinkStyle('#10B981'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
+                                                    🏭 Portal Operacional
+                                                </Link>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )}
                 </nav>
 
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {isShoppingContext && (
                     <Link href="/checkout">
                         <button className="btn" style={{ 
                             border: '1px solid var(--border)', 
@@ -361,6 +429,7 @@ export default function Navbar() {
                             <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
                         </button>
                     </Link>
+                    )}
 
                     {!loading && (
                         user ? (
@@ -420,6 +489,18 @@ export default function Navbar() {
                     )}
                 </div>
             </div>
+            <style jsx global>{`
+                @keyframes skeleton-loading {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+                @keyframes ping {
+                    75%, 100% {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
+                }
+            `}</style>
         </header>
     );
 }

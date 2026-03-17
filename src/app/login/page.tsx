@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../lib/authContext';
 import Navbar from '../../components/Navbar';
 import Link from 'next/link';
-import { config } from '@/lib/config';
 import { useRouter } from 'next/navigation';
 import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key } from 'lucide-react';
 
@@ -146,7 +145,7 @@ export default function LoginPage() {
                                 marginTop: '0',
                                 letterSpacing: '-0.06em'
                             }}>
-                                {config.brand.name}<span style={{ color: 'var(--secondary)' }}>.</span>
+                                Logistics Pro<span style={{ color: 'var(--secondary)' }}>.</span>
                             </h1>
                             <p style={{ 
                                 color: 'rgba(255, 255, 255, 0.6)', 
@@ -154,7 +153,7 @@ export default function LoginPage() {
                                 fontSize: '1rem',
                                 fontWeight: '500'
                             }}>
-                                Portal de ingreso al sistema {config.brand.name}
+                                Portal de ingreso al sistema Logistics Pro
                             </p>
                         </div>
 

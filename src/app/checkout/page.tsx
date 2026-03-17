@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { APIProvider, Map } from '@vis.gl/react-google-maps';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
+import { DEFAULT_CUTOFF_HOUR } from '../../lib/constants';
 import { 
     Trash2, 
     MapPin, 
@@ -135,7 +136,7 @@ export default function CheckoutPage() {
                 const currentHour = bogotaNow.getHours();
 
                 let daysToAdd = 1;
-                if (cutoffEnabled && currentHour >= 17) {
+                if (cutoffEnabled && currentHour >= DEFAULT_CUTOFF_HOUR) {
                     daysToAdd = 2;
                 }
 

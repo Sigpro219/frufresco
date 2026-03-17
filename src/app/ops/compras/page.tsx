@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
-import { isAbortError } from "@/lib/errorUtils";
+import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
+import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 
 interface ProcurementTask {
   id: string;
@@ -108,7 +109,6 @@ export default function ProcurementPage() {
   // - Hora >= 18:00 (6 PM) -> Objetivo: MAÑANA.
   // - Hora < 18:00 (Antes de 6 PM) -> Objetivo: HOY (seguimos viendo lo de ayer a las 6pm).
   const getTargetDeliveryDate = async (signal?: AbortSignal) => {
-    // Check Global Cutoff Switch
     try {
       const { data: settings } = await supabase
         .from("app_settings")
@@ -117,67 +117,33 @@ export default function ProcurementPage() {
         .abortSignal(signal as any)
         .single();
 
-      const cutoffEnabled = settings?.value !== "false"; // Default to TRUE if missing or weird value
+      const cutoffEnabled = settings?.value !== "false";
 
       const now = new Date(
         new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }),
       );
 
+      // If rules are disabled, we return TODAY so it usually matches the header, 
+      // but the fetch logic will ignore it.
       if (!cutoffEnabled) {
-        console.log(
-          "🛑 Cutoff Rules DISABLED: Consolidating for TODAY/TOMORROW naturally.",
-        );
-        // If rules disabled, we assume we want to see orders for "Tomorrow" relative to execution
-        // OR we could default to "Today". Let's use Today as default base, but usually consolidation looks ahead.
-        // However, test script makes orders for TOMORROW.
-        // Let's stick to standard logic but ignoring the hour check if disabled?
-        // Actually, if disabled, we should probably just return TOMORROW always if that's where test data is?
-        // OR better: standard logic but assume hour is always 20 (late) or 0 (early)?
-
-        // USER REQUEST: "Quitamos todas las limitaciones de tiempo".
-        // Simplest: Default to TODAY. But test data is TOMORROW.
-        // Let's match OrderLoading logic: If disabled, trust the user selection or default to TODAY.
-        // But this function returns a single string.
-
-        // Let's return TODAY so he can see everything if he changes the date picker?
-        // Compras page DOES NOT have a date picker exposed easily in the UI code I saw (it filters by targetDate).
-        // Wait, handleConsolidate uses this date.
-
-        // If I return TODAY, and his orders are TOMORROW, he won't see them.
-        // Test script puts orders at `CURRENT_DATE + 1`.
-
-        // Let's force it to return TOMORROW if rules are disabled, ensuring they see the test data?
-        // No, the user said "remove limitations".
-
-        // Let's make it return TOMORROW so it matches the test script regardless of time.
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
+        return now.toISOString().split("T")[0];
       }
 
       const currentHour = now.getHours();
 
-      if (currentHour >= 18) {
-        // Ya pasó el corte de hoy, empezamos la operación de MAÑANA
+      if (currentHour >= DEFAULT_CUTOFF_HOUR) {
+        // After 5 PM, start tomorrow's operation
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
         return tomorrow.toISOString().split("T")[0];
       } else {
-        // Todavía es temprano (madrugada/día), seguimos trabajando lo de HOY
+        // Before 5 PM, keep working today's operation
         return now.toISOString().split("T")[0];
       }
     } catch (e) {
       if (isAbortError(e)) return "";
-      console.error(
-        "Error reading cutoff settings, defaulting to standard rules",
-        e,
-      );
+      console.error("Error reading cutoff settings", e);
       const now = new Date();
-      if (now.getHours() >= 18) {
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
-      }
       return now.toISOString().split("T")[0];
     }
   };
@@ -200,12 +166,19 @@ export default function ProcurementPage() {
     if (isMounted.current) setTargetDateLabel(targetDate);
 
     try {
-      // 1. Cargamos las tareas base (SIN FILTRO DE FECHA - DESACTIVADO TEMPORALMENTE)
-      const { data: rawTasks, error: tErr } = await supabase
-        .from("procurement_tasks")
-        .select("*")
-        // .eq('delivery_date', targetDate) // Filtro desactivado por petición del usuario
-        .order("delivery_date", { ascending: true }) // Primero lo más viejo/próximo
+      // Check rules again for fetch
+      const { data: cutoffData } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
+      const cutoffEnabled = cutoffData?.value !== 'false';
+
+      // 1. Load tasks
+      let query = supabase.from("procurement_tasks").select("*");
+      
+      if (cutoffEnabled) {
+        query = query.eq('delivery_date', targetDate);
+      }
+
+      const { data: rawTasks, error: tErr } = await query
+        .order("delivery_date", { ascending: true })
         .order("created_at", { ascending: false })
         .abortSignal(signal as any);
 
@@ -256,13 +229,16 @@ export default function ProcurementPage() {
           };
         });
 
-        // 4. Aplicar filtro de categoría
+        // 4. Aplicar filtro de categoría (Soporta nombre y código mapeado)
         if (
           finalCategory &&
           finalCategory !== "Ver Todo" &&
           finalCategory !== ""
         ) {
-          formatted = formatted.filter((t) => t.category === finalCategory);
+          const mappedCode = REVERSE_CATEGORY_MAP[finalCategory] || finalCategory;
+          formatted = formatted.filter(
+            (t) => t.category === finalCategory || t.category === mappedCode
+          );
         }
 
         // 5. Ordenamiento Inteligente: Parciales (En Proceso) primero, luego pendientes, al final completados
@@ -464,7 +440,10 @@ export default function ProcurementPage() {
         .from("vouchers")
         .upload(filePath, voucherFile);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        diagnoseStorageError(uploadError, 'vouchers');
+        throw uploadError;
+      }
 
       const {
         data: { publicUrl },
@@ -472,8 +451,8 @@ export default function ProcurementPage() {
 
       return publicUrl;
     } catch (err: any) {
-      console.error("Error uploading voucher:", err);
-      alert("Error subiendo la foto del vale: " + err.message);
+      diagnoseStorageError(err, "vouchers");
+      alert("Error subiendo la foto del vale: " + (err.message || err));
       return null;
     } finally {
       setUploadingImage(false);
@@ -684,6 +663,16 @@ export default function ProcurementPage() {
   const pendingTasks = tasks.filter((t) => t.status === "pending").length;
   const totalProgress =
     tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+
+  // Estadísticas por Categoría
+  const categories = ["Frutas", "Verduras", "Lácteos", "Cereales"];
+  const categoryStats = categories.map((cat) => {
+    const catTasks = tasks.filter((t) => t.category === cat);
+    const completed = catTasks.filter((t) => t.status === "completed").length;
+    const percentage =
+      catTasks.length > 0 ? Math.round((completed / catTasks.length) * 100) : 0;
+    return { name: cat, percentage, count: catTasks.length };
+  });
 
   return (
     <div style={{ padding: "1rem", paddingBottom: "5rem" }}>
@@ -961,37 +950,92 @@ export default function ProcurementPage() {
               </div>
             </div>
 
-            {/* Barra Circular Pequeña (Total) */}
+            {/* Barra Circular Pequeña (Total) - RESALTADA SEGÚN FEEDBACK */}
             <div
               style={{
                 textAlign: "center",
                 borderLeft: "1px solid var(--ops-border)",
-                paddingLeft: "1rem",
+                paddingLeft: "1.2rem",
+                marginLeft: "0.2rem",
+                position: "relative",
               }}
             >
               <div
                 style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "900",
-                  color: "var(--ops-text)",
+                  backgroundColor: totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.15)",
+                  padding: "0.5rem 0.8rem",
+                  borderRadius: "12px",
+                  border: `1px solid ${totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.3)"}`,
+                  boxShadow: totalProgress > 0 ? "0 0 15px rgba(59, 130, 246, 0.2)" : "none",
+                  transition: "all 0.4s ease",
                 }}
               >
-                {Math.round(totalProgress)}%
-              </div>
-              <div
-                style={{
-                  fontSize: "0.6rem",
-                  fontWeight: "bold",
-                  color: "var(--ops-text)",
-                  opacity: 0.7,
-                }}
-              >
-                TOTAL
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: "900",
+                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
+                    lineHeight: "1",
+                  }}
+                >
+                  {Math.round(totalProgress)}%
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.6rem",
+                    fontWeight: "900",
+                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
+                    opacity: 0.8,
+                    marginTop: "2px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  TOTAL AVANCE
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Category Progress Legend (Compact Breakdown) */}
+      {tasks.length > 0 && (
+        <div 
+          style={{ 
+            display: "flex", 
+            gap: "0.75rem", 
+            margin: "0 0.5rem 1rem 0.5rem", 
+            overflowX: "auto", 
+            padding: "0.2rem 0",
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'none'
+          }}
+        >
+          {categoryStats.map(stat => (
+            <div 
+              key={stat.name}
+              style={{
+                fontSize: "0.65rem",
+                fontWeight: "800",
+                color: "var(--ops-text-muted)",
+                backgroundColor: "var(--ops-surface)",
+                padding: "0.3rem 0.6rem",
+                borderRadius: "8px",
+                border: "1px solid var(--ops-border)",
+                whiteSpace: "nowrap",
+                display: "flex",
+                gap: "4px"
+              }}
+            >
+              <span style={{ opacity: 0.6 }}>{stat.name}:</span>
+              <span style={{ color: stat.percentage === 100 ? "var(--ops-primary)" : stat.percentage > 0 ? "#F59E0B" : "inherit" }}>
+                {stat.percentage}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Category Filter Pills */}
       <div
@@ -1004,37 +1048,42 @@ export default function ProcurementPage() {
         }}
       >
         {["Ver Todo", "Frutas", "Verduras", "Lácteos", "Cereales"].map(
-          (cat) => (
-            <button
-              key={cat}
-              onClick={() => {
-                setFilterCategory(cat);
-                fetchTasks(undefined, cat);
-              }}
-              style={{
-                padding: "0.4rem 1rem",
-                borderRadius: "20px",
-                border: `1px solid var(--ops-border)`,
-                backgroundColor:
-                  filterCategory === cat
-                    ? "var(--ops-primary)"
-                    : "var(--ops-surface)",
-                color:
-                  filterCategory === cat ? "white" : "var(--ops-text-muted)",
-                fontSize: "0.75rem",
-                fontWeight: "700",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {cat}
-            </button>
-          ),
+          (cat) => {
+            const stat = categoryStats.find(s => s.name === cat);
+            const displayLabel = stat ? `${cat} (${stat.percentage}%)` : cat;
+
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  setFilterCategory(cat);
+                  fetchTasks(undefined, cat);
+                }}
+                style={{
+                  padding: "0.4rem 1rem",
+                  borderRadius: "20px",
+                  border: `1px solid var(--ops-border)`,
+                  backgroundColor:
+                    filterCategory === cat
+                      ? "var(--ops-primary)"
+                      : "var(--ops-surface)",
+                  color:
+                    filterCategory === cat ? "white" : "var(--ops-text-muted)",
+                  fontSize: "0.75rem",
+                  fontWeight: "700",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {displayLabel}
+              </button>
+            );
+          }
         )}
       </div>
 
       {/* Print-Only Table Section */}
       <div className="print-only">
-        <h1 style={{ textAlign: "center" }}>Lista de Compras - FruFresco</h1>
+        <h1 style={{ textAlign: "center" }}>Lista de Compras - Logistics Pro</h1>
         <p style={{ textAlign: "center" }}>
           Fecha de Entrega: {formatDateFriendly(targetDateLabel)}
         </p>

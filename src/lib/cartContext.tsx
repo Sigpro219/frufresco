@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import { useAuth } from './authContext';
 
 export interface CartItem {
     id: string;
@@ -25,8 +26,10 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
+    const { user } = useAuth();
+    const prevUserRef = useRef<string | null>(null);
 
-    // Load from LocalStorage
+    // 1. Initial Load from LocalStorage
     useEffect(() => {
         const saved = localStorage.getItem('logistics_pro_cart');
         if (saved) {
@@ -38,14 +41,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    // Save to LocalStorage
+    // 2. Clear cart on Logout/Login
+    // This solves the issue where the cart persists after switching accounts
+    useEffect(() => {
+        const currentUserId = user?.id || null;
+        
+        // Check if user changed
+        if (prevUserRef.current !== currentUserId) {
+            // We only clear if there was a previous user (Logout)
+            // or if we want a fresh start on every login too.
+            // Based on user request "entrar y salir... no se vacía", we clear on any state change.
+            if (prevUserRef.current !== null) {
+                console.log('🛒 Sesión cambiada: Vacíando carrito por seguridad.');
+                setItems([]);
+                localStorage.removeItem('frufresco_cart');
+            }
+            prevUserRef.current = currentUserId;
+        }
+    }, [user]);
+
+    // 3. Persistent Sync to LocalStorage
     useEffect(() => {
         localStorage.setItem('logistics_pro_cart', JSON.stringify(items));
     }, [items]);
 
     const addItem = (newItem: CartItem) => {
         setItems((prev) => {
-            // Un item es único por su ID Y su NOMBRE (que incluye las variantes seleccionadas)
             const existing = prev.find((i) => i.id === newItem.id && i.name === newItem.name);
             if (existing) {
                 return prev.map((i) =>
@@ -64,6 +85,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const clearCart = () => {
         setItems([]);
+        localStorage.removeItem('frufresco_cart');
     };
 
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);

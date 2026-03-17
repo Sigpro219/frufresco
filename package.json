@@ -4,14 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
+    "dev:showcase": "npx dotenv -e .env.showcase -- next dev -p 3001",
+    "dev:frufresco": "npx dotenv -e .env.tenant1_production -- next dev -p 3002",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync-core": "node scripts/update-sync.js && git add . && git commit -m \"Chore: sync core update\" && git push origin main -f && git branch -f CORE main && git push origin CORE -f"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "@vis.gl/react-google-maps": "^1.7.1",
+    "dotenv": "^17.3.1",
     "lucide-react": "^0.575.0",
     "next": "16.1.3",
     "react": "19.2.3",

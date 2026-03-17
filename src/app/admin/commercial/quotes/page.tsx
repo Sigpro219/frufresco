@@ -9,10 +9,6 @@ export default function QuotesListPage() {
     const [quotes, setQuotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetchQuotes();
-    }, []);
-
     const fetchQuotes = async () => {
         setLoading(true);
         const { data, error } = await supabase
@@ -23,6 +19,10 @@ export default function QuotesListPage() {
         if (data) setQuotes(data);
         setLoading(false);
     };
+
+    useEffect(() => {
+        fetchQuotes();
+    }, []);
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('es-CO', {
@@ -35,7 +35,8 @@ export default function QuotesListPage() {
             case 'draft': return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Borrador</span>;
             case 'sent': return <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Enviada</span>;
             case 'accepted': return <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Aceptada</span>;
-            case 'converted': return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #10B981' }}>COMPLETADA</span>;
+            case 'converted': return <span style={{ backgroundColor: '#ECFDF5', color: '#047857', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #10B981' }}>PEDIDO CREADO</span>;
+            case 'agreement': return <span style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid #3B82F6' }}>ACUERDO COMERCIAL</span>;
             case 'rejected': return <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Rechazada</span>;
             default: return status;
         }

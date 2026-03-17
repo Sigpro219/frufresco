@@ -119,24 +119,50 @@ button {
 /* Category Premium Pills */
 .category-pill {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
+  background: white;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
   border: 1px solid var(--border);
+  padding: 0.8rem 1.8rem;
+  border-radius: var(--radius-md); /* 16px para armonizar con el resto */
+  color: var(--text-main);
+  font-size: 0.95rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .category-pill:hover {
   background: white !important;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-float);
+  border-color: var(--primary-light);
 }
 
 .category-pill.active {
   background: var(--primary) !important;
   color: white !important;
   box-shadow: var(--shadow-premium);
-  backdrop-filter: none;
+  border-color: var(--primary);
+}
+
+.link-hover-premium {
+  position: relative;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.link-hover-premium::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -4px;
+  left: 0;
+  background-color: var(--secondary);
+  transition: width 0.3s ease;
+}
+
+.link-hover-premium:hover::after {
+  width: 100%;
 }
 
 /* Responsive Helpers */
@@ -146,7 +172,7 @@ button {
     grid-template-columns: 1fr !important;
     gap: 1.5rem !important;
   }
-  
+
   .mobile-padding-sm {
     padding: 1.5rem !important;
   }
@@ -159,5 +185,26 @@ button {
 @media (min-width: 769px) {
   .desktop-hide {
     display: none !important;
+  }
+}
+/* Responsive Hero Section */
+.hero-container {
+  padding-top: 0;
+}
+
+@media (max-width: 768px) {
+  .hero-container {
+    padding-top: 80px !important; /* Offset for mobile navbar overlap */
+    height: auto !important;
+    min-height: 500px;
+  }
+
+  .hero-container h1 {
+    font-size: 2.8rem !important;
+  }
+
+  .hero-container p {
+    font-size: 1.1rem !important;
+    margin-bottom: 2rem !important;
   }
 }

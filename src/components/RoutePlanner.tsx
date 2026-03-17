@@ -25,6 +25,7 @@ interface Vehicle {
     driver?: {
         contact_name: string;
     } | null;
+    max_crates_capacity: number;
 }
 
 export default function RoutePlanner() {
@@ -36,12 +37,11 @@ export default function RoutePlanner() {
     const [params, setParams] = useState<Record<string, number>>({
         b2b_kg_min: 10,
         b2c_kg_min: 5,
-        base_setup_time: 5
+        base_setup_time: 5,
+        avg_kg_per_crate: 12.24
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
     const isMounted = useRef(true);
-
-    const [drivers, setDrivers] = useState<{id: string, contact_name: string}[]>([]);
 
     useEffect(() => {
         isMounted.current = true;
@@ -57,14 +57,24 @@ export default function RoutePlanner() {
             const { data: paramData } = await supabase.from('logistic_parameters').select('*');
             if (paramData && isMounted.current) {
                 const pMap: Record<string, number> = {};
-                paramData.forEach(p => pMap[p.id] = parseFloat(p.value));
+                paramData.forEach((p: any) => pMap[p.id] = parseFloat(p.value));
                 setParams(pMap);
             }
 
-            const { data: orderData, error: oErr } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('status', 'approved'); 
+            // 2. Fetch Orders (with conditional cutoff)
+            const { data: settings } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
+            const cutoffEnabled = settings?.value !== 'false';
+
+            let query = supabase.from('orders').select('*').eq('status', 'approved');
+
+            if (cutoffEnabled) {
+                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+                const targetDate = now.toISOString().split('T')[0];
+                query = query.eq('delivery_date', targetDate);
+                console.log(`🔍 Route Planner filtered for operational date: ${targetDate}`);
+            }
+
+            const { data: orderData, error: oErr } = await query;
 
             if (!isMounted.current) return;
             if (oErr) throw oErr;
@@ -77,24 +87,15 @@ export default function RoutePlanner() {
             if (!isMounted.current) return;
             if (fErr) throw fErr;
 
-            const { data: driverData, error: dErr } = await supabase
-                .from('profiles')
-                .select('id, contact_name')
-                .or('role.eq.driver,specialty.ilike.%conductor%')
-                .order('contact_name');
-
-            if (!isMounted.current) return;
-            if (dErr) throw dErr;
-
-            setDrivers(driverData || []);
-
             // Use actual total_weight_kg if available, otherwise mock for UI dev
-            setOrders((orderData || []).map(o => ({
+            setOrders((orderData || []).map((o: any) => ({
                 ...o,
-                total_weight_kg: o.total_weight_kg || Math.floor(Math.random() * 200) + 50
+                total_weight_kg: o.total_weight_kg || Math.floor(Math.random() * 200) + 50,
+                is_b2b: o.is_b2b !== undefined ? o.is_b2b : Math.random() > 0.4,
+                delivery_zone: o.delivery_zone || (['Chapinero', 'Usaquén', 'Suba', 'Teusaquillo', 'Kennedy'][Math.floor(Math.random() * 5)])
             })));
 
-            setVehicles((fleetData || []).map(v => ({
+            setVehicles((fleetData || []).map((v: any) => ({
                 ...v,
                 driver_name: v.driver?.contact_name
             })));
@@ -137,7 +138,7 @@ export default function RoutePlanner() {
 
                 setAssignments(newAssignments);
                 setIsOptimized(true);
-                setTheoreticalMetrics({ distance_km: assignments.length * 2, duration_min: assignments.length * 15 }); // Mock metrics for simulation
+                setTheoreticalMetrics({ distance_km: Object.keys(assignments).length * 2, duration_min: Object.keys(assignments).length * 15 }); // Mock metrics for simulation
             } else if (result.routes) {
                 setAssignments(result.routes);
                 setIsOptimized(true);
@@ -213,28 +214,6 @@ export default function RoutePlanner() {
         }
     };
 
-    const assignDriverToVehicle = async (vehicleId: string, driverId: string) => {
-        try {
-            if (driverId) {
-                await supabase
-                    .from('fleet_vehicles')
-                    .update({ driver_id: null })
-                    .eq('driver_id', driverId);
-            }
-
-            const { error } = await supabase
-                .from('fleet_vehicles')
-                .update({ driver_id: driverId || null })
-                .eq('id', vehicleId);
-            
-            if (error) throw error;
-            await fetchInitialData();
-            
-        } catch (err) {
-            console.error('Error in planner driver assignment:', err);
-        }
-    };
-
     const getVehicleLoad = (vehicleId: string) => {
         const orderIds = assignments[vehicleId] || [];
         return orders.filter(o => orderIds.includes(o.id)).reduce((sum, o) => sum + o.total_weight_kg, 0);
@@ -282,7 +261,7 @@ export default function RoutePlanner() {
     if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: '2rem' }}>Iniciando motores...</div>;
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '2rem', height: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '450px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
             {/* Orders Sidebar */}
             <div style={{ 
                 backgroundColor: 'white', 
@@ -290,7 +269,8 @@ export default function RoutePlanner() {
                 border: '1px solid #E5E7EB', 
                 display: 'flex', 
                 flexDirection: 'column', 
-                overflow: 'hidden' 
+                overflow: 'hidden',
+                minHeight: 0
             }}>
                 <div style={{ padding: '1.5rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -300,7 +280,7 @@ export default function RoutePlanner() {
                         </span>
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.2rem' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1.2rem', paddingRight: '0.5rem' }}>
                     {orders.map(order => {
                         const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
                         return (
@@ -311,21 +291,51 @@ export default function RoutePlanner() {
                                 style={{ 
                                     padding: '1.2rem', 
                                     borderRadius: '20px', 
-                                    border: isAssigned ? '1px solid #0D9488' : '1px solid #F3F4F6', 
-                                    marginBottom: '1rem',
+                                    border: isAssigned ? '1px solid #99F6E4' : '1px solid #E5E7EB', 
+                                    marginBottom: '1.2rem',
                                     backgroundColor: isAssigned ? '#F0FDFA' : 'white',
                                     transition: 'all 0.2s',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                    boxShadow: isAssigned ? 'none' : '0 4px 10px rgba(0,0,0,0.03)',
                                     cursor: 'grab'
                                 }}
                             >
-                                <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#111827' }}>{order.customer_name}</div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.6rem', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '0.8rem' }}>
-                                        <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: '700' }}>📦 {order.total_weight_kg}kg</span>
-                                        <span style={{ fontSize: '0.7rem', color: '#0891B2', fontWeight: '900' }}>🕒 {order.delivery_slot}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: order.is_b2b ? '#0369A1' : '#6D28D9', backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', padding: '0.3rem 0.6rem', borderRadius: '8px', letterSpacing: '0.05rem' }}>
+                                        {order.is_b2b ? 'B2B (Institucional)' : 'B2C (Consumidor)'}
+                                    </span>
+                                    <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', backgroundColor: '#F3F4F6', padding: '0.3rem 0.6rem', borderRadius: '8px' }}>
+                                        ID-{order.id.slice(0, 6)}
+                                    </span>
+                                </div>
+                                
+                                <div style={{ fontWeight: '900', fontSize: '1.05rem', color: '#111827', marginBottom: '1rem', lineHeight: '1.2' }}>{order.customer_name}</div>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '1rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: isAssigned ? '#CCFBF1' : '#F8FAFC', padding: '0.6rem', borderRadius: '12px', border: isAssigned ? '1px solid #99F6E4' : '1px solid #E2E8F0' }}>
+                                        <span style={{ fontSize: '0.6rem', color: isAssigned ? '#0D9488' : '#64748B', fontWeight: '900', marginBottom: '0.2rem' }}>ZONA DE ENTREGA</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#1E293B', fontWeight: '800' }}>📍 {order.delivery_zone || 'Por asignar'}</span>
                                     </div>
-                                    {isAssigned && <span style={{ color: '#10B981', fontSize: '0.8rem' }}>✅</span>}
+                                    <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: isAssigned ? '#CCFBF1' : '#F8FAFC', padding: '0.6rem', borderRadius: '12px', border: isAssigned ? '1px solid #99F6E4' : '1px solid #E2E8F0' }}>
+                                        <span style={{ fontSize: '0.6rem', color: isAssigned ? '#0D9488' : '#64748B', fontWeight: '900', marginBottom: '0.2rem' }}>PESO TOTAL</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#1E293B', fontWeight: '800' }}>📦 {order.total_weight_kg} kg</span>
+                                            <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: '700', backgroundColor: '#F1F5F9', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
+                                                🧺 {Math.ceil(order.total_weight_kg / params.avg_kg_per_crate)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: isAssigned ? 'rgba(255, 255, 255, 0.5)' : '#FEF3C7', padding: '0.5rem 0.8rem', borderRadius: '12px', border: isAssigned ? 'none' : '1px solid #FDE68A' }}>
+                                        <span style={{ fontSize: '0.7rem', color: isAssigned ? '#0F766E' : '#B45309', fontWeight: '900' }}>🕒 Franja:</span>
+                                        <span style={{ fontSize: '0.7rem', color: isAssigned ? '#115E59' : '#92400E', fontWeight: '800' }}>{order.delivery_slot || 'Abierta'}</span>
+                                    </div>
+                                    {isAssigned && (
+                                        <div style={{ backgroundColor: '#10B981', color: 'white', fontSize: '0.65rem', fontWeight: '900', letterSpacing: '0.05rem', padding: '0.4rem 0.8rem', borderRadius: '12px', boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)' }}>
+                                            ASIGNADO
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -334,7 +344,7 @@ export default function RoutePlanner() {
             </div>
 
             {/* Planning Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', position: 'relative' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', position: 'relative', minHeight: 0 }}>
                 <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -458,6 +468,28 @@ export default function RoutePlanner() {
                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                 />
                             </div>
+                            <div style={{ padding: '0.5rem 0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', alignItems: 'center' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0891B2' }}>kg / Canastilla Promedio</label>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#111827', backgroundColor: '#ECFEFF', padding: '0.2rem 0.6rem', borderRadius: '8px', border: '1px solid #A5F3FC' }}>
+                                        {params.avg_kg_per_crate} kg
+                                    </span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="8" 
+                                    max="18" 
+                                    step="0.01"
+                                    value={params.avg_kg_per_crate} 
+                                    onChange={(e) => updateParameter('avg_kg_per_crate', parseFloat(e.target.value))}
+                                    style={{ width: '100%', accentColor: '#0891B2', cursor: 'grab' }}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.3rem', fontSize: '0.55rem', color: '#94A3B8', fontWeight: '700' }}>
+                                    <span>8 kg</span>
+                                    <span>12.24 kg (Estándar)</span>
+                                    <span>18 kg</span>
+                                </div>
+                            </div>
                         </div>
                         <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', fontSize: '0.65rem', color: '#64748B', lineHeight: '1.4' }}>
                             💡 Estos valores afectan el cálculo de `service_duration` enviado a Google Maps.
@@ -467,16 +499,25 @@ export default function RoutePlanner() {
 
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
                     gap: '1.5rem', 
                     flex: 1, 
-                    overflowY: 'auto'
+                    overflowY: 'auto',
+                    paddingRight: '0.5rem',
+                    alignContent: 'start'
                 }}>
                     {vehicles.map(vehicle => {
                         const load = getVehicleLoad(vehicle.id);
-                        const progress = (load / vehicle.capacity_kg) * 100;
+                        const cratesNeeded = Math.ceil(load / params.avg_kg_per_crate);
+                        
+                        const kgProgress = (load / vehicle.capacity_kg) * 100;
+                        const crateProgress = vehicle.max_crates_capacity > 0 ? (cratesNeeded / vehicle.max_crates_capacity) * 100 : 0;
+                        const progress = Math.max(kgProgress, crateProgress);
+                        
                         const assignedOrders = assignments[vehicle.id] || [];
-                        const isOverloaded = load > vehicle.capacity_kg;
+                        const isKgOverloaded = load > vehicle.capacity_kg;
+                        const isCrateOverloaded = vehicle.max_crates_capacity > 0 && cratesNeeded > vehicle.max_crates_capacity;
+                        const isOverloaded = isKgOverloaded || isCrateOverloaded;
 
                         return (
                             <div 
@@ -495,49 +536,53 @@ export default function RoutePlanner() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.2rem', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>🚛 {vehicle.plate}</div>
-                                        <select 
-                                            value={vehicle.driver_id || ''}
-                                            onChange={(e) => assignDriverToVehicle(vehicle.id, e.target.value)}
-                                            style={{ 
-                                                fontSize: '0.75rem', 
-                                                color: '#0891B2', 
-                                                fontWeight: '800', 
-                                                marginTop: '0.4rem',
-                                                border: '1px solid #E2E8F0',
-                                                borderRadius: '8px',
-                                                padding: '0.2rem 0.4rem',
-                                                backgroundColor: '#F8FAFC',
-                                                width: '100%',
-                                                cursor: 'pointer',
-                                                outline: 'none'
-                                            }}
-                                        >
-                                            <option value="">👤 Sin Piloto</option>
-                                            {drivers.map(d => {
-                                                const isAssignedToOther = vehicles.some(v => v.driver_id === d.id && v.id !== vehicle.id);
-                                                return (
-                                                    <option key={d.id} value={d.id} disabled={isAssignedToOther}>
-                                                        {d.contact_name} {isAssignedToOther ? '(Ocupado)' : ''}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: '900', color: isOverloaded ? '#EF4444' : '#0D9488' }}>
-                                            {load} / {vehicle.capacity_kg} kg
+                                        <div style={{
+                                            fontSize: '0.75rem',
+                                            color: vehicle.driver?.contact_name ? '#0891B2' : '#94A3B8',
+                                            fontWeight: '700',
+                                            marginTop: '0.4rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.3rem'
+                                        }}>
+                                            👤 {vehicle.driver?.contact_name || 'Sin conductor asignado'}
                                         </div>
-                                        <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '700' }}>CARGA UTIL</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '900', color: isKgOverloaded ? '#EF4444' : '#0D9488' }}>
+                                                {load} / {vehicle.capacity_kg} kg
+                                            </div>
+                                            <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '700' }}>CARGA UTIL</div>
+                                        </div>
+                                        {vehicle.max_crates_capacity > 0 && (
+                                            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.4rem' }}>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: isCrateOverloaded ? '#EF4444' : '#6366F1' }}>
+                                                    {cratesNeeded} / {vehicle.max_crates_capacity} und
+                                                </div>
+                                                <div style={{ fontSize: '0.6rem', color: '#6B7280', fontWeight: '700' }}>CANASTILLAS</div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div style={{ height: '6px', backgroundColor: '#F3F4F6', borderRadius: '10px', marginBottom: '1.5rem', overflow: 'hidden' }}>
+                                <div style={{ height: '8px', backgroundColor: '#F3F4F6', borderRadius: '10px', marginBottom: '1.5rem', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                     <div style={{ 
-                                        width: `${Math.min(progress, 100)}%`, 
-                                        height: '100%', 
-                                        backgroundColor: isOverloaded ? '#EF4444' : '#10B981', 
-                                        transition: 'width 0.5s ease-out'
+                                        width: `${Math.min(kgProgress, 100)}%`, 
+                                        height: '4px', 
+                                        backgroundColor: isKgOverloaded ? '#EF4444' : '#10B981', 
+                                        transition: 'width 0.5s ease-out',
+                                        borderRadius: '10px'
                                     }}></div>
+                                    {vehicle.max_crates_capacity > 0 && (
+                                        <div style={{ 
+                                            width: `${Math.min(crateProgress, 100)}%`, 
+                                            height: '2px', 
+                                            backgroundColor: isCrateOverloaded ? '#EF4444' : '#6366F1', 
+                                            transition: 'width 0.5s ease-out',
+                                            borderRadius: '10px'
+                                        }}></div>
+                                    )}
                                 </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -556,6 +601,7 @@ export default function RoutePlanner() {
                                     ) : (
                                         assignedOrders.map(oid => {
                                             const order = orders.find(o => o.id === oid);
+                                            const orderCrates = order ? Math.ceil(order.total_weight_kg / params.avg_kg_per_crate) : 0;
                                             return (
                                                 <div 
                                                     key={oid} 
@@ -563,20 +609,41 @@ export default function RoutePlanner() {
                                                     onDragStart={(e) => handleDragStart(e, oid)}
                                                     style={{ 
                                                         padding: '0.8rem 1rem', 
-                                                        backgroundColor: '#F9FAFB', 
+                                                        backgroundColor: 'white', 
                                                         borderRadius: '16px', 
                                                         fontSize: '0.8rem', 
                                                         fontWeight: '700', 
                                                         display: 'flex', 
                                                         justifyContent: 'space-between',
-                                                        border: '1px solid #F3F4F6',
+                                                        border: '1px solid #E5E7EB',
                                                         color: '#374151',
-                                                        cursor: 'grab'
+                                                        cursor: 'grab',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                                                     }}
                                                 >
-                                                    <span>📦 {order?.customer_name}</span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontWeight: '800' }}>📦 {order?.customer_name}</span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                                                            <span style={{ fontSize: '0.65rem', color: '#6B7280' }}>
+                                                                {order?.delivery_zone} • {order?.total_weight_kg} kg
+                                                            </span>
+                                                            <span style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '800' }}>
+                                                                🧺 {orderCrates}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                     <span 
-                                                        style={{ cursor: 'pointer', color: '#EF4444' }} 
+                                                        style={{ 
+                                                            cursor: 'pointer', 
+                                                            color: '#EF4444',
+                                                            backgroundColor: '#FEF2F2',
+                                                            padding: '0.3rem 0.5rem',
+                                                            borderRadius: '8px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            height: 'fit-content'
+                                                        }} 
                                                         onClick={() => toggleAssignment(oid, vehicle.id)}
                                                     >✕</span>
                                                 </div>

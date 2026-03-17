@@ -38,7 +38,7 @@ export default function AdminDashboard() {
             .select('total')
             .gte('created_at', today.toISOString());
 
-        const todaySales = ordersToday?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0;
+        const todaySales = ordersToday?.reduce((acc: number, curr: { total: number }) => acc + (curr.total || 0), 0) || 0;
 
         // 2. Pedidos Pendientes
         const { count: pendingOrders } = await supabase
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
             .select('total');
 
         const avgTicket = allOrders && allOrders.length > 0
-            ? allOrders.reduce((acc, curr) => acc + (curr.total || 0), 0) / allOrders.length
+            ? allOrders.reduce((acc: number, curr: { total: number }) => acc + (curr.total || 0), 0) / allOrders.length
             : 0;
 
         setStats({
@@ -94,7 +94,7 @@ export default function AdminDashboard() {
                     schema: 'public', 
                     table: 'orders' 
                 }, 
-                (payload) => {
+                (payload: any) => {
                     console.log('🛍️ Radar detectó movimiento:', payload.eventType);
                     fetchDashboardData(); 
                 }
@@ -114,7 +114,7 @@ export default function AdminDashboard() {
                 <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', marginBottom: '0.5rem' }}>Centro de Comando</h1>
-                        <p style={{ color: '#4B5563', fontSize: '1.1rem' }}>Resumen operativo de FruFresco en tiempo real.</p>
+                        <p style={{ color: '#4B5563', fontSize: '1.1rem' }}>Resumen operativo de Logistics Pro en tiempo real.</p>
                         <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                             <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '700' }}>
                                 🛡️ Admin: {profile?.company_name || user?.email?.split('@')[0]}
@@ -192,6 +192,11 @@ export default function AdminDashboard() {
                         <AdminCard title="Maestros SKU" href="/admin/master/products" icon="🏗️" color="white" textColor="#4F46E5" />
                         <AdminCard title="Clientes" href="/admin/clients" icon="👥" color="white" textColor="#475569" />
                         <AdminCard title="Ajustes" href="/admin/settings" icon="⚙️" color="white" textColor="#64748B" />
+                        {profile?.role === 'admin' && (
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <AdminCard title="DELTA Command Center" href="/admin/command-center" icon="🛰️" color="#111827" textColor="#D4AF37" />
+                            </div>
+                        )}
                     </div>
 
                     {/* Radar de Ventas B2C (Actividad Reciente) */}
