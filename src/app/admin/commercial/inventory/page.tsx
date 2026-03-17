@@ -180,7 +180,7 @@ export default function InventoryAdminPage() {
                         .from('products')
                         .select(`
                             id, name, sku, category, unit_of_measure, image_url, base_price, is_active, min_inventory_level, accounting_id,
-                            inventory_stocks (
+                            inventory_stocks!product_id (
                                 id, quantity, status, warehouse_id, updated_at,
                                 warehouses (name)
                             )
