@@ -205,6 +205,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         try {
             const uploadedImageUrl = await uploadImage();
             
+            console.log('Guardando Producto:', {
+                id: product.id,
+                sku: formData.sku,
+                options_count: options.length,
+                variants_count: variants.length
+            });
+
             const { error } = await supabase
                 .from('products')
                 .update({
@@ -220,6 +227,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     buying_team: formData.buying_team,
                     procurement_method: formData.procurement_method,
                     options_config: options,
+                    options: options, // Para compatibilidad con versiones anteriores
                     variants: variants,
                     iva_rate: formData.iva_rate
                 })
@@ -227,6 +235,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
             if (error) throw error;
 
+            console.info('✅ Producto actualizado correctamente');
             onSave();
             onClose();
         } catch (error: any) {
