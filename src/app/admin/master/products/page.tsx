@@ -469,7 +469,7 @@ export default function MasterProductsPage() {
                         unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
                         base_price: parseFloat(row.Costo_Base || row.base_price || '0'),
                         iva_rate: parseInt(row.IVA || row.iva_rate || '19'),
-                        image_url: (row.URL_Imagen || row.image_url || '').toString() || null,
+                        image_url: (row.URL_Imagen && row.URL_Imagen.toString() !== '0') ? row.URL_Imagen.toString() : null,
                         buying_team: (row.Comprador || row.buying_team || '').toString(),
                         procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString(),
                         is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
