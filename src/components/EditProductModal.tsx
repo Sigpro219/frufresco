@@ -124,7 +124,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     const generateVariants = () => {
-        if (options.length === 0) return;
+        if (options.length === 0) {
+            if (confirm('¿Eliminar todas las combinaciones generadas?')) {
+                setVariants([]);
+            }
+            return;
+        }
 
         let results: any[] = [{}];
         options.forEach(opt => {
@@ -638,13 +643,21 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     </button>
                                 )}
 
-                                {options.length > 0 && (
+                                {options.length > 0 ? (
                                     <button
                                         type="button"
                                         onClick={generateVariants}
                                         style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
                                     >
                                         🔄 Regenerar Combinaciones
+                                    </button>
+                                ) : variants.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={generateVariants}
+                                        style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
+                                    >
+                                        🗑️ Borrar Combinaciones
                                     </button>
                                 )}
 
