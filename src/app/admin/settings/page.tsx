@@ -221,6 +221,38 @@ export default function AdminSettingsPage() {
             console.error('Supabase Save Error:', error);
             (window as any).showToast?.('Error al guardar: ' + error.message, 'error');
         } else {
+            // Sincronización proactiva del registro maestro en Flota SaaS (Command Center)
+            const brandingKeys = ['app_logo_url', 'app_name', 'app_logosymbol_url', 'app_short_name', 'provider_logo_url'];
+            if (brandingKeys.includes(key)) {
+                try {
+                    // Solo intentamos actualizar si la tabla fleet_tenants existe (caso del CORE)
+                    const { data: fleet } = await supabase
+                        .from('fleet_tenants')
+                        .select('id, branding_config')
+                        .eq('supabase_url', process.env.NEXT_PUBLIC_SUPABASE_URL || '')
+                        .single();
+                    
+                    if (fleet) {
+                        const newBranding = { 
+                            ...(fleet.branding_config || {}),
+                            [key === 'app_logo_url' ? 'app_logo_url' : key]: newValue 
+                        };
+                        // Normalizamos nombres de keys si es necesario para el Command Center
+                        await supabase
+                            .from('fleet_tenants')
+                            .update({ 
+                                branding_config: newBranding,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', fleet.id);
+                        console.log('✅ Registro de Flota actualizado proactivamente');
+                    }
+                } catch (fleetErr) {
+                    // Silencioso si falla (en tenantes hijos la tabla no existe)
+                    console.warn('💡 Entorno independiente (Hijo) o sin tabla de flota. Sincronización maestro omitida.', fleetErr);
+                }
+            }
+
             setSettings(prev => {
                 const existing = prev.find(s => s.key === key);
                 if (existing) {

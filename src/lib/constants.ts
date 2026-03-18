@@ -1,11 +1,12 @@
 
 export const CATEGORY_MAP: Record<string, string> = {
     'FR': 'Frutas',
-    'VE': 'Vegetales',
+    'VE': 'Verduras',
     'TU': 'Tubérculos',
     'HO': 'Hortalizas',
     'LA': 'Lácteos',
-    'DE': 'Despensa'
+    'DE': 'Despensa',
+    'CO': 'Congelados'
 };
 
 // Business Logic Cutoff Rules
@@ -15,10 +16,11 @@ export const ADMIN_EDIT_CUTOFF_HOUR = 20; // 8:00 PM - Admin edit lock for next 
 
 export const REVERSE_CATEGORY_MAP: Record<string, string> = {
     'Frutas': 'FR',
-    'Vegetales': 'VE',
+    'Vegetales': 'VE',  // legacy alias
     'Verduras': 'VE',
     'Tubérculos': 'TU',
     'Hortalizas': 'HO',
     'Lácteos': 'LA',
-    'Despensa': 'DE'
+    'Despensa': 'DE',
+    'Congelados': 'CO'
 };

@@ -28,11 +28,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
-        { id: 'VE', name: 'Vegetales' },
+        { id: 'VE', name: 'Verduras' },
         { id: 'TU', name: 'Tubérculos' },
         { id: 'HO', name: 'Hortalizas' },
         { id: 'LA', name: 'Lácteos' },
-        { id: 'DE', name: 'Despensa' }
+        { id: 'DE', name: 'Despensa' },
+        { id: 'CO', name: 'Congelados' }
     ];
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];

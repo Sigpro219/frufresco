@@ -164,20 +164,42 @@ ALTER TABLE inventory_random_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_task_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_settings ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies for development
+-- Permissive policies for development (idempotent: safe to run multiple times)
+DROP POLICY IF EXISTS "Public read warehouses" ON warehouses;
 CREATE POLICY "Public read warehouses" ON warehouses FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public read stocks" ON inventory_stocks;
 CREATE POLICY "Public read stocks" ON inventory_stocks FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public read movements" ON inventory_movements;
 CREATE POLICY "Public read movements" ON inventory_movements FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public read tasks" ON inventory_random_tasks;
 CREATE POLICY "Public read tasks" ON inventory_random_tasks FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public read items" ON inventory_task_items;
 CREATE POLICY "Public read items" ON inventory_task_items FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public read settings" ON inventory_settings;
 CREATE POLICY "Public read settings" ON inventory_settings FOR SELECT TO authenticated USING (true);
 
 -- Admin full access
+DROP POLICY IF EXISTS "Admin full warehouses" ON warehouses;
 CREATE POLICY "Admin full warehouses" ON warehouses FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin full stocks" ON inventory_stocks;
 CREATE POLICY "Admin full stocks" ON inventory_stocks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin full movements" ON inventory_movements;
 CREATE POLICY "Admin full movements" ON inventory_movements FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin full tasks" ON inventory_random_tasks;
 CREATE POLICY "Admin full tasks" ON inventory_random_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin full items" ON inventory_task_items;
 CREATE POLICY "Admin full items" ON inventory_task_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin full settings" ON inventory_settings;
 CREATE POLICY "Admin full settings" ON inventory_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 10. Initial Stock seeding for existing products
