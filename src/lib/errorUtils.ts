@@ -35,6 +35,32 @@ export function diagnoseStorageError(error: any, bucketName: string) {
     return message;
 }
 
+/**
+ * Centrally diagnoses Supabase Database errors, specifically RLS (Row Level Security)
+ * or permission denied issues which are common when moving between tenants.
+ */
+export function diagnoseDatabaseError(error: any, table: string, operation: string = 'Update') {
+    if (!error) return null;
+    
+    const message = error.message || String(error);
+    const code = error.code || '';
+    
+    console.error(`🚨 Database Error [${table} - ${operation}]:`, error);
+
+    // Common RLS error code is 42501 (insufficient_privilege)
+    if (code === '42501' || message.includes('permission denied') || message.includes('policy')) {
+        const diagnosis = `⚠️ DIAGNOSIS DE INFRAESTRUCTURA: Error de permisos (RLS). 
+        CAUSA: La tabla "${table}" no tiene políticas de escritura permitidas para este usuario/tenant.
+        SOLUCIÓN: Debes ejecutar un script SQL en el panel de Supabase de este Tenant para habilitar ${operation}.
+        EJEMPLO SQL: "CREATE POLICY \"Allow ${operation}\" ON ${table} FOR ${operation.toUpperCase()} USING (true) WITH CHECK (true);"`;
+        
+        console.error(diagnosis);
+        return `Error de Permisos (SQL Sync Requerido). La base de datos del Tenant rechazó el ${operation}.`;
+    }
+
+    return message;
+}
+
 export function isAbortError(err: unknown): boolean {
     if (!err) return false;
     

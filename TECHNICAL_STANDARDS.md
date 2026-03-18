@@ -47,11 +47,14 @@ Para mantener un catálogo profesional y persuasivo, las descripciones generadas
 - **Uso Sugerido**: Dinámico según categoría (Frutas -> Jugos/Postres, Verduras -> Cocina Gourmet, etc.).
 - **Canal**: Mencionar explícitamente "Apto para canal B2B (Horeca) y B2C (Hogares)".
 
-## 4. Inteligencia de Precios
+## 5. Gestión de Infraestructura y Despliegue (Sync & SQL)
 
-El sistema calcula el **Precio Sugerido B2C** mediante la fórmula:
-`Costo Promedio (Últimas 5 compras) + Margen del Modelo (Configuración Comercial) + Ajuste por Regla (Excepción de Producto)`.
+Para asegurar la consistencia entre el código y las bases de datos de los distintos Tenants (especialmente cuando están en cuentas de Supabase separadas):
+
+- **RLS Obligatorio**: Al agregar nuevas tablas o columnas que requieran escritura desde el frontend, se DEBE adjuntar el script SQL para habilitar las políticas de Row Level Security (RLS) correspondientes.
+- **Principio de Doble Validación**: Antes de dar por terminada una tarea en Tenant 1, se debe verificar que el esquema de base de datos coincida con las expectativas del código.
+- **Manejo de Errores**: El código debe utilizar las utilidades de diagnóstico (`diagnoseDatabaseError`) para alertar al administrador si una operación falló por falta de permisos en el Tenant.
 
 ---
 
-_Documento actualizado al 30 de Enero, 2026._
+_Documento actualizado al 18 de Marzo, 2026._
