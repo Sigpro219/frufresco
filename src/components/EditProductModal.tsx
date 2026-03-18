@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase, Product } from '@/lib/supabase';
-import { diagnoseStorageError } from '@/lib/errorUtils';
+import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
 
 interface EditProductModalProps {
     product: Product;
@@ -239,7 +239,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             onSave();
             onClose();
         } catch (error: any) {
-            alert('Error al actualizar producto: ' + error.message);
+            const diagnosis = diagnoseDatabaseError(error, 'products', 'Update');
+            alert(diagnosis || 'Error al actualizar producto');
         } finally {
             setLoading(false);
         }
