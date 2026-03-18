@@ -53,6 +53,7 @@ export default function MasterProductsPage() {
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [dragging, setDragging] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [wipeExistingData, setWipeExistingData] = useState(false); // Nueva opción de limpieza
     const [dynamicUnits, setDynamicUnits] = useState<string[]>(['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto', 'Caja', 'Saco', 'Cubeta']);
     const [selectedVariantProduct, setSelectedVariantProduct] = useState<Product | null>(null);
     const [selectedEditProduct, setSelectedEditProduct] = useState<Product | null>(null);
@@ -166,24 +167,38 @@ export default function MasterProductsPage() {
 
     const downloadFullMaster = () => {
         const exportData = products.map(p => ({
-            ID: p.accounting_id || '',
-            SKU: p.sku,
-            Nombre: p.name,
+            ID_INTERNO: p.id,
+            SKU: p.sku || '',
+            ID_CONTABLE: p.accounting_id || '',
+            Nombre: p.name || '',
+            Descripcion: p.description || '',
+            Categoria: p.category || '', // Mantener código técnico para recarga
+            Categoria_Nombre: CATEGORY_MAP[p.category] || p.category,
+            Unidad: p.unit_of_measure || '',
+            Costo_Base: p.base_price || 0,
             IVA: p.iva_rate ?? 19,
-            Categoria: CATEGORY_MAP[p.category] || p.category,
-            Unidad: p.unit_of_measure,
-            Comprador: p.buying_team,
-            Metodo_Compra: p.procurement_method,
+            URL_Imagen: p.image_url || '',
+            Comprador: p.buying_team || '',
+            Metodo_Compra: p.procurement_method || '',
             Activo: p.is_active ? 'SI' : 'NO',
             Web: p.show_on_web ? 'SI' : 'NO',
-            Min_Inventario: p.min_inventory_level
+            Min_Inventario: p.min_inventory_level || 0,
+            Config_Opciones: p.options_config ? JSON.stringify(p.options_config) : '[]',
+            Variantes_JSON: p.variants ? JSON.stringify(p.variants) : '[]'
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(exportData);
+        // Ajustar anchos de columna básicos
+        worksheet['!cols'] = [
+            { wch: 36 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 60 }, 
+            { wch: 10 }, { wch: 20 }, { wch: 10 }, { wch: 8 }, { wch: 50 },
+            { wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 10 }, { wch: 15 }
+        ];
+
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Maestro_Productos");
-        XLSX.writeFile(workbook, `maestro_skus_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showToast('Catálogo exportado exitosamente', 'success');
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Maestro_Completo");
+        XLSX.writeFile(workbook, `full_maestro_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Catálogo completo exportado para edición', 'success');
     };
 
     const sanitizeMasterData = async () => {
@@ -422,90 +437,82 @@ export default function MasterProductsPage() {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             
-            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+            const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-            
-            if (rows.length <= 1) {
-                showToast('El archivo está vacío o solo tiene encabezados', 'error');
+            if (rows.length === 0) {
+                showToast('El archivo está vacío o no tiene el formato correcto', 'error');
                 return;
             }
 
-            setLoading(true);
-            let errors = 0;
-
-            // Skip header (index 0)
-            for (const cols of rows.slice(1)) {
-                if (cols.length < 2) continue;
-
-                // Estructura exactas: [0] id, [1] Nombre, [2] Comprador (Buying Team), [3] Gestión (Method)
-                const accountingId = parseInt(cols[0]?.toString() || '0');
-                const nameText = cols[1]?.toString().trim() || 'Desconocido';
-                const buyingTeam = cols[2]?.toString().trim() || '';
-                const procurementMethod = cols[3]?.toString().trim() || '';
-
-                // Lógica Inteligente de Categoría (Inferir del Comprador)
-                let categoryPrefix = 'DE'; // Defecto (Despensa)
-                const btU = buyingTeam.toUpperCase();
-                if (btU.includes('FRUTA')) categoryPrefix = 'FR';
-                else if (btU.includes('VEGETAL')) categoryPrefix = 'VE';
-                else if (btU.includes('PAPA') || btU.includes('BULTO')) categoryPrefix = 'TU';
-                else if (btU.includes('HIERBA') || btU.includes('HORTALIZA')) categoryPrefix = 'HO';
-                else if (btU.includes('REFRIGER')) categoryPrefix = 'LA'; 
-
-                // Generar SKU Único: CATEGORIA-ID (si existe) o CATEGORIA-NOMB-ID
-                const cleanName = nameText.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
-                const sku = accountingId > 0 
-                  ? `${categoryPrefix}-${accountingId.toString().padStart(4, '0')}` 
-                  : `${categoryPrefix}-${cleanName}-${Math.floor(Math.random() * 1000)}`;
-
-                const productData = {
-                    accounting_id: accountingId > 0 ? accountingId : null,
-                    sku: sku,
-                    name: nameText.charAt(0).toUpperCase() + nameText.slice(1).toLowerCase(),
-                    category: categoryPrefix,
-                    buying_team: buyingTeam,
-                    procurement_method: procurementMethod,
-                    unit_of_measure: 'Kg', 
-                    weight_kg: 0.5, // Peso logístico base
-                    theoretical_shrinkage_pct: 0,
-                    description: generateDescription(nameText, categoryPrefix),
-                    is_active: true,
-                    show_on_web: true,
-                    image_url: null 
-                };
-
-                const { error } = await supabase
-                    .from('products')
-                    .upsert(productData, { onConflict: 'sku' });
-
-                if (error) {
-                    console.error('SGP 4-Column Upsert Error:', error);
-                    errors++;
-                }
+            if (wipeExistingData) {
+                const confirmed = confirm('⚠️ ATENCIÓN: Se eliminarán TODOS los productos actuales antes de cargar los nuevos. ¿Estás absolutamente seguro?');
+                if (!confirmed) return;
             }
 
-            showToast(`Carga masiva finalizada con ${errors} errores.`, errors > 0 ? 'info' : 'success');
-            fetchProducts();
-            
-            setLoading(false);
-            setSelectedFile(null);
-            setIsBulkModalOpen(false);
+            setLoading(true);
+            try {
+                if (wipeExistingData) {
+                    // Borrado total (excepto quizás un ping de sistema si existiera)
+                    const { error: purgeError } = await supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
+                    if (purgeError) throw purgeError;
+                }
+
+                const productsToInsert = rows.map(row => {
+                    // Mapeo flexible por nombres de columna para soportar exportación completa
+                    return {
+                        id: row.ID_INTERNO || row.id || undefined,
+                        sku: (row.SKU || row.sku || '').toString(),
+                        accounting_id: parseInt(row.ID_CONTABLE || row.accounting_id || '0'),
+                        name: (row.Nombre || row.name || '').toString(),
+                        description: (row.Descripcion || row.description || '').toString(),
+                        category: (row.Categoria || row.category || 'DE').toString(),
+                        unit_of_measure: (row.Unidad || row.unit_of_measure || 'Kg').toString(),
+                        base_price: parseFloat(row.Costo_Base || row.base_price || '0'),
+                        iva_rate: parseInt(row.IVA || row.iva_rate || '19'),
+                        image_url: (row.URL_Imagen || row.image_url || '').toString() || null,
+                        buying_team: (row.Comprador || row.buying_team || '').toString(),
+                        procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString(),
+                        is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
+                        show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
+                        min_inventory_level: parseInt(row.Min_Inventario || row.min_inventory_level || '0'),
+                        options_config: typeof row.Config_Opciones === 'string' ? JSON.parse(row.Config_Opciones) : (row.options_config || []),
+                        variants: typeof row.Variantes_JSON === 'string' ? JSON.parse(row.Variantes_JSON) : (row.variants || [])
+                    };
+                });
+
+                // Cargar en bloques de 100
+                const chunkSize = 100;
+                for (let i = 0; i < productsToInsert.length; i += chunkSize) {
+                    const chunk = productsToInsert.slice(i, i + chunkSize);
+                    const { error } = await supabase.from('products').upsert(chunk);
+                    if (error) throw error;
+                }
+
+                showToast(`Carga masiva completada: ${productsToInsert.length} productos procesados.`, 'success');
+                setIsBulkModalOpen(false);
+                setSelectedFile(null);
+                fetchProducts();
+            } catch (err: any) {
+                console.error('Error en carga masiva:', err);
+                showToast('Error en la carga: ' + err.message, 'error');
+            } finally {
+                setLoading(false);
+            }
         };
         reader.readAsBinaryString(selectedFile);
     };
 
     const downloadTemplate = () => {
         const data = [
-            ["id", "Nombre", "Comprador", "Gestión de compras"],
-            ["1", "Acelga", "HIERBAS Y HORTALIZAS", "Compras Generales"],
-            ["2", "Achote en Pepa", "EQUIPO A VEGETALES", "Compras Generales"]
+            ["SKU", "Nombre", "Descripcion", "Categoria", "Unidad", "Costo_Base", "IVA", "URL_Imagen", "Comprador", "Metodo_Compra", "Activo", "Web", "Min_Inventario"],
+            ["M-FR-MNZ-K", "Manzana Roja", "Manzana fresca seleccionada...", "FR", "Kg", 5000, 0, "", "FRUTA", "Compras Generales", "SI", "SI", 10],
+            ["M-VE-CBL-K", "Cebolla Cabezona", "Cebolla de alta calidad...", "VE", "Kg", 2000, 0, "", "VEGETAL", "Compras Generales", "SI", "SI", 20]
         ];
 
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla_SGP");
-        
-        XLSX.writeFile(workbook, "plantilla_maestra_sgp.xlsx");
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla_Productos");
+        XLSX.writeFile(workbook, "plantilla_carga_masiva_frubana.xlsx");
     };
 
     const filteredProducts = useMemo(() => {
@@ -659,34 +666,25 @@ export default function MasterProductsPage() {
 
                             </button>
                             <button
-                                disabled
+                                onClick={() => setIsBulkModalOpen(true)}
                                 style={{
                                     padding: '1rem',
                                     borderRadius: '12px',
-                                    backgroundColor: '#F9FAFB',
-                                    color: '#9CA3AF',
+                                    backgroundColor: '#F3F4F6',
+                                    color: '#374151',
                                     border: '1px solid #E5E7EB',
                                     fontWeight: '700',
-                                    cursor: 'not-allowed',
+                                    cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '0.8rem',
                                     transition: 'all 0.2s',
                                     position: 'relative'
                                 }}
-                                title="Acceso Restringido: Solo Nivel de Control Superior del Sistema"
+                                title="Carga Masiva desde Excel"
                             >
                                 <div style={{ position: 'relative' }}>
-                                    <FileUp size={20} style={{ opacity: 0.5 }} />
-                                    <Lock size={10} style={{ 
-                                        position: 'absolute', 
-                                        bottom: -2, 
-                                        right: -2, 
-                                        color: '#EF4444',
-                                        backgroundColor: 'white',
-                                        borderRadius: '50%',
-                                        padding: '1px'
-                                    }} />
+                                    <FileUp size={20} />
                                 </div>
                             </button>
                         </div>
@@ -1545,6 +1543,20 @@ export default function MasterProductsPage() {
                                     </div>
                                     {!selectedFile && <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>Archivos .xlsx o .xls oficiales de Excel</div>}
                                 </div>
+                            </div>
+
+                            {/* Opción de Purga */}
+                            <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#FEF2F2', borderRadius: '14px', border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="wipe-data" 
+                                    checked={wipeExistingData} 
+                                    onChange={(e) => setWipeExistingData(e.target.checked)}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="wipe-data" style={{ fontSize: '0.85rem', color: '#B91C1C', fontWeight: '700', cursor: 'pointer' }}>
+                                    Borrar todos los productos existentes antes de cargar (Limpieza total)
+                                </label>
                             </div>
 
                             <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
