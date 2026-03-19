@@ -16,7 +16,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [uploading, setUploading] = useState(false);
     const [formData, setFormData] = useState<Product>({ 
         ...product,
-        iva_rate: product.iva_rate ?? 19 
+        iva_rate: product.iva_rate ?? 19,
+        utility_deviation_pct: product.utility_deviation_pct ?? 0
     });
     const [parentSearch, setParentSearch] = useState('');
     const [showParentResults, setShowParentResults] = useState(false);
@@ -28,17 +29,16 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
-        { id: 'VE', name: 'Verduras' },
+        { id: 'VE', name: 'Vegetales' },
         { id: 'TU', name: 'Tubérculos' },
         { id: 'HO', name: 'Hortalizas' },
         { id: 'LA', name: 'Lácteos' },
-        { id: 'DE', name: 'Despensa' },
-        { id: 'CO', name: 'Congelados' }
+        { id: 'DE', name: 'Despensa' }
     ];
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];
     const procurementMethods = ['Compras Generales', 'Contratación Directa', 'Importación', 'Local'];
-    const baseUnits = ['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto', 'Caja', 'Saco', 'Cubeta'];
+    const [baseUnits, setBaseUnits] = useState(['Kg', 'G', 'Lb', 'Pkt 250g', 'Pkt 500g', 'Lt', 'Un', 'Atado', 'Bulto', 'Caja', 'Saco', 'Cubeta']);
 
     const INITIAL_ATTRIBUTES = [
         { name: 'Madurez', values: ['Verde', 'Pintón', 'Maduro', 'Sobremaduro'] },
@@ -61,6 +61,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 }
                 if (data && data.length > 0) {
                     setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                }
+
+                // Fetch Dynamic Units from Settings
+                const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'standard_units').single();
+                if (settingsData?.value) {
+                    const dynamicList = settingsData.value.split(',').map((u: string) => u.trim());
+                    if (dynamicList.length > 0) setBaseUnits(dynamicList);
                 }
             } catch (e) {
                 console.warn('EditModal: Error fetching master attributes.');
@@ -124,12 +131,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     const generateVariants = () => {
-        if (options.length === 0) {
-            if (confirm('¿Eliminar todas las combinaciones generadas?')) {
-                setVariants([]);
-            }
-            return;
-        }
+        if (options.length === 0) return;
 
         let results: any[] = [{}];
         options.forEach(opt => {
@@ -205,13 +207,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         try {
             const uploadedImageUrl = await uploadImage();
             
-            console.log('Guardando Producto:', {
-                id: product.id,
-                sku: formData.sku,
-                options_count: options.length,
-                variants_count: variants.length
-            });
-
             const { error } = await supabase
                 .from('products')
                 .update({
@@ -226,8 +221,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     parent_id: formData.parent_id,
                     buying_team: formData.buying_team,
                     procurement_method: formData.procurement_method,
+                    utility_deviation_pct: formData.utility_deviation_pct || 0,
                     options_config: options,
-                    options: options, // Para compatibilidad con versiones anteriores
                     variants: variants,
                     iva_rate: formData.iva_rate
                 })
@@ -235,7 +230,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
             if (error) throw error;
 
-            console.info('✅ Producto actualizado correctamente');
             onSave();
             onClose();
         } catch (error: any) {
@@ -419,6 +413,36 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         )}
                     </div>
 
+                    {/* Lógica de Desviación de Utilidad (Solo si es Hijo) */}
+                    {formData.parent_id && (
+                        <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
+                                <span>📊 CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0 }}>
+                                Este producto hereda los costos del Padre. Define aquí la utilidad adicional por el proceso de empaque o volumen menor.
+                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#1E40AF', marginBottom: '4px' }}>Ajuste de Utilidad (%)</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input 
+                                            type="number"
+                                            value={formData.utility_deviation_pct}
+                                            onChange={(e) => setFormData({ ...formData, utility_deviation_pct: parseFloat(e.target.value) || 0 })}
+                                            style={{ width: '80px', padding: '0.6rem', borderRadius: '8px', border: '2px solid #2563EB', fontWeight: '900', textAlign: 'center' }}
+                                        />
+                                        <span style={{ fontWeight: '800', color: '#2563EB' }}>% ADICIONAL</span>
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.75rem', color: '#1E40AF' }}>
+                                    Padre vinculado: <br />
+                                    <strong style={{ fontSize: '0.85rem' }}>{allProducts.find(p => p.id === formData.parent_id)?.sku || 'Cargando...'}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Unidad de Medida</label>
@@ -545,6 +569,25 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <div style={{ borderLeft: '1px solid #eee', paddingLeft: '3rem' }}>
                             <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>🧬 Variantes del SKU</h3>
 
+                            {/* BLOQUE DE VARIANTES (Oculto si es Hijo) */}
+                    {!formData.parent_id ? (
+                        <div style={{ backgroundColor: '#F9FAFB', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#374151' }}>🛠️ GESTIÓN TÉCNICA DE VARIANTES</h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#6B7280' }}>Define atributos (Madurez, Tamaño) para crear sub-SKUs automáticos.</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={addOption}
+                                        disabled={options.length >= 3}
+                                        style={{ padding: '0.6rem 1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', fontSize: '0.75rem', cursor: options.length >= 3 ? 'not-allowed' : 'pointer', opacity: options.length >= 3 ? 0.5 : 1 }}
+                                    >
+                                        + Agregar Atributo
+                                    </button>
+                                </div>
+                            </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 {options.map((opt: any, idx: number) => (
                                     <div key={idx} style={{ padding: '1.2rem', backgroundColor: '#F3F4F6', borderRadius: '12px', position: 'relative' }}>
@@ -643,31 +686,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     </div>
                                 ))}
 
-                                {options.length < 3 && (
-                                    <button
-                                        type="button"
-                                        onClick={addOption}
-                                        style={{ padding: '0.8rem', borderRadius: '8px', border: '2px dashed #D1D5DB', color: '#6B7280', fontWeight: '700', background: 'none', cursor: 'pointer' }}
-                                    >
-                                        + Añadir Variable de Producto
-                                    </button>
-                                )}
-
-                                {options.length > 0 ? (
+                                {options.length > 0 && (
                                     <button
                                         type="button"
                                         onClick={generateVariants}
                                         style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
                                     >
                                         🔄 Regenerar Combinaciones
-                                    </button>
-                                ) : variants.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={generateVariants}
-                                        style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
-                                    >
-                                        🗑️ Borrar Combinaciones
                                     </button>
                                 )}
 
@@ -772,7 +797,18 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 )}
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F3F4F6', borderRadius: '20px', border: '1px dashed #D1D5DB' }}>
+                                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⛓️</div>
+                                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#4B5563' }}>Producto tipo Variación (Hijo)</h3>
+                                <p style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '4px' }}>
+                                    Como este SKU ya es una variación funcional del Padre, no puede tener sub-variantes propias.
+                                    Gestiona su precio dinámico en la sección superior.
+                                </p>
+                            </div>
+                        )}
+                        </div> {/* Fin Columna Derecha */}
+                    </div> {/* Fin Grid */}
 
                     <footer style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
                         <button type="button" onClick={onClose} style={{ padding: '0.8rem 2rem', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontWeight: '600' }}>Cancelar</button>

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "da6c3dfe-dad9-49eb-877f-1481dab5d883",
+    "tenant_name": "Delta Coretech (Showcase)",
+    "tenant_slug": "showcase",
+    "supabase_url": "https://kuxnixwoacwsotcilhuz.supabase.co",
+    "service_role_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eG5peHdvYWN3c290Y2lsaHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODU5ODU3MiwiZXhwIjoyMDg0MTc0NTcyfQ.lJ4JSQlzJAW6QW0Mo4UuG7QxcXTXw5iihVO_k6RS-eU",
+    "status": "active",
+    "subscription_start": "2026-03-17T16:54:25.184625+00:00",
+    "subscription_duration_months": 120,
+    "subscription_end": "2036-03-17T16:54:25.184625+00:00",
+    "branding_config": {
+      "app_name": "Delta Coretech",
+      "app_logo_url": "/logo_corporate.png"
+    },
+    "last_sync": "2026-03-18T16:35:01.79+00:00",
+    "created_at": "2026-03-17T16:54:25.184625+00:00",
+    "updated_at": "2026-03-17T16:54:25.184625+00:00"
+  },
+  {
+    "id": "b6c5875c-a271-4722-a5da-7fe5db64612c",
+    "tenant_name": "FruFresco (Tenant 1)",
+    "tenant_slug": "frufresco",
+    "supabase_url": "https://csqurhdykbalvlnpowcz.supabase.co",
+    "service_role_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzcXVyaGR5a2JhbHZsbnBvd2N6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjY3Njk2MSwiZXhwIjoyMDg4MjUyOTYxfQ.6lAdV9TeZvrc6nMs7VCMxnZiTWeewMsFtZn84-kJ_5E",
+    "status": "active",
+    "subscription_start": "2026-03-17T16:54:25.465763+00:00",
+    "subscription_duration_months": 12,
+    "subscription_end": "2027-03-17T16:54:25.465763+00:00",
+    "branding_config": {
+      "app_name": "FruFresco",
+      "app_logo_url": "/logo.png"
+    },
+    "last_sync": "2026-03-18T16:35:01.79+00:00",
+    "created_at": "2026-03-17T16:54:25.465763+00:00",
+    "updated_at": "2026-03-17T16:54:25.465763+00:00"
+  }
+]
