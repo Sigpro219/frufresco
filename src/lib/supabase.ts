@@ -97,4 +97,5 @@ export interface Product {
     iva_rate?: number;
     tags?: string[];
     keywords?: string;
+    utility_deviation_pct?: number;
 }
