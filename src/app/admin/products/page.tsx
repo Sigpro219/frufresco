@@ -415,10 +415,10 @@ export default function AdminProductsPage() {
 
         return {
             total,
-            activeCoverage: Math.round((active / total) * 100),
-            imageCoverage: Math.round((withImg / total) * 100),
-            variantsCoverage: Math.round((withVariants / total) * 100),
-            pricingStatus: Math.round((withPrice / total) * 100)
+            activeCoverage: (active / total * 100).toFixed(1),
+            imageCoverage: (withImg / total * 100).toFixed(1),
+            variantsCoverage: (withVariants / total * 100).toFixed(1),
+            pricingStatus: (withPrice / total * 100).toFixed(1)
         };
     }, [products]);
 
