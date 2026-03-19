@@ -646,7 +646,7 @@ export default function CheckoutPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
                                             <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0, fontWeight: '700' }}>
-                                                Ubicación vinculada
+                                                Punto de entrega verificado y en cobertura
                                             </p>
                                         </div>
                                         <button 
@@ -787,7 +787,7 @@ export default function CheckoutPage() {
                                 {loading ? (
                                     <>Procesando <Loader2 size={24} className="animate-spin" /></>
                                 ) : !latitude ? (
-                                    <>Confirmar Punto de Entrega <MapPin size={24} strokeWidth={2.5} /></>
+                                    <>📍 Pincha arriba para fijar tu entrega <MapPin size={24} strokeWidth={2.5} /></>
                                 ) : (outOfZone && !isB2B) ? (
                                     <>Zona No Soportada <MapPin size={24} /></>
                                 ) : (
