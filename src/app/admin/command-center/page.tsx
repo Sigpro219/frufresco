@@ -94,8 +94,6 @@ export default function CommandCenter() {
         permissions: []
     });
 
-    const [globalUpdating, setGlobalUpdating] = useState(false);
-
     const fetchSettings = useCallback(async () => {
         try {
             const { data, error } = await supabase.from('app_settings').select('*');
@@ -379,33 +377,17 @@ export default function CommandCenter() {
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0 }}>DELTA <span style={{ color: '#D4AF37' }}>Command Center</span></h1>
                         <p style={{ color: '#6B7280', fontSize: '1rem', marginTop: '8px' }}>Consola Maestra de Gobernanza del Motor FruFresco CORE.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <button 
-                            onClick={handleGlobalUpdate}
-                            disabled={globalUpdating}
-                            style={{ 
-                                display: 'flex', alignItems: 'center', gap: '8px', 
-                                padding: '10px 20px', backgroundColor: '#6366F1', border: 'none', 
-                                borderRadius: '12px', fontWeight: '800', color: 'white', cursor: globalUpdating ? 'not-allowed' : 'pointer',
-                                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)', transition: 'all 0.2s', opacity: globalUpdating ? 0.7 : 1
-                            }}
-                        >
-                            <RefreshCw size={18} className={globalUpdating ? 'animate-spin' : ''} />
-                            {globalUpdating ? 'Sincronizando...' : 'Actualizar Toda la Aplicación'}
-                        </button>
-
-                        <button 
-                            onClick={() => router.push('/admin/dashboard')}
-                            style={{ 
-                                display: 'flex', alignItems: 'center', gap: '8px', 
-                                padding: '10px 20px', backgroundColor: 'white', border: '1px solid #E5E7EB', 
-                                borderRadius: '12px', fontWeight: '800', color: '#111827', cursor: 'pointer',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)', transition: 'all 0.2s'
-                            }}
-                        >
-                            <ArrowLeft size={18} /> Menú Admin
-                        </button>
-                    </div>
+                    <button 
+                        onClick={() => router.push('/admin/dashboard')}
+                        style={{ 
+                            display: 'flex', alignItems: 'center', gap: '8px', 
+                            padding: '10px 20px', backgroundColor: 'white', border: '1px solid #E5E7EB', 
+                            borderRadius: '12px', fontWeight: '800', color: '#111827', cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)', transition: 'all 0.2s'
+                        }}
+                    >
+                        <ArrowLeft size={18} /> Menú Admin
+                    </button>
                 </header>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '1.5rem', marginBottom: '2rem' }}>
