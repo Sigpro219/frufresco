@@ -740,27 +740,26 @@ export default function MasterProductsPage() {
                             >
                                 <FileDown size={18} />
                             </button>
-                            {/* 
                             <button
-                                onClick={() => setIsBulkModalOpen(true)}
+                                disabled={true}
                                 style={{
                                     padding: '0.6rem 0.8rem',
                                     borderRadius: '10px',
                                     backgroundColor: '#F3F4F6',
-                                    color: '#374151',
+                                    color: '#9CA3AF',
                                     border: '1px solid #E5E7EB',
                                     fontWeight: '700',
-                                    cursor: 'pointer',
+                                    cursor: 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     transition: 'all 0.2s',
-                                    position: 'relative'
+                                    position: 'relative',
+                                    opacity: 0.6
                                 }}
-                                title="Carga Masiva desde Excel"
+                                title="Carga Masiva (Deshabilitada por seguridad)"
                             >
                                 <FileUp size={18} />
                             </button>
-                            */}
                         </div>
                     </div>
                 </header>
