@@ -111,7 +111,7 @@ export async function POST(req: Request) {
                                 .from('products')
                                 .update({ image_url: cp.image_url })
                                 .eq('sku', cp.sku)
-                                .is('image_url', null); // Solo actualiza los que NO tienen imagen aún
+                                .or('image_url.is.null,image_url.eq.'); // Actualiza NULL o vacío
 
                             if (imgErr) {
                                 imagesFailed++;
