@@ -237,31 +237,41 @@ export default function MasterProductsPage() {
         }
     };
     
-    const hideProductsWithoutImages = async () => {
-        const noImageProducts = products.filter(p => !p.image_url || p.image_url.trim() === '');
-        const count = noImageProducts.length;
+    const syncWebVisibility = async () => {
+        const toHide = products.filter(p => (!p.image_url || p.image_url.trim() === '') && p.show_on_web).length;
+        const toShow = products.filter(p => p.image_url && p.image_url.trim() !== '' && !p.show_on_web && p.is_active).length;
         
-        if (count === 0) {
-            showToast('No hay productos sin imagen para ocultar.', 'info');
+        if (toHide === 0 && toShow === 0) {
+            showToast('El catálogo web ya está sincronizado con las imágenes disponibles.', 'info');
             return;
         }
 
-        if (!confirm(`⚠️ ATENCIÓN: Se ocultarán de la vista pública ${count} productos que no tienen fotografía vinculada. ¿Deseas continuar?`)) return;
+        if (!confirm(`🚀 Sincronización Web:\n\n• Se ocultarán ${toHide} productos sin foto.\n• Se activarán ${toShow} productos con foto activa.\n\n¿Deseas aplicar estos cambios masivamente?`)) return;
 
         try {
             setLoading(true);
-            const { error } = await supabase
+            
+            // 1. Ocultar los que no tienen imagen (o imagen vacía)
+            const { error: hideErr } = await supabase
                 .from('products')
                 .update({ show_on_web: false })
                 .or('image_url.is.null,image_url.eq.""');
+            if (hideErr) throw hideErr;
 
-            if (error) throw error;
+            // 2. Mostrar los que sí tienen imagen Y están activos en catálogo
+            const { error: showErr } = await supabase
+                .from('products')
+                .update({ show_on_web: true })
+                .not('image_url', 'is', null)
+                .neq('image_url', '')
+                .eq('is_active', true);
+            if (showErr) throw showErr;
 
-            showToast(`Limpieza completada: ${count} productos retirados de la web masivamente.`, 'success');
+            showToast(`Sincronización exitosa: ${toHide} ocultos y ${toShow} nuevos publicados.`, 'success');
             await fetchProducts();
         } catch (err: any) {
-            console.error('Cleanup error:', err);
-            showToast('Error durante la limpieza: ' + err.message, 'error');
+            console.error('Sync error:', err);
+            showToast('Error durante la sincronización: ' + err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -656,13 +666,13 @@ export default function MasterProductsPage() {
                                 <Wand2 size={16} /> Sanetizar
                             </button>
                             <button
-                                onClick={hideProductsWithoutImages}
+                                onClick={syncWebVisibility}
                                 style={{
                                     padding: '0.6rem 1rem',
                                     borderRadius: '10px',
-                                    backgroundColor: '#FEE2E2',
-                                    color: '#991B1B',
-                                    border: '1px solid #FECACA',
+                                    backgroundColor: '#EEF2FF',
+                                    color: '#4338CA',
+                                    border: '1px solid #C7D2FE',
                                     fontWeight: '700',
                                     cursor: 'pointer',
                                     display: 'flex',
@@ -670,9 +680,9 @@ export default function MasterProductsPage() {
                                     gap: '0.6rem',
                                     fontSize: '0.85rem'
                                 }}
-                                title="Ocultar todos los productos que no tienen imagen"
+                                title="Sincronizar visibilidad web con disponibilidad de imágenes"
                             >
-                                <ImageOff size={16} /> Limpiar Web
+                                <Globe size={16} /> Sincronizar Web
                             </button>
                             <button
                                 onClick={() => setIsManageAttributesModalOpen(true)}
