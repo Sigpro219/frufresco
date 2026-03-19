@@ -605,7 +605,7 @@ export default function CheckoutPage() {
                                             disabled={isGettingLocation}
                                         >
                                             {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                            Usar GPS
+                                            📍 Mi ubicación actual
                                         </button>
 
                                         <button 
@@ -627,7 +627,7 @@ export default function CheckoutPage() {
                                                 gap: '8px'
                                             }}
                                         >
-                                            <MapIcon size={14} /> Mapa
+                                            <MapIcon size={14} /> 🗺️ Seleccionar en Mapa
                                         </button>
                                     </div>
                                 )}
@@ -787,7 +787,7 @@ export default function CheckoutPage() {
                                 {loading ? (
                                     <>Procesando <Loader2 size={24} className="animate-spin" /></>
                                 ) : !latitude ? (
-                                    <>Vincular GPS para Pagar <MapPin size={24} strokeWidth={2.5} /></>
+                                    <>Confirmar Punto de Entrega <MapPin size={24} strokeWidth={2.5} /></>
                                 ) : (outOfZone && !isB2B) ? (
                                     <>Zona No Soportada <MapPin size={24} /></>
                                 ) : (
@@ -797,7 +797,7 @@ export default function CheckoutPage() {
 
                             {!latitude && address.trim().length > 3 && (
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontWeight: '600', opacity: 0.7 }}>
-                                    * Capturar tu ubicación GPS es obligatorio.
+                                    📍 Necesitamos tu ubicación exacta para que el repartidor llegue sin problemas.
                                 </p>
                             )}
 
