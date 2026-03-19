@@ -145,7 +145,7 @@ export default function CommandCenter() {
                 url: t.supabase_url.replace('https://', '').replace('.supabase.co', ''),
                 status: t.status,
                 end_date: t.subscription_end ? new Date(t.subscription_end).toLocaleDateString('es-CO') : 'N/A',
-                last_sync: t.last_sync ? new Date(t.last_sync).toLocaleDateString('es-CO') : 'Nunca'
+                last_sync: t.last_sync ? new Date(t.last_sync).toLocaleString('es-CO', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : 'Nunca'
             }));
             
             setTenants(formattedTenants);
@@ -176,49 +176,39 @@ export default function CommandCenter() {
         if (selectedIds.length === 0) return;
         setSyncing('global');
         try {
-            const res = await fetch('/api/fleet/sync', {
+            // PASO 1: Deploy de código — git merge CORE → ramas tenant → push → Vercel rebuild
+            const deployRes = await fetch('/api/maintenance/update-all', { method: 'POST' });
+            const deployData = await deployRes.json();
+            if (!deployData.success) {
+                alert('⚠️ El deploy de código falló: ' + deployData.error + '\n\nNo se sincronizó la configuración.');
+                return;
+            }
+
+            // PASO 2: Sync de configuración en Supabase (branding, unidades, settings)
+            const configRes = await fetch('/api/fleet/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ selectedIds })
             });
+            const configData = await configRes.json();
 
-            const data = await res.json();
-            if (data.success) {
-                const summary = data.results.map((r: any) => `${r.name}: ${r.success ? '✅ OK' : '❌ ' + (r.error || 'Err')}`).join('\n');
-                alert(`Sincronización completada:\n\n${summary}`);
+            if (configData.success) {
+                const summary = configData.results.map((r: { name: string; success: boolean; error?: string }) =>
+                    `${r.name}: ${r.success ? '✅ OK' : '❌ ' + (r.error || 'Error')}`
+                ).join('\n');
+                alert(`🚀 Deploy + Sync completado:\n\n${summary}\n\nVercel está redesplegando. En ~60s los tenants tendrán la última versión.`);
                 fetchTenants();
             } else {
-                alert('Error al sincronizar: ' + data.message);
+                alert('El código se desplegó pero falló el sync de config: ' + configData.message);
             }
         } catch (err) {
-            console.error('Sync Error:', err);
-            alert('Fallo catastrófico al intentar la sincronización.');
+            console.error('Full Deploy Error:', err);
+            alert('Fallo crítico en el deploy masivo. Revisa la consola.');
         } finally {
             setSyncing(null);
         }
     };
 
-    const handleGlobalUpdate = async () => {
-        if (!confirm('🚨 ¿Estás seguro de propagar la versión del CORE a toda la infraestructura? \n\nEsta acción realizará commits automáticos y empujará a GitHub.')) return;
-        
-        setGlobalUpdating(true);
-        try {
-            const res = await fetch('/api/maintenance/update-all', { method: 'POST' });
-            const data = await res.json();
-            
-            if (data.success) {
-                alert('✅ ¡ÉXITO! La aplicación ha sido actualizada y desplegada en todas las ramas.');
-                fetchTenants();
-            } else {
-                alert('❌ ERROR: ' + data.error);
-            }
-        } catch (err) {
-            console.error('Global Update Error:', err);
-            alert('Fallo crítico al intentar la actualización masiva.');
-        } finally {
-            setGlobalUpdating(false);
-        }
-    };
 
     const handleRespond = async (ticket: Ticket) => {
         if (!responseText.trim()) return;
@@ -574,7 +564,7 @@ export default function CommandCenter() {
                                 <h2>🚢 Control de Flota SaaS</h2>
                                 <button onClick={handleSync} disabled={selectedIds.length === 0 || !!syncing} style={{ background: '#111827', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', border: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', opacity: selectedIds.length > 0 ? 1 : 0.5 }}>
                                     <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                                    {syncing ? 'Sincronizando...' : `Push a ${selectedIds.length} Instancias`}
+                                    {syncing ? 'Desplegando + Sincronizando...' : `🚀 Deploy a ${selectedIds.length} Instancias`}
                                 </button>
                             </div>
                             <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #E5E7EB', overflowX: 'auto' }}>

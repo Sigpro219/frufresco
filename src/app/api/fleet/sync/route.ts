@@ -97,7 +97,7 @@ export async function POST(req: Request) {
                 try {
                     // Traer todos los SKUs del CORE que tienen imagen
                     const { data: coreProducts } = await supabaseCore
-                        .from('master_products')
+                        .from('products')
                         .select('sku, image_url')
                         .not('image_url', 'is', null)
                         .neq('image_url', '');
@@ -108,10 +108,10 @@ export async function POST(req: Request) {
 
                         for (const cp of coreProducts) {
                             const { error: imgErr } = await supabaseTenant
-                                .from('master_products')
+                                .from('products')
                                 .update({ image_url: cp.image_url })
                                 .eq('sku', cp.sku)
-                                .is('image_url', null); // Solo actualiza los que NO tienen imagen aún
+                                .or('image_url.is.null,image_url.eq.'); // Actualiza NULL o vacío
 
                             if (imgErr) {
                                 imagesFailed++;
