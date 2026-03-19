@@ -740,6 +740,7 @@ export default function MasterProductsPage() {
                             >
                                 <FileDown size={18} />
                             </button>
+                            {/* 
                             <button
                                 onClick={() => setIsBulkModalOpen(true)}
                                 style={{
@@ -759,6 +760,7 @@ export default function MasterProductsPage() {
                             >
                                 <FileUp size={18} />
                             </button>
+                            */}
                         </div>
                     </div>
                 </header>
