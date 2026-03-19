@@ -44,7 +44,10 @@ export async function POST(req: Request) {
                 const updates = [
                     { key: 'last_core_sync', value: now },
                     { key: 'app_name', value: tenant.branding_config?.app_name || '' },
+                    { key: 'app_short_name', value: tenant.branding_config?.app_short_name || '' },
                     { key: 'app_logo_url', value: tenant.branding_config?.app_logo_url || '' },
+                    { key: 'app_logosymbol_url', value: tenant.branding_config?.app_logosymbol_url || '' },
+                    { key: 'provider_logo_url', value: tenant.branding_config?.provider_logo_url || '' },
                     { key: 'system_status', value: tenant.status },
                     { key: 'standard_units', value: coreUnits },
                     { key: 'suspended_units', value: coreSuspended }

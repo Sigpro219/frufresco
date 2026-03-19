@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
 
@@ -29,11 +30,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
-        { id: 'VE', name: 'Vegetales' },
+        { id: 'VE', name: 'Verduras' },
         { id: 'TU', name: 'Tubérculos' },
         { id: 'HO', name: 'Hortalizas' },
         { id: 'LA', name: 'Lácteos' },
-        { id: 'DE', name: 'Despensa' }
+        { id: 'DE', name: 'Despensa' },
+        { id: 'CO', name: 'Congelados' }
     ];
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];
@@ -131,7 +133,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     const generateVariants = () => {
-        if (options.length === 0) return;
+        if (options.length === 0) {
+            if (confirm('¿Eliminar todas las combinaciones generadas?')) {
+                setVariants([]);
+            }
+            return;
+        }
 
         let results: any[] = [{}];
         options.forEach(opt => {
@@ -207,6 +214,13 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         try {
             const uploadedImageUrl = await uploadImage();
             
+            console.log('Guardando Producto:', {
+                id: product.id,
+                sku: formData.sku,
+                options_count: options.length,
+                variants_count: variants.length
+            });
+
             const { error } = await supabase
                 .from('products')
                 .update({
@@ -223,6 +237,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     procurement_method: formData.procurement_method,
                     utility_deviation_pct: formData.utility_deviation_pct || 0,
                     options_config: options,
+                    options: options, // Para compatibilidad con versiones anteriores
                     variants: variants,
                     iva_rate: formData.iva_rate
                 })
@@ -230,6 +245,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
             if (error) throw error;
 
+            console.info('✅ Producto actualizado correctamente');
             onSave();
             onClose();
         } catch (error: any) {
@@ -282,7 +298,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
                         <div style={{ width: '100px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #D1D5DB', position: 'relative', flexShrink: 0 }}>
                             {previewUrl ? (
-                                <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Image 
+                                    src={previewUrl} 
+                                    alt="" 
+                                    width={100} 
+                                    height={100} 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                    sizes="100px"
+                                />
                             ) : (
                                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>📷</div>
                             )}
@@ -686,13 +709,31 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     </div>
                                 ))}
 
-                                {options.length > 0 && (
+                                {options.length < 3 && (
+                                    <button
+                                        type="button"
+                                        onClick={addOption}
+                                        style={{ padding: '0.8rem', borderRadius: '8px', border: '2px dashed #D1D5DB', color: '#6B7280', fontWeight: '700', background: 'none', cursor: 'pointer' }}
+                                    >
+                                        + Añadir Variable de Producto
+                                    </button>
+                                )}
+
+                                {options.length > 0 ? (
                                     <button
                                         type="button"
                                         onClick={generateVariants}
                                         style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
                                     >
                                         🔄 Regenerar Combinaciones
+                                    </button>
+                                ) : variants.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={generateVariants}
+                                        style={{ padding: '1rem', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
+                                    >
+                                        🗑️ Borrar Combinaciones
                                     </button>
                                 )}
 
@@ -731,7 +772,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     }}
                                                                 >
                                                                     {v.image_url ? (
-                                                                        <img src={v.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                        <Image 
+                                                                            src={v.image_url} 
+                                                                            alt=""
+                                                                            width={40} 
+                                                                            height={40}
+                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                            sizes="40px"
+                                                                        />
                                                                     ) : (
                                                                         <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>{variantUploading === v.id ? '...' : '📷'}</span>
                                                                     )}

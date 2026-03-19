@@ -8,6 +8,7 @@ import Link from 'next/link';
 import VariantModal from '@/components/VariantModal';
 import CreateProductModal from '@/components/CreateProductModal';
 import { CATEGORY_MAP } from '@/lib/constants';
+import Image from 'next/image';
 import { 
     Search,
     ChevronLeft,
@@ -17,7 +18,11 @@ import {
     Eye,
     EyeOff,
     Image as ImageIcon,
-    Filter
+    Filter,
+    Globe,
+    CheckCircle,
+    Package,
+    AlertCircle
 } from 'lucide-react';
 
 export default function AdminProductsPage() {
@@ -75,13 +80,49 @@ export default function AdminProductsPage() {
     }, [showToast]);
 
     const [savingId, setSavingId] = useState<string | null>(null);
+    const [isSyncingPrices, setIsSyncingPrices] = useState(false);
+    const [autosyncEnabled, setAutosyncEnabled] = useState(true);
+    const [b2cModelId, setB2cModelId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'hidden'>('all');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
     useEffect(() => {
         fetchProducts();
+        fetchAutosyncStatus();
     }, [fetchProducts]);
+
+    const fetchAutosyncStatus = async () => {
+        const { data, error } = await supabase
+            .from('pricing_models')
+            .select('id, b2c_autosync_enabled')
+            .eq('name', 'Clientes B2C')
+            .single();
+        
+        if (data) {
+            setAutosyncEnabled(data.b2c_autosync_enabled);
+            setB2cModelId(data.id);
+        }
+    };
+
+    const toggleAutosync = async () => {
+        const newValue = !autosyncEnabled;
+        setAutosyncEnabled(newValue);
+        
+        if (b2cModelId) {
+            const { error } = await supabase
+                .from('pricing_models')
+                .update({ b2c_autosync_enabled: newValue })
+                .eq('id', b2cModelId);
+            
+            if (error) {
+                showToast('No se pudo guardar la configuración', 'error');
+                setAutosyncEnabled(!newValue);
+            } else {
+                showToast(`Auto-sincronización ${newValue ? 'activada' : 'desactivada'}`, 'info');
+            }
+        }
+    };
 
     const updateProductField = async (id: string, field: keyof Product, value: string | number | boolean | any[] | null) => {
         // No guardar si el valor es el mismo para ahorrar peticiones
@@ -219,6 +260,128 @@ export default function AdminProductsPage() {
         }
     };
 
+    // --- SYNC B2C PRICES LOGIC ---
+    const syncB2CWebPrices = async () => {
+        if (!confirm('¿Sincronizar precios en tienda? Se calculará (Costo + Margen B2C + IVA) redondeando al siguiente múltiplo de $50.')) return;
+
+        setIsSyncingPrices(true);
+        try {
+            console.log('🚀 Iniciando sincronización de tienda desde Panel B2C...');
+
+            // 1. Obtener Modelo B2C y sus reglas
+            const { data: b2cModel } = await supabase
+                .from('pricing_models')
+                .select('*')
+                .eq('name', 'Clientes B2C')
+                .single();
+
+            if (!b2cModel) {
+                alert('No se encontró el modelo \"Clientes B2C\". Créalo en la configuración de precios primero.');
+                setIsSyncingPrices(false);
+                return;
+            }
+
+            const { data: b2cRules } = await supabase
+                .from('pricing_rules')
+                .select('*')
+                .eq('model_id', b2cModel.id);
+
+            const rulesMap: Record<string, number> = {};
+            b2cRules?.forEach(r => { rulesMap[r.product_id] = r.margin_adjustment; });
+
+            // 1.1 Obtener TODAS las conversiones para el cálculo
+            const { data: convData } = await supabase
+                .from('product_conversions')
+                .select('*');
+            
+            const conversions = convData || [];
+
+            // 2. Obtener Costos (Matriz) con sus unidades
+            const { data: lastPurchases } = await supabase
+                .from('purchases')
+                .select('product_id, unit_price, purchase_unit')
+                .order('created_at', { ascending: false });
+
+            const costMap: Record<string, { price: number, unit: string }> = {};
+            lastPurchases?.forEach(p => {
+                if (!costMap[p.product_id]) {
+                    costMap[p.product_id] = { price: p.unit_price, unit: p.purchase_unit };
+                }
+            });
+
+            // 3. Procesar Productos
+            const updates = products.map(prod => {
+                const purchaseInfo = costMap[prod.id];
+                if (!purchaseInfo || purchaseInfo.price === 0) return null;
+
+                let realCost = purchaseInfo.price;
+
+                // --- LÓGICA DE CONVERSIÓN ---
+                if (purchaseInfo.unit && purchaseInfo.unit !== prod.unit_of_measure) {
+                    // Buscar si 1 Unidad de Compra = X Unidades de Venta
+                    const convAB = conversions.find(c => 
+                        c.product_id === prod.id && 
+                        c.from_unit === purchaseInfo.unit && 
+                        c.to_unit === prod.unit_of_measure
+                    );
+
+                    if (convAB && convAB.conversion_factor) {
+                        realCost = purchaseInfo.price / convAB.conversion_factor;
+                    } else {
+                        // Buscar si 1 Unidad de Venta = X Unidades de Compra
+                        const convBA = conversions.find(c => 
+                            c.product_id === prod.id && 
+                            c.from_unit === prod.unit_of_measure && 
+                            c.to_unit === purchaseInfo.unit
+                        );
+                        if (convBA && convBA.conversion_factor) {
+                            realCost = purchaseInfo.price * convBA.conversion_factor;
+                        }
+                    }
+                }
+
+                const baseMargin = b2cModel.base_margin_percent;
+                const adjustment = rulesMap[prod.id] || 0;
+                const finalMargin = (baseMargin + adjustment) / 100;
+                
+                // Formula: Costo Real x (1 + Margen) x (1 + IVA) -> Redondear $50
+                const priceBeforeTax = realCost * (1 + finalMargin);
+                const ivaRate = (prod.iva_rate || 0) / 100;
+                const rawFinalPrice = priceBeforeTax * (1 + ivaRate);
+                
+                // Redondeo al siguiente múltiplo de $50:
+                const roundedPrice = Math.ceil(rawFinalPrice / 50) * 50;
+
+                return {
+                    id: prod.id,
+                    name: prod.name,
+                    base_price: roundedPrice
+                };
+            }).filter(Boolean);
+
+            if (updates.length === 0) {
+                alert('No se encontraron productos con costos válidos para actualizar.');
+                return;
+            }
+
+            // 4. Update Masivo
+            for (let i = 0; i < updates.length; i += 50) {
+                const batch = updates.slice(i, i + 50);
+                const { error } = await supabase.from('products').upsert(batch);
+                if (error) throw error;
+            }
+
+            showToast(`¡Tienda Actualizada! ${updates.length} precios sincronizados con IVA y redondeo $50.`, 'success');
+            fetchProducts(); // Refrescar lista
+
+        } catch (err: any) {
+            console.error('Sync Error:', err);
+            showToast('Error sincronizando tienda: ' + err.message, 'error');
+        } finally {
+            setIsSyncingPrices(false);
+        }
+    };
+
     const handleBulkToggle = async (active: boolean) => {
         const { error } = await supabase
             .from('products')
@@ -234,12 +397,23 @@ export default function AdminProductsPage() {
         }
     };
 
-    const stats = {
-        total: products.length,
-        active: products.filter(p => p.is_active).length,
-        hidden: products.filter(p => !p.is_active).length,
-        noImage: products.filter(p => !p.image_url).length
-    };
+    const kpiMetrics = useMemo(() => {
+        const total = products.length;
+        if (total === 0) return { total: 0, activeCoverage: 0, imageCoverage: 0, variantsCoverage: 0, pricingStatus: 0 };
+
+        const active = products.filter(p => p.is_active).length;
+        const withImg = products.filter(p => p.image_url && p.image_url.trim() !== '').length;
+        const withVariants = products.filter(p => p.variants && (p.variants as any[]).length > 0).length;
+        const withPrice = products.filter(p => p.base_price > 0).length;
+
+        return {
+            total,
+            activeCoverage: Math.round((active / total) * 100),
+            imageCoverage: Math.round((withImg / total) * 100),
+            variantsCoverage: Math.round((withVariants / total) * 100),
+            pricingStatus: Math.round((withPrice / total) * 100)
+        };
+    }, [products]);
 
     const filteredProducts = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -340,8 +514,9 @@ export default function AdminProductsPage() {
 
     // Renderizado principal
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
             <Navbar />
+            <Toast />
 
 
             {loading && (
@@ -369,78 +544,175 @@ export default function AdminProductsPage() {
                 }
             `}</style>
             <Toast />
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                <Link href="/admin/dashboard" style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    color: '#6B7280',
-                    textDecoration: 'none',
-                    fontWeight: '600',
-                    marginBottom: '1rem',
-                    fontSize: '0.95rem'
-                }}>
-                    ← Volver al Panel
-                </Link>
-                <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', marginBottom: '0.5rem' }}>🛍️ Catálogo B2C (Tienda)</h1>
-                        <p style={{ color: '#6B7280', fontSize: '1.2rem' }}>Administra los precios comerciales, fotos y visibilidad pública de tus productos.</p>
-                        <div style={{ marginTop: '0.8rem' }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+                <header style={{ marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>← Volver al Dashboard</Link>
+                            <h1 style={{ fontSize: '2.3rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Comercial B2C 🛍️</h1>
+                            <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>Gestión de precios públicos, visibilidad y branding de productos.</p>
+                        </div>
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '12px', 
+                            alignItems: 'center',
+                            backgroundColor: 'rgba(255, 255, 255, 0.45)',
+                            backdropFilter: 'blur(12px)',
+                            padding: '0.6rem 1.2rem',
+                            borderRadius: '16px',
+                            border: '1px solid rgba(255, 255, 255, 0.6)',
+                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)'
+                        }}>
                             <Link href="/admin/master/products" style={{ 
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '0.5rem',
-                                color: 'white', 
+                                gap: '8px',
+                                color: '#4F46E5', 
                                 fontWeight: '700', 
                                 textDecoration: 'none', 
-                                fontSize: '0.9rem',
-                                backgroundColor: '#4F46E5',
-                                padding: '0.6rem 1.5rem',
-                                borderRadius: '12px',
-                                border: 'none',
-                                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
-                                transition: 'all 0.2s'
-                            }}>
-                                Ir al Maestro Técnico (Editar Datos)
+                                fontSize: '0.8rem',
+                                backgroundColor: 'white',
+                                padding: '0.6rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid #E0E7FF',
+                                transition: 'all 0.2s',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFF')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                            >
+                                <Info size={16} /> Panel Maestro
                             </Link>
+
+                            <button
+                                onClick={syncB2CWebPrices}
+                                disabled={isSyncingPrices}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    color: 'white',
+                                    backgroundColor: isSyncingPrices ? '#9CA3AF' : '#10B981',
+                                    padding: '0.6rem 1.4rem',
+                                    borderRadius: '11px',
+                                    border: 'none',
+                                    fontWeight: '800',
+                                    fontSize: '0.85rem',
+                                    cursor: isSyncingPrices ? 'not-allowed' : 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                }}
+                                onMouseEnter={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'scale(1.02)')}
+                                onMouseLeave={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'scale(1)')}
+                            >
+                                <Globe size={18} />
+                                {isSyncingPrices ? 'Publicando...' : 'Publicar Precios en Tienda'}
+                            </button>
+
+                            {/* SEPARADOR SUTIL */}
+                            <div style={{ height: '20px', width: '1px', backgroundColor: 'rgba(0,0,0,0.1)', marginLeft: '8px' }}></div>
+
+                            {/* SELECTOR AUTO-SYNC PEGADO A LA DERECHA */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                paddingLeft: '8px'
+                            }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Auto
+                                </span>
+                                <div 
+                                    onClick={toggleAutosync}
+                                    style={{
+                                        width: '40px',
+                                        height: '21px',
+                                        backgroundColor: autosyncEnabled ? '#10B981' : '#D1D5DB',
+                                        borderRadius: '20px',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '15px',
+                                        height: '15px',
+                                        backgroundColor: 'white',
+                                        borderRadius: '50%',
+                                        position: 'absolute',
+                                        top: '3px',
+                                        left: autosyncEnabled ? '22px' : '3px',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                    }} />
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    {savingId && (
-                        <div style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#1E40AF', animation: 'pulse 1s infinite' }}></div>
-                            Guardando cambios...
-                        </div>
-                    )}
                 </header>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+                {/* KPI DASHBOARD MINIMALISTA */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(5, 1fr)', 
+                    gap: '1rem', 
+                    marginBottom: '2rem' 
+                }}>
                     {[
-                        { label: 'Total Productos', value: stats.total, color: '#4F46E5', icon: '📦' },
-                        { label: 'Activos en Tienda', value: stats.active, color: '#10B981', icon: '👁️' },
-                        { label: 'Ocultos', value: stats.hidden, color: '#EF4444', icon: '🚫' },
-                        { label: 'Sin Imagen', value: stats.noImage, color: '#F59E0B', icon: '🖼️' }
-                    ].map((stat, i) => (
+                        { label: 'Total Catálogo', value: kpiMetrics.total, icon: '📦', color: '#6366F1', bg: '#EEF2FF', desc: 'SKUs Disponibles' },
+                        { label: 'En Inventario', value: `${kpiMetrics.activeCoverage}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5', desc: 'Productos Visibles' },
+                        { label: 'Cobertura Visual', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#3B82F6', bg: '#EFF6FF', desc: 'Items con Foto' },
+                        { label: 'Sincronización', value: `${kpiMetrics.pricingStatus}%`, icon: '💰', color: '#F59E0B', bg: '#FFFBEB', desc: 'Precios Públicos' },
+                        { label: 'Variaciones', value: `${kpiMetrics.variantsCoverage}%`, icon: '🏗️', color: '#EF4444', bg: '#FEF2F2', desc: 'Complejidad SKU' },
+                    ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: 'white',
-                            padding: '1.5rem',
+                            padding: '1.2rem',
                             borderRadius: '16px',
-                            boxShadow: 'var(--shadow-sm)',
-                            border: '1px solid var(--border)',
+                            border: '1px solid #E5E7EB',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '1rem'
-                        }}>
-                            <div style={{ fontSize: '2rem', backgroundColor: `${stat.color}15`, width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {stat.icon}
+                            gap: '1rem',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            cursor: 'default',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-3px)';
+                            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+                            e.currentTarget.style.borderColor = card.color;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.01)';
+                            e.currentTarget.style.borderColor = '#E5E7EB';
+                        }}
+                        >
+                            <div style={{ 
+                                width: '40px', 
+                                height: '40px', 
+                                borderRadius: '12px', 
+                                backgroundColor: card.bg, 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                fontSize: '1.2rem' 
+                            }}>
+                                {card.icon}
                             </div>
                             <div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>{stat.label}</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: stat.color }}>{stat.value}</div>
+                                <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                    {card.label}
+                                </p>
+                                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                                    {card.value}
+                                </p>
                             </div>
                         </div>
                     ))}
                 </div>
+
+
 
                 {selectedIds.length > 0 && (
                     <div style={{
@@ -538,22 +810,23 @@ export default function AdminProductsPage() {
 
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <div style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
+                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
                                 <Search size={22} />
                             </div>
                             <input
                                 type="text"
-                                placeholder="Buscar por nombre, SKU o categoría..."
+                                placeholder="Buscar por nombre, SKU o etiqueta estratégica..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '1.2rem 3.5rem 1.2rem 3.5rem',
-                                    borderRadius: '12px',
-                                    border: '1px solid #D1D5DB',
-                                    fontSize: '1.1rem',
+                                    padding: '1.1rem 3.5rem 1.1rem 3.5rem',
+                                    borderRadius: '16px',
+                                    border: '1px solid #E5E7EB',
+                                    fontSize: '1rem',
                                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    fontFamily: 'inherit'
                                 }}
                             />
                             {searchQuery && (
@@ -561,7 +834,7 @@ export default function AdminProductsPage() {
                                     onClick={() => setSearchQuery('')}
                                     style={{
                                         position: 'absolute',
-                                        right: '1rem',
+                                        right: '1.2rem',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         border: 'none',
@@ -600,19 +873,34 @@ export default function AdminProductsPage() {
                                     position: 'absolute',
                                     right: 0,
                                     top: '120%',
-                                    width: '300px',
+                                    width: '320px',
                                     backgroundColor: 'white',
-                                    borderRadius: '16px',
-                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                                    borderRadius: '20px',
+                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
                                     border: '1px solid #E5E7EB',
-                                    padding: '1.5rem',
-                                    zIndex: 100
+                                    padding: '1.8rem',
+                                    zIndex: 100,
+                                    animation: 'fadeInDown 0.2s ease-out'
                                 }}>
-                                    <h4 style={{ margin: '0 0 1rem 0', color: '#111827', fontSize: '1rem', fontWeight: '800' }}>💡 Tips de Búsqueda</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontSize: '0.85rem' }}>
-                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@web</code> Solo en tienda</div>
-                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@19%</code> Filtrar por IVA</div>
-                                        <div><code style={{ background: '#F3F4F6', padding: '2px 4px', borderRadius: '4px' }}>@fruta</code> Por categoría</div>
+                                    <h4 style={{ margin: '0 0 1.2rem 0', color: '#111827', fontSize: '1.1rem', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        🚀 Power Search Tips
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                                        {[
+                                            { tag: '@web', desc: 'Productos activos en tienda' },
+                                            { tag: '@oculto', desc: 'Items en mantenimiento' },
+                                            { tag: '@19%', desc: 'Filtrar por tasa de IVA' },
+                                            { tag: '@fruta', desc: 'Búsqueda por categoría' },
+                                            { tag: '@on', desc: 'SKUs habilitados' }
+                                        ].map((item, i) => (
+                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                                                <code style={{ backgroundColor: '#EEF2FF', padding: '3px 8px', borderRadius: '6px', color: '#4F46E5', fontWeight: '800' }}>{item.tag}</code>
+                                                <span style={{ color: '#6B7280', fontWeight: '600' }}>{item.desc}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6', fontSize: '0.75rem', color: '#9CA3AF', fontStyle: 'italic', textAlign: 'center' }}>
+                                        Combinar: &quot;Papa @web @fresco&quot;
                                     </div>
                                 </div>
                             )}
@@ -684,7 +972,15 @@ export default function AdminProductsPage() {
                                                 }}
                                             >
                                                 {product.image_url ? (
-                                                    <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <Image 
+                                                        src={product.image_url} 
+                                                        alt={product.name} 
+                                                        width={80} 
+                                                        height={80} 
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        sizes="80px"
+                                                        loading="lazy"
+                                                    />
                                                 ) : (
                                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
                                                         <ImageIcon size={30} />
@@ -1022,6 +1318,6 @@ export default function AdminProductsPage() {
                     )
                 }
             </div>
-        </main >
+        </div>
     );
 }

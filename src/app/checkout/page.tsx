@@ -26,6 +26,7 @@ import {
     AlertCircle,
     X
 } from 'lucide-react';
+import { useAuth } from '../../lib/authContext';
 
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart } = useCart();
@@ -44,6 +45,9 @@ export default function CheckoutPage() {
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
+    const { profile } = useAuth();
+    
+    const isB2B = profile?.role === 'b2b_client';
 
     useEffect(() => {
         async function fetchGeofence() {
@@ -108,6 +112,16 @@ export default function CheckoutPage() {
         setDate(prev => prev || defaultDate);
         setMinDeliveryDate(defaultDate);
     }, []);
+
+    // Load Profile data for B2B/Registered users
+    useEffect(() => {
+        if (profile) {
+            if (!name) setName(profile.contact_name || '');
+            if (!email && profile.company_name?.includes('@')) setEmail(profile.company_name);
+            if (!address) setAddress(profile.address_main || '');
+            console.log('👤 profile found, filling member data...');
+        }
+    }, [profile]);
 
     // Fetch settings and refine date
     useEffect(() => {
@@ -197,7 +211,7 @@ export default function CheckoutPage() {
                     subtotal: totalPrice,
                     total: totalPrice,
                     latitude: safeLat,
-                    longitude: safeLng,
+                    longitude: safeLng
                 })
                 .select()
                 .single();
@@ -478,111 +492,109 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.6rem', 
+                            fontSize: '1.4rem', 
                             fontWeight: '900', 
-                            marginBottom: '2rem', 
+                            marginBottom: '1.75rem', 
                             color: 'var(--text-main)', 
-                            borderBottom: '2px solid rgba(0,0,0,0.05)', 
-                            paddingBottom: '0.75rem',
-                            letterSpacing: '-0.02em',
+                            letterSpacing: '-0.04em',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px'
+                            gap: '12px'
                         }}>
-                            <CreditCard size={24} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
+                            <CreditCard size={22} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
                         </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Nombre Completo
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
-                                        <User size={18} />
+                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                        <User size={16} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Juan Pérez"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
-                                        className="checkout-input"
+                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
+                                        className="checkout-input-modern"
                                     />
                                 </div>
                             </div>
 
-                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         WhatsApp
                                     </label>
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
-                                            <Phone size={18} />
+                                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                            <Phone size={16} />
                                         </div>
                                         <input
                                             type="tel"
                                             placeholder="300 123 4567"
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
-                                            style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
-                                            className="checkout-input"
+                                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            className="checkout-input-modern"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         Email
                                     </label>
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
-                                            <Mail size={18} />
+                                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                            <Mail size={16} />
                                         </div>
                                         <input
                                             type="email"
-                                            placeholder="cliente@correo.com"
+                                            placeholder="ejemplo@correo.com"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
-                                            className="checkout-input"
+                                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            className="checkout-input-modern"
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Dirección de Entrega
                                 </label>
-                                <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
-                                        <MapPin size={18} />
+                                <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
+                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                        <MapPin size={16} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Ej: Calle 158 # 93-37, Apto 310"
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
-                                        className="checkout-input"
+                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                        className="checkout-input-modern"
                                     />
                                 </div>
 
                                 {/* GPS Capture Flow */}
                                 {address.trim().length > 3 && !latitude && (
-                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '0.5rem' }}>
+                                    <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
                                         <button
                                             onClick={handleGetLocation}
                                             type="button"
                                             className="btn-glass"
                                             style={{ 
-                                                fontSize: '0.8rem', 
+                                                fontSize: '0.75rem', 
                                                 background: 'rgba(37, 99, 235, 0.05)', 
                                                 color: '#2563EB', 
-                                                border: '1px solid rgba(37, 99, 235, 0.2)', 
-                                                padding: '0.8rem', 
-                                                borderRadius: '14px', 
+                                                border: '1px solid rgba(37, 99, 235, 0.1)', 
+                                                padding: '0.7rem', 
+                                                borderRadius: '12px', 
                                                 cursor: 'pointer',
                                                 fontWeight: '800',
                                                 display: 'flex',
@@ -592,7 +604,7 @@ export default function CheckoutPage() {
                                             }}
                                             disabled={isGettingLocation}
                                         >
-                                            {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
                                             Usar GPS
                                         </button>
 
@@ -601,12 +613,12 @@ export default function CheckoutPage() {
                                             type="button"
                                             className="btn-glass"
                                             style={{ 
-                                                fontSize: '0.8rem', 
+                                                fontSize: '0.75rem', 
                                                 background: 'rgba(0,0,0,0.03)', 
                                                 color: 'var(--text-main)', 
-                                                border: '1px solid rgba(0,0,0,0.1)', 
-                                                padding: '0.8rem', 
-                                                borderRadius: '14px', 
+                                                border: '1px solid rgba(0,0,0,0.05)', 
+                                                padding: '0.7rem', 
+                                                borderRadius: '12px', 
                                                 cursor: 'pointer',
                                                 fontWeight: '800',
                                                 display: 'flex',
@@ -615,7 +627,7 @@ export default function CheckoutPage() {
                                                 gap: '8px'
                                             }}
                                         >
-                                            <MapIcon size={16} /> Mapa
+                                            <MapIcon size={14} /> Mapa
                                         </button>
                                     </div>
                                 )}
@@ -626,20 +638,20 @@ export default function CheckoutPage() {
                                         alignItems: 'center', 
                                         justifyContent: 'space-between',
                                         gap: '8px', 
-                                        backgroundColor: 'rgba(22, 101, 52, 0.08)', 
-                                        padding: '0.75rem 1.25rem', 
-                                        borderRadius: '16px',
-                                        border: '1px solid rgba(22, 101, 52, 0.2)'
+                                        backgroundColor: '#F0FDF4', 
+                                        padding: '0.6rem 1rem', 
+                                        borderRadius: '12px',
+                                        border: '1px solid #DCFCE7'
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <CheckCircle2 size={18} color="#166534" strokeWidth={2.5} />
-                                            <p style={{ fontSize: '0.85rem', color: '#166534', margin: 0, fontWeight: '700' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
+                                            <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0, fontWeight: '700' }}>
                                                 Ubicación vinculada
                                             </p>
                                         </div>
                                         <button 
                                             onClick={() => { setLatitude(null); setLongitude(null); }}
-                                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '800', textDecoration: 'underline' }}
+                                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
                                         >
                                             Cambiar
                                         </button>
@@ -660,8 +672,8 @@ export default function CheckoutPage() {
                                         value={date}
                                         onChange={(e) => setDate(e.target.value)}
                                         min={minDeliveryDate}
-                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1px solid var(--border)', fontSize: '1rem', fontWeight: '600', color: 'var(--text-main)', backgroundColor: 'rgba(255,255,255,0.5)', outline: 'none' }}
-                                        className="checkout-input"
+                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-main)', backgroundColor: 'white', outline: 'none' }}
+                                        className="checkout-input-modern"
                                     />
                                 </div>
                             </div>
@@ -709,7 +721,7 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {outOfZone && latitude && (
+                            {outOfZone && latitude && !isB2B && (
                                 <div style={{
                                     backgroundColor: 'rgba(249, 115, 22, 0.08)',
                                     color: '#C2410C',
@@ -767,16 +779,16 @@ export default function CheckoutPage() {
                                     justifyContent: 'center',
                                     gap: '12px',
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    boxShadow: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'none' : '0 10px 30px rgba(26, 77, 46, 0.2)'
+                                    boxShadow: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'none' : '0 10px 30px rgba(26, 77, 46, 0.2)'
                                 }}
-                                disabled={loading || !isMinOrderMet || !latitude || outOfZone}
+                                disabled={loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)}
                                 onClick={handleSubmit}
                             >
                                 {loading ? (
                                     <>Procesando <Loader2 size={24} className="animate-spin" /></>
                                 ) : !latitude ? (
                                     <>Vincular GPS para Pagar <MapPin size={24} strokeWidth={2.5} /></>
-                                ) : outOfZone ? (
+                                ) : (outOfZone && !isB2B) ? (
                                     <>Zona No Soportada <MapPin size={24} /></>
                                 ) : (
                                     <>Pagar Pedido Seguro <Rocket size={24} strokeWidth={2.5} /></>
