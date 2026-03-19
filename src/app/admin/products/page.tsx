@@ -403,7 +403,14 @@ export default function AdminProductsPage() {
 
         const active = products.filter(p => p.is_active).length;
         const withImg = products.filter(p => p.image_url && p.image_url.trim() !== '').length;
-        const withVariants = products.filter(p => p.variants && (p.variants as any[]).length > 0).length;
+        
+        // Detección robusta de variaciones (array o configuración de opciones)
+        const withVariants = products.filter(p => {
+            const hasVariantsArray = Array.isArray(p.variants) && p.variants.length > 0;
+            const hasOptionsConfig = p.options_config && typeof p.options_config === 'object' && Object.keys(p.options_config).length > 0;
+            return hasVariantsArray || hasOptionsConfig;
+        }).length;
+
         const withPrice = products.filter(p => p.base_price > 0).length;
 
         return {
@@ -660,10 +667,10 @@ export default function AdminProductsPage() {
                 }}>
                     {[
                         { label: 'Total Catálogo', value: kpiMetrics.total, icon: '📦', color: '#6366F1', bg: '#EEF2FF', desc: 'SKUs Disponibles' },
-                        { label: 'En Inventario', value: `${kpiMetrics.activeCoverage}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5', desc: 'Productos Visibles' },
+                        { label: 'Stock Activo', value: `${kpiMetrics.activeCoverage}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5', desc: 'Productos Visibles' },
                         { label: 'Cobertura Visual', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#3B82F6', bg: '#EFF6FF', desc: 'Items con Foto' },
-                        { label: 'Sincronización', value: `${kpiMetrics.pricingStatus}%`, icon: '💰', color: '#F59E0B', bg: '#FFFBEB', desc: 'Precios Públicos' },
-                        { label: 'Variaciones', value: `${kpiMetrics.variantsCoverage}%`, icon: '🏗️', color: '#EF4444', bg: '#FEF2F2', desc: 'Complejidad SKU' },
+                        { label: 'Cobertura Precios', value: `${kpiMetrics.pricingStatus}%`, icon: '💰', color: kpiMetrics.pricingStatus < 90 ? '#EF4444' : '#F59E0B', bg: kpiMetrics.pricingStatus < 90 ? '#FEF2F2' : '#FFFBEB', desc: 'Precios Públicos' },
+                        { label: 'Mix Variaciones', value: `${kpiMetrics.variantsCoverage}%`, icon: '⚖️', color: '#8B5CF6', bg: '#F5F3FF', desc: 'Complejidad SKU' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: 'white',
