@@ -13,31 +13,35 @@ try {
             const oldSku = item.SKU || '';
             const suffix = oldSku.includes('-') ? oldSku.split('-').pop() : (item.ID_CONTABLE || '0000');
             const newSku = `${item.Categoria}-${suffix}`;
-            values.push(`('${item.ID_INTERNO}', '${item.Categoria}', '${newSku}')`);
+            const iva = item.IVA || 0;
+            
+            // Escapamos con comillas simples si hay que limpiar algo, pero ID y IVA son seguros
+            values.push(`('${item.ID_INTERNO}', '${item.Categoria}', '${newSku}', ${iva})`);
         }
     });
 
-    const sql = `-- RECONCILIACION MAESTRA - FRUFRESCO TENANT 1
--- Ejecutar en el Editor SQL de Supabase
+    const sql = `-- RECONCILIACION MAESTRA - FRUFRESCO TENANT 1 (Con IVA)
+-- Ejecutar en el Editor SQL de Supabase para Tenant 1
 
 BEGIN;
 
 UPDATE products AS p 
 SET 
     category = v.new_cat,
-    sku = v.new_sku
+    sku = v.new_sku,
+    iva_rate = v.iva
 FROM (VALUES 
 ${values.join(',\n')}
-) AS v(id, new_cat, new_sku)
+) AS v(id, new_cat, new_sku, iva)
 WHERE p.id = v.id::uuid;
 
 COMMIT;
 
 -- Verificacion post-update
-SELECT id, name, category, sku FROM products LIMIT 5;`;
+SELECT id, name, category, sku, iva_rate FROM products LIMIT 5;`;
 
     fs.writeFileSync('Update_FruFresco_Master.sql', sql);
-    console.log(`✅ SQL Generado: Update_FruFresco_Master.sql con ${values.length} registros.`);
+    console.log(`✅ SQL Generado: Update_FruFresco_Master.sql con ${values.length} registros (incluyendo IVA).`);
 
 } catch (e) {
     console.error("Error generating SQL:", e.message);

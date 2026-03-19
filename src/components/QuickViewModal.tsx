@@ -13,6 +13,7 @@ interface Product {
     unit_of_measure: string;
     image_url: string;
     sku?: string;
+    iva_rate?: number;
     options?: any;
     options_config?: any[];
     variants?: any[];
@@ -63,6 +64,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
             id: product.id,
             name: getFormattedName(),
             price: currentPrice,
+            iva_rate: product.iva_rate,
             quantity: quantity,
             image_url: product.image_url
         });

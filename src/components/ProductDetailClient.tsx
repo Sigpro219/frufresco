@@ -18,6 +18,7 @@ interface Product {
     options_config?: any[];
     variants?: any[];
     show_on_web?: boolean;
+    iva_rate?: number;
 }
 
 export default function ProductDetailClient({ product }: { product: Product }) {
@@ -63,6 +64,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             id: product.id,
             name: getFormattedName(),
             price: currentPrice,
+            iva_rate: product.iva_rate,
             quantity: quantity,
             image_url: product.image_url
         });
@@ -75,6 +77,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             id: product.id,
             name: getFormattedName(),
             price: currentPrice,
+            iva_rate: product.iva_rate,
             quantity: quantity,
             image_url: product.image_url
         });

@@ -45,8 +45,16 @@ export default function CheckoutPage() {
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
+    const [specialNotes, setSpecialNotes] = useState('');
     const { profile } = useAuth();
     
+    const taxAmount = items.reduce((sum, item) => {
+        const rate = item.iva_rate || 0;
+        // Tax included in price formula: Price * (rate / (100 + rate))
+        const itemTax = (item.price * item.quantity) * (rate / (100 + rate));
+        return sum + itemTax;
+    }, 0);
+
     const isB2B = profile?.role === 'b2b_client';
 
     useEffect(() => {
@@ -208,10 +216,12 @@ export default function CheckoutPage() {
                     customer_name: name,
                     customer_email: email,
                     customer_phone: phone,
-                    subtotal: totalPrice,
+                    subtotal: totalPrice - taxAmount,
+                    tax: taxAmount,
                     total: totalPrice,
                     latitude: safeLat,
-                    longitude: safeLng
+                    longitude: safeLng,
+                    special_notes: specialNotes
                 })
                 .select()
                 .single();
@@ -677,12 +687,42 @@ export default function CheckoutPage() {
                                     />
                                 </div>
                             </div>
+
+                            <div style={{ marginTop: '0.8rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    ¿Alguna recomendación para la entrega?
+                                </label>
+                                <textarea
+                                    placeholder="Ej: Dejar en portería, local 105, el timbre no sirve..."
+                                    value={specialNotes}
+                                    onChange={(e) => setSpecialNotes(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '1rem', 
+                                        borderRadius: '16px', 
+                                        border: '1px solid #E5E7EB', 
+                                        fontSize: '0.95rem', 
+                                        fontWeight: '500', 
+                                        backgroundColor: 'white', 
+                                        outline: 'none', 
+                                        minHeight: '100px', 
+                                        resize: 'none',
+                                        fontFamily: 'inherit',
+                                        transition: 'all 0.3s'
+                                    }}
+                                    className="checkout-input-modern"
+                                />
+                            </div>
                         </div>
 
                         <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.95rem' }}>Subtotal</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${totalPrice.toLocaleString('es-CO')}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${(totalPrice - taxAmount).toLocaleString('es-CO')}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.95rem' }}>Impuestos (IVA)</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${taxAmount.toLocaleString('es-CO')}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2rem' }}>
                                 <span style={{ 
