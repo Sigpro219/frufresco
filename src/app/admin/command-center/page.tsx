@@ -176,11 +176,15 @@ export default function CommandCenter() {
         if (selectedIds.length === 0) return;
         setSyncing('global');
         try {
-            // PASO 1: Deploy de código — git merge CORE → ramas tenant → push → Vercel rebuild
+            // PASO 1: Deploy de código (git push CORE → ramas remotas, sin cambiar rama local)
             const deployRes = await fetch('/api/maintenance/update-all', { method: 'POST' });
             const deployData = await deployRes.json();
+
             if (!deployData.success) {
-                alert('⚠️ El deploy de código falló: ' + deployData.error + '\n\nNo se sincronizó la configuración.');
+                const detail = deployData.results
+                    ?.map((r: { branch: string; success: boolean; message: string }) => `${r.branch}: ${r.success ? '✅' : '❌ ' + r.message}`)
+                    .join('\n') || deployData.error;
+                alert('⚠️ Deploy de código falló:\n\n' + detail);
                 return;
             }
 
@@ -192,18 +196,19 @@ export default function CommandCenter() {
             });
             const configData = await configRes.json();
 
+            const deploySummary = deployData.results
+                ?.map((r: { branch: string; success: boolean; message: string }) => `• ${r.branch}: ${r.success ? '✅ ' + r.message : '❌ ' + r.message}`)
+                .join('\n') || '';
+
             if (configData.success) {
-                const summary = configData.results.map((r: { name: string; success: boolean; error?: string }) =>
-                    `${r.name}: ${r.success ? '✅ OK' : '❌ ' + (r.error || 'Error')}`
-                ).join('\n');
-                alert(`🚀 Deploy + Sync completado:\n\n${summary}\n\nVercel está redesplegando. En ~60s los tenants tendrán la última versión.`);
-                fetchTenants();
+                alert(`🚀 Deploy completo:\n\n${deploySummary}\n\n⚙️ Config sincronizada. Vercel redespliega en ~60s.`);
             } else {
-                alert('El código se desplegó pero falló el sync de config: ' + configData.message);
+                alert(`Código desplegado pero config falló:\n\n${deploySummary}`);
             }
+            fetchTenants();
         } catch (err) {
             console.error('Full Deploy Error:', err);
-            alert('Fallo crítico en el deploy masivo. Revisa la consola.');
+            alert('Error inesperado en el deploy. Revisa la consola del servidor.');
         } finally {
             setSyncing(null);
         }
@@ -562,10 +567,12 @@ export default function CommandCenter() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h2>🚢 Control de Flota SaaS</h2>
-                                <button onClick={handleSync} disabled={selectedIds.length === 0 || !!syncing} style={{ background: '#111827', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', border: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', opacity: selectedIds.length > 0 ? 1 : 0.5 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <button onClick={handleSync} disabled={selectedIds.length === 0 || !!syncing} style={{ background: '#111827', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', border: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', cursor: selectedIds.length > 0 ? 'pointer' : 'not-allowed', opacity: selectedIds.length > 0 ? 1 : 0.5, whiteSpace: 'nowrap' }}>
                                     <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                                    {syncing ? 'Desplegando + Sincronizando...' : `🚀 Deploy a ${selectedIds.length} Instancias`}
+                                    {syncing ? 'Desplegando...' : `🚀 Deploy a ${selectedIds.length} Instancias`}
                                 </button>
+                            </div>
                             </div>
                             <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #E5E7EB', overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
