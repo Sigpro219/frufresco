@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
 
@@ -282,7 +283,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
                         <div style={{ width: '100px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #D1D5DB', position: 'relative', flexShrink: 0 }}>
                             {previewUrl ? (
-                                <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Image 
+                                    src={previewUrl} 
+                                    alt="" 
+                                    width={100} 
+                                    height={100} 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                    sizes="100px"
+                                />
                             ) : (
                                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>📷</div>
                             )}
@@ -731,7 +739,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                                     }}
                                                                 >
                                                                     {v.image_url ? (
-                                                                        <img src={v.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                        <Image 
+                                                                            src={v.image_url} 
+                                                                            alt=""
+                                                                            width={40} 
+                                                                            height={40}
+                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                                            sizes="40px"
+                                                                        />
                                                                     ) : (
                                                                         <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>{variantUploading === v.id ? '...' : '📷'}</span>
                                                                     )}

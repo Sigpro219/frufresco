@@ -13,6 +13,9 @@ interface Profile {
     price_list_id?: string;
     address_main?: string;
     specialty?: string;
+    needs_crates?: boolean;
+    document_type?: string;
+    remission_with_prices?: boolean;
 }
 
 interface AuthContextType {

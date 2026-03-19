@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Product } from '@/lib/supabase';
 
 interface Variant {
@@ -233,7 +234,14 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                                     {uploadingIndex === idx ? (
                                                         <span style={{ fontSize: '1.5rem' }}>⏳</span>
                                                     ) : v.image_url ? (
-                                                        <img src={v.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                        <Image 
+                                                            src={v.image_url} 
+                                                            alt="" 
+                                                            width={60} 
+                                                            height={60} 
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                            sizes="60px"
+                                                        />
                                                     ) : (
                                                         <span style={{ fontSize: '1.5rem', opacity: 0.5 }}>📷</span>
                                                     )}
