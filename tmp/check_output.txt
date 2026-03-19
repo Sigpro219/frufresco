@@ -1,7 +1,0 @@
-[
-  {
-    "key": "app_logo_url",
-    "value": "https://kuxnixwoacwsotcilhuz.supabase.co/storage/v1/object/public/branding/1773852195410_50gm7e6o3.png",
-    "updated_at": "2026-03-18T16:43:17.246+00:00"
-  }
-]

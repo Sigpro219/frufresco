@@ -604,18 +604,20 @@ export default function MasterProductsPage() {
     // Dashboard KPIs
     const kpiMetrics = useMemo(() => {
         const total = products.length;
-        if (total === 0) return { total: 0, imageCoverage: 0, webVisibility: 0, active: 0, alerts: 0 };
+        if (total === 0) return { total: 0, activeCount: 0, imageCoverage: 0, webCount: 0, noImageCount: 0, alerts: 0 };
 
         const withImg = products.filter(p => p.image_url && p.image_url.trim() !== '').length;
         const webVis = products.filter(p => p.show_on_web).length;
-        const active = products.filter(p => p.is_active).length;
         const withAlert = products.filter(p => p.min_inventory_level > 0).length;
+        const noImg = products.filter(p => !p.image_url || p.image_url.trim() === '').length;
+        const activeCount = products.filter(p => p.is_active).length;
 
         return {
             total,
+            activeCount,
             imageCoverage: Math.round((withImg / total) * 100),
-            webVisibility: Math.round((webVis / total) * 100),
-            active: Math.round((active / total) * 100),
+            webCount: webVis,
+            noImageCount: noImg,
             alerts: withAlert
         };
     }, [products]);
@@ -759,10 +761,10 @@ export default function MasterProductsPage() {
                     marginBottom: '2rem' 
                 }}>
                     {[
-                        { label: 'Total SKUs', value: kpiMetrics.total, icon: '📦', color: '#6366F1', bg: '#EEF2FF' },
-                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#10B981', bg: '#ECFDF5' },
-                        { label: 'Visibilidad Web', value: `${kpiMetrics.webVisibility}%`, icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
-                        { label: 'Catálogo Activo', value: `${kpiMetrics.active}%`, icon: '✅', color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Total Histórico', value: kpiMetrics.total, icon: '🗂️', color: '#6366F1', bg: '#EEF2FF' },
+                        { label: 'Catálogo Activo', value: `${((kpiMetrics.activeCount / kpiMetrics.total) * 100).toFixed(1)}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5' },
+                        { label: 'Publicados en Web', value: kpiMetrics.webCount, icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#F59E0B', bg: '#FFFBEB' },
                         { label: 'Alertas Inventario', value: kpiMetrics.alerts, icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
                     ].map((card, i) => (
                         <div key={i} style={{

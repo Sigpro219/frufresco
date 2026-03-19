@@ -6,8 +6,12 @@ Este flujo actualiza la versión oficial de FruFresco con las últimas mejoras d
 
 // turbo-all
 
-1. Asegurar que el CORE esté guardado: `git add .` y `git commit -m "Sync point for TENANT_FRUFRESCO"`
-2. Cambiar a la rama de producción: `git checkout tenant-frufresco`
-3. Fusionar mejoras: `git merge core`
-4. Publicar cambios: `git push origin tenant-frufresco`
-5. Regresar al laboratorio: `git checkout core`
+1. Asegurar que el CORE esté guardado: `git add .`
+2. Commit: `git commit -m "Sync point for TENANT_FRUFRESCO"`
+3. Push CORE: `git push origin CORE`
+4. Cambiar a la rama de producción: `git checkout tenant-frufresco`
+5. Fusionar mejoras: `git merge CORE --no-edit`
+6. Resolver conflictos conocidos con versión CORE: `git checkout CORE -- src/app/api/fleet/sync/route.ts src/components/EditProductModal.tsx`
+7. Confirmar resolución si hubo conflictos: `git add .; git commit -m "Sync: tenant-frufresco desde CORE"`
+8. Publicar cambios: `git push origin tenant-frufresco`
+9. Regresar al laboratorio: `git checkout CORE`

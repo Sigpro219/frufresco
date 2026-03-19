@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
 
 interface SyncResult {
     name: string;
@@ -29,10 +33,6 @@ export async function POST(req: Request) {
         const results: SyncResult[] = [];
         const now = new Date().toISOString();
 
-        // 0. Preparar Git para sincronizar código
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execPromise = promisify(exec);
 
         for (const tenant of fleet) {
             const tenantResults: SyncResult = { name: tenant.tenant_name, success: true, logs: [] };
@@ -51,8 +51,8 @@ export async function POST(req: Request) {
                         console.log(`--- Sincronizando Git para ${tenant.tenant_name} (Rama: ${branchName}) ---`);
                         await execPromise(`git checkout ${branchName} && git merge CORE -m "Sync: Push from Command Center" && git push origin ${branchName}`);
                         tenantResults.logs.push({ key: 'git_update', status: 'ok', message: `Rama ${branchName} actualizada.` });
-                    } catch (gitErr: any) {
-                        console.error(`Error Git en ${tenant.tenant_name}:`, gitErr.message);
+                    } catch (gitErr: unknown) {
+                        console.error(`Error Git en ${tenant.tenant_name}:`, gitErr instanceof Error ? gitErr.message : String(gitErr));
                         tenantResults.logs.push({ key: 'git_update', status: 'error', message: 'Fallo al mezclar rama de Git.' });
                         // No lanzamos el error para intentar al menos actualizar la base de datos
                     }
@@ -93,6 +93,46 @@ export async function POST(req: Request) {
                     }
                 }
 
+                // --- C. SINCRONIZACIÓN DE IMÁGENES (master_products) ---
+                try {
+                    // Traer todos los SKUs del CORE que tienen imagen
+                    const { data: coreProducts } = await supabaseCore
+                        .from('master_products')
+                        .select('sku, image_url')
+                        .not('image_url', 'is', null)
+                        .neq('image_url', '');
+
+                    if (coreProducts && coreProducts.length > 0) {
+                        let imagesSynced = 0;
+                        let imagesFailed = 0;
+
+                        for (const cp of coreProducts) {
+                            const { error: imgErr } = await supabaseTenant
+                                .from('master_products')
+                                .update({ image_url: cp.image_url })
+                                .eq('sku', cp.sku)
+                                .is('image_url', null); // Solo actualiza los que NO tienen imagen aún
+
+                            if (imgErr) {
+                                imagesFailed++;
+                            } else {
+                                imagesSynced++;
+                            }
+                        }
+                        tenantResults.logs.push({ 
+                            key: 'image_sync', 
+                            status: imagesFailed === 0 ? 'ok' : 'partial',
+                            message: `${imagesSynced} imágenes sincronizadas, ${imagesFailed} errores.`
+                        });
+                    }
+                } catch (imgSyncErr: unknown) {
+                    tenantResults.logs.push({ 
+                        key: 'image_sync', 
+                        status: 'error', 
+                        message: imgSyncErr instanceof Error ? imgSyncErr.message : 'Error sync imágenes'
+                    });
+                }
+
                 if (tenantResults.success) {
                     await supabaseCore
                         .from('fleet_tenants')
@@ -105,7 +145,7 @@ export async function POST(req: Request) {
                 tenantResults.error = err instanceof Error ? err.message : String(err);
             } finally {
                 // Volver siempre al CORE para mantener el entorno estable
-                try { await execPromise('git checkout CORE'); } catch(e) {}
+                try { await execPromise('git checkout CORE'); } catch { }
             }
             results.push(tenantResults);
         }
