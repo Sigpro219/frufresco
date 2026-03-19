@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError } from '@/lib/errorUtils';
 import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
@@ -510,7 +511,14 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     justifyContent: 'center'
                                 }}>
                                     {previewUrl ? (
-                                        <img src={previewUrl} alt="Preview" style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px', marginBottom: '1rem' }} />
+                                        <Image 
+                                            src={previewUrl} 
+                                            alt="Preview" 
+                                            width={500} 
+                                            height={180} 
+                                            style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px', marginBottom: '1rem' }} 
+                                            sizes="(max-width: 500px) 100vw, 500px"
+                                        />
                                     ) : (
                                         <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📸</div>
                                     )}

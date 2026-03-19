@@ -34,6 +34,13 @@ export async function POST(req: Request) {
             try {
                 const supabaseTenant = createClient(tenant.supabase_url, tenant.service_role_key);
                 
+                // 1. Fetch official units from CORE
+                const { data: unitsRow } = await supabaseCore.from('app_settings').select('value').eq('key', 'standard_units').single();
+                const coreUnits = unitsRow?.value || '';
+                
+                const { data: suspendedRow } = await supabaseCore.from('app_settings').select('value').eq('key', 'suspended_units').single();
+                const coreSuspended = suspendedRow?.value || '';
+
                 const updates = [
                     { key: 'last_core_sync', value: now },
                     { key: 'app_name', value: tenant.branding_config?.app_name || '' },
@@ -41,7 +48,9 @@ export async function POST(req: Request) {
                     { key: 'app_logo_url', value: tenant.branding_config?.app_logo_url || '' },
                     { key: 'app_logosymbol_url', value: tenant.branding_config?.app_logosymbol_url || '' },
                     { key: 'provider_logo_url', value: tenant.branding_config?.provider_logo_url || '' },
-                    { key: 'system_status', value: tenant.status }
+                    { key: 'system_status', value: tenant.status },
+                    { key: 'standard_units', value: coreUnits },
+                    { key: 'suspended_units', value: coreSuspended }
                 ];
 
                 for (const item of updates) {

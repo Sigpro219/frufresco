@@ -22,6 +22,7 @@ export default function PricingSettingsPage() {
     const [newModelName, setNewModelName] = useState('');
     const [newModelMargin, setNewModelMargin] = useState(20);
     const [newModelDesc, setNewModelDesc] = useState('');
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Editing State
     const [isEditingModel, setIsEditingModel] = useState(false);
@@ -159,6 +160,100 @@ export default function PricingSettingsPage() {
         fetchRules(selectedModel.id);
     };
 
+    // --- MASTER SYNC LOGIC ---
+    const syncPricesToCatalog = async () => {
+        if (!selectedModel) return;
+        if (selectedModel.name !== 'Clientes B2C') {
+            return alert('Esta sincronización maestra está optimizada para el modelo \"Clientes B2C\" que alimenta la landing page.');
+        }
+
+        if (!confirm('¿Estás seguro? Esta acción actualizará los precios públicos de TODO el catálogo basándose en los últimos costos de la matriz y el margen de este modelo.')) return;
+
+        setIsSyncing(true);
+        try {
+            console.log('🚀 Iniciando sincronización maestra de precios...');
+
+            // 1. Obtener todos los productos activos
+            const { data: allProducts, error: pError } = await supabase
+                .from('products')
+                .select('id, name, iva_rate, category');
+            
+            if (pError) throw pError;
+
+            // 2. Obtener últimas compras para cada uno
+            // Nota: Podríamos usar una vista o RPC para esto de forma más eficiente, 
+            // pero para esta escala lo haremos con lógica de cliente robusta.
+            const { data: lastPurchases, error: purError } = await supabase
+                .from('purchases')
+                .select('product_id, unit_price')
+                .order('created_at', { ascending: false });
+
+            if (purError) throw purError;
+
+            // Mapear el último costo por ID
+            const costMap: Record<string, number> = {};
+            lastPurchases.forEach(p => {
+                if (!costMap[p.product_id]) costMap[p.product_id] = p.unit_price;
+            });
+
+            // 3. Obtener reglas de excepción del modelo B2C
+            const { data: b2cRules } = await supabase
+                .from('pricing_rules')
+                .select('*')
+                .eq('model_id', selectedModel.id);
+
+            const rulesMap: Record<string, number> = {};
+            b2cRules?.forEach(r => {
+                rulesMap[r.product_id] = r.margin_adjustment;
+            });
+
+            // 4. Calcular y Preparar Updates
+            const updates = allProducts.map(prod => {
+                const cost = costMap[prod.id];
+                if (!cost || cost === 0) return null;
+
+                const baseMargin = selectedModel.base_margin_percent;
+                const adjustment = rulesMap[prod.id] || 0;
+                const finalMargin = (baseMargin + adjustment) / 100;
+                
+                // Lógica de Precio: (Costo * (1 + Margen)) * (1 + IVA)
+                const priceBeforeTax = cost * (1 + finalMargin);
+                const ivaRate = (prod.iva_rate || 0) / 100;
+                const finalPrice = Math.round(priceBeforeTax * (1 + ivaRate));
+
+                return {
+                    id: prod.id,
+                    base_price: finalPrice
+                };
+            }).filter(Boolean);
+
+            if (updates.length === 0) {
+                alert('No se encontraron productos con costos válidos para actualizar.');
+                return;
+            }
+
+            console.log(`📊 Procesando ${updates.length} actualizaciones de precio...`);
+
+            // 5. Ejecutar actualizaciones (por lotes de 50 para seguridad)
+            for (let i = 0; i < updates.length; i += 50) {
+                const batch = updates.slice(i, i + 50);
+                const { error: upError } = await supabase
+                    .from('products')
+                    .upsert(batch);
+                
+                if (upError) throw upError;
+            }
+
+            alert(`✅ ¡Éxito! Se han actualizado ${updates.length} precios en el catálogo público conforme al modelo B2C.`);
+            
+        } catch (err: any) {
+            console.error('❌ Error en Sync:', err);
+            alert('Error durante la sincronización: ' + err.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
             <Navbar />
@@ -284,7 +379,29 @@ export default function PricingSettingsPage() {
                                         <p style={{ color: '#6B7280', margin: '0.5rem 0 0 0', fontWeight: '500' }}>{selectedModel.description}</p>
                                         <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#059669', fontWeight: 'bold' }}>Margen Base: {selectedModel.base_margin_percent}%</div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        {selectedModel.name === 'Clientes B2C' && (
+                                            <button
+                                                onClick={syncPricesToCatalog}
+                                                disabled={isSyncing}
+                                                style={{ 
+                                                    backgroundColor: '#10B981', 
+                                                    color: 'white', 
+                                                    border: 'none', 
+                                                    padding: '0.6rem 1.2rem', 
+                                                    borderRadius: '8px', 
+                                                    fontWeight: '900', 
+                                                    cursor: isSyncing ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                                    opacity: isSyncing ? 0.7 : 1
+                                                }}
+                                            >
+                                                {isSyncing ? <><span className="animate-spin">🔄</span> Sincronizando...</> : <>🚀 Fijar Precios en Catálogo</>}
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => {
                                                 setEditModelData({

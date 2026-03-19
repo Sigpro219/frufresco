@@ -16,7 +16,6 @@ import {
     Plus, 
     FileDown, 
     FileUp, 
-    Percent, 
     Globe, 
     EyeOff, 
     Search,
@@ -24,12 +23,9 @@ import {
     ChevronUp,
     Wand2,
     Dna,
-    Package,
-    CheckCircle,
-    AlertCircle,
-    Lock,
     X,
-    Info
+    Info,
+    ImageOff
 } from 'lucide-react';
 
 
@@ -240,6 +236,37 @@ export default function MasterProductsPage() {
             setLoading(false);
         }
     };
+    
+    const hideProductsWithoutImages = async () => {
+        const noImageProducts = products.filter(p => !p.image_url || p.image_url.trim() === '');
+        const count = noImageProducts.length;
+        
+        if (count === 0) {
+            showToast('No hay productos sin imagen para ocultar.', 'info');
+            return;
+        }
+
+        if (!confirm(`⚠️ ATENCIÓN: Se ocultarán de la vista pública ${count} productos que no tienen fotografía vinculada. ¿Deseas continuar?`)) return;
+
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('products')
+                .update({ show_on_web: false })
+                .or('image_url.is.null,image_url.eq.""');
+
+            if (error) throw error;
+
+            showToast(`Limpieza completada: ${count} productos retirados de la web masivamente.`, 'success');
+            await fetchProducts();
+        } catch (err: any) {
+            console.error('Cleanup error:', err);
+            showToast('Error durante la limpieza: ' + err.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     const updateProductField = async (id: string, field: keyof Product, value: string | number | boolean | unknown[] | null) => {
 
@@ -369,7 +396,7 @@ export default function MasterProductsPage() {
         }
     };
 
-    const handleSaveVariants = async (optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
+    const handleSaveVariants = async (optionsConfig: Product['options_config'] | null, variants: Product['variants'] | null): Promise<boolean> => {
         if (!selectedVariantProduct) return false;
 
         try {
@@ -437,7 +464,7 @@ export default function MasterProductsPage() {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             
-            const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
+            const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[];
 
             if (rows.length === 0) {
                 showToast('El archivo está vacío o no tiene el formato correcto', 'error');
@@ -551,7 +578,7 @@ export default function MasterProductsPage() {
                 if (tag === 'off' || tag === 'inactivo') return !p.is_active;
 
                 // Filtro Categoría (@frutas, @despensa...)
-                const categoryEntry = Object.entries(CATEGORY_MAP).find(([_, label]) => 
+                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
                     label.toLowerCase().startsWith(tag)
                 );
                 if (categoryEntry && p.category === categoryEntry[0]) return true;
@@ -574,82 +601,120 @@ export default function MasterProductsPage() {
 
     const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
 
+    // Dashboard KPIs
+    const kpiMetrics = useMemo(() => {
+        const total = products.length;
+        if (total === 0) return { total: 0, imageCoverage: 0, webVisibility: 0, active: 0, alerts: 0 };
+
+        const withImg = products.filter(p => p.image_url && p.image_url.trim() !== '').length;
+        const webVis = products.filter(p => p.show_on_web).length;
+        const active = products.filter(p => p.is_active).length;
+        const withAlert = products.filter(p => p.min_inventory_level > 0).length;
+
+        return {
+            total,
+            imageCoverage: Math.round((withImg / total) * 100),
+            webVisibility: Math.round((webVis / total) * 100),
+            active: Math.round((active / total) * 100),
+            alerts: withAlert
+        };
+    }, [products]);
+
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
+        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
             <Navbar />
             <Toast />
             
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 2rem' }}>
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.9rem' }}>← Volver</Link>
-                            <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0 0 0' }}>Data Maestra de SKUs 🏗️</h1>
-                            <p style={{ color: '#6B7280' }}>Definición técnica de productos, códigos únicos y unidades base.</p>
+                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>← Volver al Dashboard</Link>
+                            <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Maestro de SKUs 🏗️</h1>
+                            <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button
                                 onClick={sanitizeMasterData}
                                 style={{
-                                    padding: '1rem 1.5rem',
-                                    borderRadius: '12px',
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '10px',
                                     backgroundColor: '#FEF3C7',
                                     color: '#92400E',
                                     border: '1px solid #FDE68A',
-                                    fontWeight: '800',
+                                    fontWeight: '700',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.8rem',
+                                    gap: '0.6rem',
+                                    fontSize: '0.85rem'
                                 }}
                                 title="Generar SKUs y descripciones faltantes"
                             >
-                                <Wand2 size={18} /> Sanetizar Datos
-
+                                <Wand2 size={16} /> Sanetizar
+                            </button>
+                            <button
+                                onClick={hideProductsWithoutImages}
+                                style={{
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FEE2E2',
+                                    color: '#991B1B',
+                                    border: '1px solid #FECACA',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.6rem',
+                                    fontSize: '0.85rem'
+                                }}
+                                title="Ocultar todos los productos que no tienen imagen"
+                            >
+                                <ImageOff size={16} /> Limpiar Web
                             </button>
                             <button
                                 onClick={() => setIsManageAttributesModalOpen(true)}
                                 style={{
-                                    padding: '1rem 1.5rem',
-                                    borderRadius: '12px',
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '10px',
                                     backgroundColor: 'white',
                                     color: '#4B5563',
                                     border: '1px solid #D1D5DB',
-                                    fontWeight: '800',
+                                    fontWeight: '700',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.8rem',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                                    gap: '0.6rem',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                    fontSize: '0.85rem'
                                 }}
                             >
-                                <Dna size={18} /> Variaciones Maestras
-
+                                <Dna size={16} /> Variaciones
                             </button>
+
                             <button
                                 onClick={() => setIsCreateModalOpen(true)}
                                 style={{
-                                    padding: '1rem 2rem',
-                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '0.6rem 1rem',
                                     backgroundColor: '#111827',
                                     color: 'white',
                                     border: 'none',
+                                    borderRadius: '10px',
                                     fontWeight: '800',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.8rem',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer'
                                 }}
                             >
-                                <Plus size={18} /> Crear Nuevo SKU Maestro
-
+                                <Plus size={20} /> Nuevo SKU
                             </button>
                             <button
                                 onClick={downloadFullMaster}
                                 style={{
-                                    padding: '1rem',
-                                    borderRadius: '12px',
+                                    padding: '0.6rem 0.8rem',
+                                    borderRadius: '10px',
                                     backgroundColor: '#EFF6FF',
                                     color: '#2563EB',
                                     border: '1px solid #BFDBFE',
@@ -657,19 +722,17 @@ export default function MasterProductsPage() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.8rem',
                                     transition: 'all 0.2s'
                                 }}
                                 title="Exportar Todo el Maestro (Excel)"
                             >
-                                <FileDown size={20} />
-
+                                <FileDown size={18} />
                             </button>
                             <button
                                 onClick={() => setIsBulkModalOpen(true)}
                                 style={{
-                                    padding: '1rem',
-                                    borderRadius: '12px',
+                                    padding: '0.6rem 0.8rem',
+                                    borderRadius: '10px',
                                     backgroundColor: '#F3F4F6',
                                     color: '#374151',
                                     border: '1px solid #E5E7EB',
@@ -677,124 +740,78 @@ export default function MasterProductsPage() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.8rem',
                                     transition: 'all 0.2s',
                                     position: 'relative'
                                 }}
                                 title="Carga Masiva desde Excel"
                             >
-                                <div style={{ position: 'relative' }}>
-                                    <FileUp size={20} />
-                                </div>
+                                <FileUp size={18} />
                             </button>
                         </div>
                     </div>
                 </header>
 
-                {/* Dashboard Rápido / KPI'S INTERACTIVOS COMPACTOS */}
+                {/* KPI DASHBOARD */}
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+                    gridTemplateColumns: 'repeat(5, 1fr)', 
                     gap: '1rem', 
-                    marginBottom: '1rem' 
+                    marginBottom: '2rem' 
                 }}>
-                    {/* CARD 1: TOTAL CATALOGO */}
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        padding: '1.1rem 1.2rem', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E5E7EB',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.05 }}>
-                            <Package size={80} color="#111827" />
-                        </div>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Portafolio Maestro</span>
-                        <div style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.1rem 0' }}>{products.length}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#059669', fontWeight: '700' }}>
-                            <CheckCircle size={12} /> SKUs Técnicos Únicos
-                        </div>
-                    </div>
-
-                    {/* CARD 2: VISIBILIDAD WEB */}
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        padding: '1.1rem 1.2rem', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E5E7EB',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                    }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Alcance Comercial</span>
-                        <div style={{ fontSize: '2rem', fontWeight: '900', color: '#2563EB', margin: '0.1rem 0' }}>
-                            {Math.round((products.filter(p => p.show_on_web).length / (products.length || 1)) * 100)}%
-                        </div>
-                        <div style={{ height: '4px', backgroundColor: '#EFF6FF', borderRadius: '10px', marginTop: '6px' }}>
+                    {[
+                        { label: 'Total SKUs', value: kpiMetrics.total, icon: '📦', color: '#6366F1', bg: '#EEF2FF' },
+                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#10B981', bg: '#ECFDF5' },
+                        { label: 'Visibilidad Web', value: `${kpiMetrics.webVisibility}%`, icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Catálogo Activo', value: `${kpiMetrics.active}%`, icon: '✅', color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Alertas Inventario', value: kpiMetrics.alerts, icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
+                    ].map((card, i) => (
+                        <div key={i} style={{
+                            backgroundColor: 'white',
+                            padding: '1rem 1.2rem',
+                            borderRadius: '16px',
+                            border: '1px solid #E5E7EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            cursor: 'default'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-3px)';
+                            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+                            e.currentTarget.style.borderColor = card.color;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                            e.currentTarget.style.borderColor = '#E5E7EB';
+                        }}
+                        >
                             <div style={{ 
-                                width: `${(products.filter(p => p.show_on_web).length / (products.length || 1)) * 100}%`, 
-                                height: '100%', 
-                                backgroundColor: '#2563EB', 
-                                borderRadius: '10px' 
-                            }}></div>
+                                width: '40px', 
+                                height: '40px', 
+                                borderRadius: '12px', 
+                                backgroundColor: card.bg, 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                fontSize: '1.2rem' 
+                            }}>
+                                {card.icon}
+                            </div>
+                            <div>
+                                <p style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                    {card.label}
+                                </p>
+                                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                                    {card.value}
+                                </p>
+                            </div>
                         </div>
-                        <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: '#1E40AF', fontWeight: '700' }}>
-                            {products.filter(p => p.show_on_web).length} en tienda virtual
-                        </p>
-                    </div>
-
-                    {/* CARD 3: SALUD FISCAL (IVA) */}
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        padding: '1.1rem 1.2rem', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E5E7EB',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                    }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cumplimiento Fiscal</span>
-                        <div style={{ fontSize: '2rem', fontWeight: '900', color: '#C2410C', margin: '0.1rem 0' }}>
-                            {products.filter(p => p.iva_rate !== undefined).length} <span style={{ fontSize: '1rem', color: '#9CA3AF' }}>/ {products.length}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '3px', marginTop: '10px' }}>
-                            {[22, 19, 5, 0].map(rate => {
-                                const count = products.filter(p => p.iva_rate === rate).length;
-                                if (count === 0) return null;
-                                return (
-                                    <div key={rate} style={{ 
-                                        flex: count, 
-                                        height: '10px', 
-                                        backgroundColor: rate === 22 ? '#6B21A8' : rate === 19 ? '#C2410C' : rate === 5 ? '#1E40AF' : '#166534',
-                                        borderRadius: '2px'
-                                    }} title={`${rate}%: ${count} SKUs`}></div>
-                                );
-                            })}
-                        </div>
-                        <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: '#6B7280', fontWeight: '700' }}>
-                            Distribución de tasas IVA
-                        </p>
-                    </div>
-
-                    {/* CARD 4: POLÍTICAS DE RIESGO */}
-                    <div style={{ 
-                        backgroundColor: 'white', 
-                        padding: '1.1rem 1.2rem', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E5E7EB',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                        borderLeft: '4px solid #EF4444'
-                    }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Control de Quiebres</span>
-                        <div style={{ fontSize: '2rem', fontWeight: '900', color: '#B91C1C', margin: '0.1rem 0' }}>
-                            {products.filter(p => p.min_inventory_level > 0).length}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#B91C1C', fontWeight: '700' }}>
-                            <AlertCircle size={12} /> Cobertura: {Math.round((products.filter(p => p.min_inventory_level > 0).length / (products.length || 1)) * 100)}%
-                        </div>
-                        <p style={{ margin: '6px 0 0 0', fontSize: '0.7rem', color: '#9CA3AF' }}>
-                             Seguridad de stock activa
-                        </p>
-                    </div>
+                    ))}
                 </div>
+
+
 
                 {savingId && (
                     <div style={{ 
@@ -913,7 +930,7 @@ export default function MasterProductsPage() {
                                     ))}
                                 </div>
                                 <div style={{ marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6', fontSize: '0.75rem', color: '#9CA3AF', fontStyle: 'italic' }}>
-                                    Puedes combinar términos: "Papa @19% @web"
+                                    Puedes combinar términos: &quot;Papa @19% @web&quot;
                                 </div>
                             </div>
                         )}
@@ -977,7 +994,15 @@ export default function MasterProductsPage() {
                                                 }}
                                             />
                                             {p.image_url ? (
-                                                <Image src={p.image_url} alt={p.name} width={50} height={50} style={{ width: '100%', height: '100%', objectFit: 'cover' }} unoptimized />
+                                                <Image 
+                                                    src={p.image_url} 
+                                                    alt={p.name} 
+                                                    width={50} 
+                                                    height={50} 
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                    sizes="50px"
+                                                    loading="lazy"
+                                                />
                                             ) : (
                                                 <span style={{ fontSize: '1.2rem', opacity: 0.5 }}>📷</span>
                                             )}
@@ -1610,6 +1635,6 @@ export default function MasterProductsPage() {
             {isManageAttributesModalOpen && (
                 <ManageAttributesModal onClose={() => setIsManageAttributesModalOpen(false)} />
             )}
-        </main>
+        </div>
     );
 }

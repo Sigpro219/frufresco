@@ -13,10 +13,9 @@ export default function OrderLoadingPage() {
         const bogota = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
         return bogota.toISOString().split('T')[0];
     });
-    const [filterSource, setFilterSource] = useState('all');
-
-    const [filterStatus, setFilterStatus] = useState('all');
-    const [refreshTrigger, setRefreshTrigger] = useState(0); // Forcing refresh
+    const [refreshTrigger, setRefreshTrigger] = useState(0); 
+    const [searchTerm, setSearchTerm] = useState('');
+    const [showHelpTooltip, setShowHelpTooltip] = useState(false);
 
     // Modal States
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -28,11 +27,68 @@ export default function OrderLoadingPage() {
     // Bulk Selection State
     const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
 
+    const [variantQuantity, setVariantQuantity] = useState(1);
+    const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+
+    const filteredOrders = orders.filter(order => {
+        if (!searchTerm) return true;
+        
+        const term = searchTerm.toLowerCase().trim();
+        const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
+        const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+        const friendlyId = getFriendlyOrderId(order).toLowerCase();
+
+        // Check for @ commands
+        if (term.startsWith('@')) {
+            const command = term.substring(1).replace(/[\s-]+/g, '_');
+            
+            if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
+            if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
+            if (command === 'b2b') return isB2B;
+            if (command === 'b2c' || command === 'hogar') return !isB2B;
+            if (command === 'web' || command === '🛒' || command === 'app') return order.origin_source === 'web';
+            if (command === 'whatsapp' || command === '💬') return order.origin_source === 'whatsapp';
+            if (command === 'telefono' || command === 'phone' || command === '📞') return order.origin_source === 'phone';
+            if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
+            if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
+            if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
+            if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
+            if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
+            if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
+            if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
+            if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
+            if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
+            if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
+            if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
+            if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
+        }
+
+        // Generic search normalization
+        const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
+        const normTerm = term.replace(/[_\s-]/g, '');
+        const rawSeqStr = (order.sequence_id || '').toString();
+
+        return (
+            friendlyId.includes(term) ||
+            normFriendlyId.includes(normTerm) ||
+            rawSeqStr === term ||
+            order.id.toLowerCase().includes(term) ||
+            (order.customer_name || '').toLowerCase().includes(term) ||
+            (order.customer_nit || '').toLowerCase().includes(term) ||
+            (order.customer_phone || '').toLowerCase().includes(term) ||
+            (order.shipping_address || '').toLowerCase().includes(term) ||
+            (order.status || '').toLowerCase().includes(term) ||
+            (order.origin_source || '').toLowerCase().includes(term) ||
+            (order.paymentMethod || '').toLowerCase().includes(term)
+        );
+    });
+
     const toggleSelectAll = () => {
-        if (selectedOrders.size === orders.length && orders.length > 0) {
+        const completeOrders = filteredOrders.filter(o => o.isComplete);
+        if (selectedOrders.size === completeOrders.length && completeOrders.length > 0) {
             setSelectedOrders(new Set());
         } else {
-            setSelectedOrders(new Set(orders.map(o => o.id)));
+            setSelectedOrders(new Set(completeOrders.map(o => o.id)));
         }
     };
 
@@ -57,8 +113,6 @@ export default function OrderLoadingPage() {
 
     // Variant Selection Modal States (For products with options)
     const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
-    const [variantQuantity, setVariantQuantity] = useState(1);
-    const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const handleOrderClick = async (order: any) => {
         setSelectedOrder(order);
@@ -383,8 +437,7 @@ export default function OrderLoadingPage() {
         const now = new Date();
         const bogota = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
         setSelectedDate(bogota.toISOString().split('T')[0]);
-        setFilterSource('all');
-        setFilterStatus('all');
+        setSearchTerm('');
     };
 
     useEffect(() => {
@@ -398,13 +451,6 @@ export default function OrderLoadingPage() {
                     .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email)')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
-
-                if (filterSource !== 'all') {
-                    query = query.eq('origin_source', filterSource);
-                }
-                if (filterStatus !== 'all') {
-                    query = query.eq('status', filterStatus);
-                }
 
                 const { data, error } = await query;
 
@@ -441,7 +487,13 @@ export default function OrderLoadingPage() {
                             customer_phone: phone,
                             customer_nit: order.profiles?.nit || null,
                             paymentMethod: order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
-                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null
+                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null,
+                            isComplete: (
+                                name && name !== 'Cliente Desconocido' && name !== 'Sin Razón Social' && name !== 'Cliente Registrado' &&
+                                phone && phone !== 'Sin Teléfono' && phone !== 'Sin tel.' &&
+                                order.shipping_address && order.shipping_address.length > 5 &&
+                                (!order.profiles || order.profiles.role !== 'b2b_client' || (order.profiles.nit && order.profiles.nit !== 'Sin NIT'))
+                            )
                         };
                     });
                     setOrders(processedData);
@@ -462,21 +514,27 @@ export default function OrderLoadingPage() {
         return () => {
             active = false;
         };
-        return () => {
-            active = false;
-        };
-    }, [selectedDate, filterSource, filterStatus, refreshTrigger]);
+    }, [selectedDate, refreshTrigger]);
+
+    // Summary Metrics (Dashboard)
+    const totalOrders = orders.length;
+    const totalSales = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const totalWeightTons = (orders.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0) / 1000);
+    const approvedCount = orders.filter(o => ['approved', 'shipped', 'delivered'].includes(o.status)).length;
+    const incompleteCount = orders.filter(o => !o.isComplete).length;
+    const approvalRate = totalOrders > 0 ? (approvedCount / totalOrders) * 100 : 0;
+
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
             <Navbar />
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.2rem', color: '#0F172A' }}>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.2rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
                             Cargue de Pedidos
                         </h1>
-                        <p style={{ color: '#64748B', fontSize: '0.9rem', margin: 0 }}>Gestión y monitoreo de la demanda diaria</p>
+                        <p style={{ color: '#64748B', fontSize: '1rem', fontWeight: '500', margin: 0 }}>Gestión y monitoreo de la demanda diaria</p>
                     </div>
                     
                     {/* Acciones Secundarias (Menos protagonismo) */}
@@ -504,6 +562,49 @@ export default function OrderLoadingPage() {
                         </Link>
                     </div>
                     </div>
+
+                {/* Dashboard de Indicadores - Slim Version */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(5, 1fr)', 
+                    gap: '1rem', 
+                    marginBottom: '2rem'
+                }}>
+                    {[
+                        { label: 'TOTAL PEDIDOS', value: totalOrders, sub: 'HOY', icon: '📦', color: '#F8FAFC' },
+                        { label: 'VALOR CARGA', value: `$${totalSales.toLocaleString()}`, sub: 'Bruto', icon: '💰', color: '#F8FAFC' },
+                        { label: 'PESO TOTAL', value: `${totalWeightTons.toFixed(2)} TON`, sub: 'Logística', icon: '🚜', color: '#F8FAFC' },
+                        { label: 'EFECTIVIDAD', value: `${approvalRate.toFixed(0)}%`, sub: 'Procesado', icon: '✅', color: approvalRate >= 80 ? '#F0FDF4' : '#F8FAFC', textColor: approvalRate >= 80 ? '#16A34A' : '#1E293B' },
+                        { label: 'ALERTAS', value: incompleteCount, sub: 'Incompletos', icon: '⚠️', color: incompleteCount > 0 ? '#FEF2F2' : '#F8FAFC', textColor: incompleteCount > 0 ? '#E11D48' : '#1E293B' }
+                    ].map((card, i) => (
+                        <div key={i} style={{
+                            backgroundColor: card.color || 'white',
+                            padding: '0.875rem 1.25rem',
+                            borderRadius: '16px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            transition: 'all 0.2s ease',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }} onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05)';
+                        }} onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', letterSpacing: '0.05em' }}>{card.label}</span>
+                                <span style={{ fontSize: '1rem', opacity: 0.7 }}>{card.icon}</span>
+                            </div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: card.textColor || '#0F172A', lineHeight: '1.2' }}>{card.value}</div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#94A3B8' }}>{card.sub}</div>
+                        </div>
+                    ))}
+                </div>
                     
                     {/* Bulk Action Floating Bar (Placeholder for now) */}
                     {selectedOrders.size > 0 && (
@@ -598,78 +699,136 @@ export default function OrderLoadingPage() {
                             }}
                         />
                     </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.5rem' }}>
-                            CANAL
-                        </label>
-                        <select
-                            value={filterSource}
-                            onChange={(e) => setFilterSource(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '0.5rem',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '8px',
-                                fontSize: '0.875rem'
-                            }}
-                        >
-                            <option value="all">Todos</option>
-                            <option value="web">Web</option>
-                            <option value="whatsapp">WhatsApp</option>
-                            <option value="phone">Teléfono</option>
-                        </select>
+                    <div style={{ gridColumn: 'span 3' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B' }}>
+                                BUSCADOR INTELIGENTE
+                            </label>
+                            <div 
+                                style={{ position: 'relative', cursor: 'help' }}
+                                onMouseEnter={() => setShowHelpTooltip(true)}
+                                onMouseLeave={() => setShowHelpTooltip(false)}
+                            >
+                                <span style={{ 
+                                    backgroundColor: '#2563EB', 
+                                    color: 'white', 
+                                    borderRadius: '50%', 
+                                    width: '18px', 
+                                    height: '18px', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    transform: showHelpTooltip ? 'scale(1.2)' : 'scale(1.0)',
+                                    opacity: '0.8'
+                                }}>?</span>
+                                
+                                {showHelpTooltip && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '25px',
+                                        left: '0',
+                                        width: '280px',
+                                        backgroundColor: '#1E293B',
+                                        color: 'white',
+                                        padding: '1rem',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                                        zIndex: 100,
+                                        fontSize: '0.75rem',
+                                        lineHeight: '1.4',
+                                        animation: 'fadeIn 0.2s ease-out'
+                                    }}>
+                                        <div style={{ fontWeight: '800', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.3rem' }}>
+                                            GUÍA DE COMANDOS INTELIGENTES
+                                        </div>
+                                        <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                            <p><strong>@Estados:</strong> pendiente, para_compra, aprobado, etc</p>
+                                            <p><strong>@Canales:</strong> web (🛒), whatsapp (💬), telefono (📞)</p>
+                                            <p><strong>@Pago:</strong> @efectivo, @transferencia, @pago, @sin pago</p>
+                                            <p><strong>@Logística/Check:</strong> @sin coordenadas, @incompletos, @error</p>
+                                        </div>
+                                        <div style={{ marginTop: '0.5rem', color: '#94A3B8', fontSize: '0.65rem', fontStyle: 'italic' }}>
+                                            Tip: Puedes combinar palabras (ej: @error Burger)
+                                        </div>
+                                        <style>{`
+                                            @keyframes fadeIn {
+                                                from { opacity: 0; transform: translateY(5px); }
+                                                to { opacity: 1; transform: translateY(0); }
+                                            }
+                                        `}</style>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <span style={{ 
+                                position: 'absolute', 
+                                left: '12px', 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                color: '#94A3B8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                pointerEvents: 'none'
+                            }}>🔍</span>
+                            <input
+                                type="text"
+                                placeholder="Buscar por ID, nombre, NIT, teléfono, dirección o usa @estado, @canal..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+                                    border: '2px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    fontSize: '0.95rem',
+                                    fontWeight: '600',
+                                    color: '#1E293B',
+                                    outline: 'none',
+                                    transition: 'all 0.2s',
+                                    backgroundColor: '#F8FAFC'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = '#2563EB';
+                                    e.target.style.backgroundColor = 'white';
+                                    e.target.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#E2E8F0';
+                                    e.target.style.backgroundColor = '#F8FAFC';
+                                    e.target.style.boxShadow = 'none';
+                                }}
+                            />
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => setSearchTerm('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '12px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        border: 'none',
+                                        background: '#E2E8F0',
+                                        color: '#64748B',
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 'bold',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >✕</button>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.5rem' }}>
-                            ESTADO
-                        </label>
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '0.5rem',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '8px',
-                                fontSize: '0.875rem'
-                            }}
-                        >
-                            <option value="all">Todos</option>
-                            <option value="pending_approval">Pendiente</option>
-                            <option value="para_compra">Para Compra</option>
-                            <option value="approved">Aprobado</option>
-                            <option value="shipped">Enviado</option>
-                            <option value="delivered">Entregado</option>
-                        </select>
-                    </div>
-                    <button
-                        onClick={resetFilters}
-                        style={{
-                            padding: '0.625rem 1rem',
-                            backgroundColor: '#F1F5F9',
-                            color: '#475569',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.5rem'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#E2E8F0';
-                            e.currentTarget.style.color = '#1E293B';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#F1F5F9';
-                            e.currentTarget.style.color = '#475569';
-                        }}
-                    >
-                        <span>🧹</span> Limpiar Filtros
-                    </button>
+
                 </div>
 
                 {/* Loading */}
@@ -681,15 +840,15 @@ export default function OrderLoadingPage() {
                 )}
 
                 {/* Empty */}
-                {!loading && orders.length === 0 && (
+                {!loading && filteredOrders.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '12px' }}>
                         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
-                        <div style={{ color: '#64748B', fontWeight: '600' }}>No hay pedidos para esta fecha</div>
+                        <div style={{ color: '#64748B', fontWeight: '600' }}>No se encontraron pedidos con estos criterios</div>
                     </div>
                 )}
 
                 {/* List View (Table) */}
-                {!loading && orders.length > 0 && (
+                {!loading && filteredOrders.length > 0 && (
                     <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)', border: '1px solid #F1F5F9' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
@@ -718,7 +877,7 @@ export default function OrderLoadingPage() {
                                     <th style={{ padding: '1.25rem 1rem', width: '40px', textAlign: 'center' }}>
                                         <input 
                                             type="checkbox" 
-                                            checked={orders.length > 0 && selectedOrders.size === orders.length}
+                                            checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
                                             onChange={toggleSelectAll}
                                             style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
                                         />
@@ -726,7 +885,7 @@ export default function OrderLoadingPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {orders.map((order) => {
+                                {filteredOrders.map((order) => {
                                     const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
                                     const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
                                     const friendlyId = getFriendlyOrderId(order);
@@ -734,9 +893,15 @@ export default function OrderLoadingPage() {
                                     return (
                                         <tr key={order.id} 
                                             onClick={() => handleOrderClick(order)}
-                                            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background-color 0.2s', cursor: 'pointer' }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            style={{ 
+                                                borderBottom: '1px solid #F1F5F9', 
+                                                transition: 'all 0.2s', 
+                                                cursor: 'pointer',
+                                                backgroundColor: !order.isComplete ? '#FFF1F2' : 'transparent',
+                                                borderLeft: !order.isComplete ? '4px solid #F43F5E' : 'none'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFE4E6' : '#F8FAFC'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFF1F2' : 'transparent'}
                                         >
                                             <td style={{ padding: '1rem' }}>
                                                 <div style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '1rem', color: '#1E293B' }}>
@@ -831,8 +996,21 @@ export default function OrderLoadingPage() {
                                                 <input 
                                                     type="checkbox" 
                                                     checked={selectedOrders.has(order.id)}
-                                                    onChange={(e) => { e.stopPropagation(); toggleSelectOrder(order.id); }}
-                                                    style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                                                    disabled={!order.isComplete}
+                                                    onChange={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        if (!order.isComplete) {
+                                                            alert('⚠️ Este pedido no puede procesarse porque tiene información incompleta.');
+                                                            return;
+                                                        }
+                                                        toggleSelectOrder(order.id); 
+                                                    }}
+                                                    style={{ 
+                                                        cursor: order.isComplete ? 'pointer' : 'not-allowed', 
+                                                        transform: 'scale(1.2)',
+                                                        opacity: order.isComplete ? 1 : 0.5
+                                                    }}
+                                                    title={!order.isComplete ? 'Información incompleta' : ''}
                                                 />
                                             </td>
                                         </tr>
@@ -844,7 +1022,7 @@ export default function OrderLoadingPage() {
                 )}
 
                 <div style={{ textAlign: 'center', marginTop: '1.5rem', color: '#94A3B8', fontSize: '0.875rem' }}>
-                    {orders.length} pedido(s) encontrado(s)
+                    {filteredOrders.length} pedido(s) encontrado(s)
                 </div>
 
                 {/* Order Details Modal */}

@@ -32,6 +32,9 @@ interface Profile {
     longitude?: number;
     geocoding_status?: string;
     logistics_data?: LogisticsData;
+    needs_crates?: boolean;
+    document_type?: string;
+    remission_with_prices?: boolean;
     total_orders?: number;
     total_spent?: number;
     last_order?: string;
@@ -1016,6 +1019,19 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     </div>
                 )}
 
+                {(isB2B || isB2C) && profileData && (
+                    <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        {profileData.needs_crates && (
+                            <div style={{ backgroundColor: '#F0F9FF', color: '#0369A1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span>🧺</span> CON CANASTAS
+                            </div>
+                        )}
+                        <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>📄</span> {profileData.document_type === 'remission' ? (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)') : 'FACTURA'}
+                        </div>
+                    </div>
+                )}
+
                 {isB2B && profileData && profileData.delivery_restrictions && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'block', marginBottom: '0.2rem' }}>⚠️ RESTRICCIONES</span>
@@ -1347,6 +1363,24 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                                 </section>
                             )}
 
+                            {/* LOGÍSTICA ADICIONAL */}
+                            {(client.role === 'b2b_client' || client.role === 'b2c_client') && (
+                                <section>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        📦 Requerimientos de Entrega
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <ModalRow label="Uso de Canastillas" value={client.needs_crates ? '✅ SÍ RECOGE' : '❌ NO USA'} />
+                                        <ModalRow label="Documento Pref." value={client.document_type === 'remission' ? 'Remisión' : 'Factura'} />
+                                        {client.document_type === 'remission' && (
+                                            <div style={{ gridColumn: '1 / -1' }}>
+                                                <ModalRow label="Precios en Remisión" value={client.remission_with_prices ? '✅ MOSTRAR' : '❌ OCULTAR'} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            )}
+
                             {/* LOGÍSTICA IA */}
                             {client.logistics_data && (
                                 <section>
@@ -1458,7 +1492,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
         logistics_data: editData?.logistics_data || null,
         latitude: editData?.latitude || '',
         longitude: editData?.longitude || '',
-        geocoding_status: editData?.geocoding_status || 'manual'
+        geocoding_status: editData?.geocoding_status || 'manual',
+        needs_crates: editData?.needs_crates || false,
+        document_type: editData?.document_type || 'invoice',
+        remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true
     });
     const [saving, setSaving] = useState(false);
 
@@ -1938,7 +1975,46 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                                 </select>
                             </div>
                             {/* Cupo de Crédito y Términos eliminados a petición */}
+                        </div>
 
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>¿Requiere Canastillas?</label>
+                                <select 
+                                    value={formData.needs_crates ? 'yes' : 'no'} 
+                                    onChange={(e) => setFormData({...formData, needs_crates: e.target.value === 'yes'})}
+                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                >
+                                    <option value="no">❌ No usa canastillas</option>
+                                    <option value="yes">🧺 Sí, requiere canastillas</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Documento de Venta</label>
+                                <select 
+                                    value={formData.document_type} 
+                                    onChange={(e) => setFormData({...formData, document_type: e.target.value})}
+                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                >
+                                    <option value="invoice">📜 Factura Electrónica</option>
+                                    <option value="remission">📄 Remisión Comercial</option>
+                                </select>
+                            </div>
+
+                            {formData.document_type === 'remission' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>¿Mostrar Precios en Rem? </label>
+                                    <select 
+                                        value={formData.remission_with_prices ? 'yes' : 'no'} 
+                                        onChange={(e) => setFormData({...formData, remission_with_prices: e.target.value === 'yes'})}
+                                        style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                    >
+                                        <option value="yes">💰 Mostrar Precios</option>
+                                        <option value="no">🚫 Ocultar Precios</option>
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </section>
                     
