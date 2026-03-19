@@ -29,9 +29,36 @@ export async function POST(req: Request) {
         const results: SyncResult[] = [];
         const now = new Date().toISOString();
 
+        // 0. Preparar Git para sincronizar código
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execPromise = promisify(exec);
+
         for (const tenant of fleet) {
             const tenantResults: SyncResult = { name: tenant.tenant_name, success: true, logs: [] };
             try {
+                // --- A. SINCRONIZACIÓN DE CÓDIGO (GIT) ---
+                // Mapeo dinámico de ramas según el Tenant
+                let branchName = '';
+                if (tenant.tenant_name.toLowerCase().includes('showcase') || tenant.tenant_name.toLowerCase().includes('delta')) {
+                    branchName = 'white-label';
+                } else if (tenant.tenant_name.toLowerCase().includes('frufresco') || tenant.tenant_name.toLowerCase().includes('tenant 1')) {
+                    branchName = 'tenant-frufresco';
+                }
+
+                if (branchName) {
+                    try {
+                        console.log(`--- Sincronizando Git para ${tenant.tenant_name} (Rama: ${branchName}) ---`);
+                        await execPromise(`git checkout ${branchName} && git merge CORE -m "Sync: Push from Command Center" && git push origin ${branchName}`);
+                        tenantResults.logs.push({ key: 'git_update', status: 'ok', message: `Rama ${branchName} actualizada.` });
+                    } catch (gitErr: any) {
+                        console.error(`Error Git en ${tenant.tenant_name}:`, gitErr.message);
+                        tenantResults.logs.push({ key: 'git_update', status: 'error', message: 'Fallo al mezclar rama de Git.' });
+                        // No lanzamos el error para intentar al menos actualizar la base de datos
+                    }
+                }
+
+                // --- B. SINCRONIZACIÓN DE BASE DE DATOS ---
                 const supabaseTenant = createClient(tenant.supabase_url, tenant.service_role_key);
                 
                 // 1. Fetch official units from CORE
@@ -76,6 +103,9 @@ export async function POST(req: Request) {
             } catch (err: unknown) {
                 tenantResults.success = false;
                 tenantResults.error = err instanceof Error ? err.message : String(err);
+            } finally {
+                // Volver siempre al CORE para mantener el entorno estable
+                try { await execPromise('git checkout CORE'); } catch(e) {}
             }
             results.push(tenantResults);
         }
