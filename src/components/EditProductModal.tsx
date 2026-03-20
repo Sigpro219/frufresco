@@ -244,8 +244,39 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 .eq('id', product.id);
 
             if (error) throw error;
+            
+            // 2. Sincronizar tabla dedicada product_variants
+            if (variants && variants.length > 0) {
+                // Limpiar anteriores
+                await supabase
+                    .from('product_variants')
+                    .delete()
+                    .eq('product_id', product.id);
 
-            console.info('✅ Producto actualizado correctamente');
+                // Insertar nuevas
+                const formattedVariants = variants.map(v => ({
+                    product_id: product.id,
+                    sku: v.sku,
+                    options: v.options,
+                    image_url: v.image_url,
+                    price_adjustment_percent: v.price_adj_pct || 0,
+                    is_active: v.show_on_web ?? true
+                }));
+
+                const { error: variantError } = await supabase
+                    .from('product_variants')
+                    .insert(formattedVariants);
+
+                if (variantError) throw variantError;
+            } else {
+                // Si no hay variantes, nos aseguramos de limpiar la tabla relacional
+                await supabase
+                    .from('product_variants')
+                    .delete()
+                    .eq('product_id', product.id);
+            }
+
+            console.info('✅ Producto y variantes actualizados correctamente');
             onSave();
             onClose();
         } catch (error: any) {

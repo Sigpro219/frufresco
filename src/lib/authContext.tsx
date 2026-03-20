@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { logError } from './errorUtils';
-import { User, AuthError } from '@supabase/supabase-js';
+import { User, AuthError, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface Profile {
     id: string;
@@ -37,6 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = async (userId: string, signal?: AbortSignal) => {
         if (!userId) return;
         
+        // Network pre-check
+        if (typeof window !== 'undefined' && !navigator.onLine) {
+            console.warn('⚠️ Se intentó cargar perfil pero el navegador está OFFLINE. Esperando reconexión...');
+            return;
+        }
+
         console.log('🔄 Cargando perfil para:', userId);
         let query = supabase
             .from('profiles')
@@ -49,13 +55,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data, error } = await query.maybeSingle();
 
             if (error) {
-                // Log full error object including non-enumerable properties
-                console.error('❌ Error detallado al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                // Network failure vs. Database error check
+                const isNetworkError = error.message?.toLowerCase().includes('fetch');
                 
-                // Fallback: If we have a user but profile fetch fails (e.g. network), 
-                // try to construct a temporary profile to avoid UI blocking if it's just a fetch error
-                // but ONLY if it's not a severe auth error.
-                // For now, let's just log it.
+                if (isNetworkError) {
+                    console.error('🚨 Falla de Red Crítica detectada (Failed to fetch). Iniciando diagnóstico profundo...');
+                    
+                    // Import inside function to avoid circular deps if they exist
+                    import('./supabase').then(({ verifyConnectivity }) => {
+                        verifyConnectivity().then(res => {
+                            if (!res.ok) {
+                                console.error('🚫 Diagnóstico de Conectividad:', res.error);
+                                if (res.isNetworkError) console.info('💡 Sugerencia: Revisa tu VPN, Firewall o AdBlockers. El dominio de Supabase parece inalcanzable.');
+                            } else {
+                                console.log('📡 Diagnostico OK. Latencia:', res.latency);
+                            }
+                        });
+                    });
+                } else {
+                    console.error('❌ Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                }
+                
                 logError('authContext fetchProfile', error);
             } else if (data) {
                 if (signal?.aborted) return;
@@ -63,8 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setProfile(data as Profile);
             } else {
                 console.warn('⚠️ Perfil no encontrado en la tabla profiles.');
-                // Critical Fix: If profile is missing but user exists, we might want to 
-                // create a default profile or allow access with limited features.
             }
         } catch (err) {
             console.error('❌ Excepción crítica en fetchProfile:', err);
@@ -96,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setLoading(false);
                 }
 
-                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
                     if (isMounted) {
                         setUser(session?.user ?? null);
                         if (session?.user) fetchProfile(session.user.id);

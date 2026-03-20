@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 
 export default function AdminDashboard() {
-    const { profile, user } = useAuth();
+    const { profile } = useAuth();
     const [stats, setStats] = useState({
         todaySales: 0,
         pendingOrders: 0,
@@ -18,11 +18,8 @@ export default function AdminDashboard() {
     const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
     interface RecentOrder {
-        id: string;
-        total: number;
-        status: string;
-        created_at: string;
         sequence_id?: number;
+        customer_name?: string;
         profiles?: {
             company_name: string;
         };
@@ -71,7 +68,7 @@ export default function AdminDashboard() {
         // 5. Actividad Reciente (TODOS LOS B2C: Manual y Web)
         const { data: recOrders } = await supabase
             .from('orders')
-            .select('id, total, status, created_at, sequence_id, profiles(company_name)')
+            .select('id, total, status, created_at, sequence_id, customer_name, profiles(company_name)')
             .in('type', ['b2c', 'b2c_wompi']) // Incluimos ambos subtipos de B2C
             .order('created_at', { ascending: false })
             .limit(5);
@@ -115,22 +112,9 @@ export default function AdminDashboard() {
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', marginBottom: '0.5rem' }}>Centro de Comando</h1>
                         <p style={{ color: '#4B5563', fontSize: '1.1rem' }}>Resumen operativo de Logistics Pro en tiempo real.</p>
-                        <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                            <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.2rem 0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '700' }}>
-                                🛡️ Admin: {profile?.company_name || user?.email?.split('@')[0]}
-                            </span>
-                        </div>
+
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button
-                            onClick={() => {
-                                localStorage.clear();
-                                window.location.href = '/login';
-                            }}
-                            style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', backgroundColor: '#FEF2F2', color: '#991B1B', border: '1px solid #FEE2E2', fontWeight: '700', cursor: 'pointer' }}
-                        >
-                            🛑 Reset Total
-                        </button>
                         <button
                             onClick={fetchDashboardData}
                             style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E5E7EB', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -204,31 +188,51 @@ export default function AdminDashboard() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                             <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>🛍️ Radar de Ventas B2C</h2>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#10B981', fontWeight: '700' }}>
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block', boxShadow: '0 0 4px #10B981' }}></span>
+                                <span className="pulse-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
                                 VIVO
                             </div>
                         </div>
+                        <style>{`
+                            @keyframes pulse {
+                                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+                                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                            }
+                            .pulse-dot {
+                                animation: pulse 2s infinite;
+                            }
+                        `}</style>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {recentOrders.length === 0 && <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>No hay ventas B2C recientes.</p>}
                             {recentOrders.map(order => (
                                 <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #F3F4F6' }}>
                                     <div>
                                         <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>Pedido #{getFriendlyOrderId(order)}</div>
-                                        <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                            {order.profiles?.company_name || 'Cliente Línea Hogar'} • {new Date(order.created_at).toLocaleTimeString()}
+                                         <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
+                                            {order.profiles?.company_name || order.customer_name || 'Cliente Línea Hogar'} • {new Date(order.created_at).toLocaleTimeString()}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontWeight: '800', color: '#111827' }}>${order.total?.toLocaleString()}</div>
                                         <div style={{
-                                            fontSize: '0.75rem',
+                                            fontSize: '0.65rem',
+                                            padding: '2px 8px',
+                                            borderRadius: '9999px',
+                                            backgroundColor: order.status === 'delivered' ? '#DCFCE7' :
+                                                order.status === 'cancelled' ? '#FEE2E2' :
+                                                    order.status === 'pending_approval' ? '#FEF3C7' :
+                                                        order.status === 'approved' ? '#DBEAFE' :
+                                                            order.status === 'dispatched' ? '#E0F2FE' : '#F1F5F9',
                                             color: order.status === 'delivered' ? '#15803D' :
                                                 order.status === 'cancelled' ? '#BE123C' :
                                                     order.status === 'pending_approval' ? '#B45309' :
                                                         order.status === 'approved' ? '#1E40AF' :
                                                             order.status === 'dispatched' ? '#0369A1' : '#64748B',
-                                            fontWeight: '700',
-                                            textTransform: 'uppercase'
+                                            fontWeight: '800',
+                                            textTransform: 'uppercase',
+                                            display: 'inline-block',
+                                            border: '1px solid currentColor',
+                                            opacity: 0.9
                                         }}>
                                             {order.status === 'draft' ? 'Borrador' :
                                                 order.status === 'pending_approval' ? 'Pendiente' :

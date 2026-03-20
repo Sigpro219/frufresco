@@ -4,21 +4,27 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { Copy, Check } from 'lucide-react';
 
 function ResultContent() {
     const searchParams = useSearchParams();
     const transactionId = searchParams.get('id');
     const [status, setStatus] = useState<'loading' | 'success' | 'pending' | 'error'>('loading');
-    const [transactionData, setTransactionData] = useState<any>(null);
+    const [transactionData, setTransactionData] = useState<{
+        status: string;
+        order_id: string;
+        order_sequence: number;
+        order_created_at: string;
+    } | null>(null);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
-        if (!transactionId) {
-            setStatus('error');
-            return;
-        }
-
-        // Llamamos a nuestra API interna para verificar el estado en nuestra BD
         const checkStatus = async () => {
+            if (!transactionId) {
+                setStatus('error');
+                return;
+            }
             try {
                 const response = await fetch(`/api/payments/status?id=${transactionId}`);
                 const responseBody = await response.json();
@@ -38,7 +44,13 @@ function ResultContent() {
         checkStatus();
     }, [transactionId]);
 
-    const renderIcon = () => {
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const renderIconStatus = () => {
         switch (status) {
             case 'success': return '✅';
             case 'pending': return '⏳';
@@ -56,6 +68,14 @@ function ResultContent() {
         }
     };
 
+    const friendlyId = transactionData?.order_id 
+        ? getFriendlyOrderId({
+            id: transactionData.order_id,
+            sequence_id: transactionData.order_sequence,
+            created_at: transactionData.order_created_at
+        })
+        : '';
+
     return (
         <div style={{
             maxWidth: '600px',
@@ -67,7 +87,7 @@ function ResultContent() {
             boxShadow: 'var(--shadow-lg)',
             border: '1px solid var(--border)'
         }}>
-            <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>{renderIcon()}</div>
+            <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>{renderIconStatus()}</div>
             <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem' }}>{renderMessage()}</h1>
 
             <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.1rem' }}>
@@ -81,13 +101,51 @@ function ResultContent() {
             {transactionId && (
                 <div style={{
                     backgroundColor: '#F3F4F6',
-                    padding: '1rem',
-                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    borderRadius: '16px',
                     marginBottom: '2.5rem',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace'
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
                 }}>
-                    ID de Transacción: {transactionId}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>ID de Transacción</span>
+                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: '600' }}>{transactionId}</span>
+                    </div>
+                    {friendlyId && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E5E7EB', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>Número de Pedido</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ 
+                                    fontSize: '1.3rem', 
+                                    fontWeight: '900', 
+                                    color: 'var(--primary)',
+                                    letterSpacing: '0.05em'
+                                }}>
+                                    {friendlyId}
+                                </span>
+                                <button
+                                    onClick={() => handleCopy(friendlyId)}
+                                    title="Copiar Pedido"
+                                    style={{
+                                        background: copied ? '#F0FDF4' : 'white',
+                                        border: `1px solid ${copied ? '#16A34A' : '#E5E7EB'}`,
+                                        borderRadius: '8px',
+                                        padding: '6px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                    }}
+                                >
+                                    {copied ? <Check size={16} color="#16A34A" /> : <Copy size={16} color="#6B7280" />}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

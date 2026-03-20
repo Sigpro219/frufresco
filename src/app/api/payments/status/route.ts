@@ -18,9 +18,13 @@ export async function GET(request: Request) {
     }
 
     try {
+        if (!supabase) {
+            return NextResponse.json({ error: 'Database connection not available' }, { status: 500 });
+        }
+
         const { data, error } = await supabase
             .from('orders')
-            .select('status, total, delivery_date')
+            .select('id, sequence_id, created_at, status, total, delivery_date')
             .eq('wompi_transaction_id', id)
             .single();
 
@@ -41,11 +45,15 @@ export async function GET(request: Request) {
                 status: wompiStatus,
                 amount_in_cents: data.total * 100, // Approximate
                 currency: 'COP',
-                reference: id
+                reference: id,
+                order_id: data.id,
+                order_sequence: data.sequence_id,
+                order_created_at: data.created_at
             }
         });
 
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

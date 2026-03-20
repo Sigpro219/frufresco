@@ -9,8 +9,16 @@ export async function POST() {
 
     try {
         console.log('--- INICIANDO DEPLOY MASIVO DESDE CORE ---');
+        
+        // 0. Verificar rama actual para evitar desvíos
+        const { stdout: currentBranchRaw } = await execPromise('git branch --show-current');
+        const currentBranch = currentBranchRaw.trim();
+        
+        if (currentBranch !== 'CORE' && currentBranch !== 'main') {
+             throw new Error(`Estás en la rama '${currentBranch}'. El deploy masivo solo es seguro desde 'CORE' o 'main'.`);
+        }
 
-        // 1. Guardar cualquier cambio pendiente en CORE
+        // 1. Guardar cualquier cambio pendiente
         const { stdout: status } = await execPromise('git status --porcelain');
         if (status.trim()) {
             console.log('Hay cambios locales detectados. Realizando auto-save...');

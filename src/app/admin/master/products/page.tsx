@@ -8,8 +8,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import CreateProductModal from '@/components/CreateProductModal';
 import EditProductModal from '@/components/EditProductModal';
-import ManageAttributesModal from '@/components/ManageAttributesModal';
-import VariantModal from '@/components/VariantModal';
 import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { 
@@ -51,9 +49,7 @@ export default function MasterProductsPage() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [wipeExistingData, setWipeExistingData] = useState(false); // Nueva opción de limpieza
     const [dynamicUnits, setDynamicUnits] = useState<string[]>(['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto', 'Caja', 'Saco', 'Cubeta']);
-    const [selectedVariantProduct, setSelectedVariantProduct] = useState<Product | null>(null);
     const [selectedEditProduct, setSelectedEditProduct] = useState<Product | null>(null);
-    const [isManageAttributesModalOpen, setIsManageAttributesModalOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
@@ -346,29 +342,6 @@ export default function MasterProductsPage() {
     // Nota: deleteProduct y deleteAllProducts han sido removidos por seguridad.
 
 
-    const handleUploadVariantImage = async (file: File) => {
-        try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('product-images')
-                .upload(filePath, file, { upsert: true });
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('product-images')
-                .getPublicUrl(filePath);
-
-            return publicUrl;
-        } catch (error) {
-            console.error('Error uploading variant image:', error);
-            showToast('Error al subir imagen', 'error');
-            return null;
-        }
-    };
 
     const handleMainImageUpload = async (productId: string, file: File) => {
         setSavingId(productId);
@@ -403,58 +376,6 @@ export default function MasterProductsPage() {
             console.error('Main Image Upload Error:', error);
         } finally {
             setSavingId(null);
-        }
-    };
-
-    const handleSaveVariants = async (optionsConfig: Product['options_config'] | null, variants: Product['variants'] | null): Promise<boolean> => {
-        if (!selectedVariantProduct) return false;
-
-        try {
-            // 1. Guardar configuración en el maestro
-            const { error: prodError } = await supabase
-                .from('products')
-                .update({ 
-                    options_config: optionsConfig,
-                    variants: variants // Mantener JSONB como redundancia/historial por ahora
-                })
-                .eq('id', selectedVariantProduct.id);
-
-            if (prodError) throw prodError;
-
-            // 2. Sincronizar tabla dedicada product_variants
-            if (variants && variants.length > 0) {
-                // Limpiar anteriores
-                await supabase
-                    .from('product_variants')
-                    .delete()
-                    .eq('product_id', selectedVariantProduct.id);
-
-                // Insertar nuevas
-                const formattedVariants = variants.map(v => ({
-                    product_id: selectedVariantProduct.id,
-                    sku: v.sku,
-                    options: v.options,
-                    image_url: v.image_url,
-                    price_adjustment_percent: v.price_adjustment_percent || 0,
-                    is_active: v.is_active ?? true
-                }));
-
-                const { error: variantError } = await supabase
-                    .from('product_variants')
-                    .insert(formattedVariants);
-
-                if (variantError) throw variantError;
-            }
-
-            showToast('Estructura técnica y fotos guardadas', 'success');
-            fetchProducts();
-            return true;
-        } catch (err: unknown) {
-            const error = err as { message?: string; code?: string; details?: string };
-            const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-            showToast('Error al guardar: ' + errorMsg, 'error');
-            console.error('Variant Save Error Detailed:', error);
-            return false;
         }
     };
 
@@ -683,25 +604,6 @@ export default function MasterProductsPage() {
                                 title="Sincronizar visibilidad web con disponibilidad de imágenes"
                             >
                                 <Globe size={16} /> Sincronizar Web
-                            </button>
-                            <button
-                                onClick={() => setIsManageAttributesModalOpen(true)}
-                                style={{
-                                    padding: '0.6rem 1rem',
-                                    borderRadius: '10px',
-                                    backgroundColor: 'white',
-                                    color: '#4B5563',
-                                    border: '1px solid #D1D5DB',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.6rem',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                    fontSize: '0.85rem'
-                                }}
-                            >
-                                <Dna size={16} /> Variaciones
                             </button>
 
                             <button
@@ -963,7 +865,7 @@ export default function MasterProductsPage() {
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>IVA</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Mínimo</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Equivalencias</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Variaciones</th>
+                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Variantes</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Descripción</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '60px', textAlign: 'center' }}>Web</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '100px' }}>Estado</th>
@@ -1200,23 +1102,21 @@ export default function MasterProductsPage() {
                                             ⚖️ {conversions.filter(c => c.product_id === p.id).length} Eq.
                                         </button>
                                     </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <button 
-                                            onClick={() => setSelectedVariantProduct(p)}
-                                            style={{ 
-                                                fontSize: '0.75rem', 
-                                                color: '#7C3AED', 
-                                                background: '#F5F3FF', 
-                                                border: '1px solid #DDD6FE', 
-                                                borderRadius: '6px', 
-                                                cursor: 'pointer', 
-                                                padding: '6px 10px',
-                                                fontWeight: '700',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
+                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            color: '#7C3AED', 
+                                            background: '#F5F3FF', 
+                                            border: '1px solid #DDD6FE', 
+                                            borderRadius: '6px', 
+                                            padding: '6px 10px',
+                                            fontWeight: '800',
+                                            display: 'inline-block',
+                                            whiteSpace: 'nowrap',
+                                            opacity: (p.variants?.length || 0) > 0 ? 1 : 0.4
+                                        }}>
                                             🧬 {p.variants?.length || 0} Var.
-                                        </button>
+                                        </div>
                                     </td>
                                     <td style={{ padding: '1rem', width: '250px' }}>
                                         <div 
@@ -1348,14 +1248,6 @@ export default function MasterProductsPage() {
                 />
             )}
 
-            {selectedVariantProduct && (
-                <VariantModal
-                    product={selectedVariantProduct}
-                    onClose={() => setSelectedVariantProduct(null)}
-                    onSave={handleSaveVariants}
-                    onUploadImage={handleUploadVariantImage}
-                />
-            )}
 
             {selectedEditProduct && (
                 <EditProductModal 
@@ -1644,9 +1536,6 @@ export default function MasterProductsPage() {
                         </div>
                     </div>
                 </div>
-            )}
-            {isManageAttributesModalOpen && (
-                <ManageAttributesModal onClose={() => setIsManageAttributesModalOpen(false)} />
             )}
         </div>
     );

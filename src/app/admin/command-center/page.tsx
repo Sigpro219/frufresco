@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, AlertTriangle, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 const AVAILABLE_MODULES = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -69,13 +69,13 @@ export default function CommandCenter() {
     const router = useRouter();
     const [settings, setSettings] = useState<Setting[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusMessage, setStatusMessage] = useState({ text: '', type: '' });
+    const [, setStatusMessage] = useState({ text: '', type: '' });
     const [isEditing, setIsEditing] = useState(false);
     const [activeTab, setActiveTab] = useState<'governance' | 'helpdesk' | 'approvals' | 'fleet'>('governance');
     
     // Help Desk state
     const [tickets, setTickets] = useState<Ticket[]>([]);
-    const [ticketsLoading, setTicketsLoading] = useState(false);
+    const [, setTicketsLoading] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [responseText, setResponseText] = useState('');
     const [ticketFilter, setTicketFilter] = useState<string>('all');
@@ -85,6 +85,20 @@ export default function CommandCenter() {
     // Fleet state
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [syncing, setSyncing] = useState<string | null>(null);
+    const [currentBranch, setCurrentBranch] = useState<string>('Detectando...');
+
+    useEffect(() => {
+        const getBranch = async () => {
+            try {
+                const res = await fetch('/api/maintenance/branch');
+                const data = await res.json();
+                setCurrentBranch(data.branch);
+            } catch {
+                setCurrentBranch('Error');
+            }
+        };
+        getBranch();
+    }, []);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     
     const [newRole, setNewRole] = useState<Role>({
@@ -232,7 +246,7 @@ export default function CommandCenter() {
             setResponseText('');
             setSelectedTicket(null);
             fetchTickets();
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error responding to ticket:', e);
         } finally {
             setSavingResponse(false);
@@ -250,10 +264,6 @@ export default function CommandCenter() {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
         return m > 0 ? `${h}h ${m}m` : `${h}h`;
-    };
-
-    const formatDate = (dateStr: string): string => {
-        return new Date(dateStr).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     const handleUpdateSetting = async (key: string, newValue: string) => {
@@ -396,10 +406,12 @@ export default function CommandCenter() {
                         </div>
                     </div>
                     <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.2rem 1.5rem', border: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '1.2rem' }}>🆔</span>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: currentBranch === 'CORE' ? '#F5F3FF' : '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: currentBranch === 'CORE' ? '#7C3AED' : '#EF4444' }}>
+                            <RefreshCw size={20} className={currentBranch === 'CORE' && syncing ? 'animate-spin' : ''} />
+                        </div>
                         <div>
-                            <span style={{ color: '#6B7280', fontSize: '0.65rem', display: 'block', fontWeight: '800' }}>Tenant Identifier</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#111827' }}>delta_coretech</span>
+                            <span style={{ color: '#6B7280', fontSize: '0.65rem', display: 'block', fontWeight: '800', textTransform: 'uppercase' }}>Rama Local Activa</span>
+                            <span style={{ fontWeight: '900', fontSize: '1rem', color: currentBranch === 'CORE' ? '#7C3AED' : '#EF4444' }}>{currentBranch}</span>
                         </div>
                     </div>
                     <div style={{ backgroundColor: '#F0F9FF', borderRadius: '20px', padding: '1.2rem 1.5rem', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -415,7 +427,7 @@ export default function CommandCenter() {
                         { id: 'approvals', label: 'Aprobaciones', icon: <ShieldCheck size={18}/> },
                         { id: 'fleet', label: 'Flota SaaS', icon: <Activity size={18}/> }
                     ].map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{ padding: '12px 24px', backgroundColor: 'transparent', color: activeTab === tab.id ? '#111827' : '#6B7280', border: 'none', borderBottom: activeTab === tab.id ? '3px solid #111827' : '3px solid transparent', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '-1px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id as 'governance' | 'helpdesk' | 'approvals' | 'fleet')} style={{ padding: '12px 24px', backgroundColor: 'transparent', color: activeTab === tab.id ? '#111827' : '#6B7280', border: 'none', borderBottom: activeTab === tab.id ? '3px solid #111827' : '3px solid transparent', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '-1px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
                             {tab.icon} {tab.label}
                         </button>
                     ))}
@@ -488,7 +500,7 @@ export default function CommandCenter() {
                             in_progress: tickets.filter(t => t.status === 'in_progress').length,
                             resolved: tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length,
                             avgResponse: (() => {
-                                const responded = tickets.filter((t: any) => t.response_time_minutes != null);
+                                const responded = tickets.filter((t: Ticket) => t.response_time_minutes != null);
                                 if (!responded.length) return null;
                                 return Math.round(responded.reduce((s, t) => s + (t.response_time_minutes || 0), 0) / responded.length);
                             })(),

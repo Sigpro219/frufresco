@@ -473,12 +473,27 @@ export default function OrderLoadingPage() {
                                 name = order.profiles.contact_name || order.profiles.company_name || 'Cliente Registrado';
                             }
                             phone = order.profiles.contact_phone || 'Sin Teléfono';
-                        } else if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
-                            // Manual B2C Parsing Logic (Fallback)
-                            const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
-                            const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
-                            if (nameMatch) name = nameMatch[1];
-                            if (phoneMatch) phone = phoneMatch[1];
+                        } else {
+                            // FALLBACK: Use data directly from order table if profile is missing
+                            // This happens with new B2C Wompi leads/orders
+                            name = order.customer_name || 'Cliente Desconocido';
+                            phone = order.customer_phone || 'Sin Teléfono';
+
+                            if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
+                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
+                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
+                                if (nameMatch) name = nameMatch[1];
+                                if (phoneMatch) phone = phoneMatch[1];
+                            }
+                        }
+
+                        // Payment Method Logic
+                        let paymentMethod = order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
+                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null;
+                        
+                        // Auto-detect Wompi if transaction ID exists but tags are missing
+                        if (!paymentMethod && (order.wompi_transaction_id || order.type === 'b2c_wompi')) {
+                            paymentMethod = 'Tarjeta / Wompi';
                         }
 
                         return {
@@ -486,8 +501,7 @@ export default function OrderLoadingPage() {
                             customer_name: name,
                             customer_phone: phone,
                             customer_nit: order.profiles?.nit || null,
-                            paymentMethod: order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
-                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null,
+                            paymentMethod: paymentMethod,
                             isComplete: (
                                 name && name !== 'Cliente Desconocido' && name !== 'Sin Razón Social' && name !== 'Cliente Registrado' &&
                                 phone && phone !== 'Sin Teléfono' && phone !== 'Sin tel.' &&
@@ -670,166 +684,199 @@ export default function OrderLoadingPage() {
                     )}
 
 
-                {/* Filtros */}
+                {/* Unified Premium Search Bar */}
                 <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(4, 1fr)', 
-                    gap: '1rem', 
-                    marginBottom: '2rem',
+                    display: 'flex',
+                    alignItems: 'stretch',
                     backgroundColor: 'white',
-                    padding: '1.5rem',
-                    borderRadius: '12px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                    alignItems: 'end'
+                    borderRadius: '16px',
+                    border: '2px solid #E2E8F0',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                    marginBottom: '2rem',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    height: '56px'
                 }}>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.5rem' }}>
-                            FECHA DE ENTREGA
-                        </label>
+                    {/* Date Segment */}
+                    <div style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 1rem',
+                        backgroundColor: '#F8FAFC',
+                        borderRight: '2px solid #E2E8F0',
+                        minWidth: '220px',
+                        position: 'relative',
+                        cursor: 'pointer'
+                    }} onClick={(e) => {
+                        const input = e.currentTarget.querySelector('input');
+                        if (input) (input as any).showPicker?.();
+                    }}>
+                        <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            marginRight: '12px',
+                            pointerEvents: 'none'
+                        }}>
+                             <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Entrega
+                             </span>
+                             <span style={{ fontSize: '1rem', lineHeight: '1' }}>📅</span>
+                        </div>
                         <input
                             type="date"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                (e.target as any).showPicker?.();
+                            }}
                             style={{
-                                width: '100%',
-                                padding: '0.5rem',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '8px',
-                                fontSize: '0.875rem'
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '0.95rem',
+                                fontWeight: '700',
+                                color: '#1E293B',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                padding: '4px 0',
+                                width: '130px'
                             }}
                         />
                     </div>
-                    <div style={{ gridColumn: 'span 3' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem' }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B' }}>
-                                BUSCADOR INTELIGENTE
-                            </label>
-                            <div 
-                                style={{ position: 'relative', cursor: 'help' }}
-                                onMouseEnter={() => setShowHelpTooltip(true)}
-                                onMouseLeave={() => setShowHelpTooltip(false)}
-                            >
-                                <span style={{ 
-                                    backgroundColor: '#2563EB', 
-                                    color: 'white', 
-                                    borderRadius: '50%', 
-                                    width: '18px', 
-                                    height: '18px', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 'bold',
-                                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
-                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    transform: showHelpTooltip ? 'scale(1.2)' : 'scale(1.0)',
-                                    opacity: '0.8'
-                                }}>?</span>
-                                
-                                {showHelpTooltip && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '25px',
-                                        left: '0',
-                                        width: '280px',
-                                        backgroundColor: '#1E293B',
-                                        color: 'white',
-                                        padding: '1rem',
-                                        borderRadius: '12px',
-                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                        zIndex: 100,
-                                        fontSize: '0.75rem',
-                                        lineHeight: '1.4',
-                                        animation: 'fadeIn 0.2s ease-out'
-                                    }}>
-                                        <div style={{ fontWeight: '800', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.3rem' }}>
-                                            GUÍA DE COMANDOS INTELIGENTES
-                                        </div>
-                                        <div style={{ display: 'grid', gap: '0.4rem' }}>
-                                            <p><strong>@Estados:</strong> pendiente, para_compra, aprobado, etc</p>
-                                            <p><strong>@Canales:</strong> web (🛒), whatsapp (💬), telefono (📞)</p>
-                                            <p><strong>@Pago:</strong> @efectivo, @transferencia, @pago, @sin pago</p>
-                                            <p><strong>@Logística/Check:</strong> @sin coordenadas, @incompletos, @error</p>
-                                        </div>
-                                        <div style={{ marginTop: '0.5rem', color: '#94A3B8', fontSize: '0.65rem', fontStyle: 'italic' }}>
-                                            Tip: Puedes combinar palabras (ej: @error Burger)
-                                        </div>
-                                        <style>{`
-                                            @keyframes fadeIn {
-                                                from { opacity: 0; transform: translateY(5px); }
-                                                to { opacity: 1; transform: translateY(0); }
-                                            }
-                                        `}</style>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div style={{ position: 'relative' }}>
-                            <span style={{ 
+
+                    {/* Search Segment */}
+                    <div style={{ 
+                        flex: 1,
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center'
+                    }}>
+                        <span style={{ 
+                            position: 'absolute', 
+                            left: '16px', 
+                            fontSize: '1.2rem',
+                            color: '#94A3B8',
+                            pointerEvents: 'none'
+                        }}>🔍</span>
+                        
+                        <input
+                            type="text"
+                            placeholder="Buscar por ID, nombre, @estado, @canal..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                padding: '0.75rem 3rem 0.75rem 3.5rem',
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                color: '#1E293B',
+                                outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                                const parent = e.target.parentElement?.parentElement;
+                                if (parent) {
+                                    parent.style.borderColor = '#2563EB';
+                                    parent.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.1)';
+                                }
+                            }}
+                            onBlur={(e) => {
+                                const parent = e.target.parentElement?.parentElement;
+                                if (parent) {
+                                    parent.style.borderColor = '#E2E8F0';
+                                    parent.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)';
+                                }
+                            }}
+                        />
+
+                        {/* Smart Help Icon Integrated */}
+                        <div 
+                            style={{ 
                                 position: 'absolute', 
-                                left: '12px', 
-                                top: '50%', 
-                                transform: 'translateY(-50%)', 
-                                color: '#94A3B8',
+                                right: searchTerm ? '45px' : '16px', 
+                                cursor: 'help',
                                 display: 'flex',
                                 alignItems: 'center',
-                                pointerEvents: 'none'
-                            }}>🔍</span>
-                            <input
-                                type="text"
-                                placeholder="Buscar por ID, nombre, NIT, teléfono, dirección o usa @estado, @canal..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem 0.75rem 0.75rem 2.5rem',
-                                    border: '2px solid #E2E8F0',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={() => setShowHelpTooltip(true)}
+                            onMouseLeave={() => setShowHelpTooltip(false)}
+                        >
+                            <span style={{ 
+                                backgroundColor: '#E2E8F0', 
+                                color: '#64748B', 
+                                borderRadius: '50%', 
+                                width: '22px', 
+                                height: '22px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold'
+                            }}>?</span>
+                            
+                            {showHelpTooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    bottom: '35px',
+                                    right: '0',
+                                    width: '300px',
+                                    backgroundColor: '#1E293B',
+                                    color: 'white',
+                                    padding: '1rem',
                                     borderRadius: '12px',
-                                    fontSize: '0.95rem',
-                                    fontWeight: '600',
-                                    color: '#1E293B',
-                                    outline: 'none',
-                                    transition: 'all 0.2s',
-                                    backgroundColor: '#F8FAFC'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#2563EB';
-                                    e.target.style.backgroundColor = 'white';
-                                    e.target.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.1)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#E2E8F0';
-                                    e.target.style.backgroundColor = '#F8FAFC';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                            {searchTerm && (
-                                <button 
-                                    onClick={() => setSearchTerm('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '12px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        border: 'none',
-                                        background: '#E2E8F0',
-                                        color: '#64748B',
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: '50%',
-                                        cursor: 'pointer',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 'bold',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                >✕</button>
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                                    zIndex: 100,
+                                    fontSize: '0.75rem',
+                                    lineHeight: '1.4',
+                                    animation: 'fadeIn 0.2s ease-out'
+                                }}>
+                                    <div style={{ fontWeight: '800', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.3rem' }}>
+                                        COMANDOS INTELIGENTES
+                                    </div>
+                                    <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                        <p><strong>@Estados:</strong> pendiente, aprobado...</p>
+                                        <p><strong>@Canales:</strong> @web, @whatsapp, @telefono</p>
+                                        <p><strong>@Pago:</strong> @efectivo, @transferencia...</p>
+                                        <p><strong>@Logística:</strong> @sin coordenadas, @error</p>
+                                    </div>
+                                    <style>{`
+                                        @keyframes fadeIn {
+                                            from { opacity: 0; transform: translateY(5px); }
+                                            to { opacity: 1; transform: translateY(0); }
+                                        }
+                                    `}</style>
+                                </div>
                             )}
                         </div>
-                    </div>
 
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute',
+                                    right: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    border: 'none',
+                                    background: '#F1F5F9',
+                                    color: '#64748B',
+                                    borderRadius: '50%',
+                                    width: '24px',
+                                    height: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem'
+                                }}
+                            >✕</button>
+                        )}
+                    </div>
                 </div>
+
 
                 {/* Loading */}
                 {loading && (
@@ -1198,12 +1245,14 @@ export default function OrderLoadingPage() {
                                                     type="date"
                                                     value={editDeliveryDate}
                                                     onChange={(e) => setEditDeliveryDate(e.target.value)}
+                                                    onClick={(e) => (e.target as any).showPicker?.()}
                                                     style={{
                                                         width: '100%',
                                                         padding: '10px',
                                                         borderRadius: '8px',
                                                         border: '1px solid #A7F3D0',
-                                                        fontSize: '0.9rem'
+                                                        fontSize: '0.9rem',
+                                                        cursor: 'pointer'
                                                     }}
                                                 />
                                             </div>

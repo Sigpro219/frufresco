@@ -37,18 +37,87 @@ export async function POST(request: Request) {
 
             console.log(`Wompi Webhook: Order ${reference} status updated to ${status}`);
 
-            // 2. ACTUALIZAR ESTADO EN SUPABASE
-            const mappedStatus = status === 'APPROVED' ? 'approved' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
+            // 1. Obtener datos actuales del pedido
+            const { data: order, error: fetchError } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('id', reference)
+                .single();
+            
+            if (fetchError || !order) {
+                console.error('Webhook: Order not found', reference);
+                return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+            }
 
-            const { error } = await supabase
+            // 2. Mapear estado
+            const mappedStatus = status === 'APPROVED' ? 'approved' : status === 'DECLINED' ? 'cancelled' : 'pending_approval';
+            
+            // 3. Lógica SI el pago es aprobado
+            let profileId = order.profile_id;
+            let adminNotes = order.admin_notes || '';
+
+            if (status === 'APPROVED') {
+                // Sello de pago para logística
+                const paymentTag = `[PAGO: Wompi ${transaction.payment_method_type || 'CARD'} APPROVED]`;
+                if (!adminNotes.includes('[PAGO:')) {
+                    adminNotes = adminNotes ? `${adminNotes} | ${paymentTag}` : paymentTag;
+                }
+
+                // SI no tiene perfil (B2C Guest), crearlo on-the-fly
+                if (!profileId && order.customer_phone) {
+                    console.log('Webhook: Creating automatic profile for guest B2C customer');
+                    
+                    // Buscar si ya existe un perfil con este teléfono (limpio)
+                    const cleanPhone = order.customer_phone.replace(/\D/g, '');
+                    const { data: existingProfile } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .ilike('contact_phone', `%${cleanPhone}%`)
+                        .single();
+
+                    if (existingProfile) {
+                        profileId = existingProfile.id;
+                        console.log('Webhook: Existing profile found and linked:', profileId);
+                    } else {
+                        // Crear nuevo perfil B2C
+                        const { data: newProfile, error: profileError } = await supabase
+                            .from('profiles')
+                            .insert({
+                                role: 'b2c_client',
+                                company_name: order.customer_name,
+                                contact_name: order.customer_name,
+                                contact_phone: order.customer_phone,
+                                email: order.customer_email,
+                                address: order.shipping_address,
+                                latitude: order.latitude,
+                                longitude: order.longitude,
+                                geocoding_status: order.latitude ? 'verified' : 'pending'
+                            })
+                            .select('id')
+                            .single();
+
+                        if (!profileError && newProfile) {
+                            profileId = newProfile.id;
+                            console.log('Webhook: New B2C profile created:', profileId);
+                        } else {
+                            console.error('Webhook: Failed to create B2C profile:', profileError);
+                        }
+                    }
+                }
+            }
+
+            // 4. Actualizar el pedido
+            const { error: updateError } = await supabase
                 .from('orders')
                 .update({
                     status: mappedStatus,
-                    wompi_transaction_id: transaction.id
+                    wompi_transaction_id: transaction.id,
+                    profile_id: profileId,
+                    admin_notes: adminNotes
                 })
                 .eq('id', reference);
 
-            if (error) throw error;
+            if (updateError) throw updateError;
         }
 
         return NextResponse.json({ received: true });

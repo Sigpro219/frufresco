@@ -528,7 +528,7 @@ export default function CheckoutPage() {
                                     Nombre Completo
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
                                         <User size={15} />
                                     </div>
                                     <input
@@ -536,7 +536,7 @@ export default function CheckoutPage() {
                                         placeholder="Juan Pérez"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
+                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -548,7 +548,7 @@ export default function CheckoutPage() {
                                         WhatsApp
                                     </label>
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
                                             <Phone size={15} />
                                         </div>
                                         <input
@@ -556,7 +556,7 @@ export default function CheckoutPage() {
                                             placeholder="300 123 4567"
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
-                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
@@ -566,7 +566,7 @@ export default function CheckoutPage() {
                                         Email
                                     </label>
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                        <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
                                             <Mail size={15} />
                                         </div>
                                         <input
@@ -574,7 +574,7 @@ export default function CheckoutPage() {
                                             placeholder="ejemplo@correo.com"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
@@ -586,7 +586,7 @@ export default function CheckoutPage() {
                                     Dirección de Entrega
                                 </label>
                                 <div style={{ position: 'relative', marginBottom: '0.6rem' }}>
-                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
                                         <MapPin size={15} />
                                     </div>
                                     <input
@@ -594,7 +594,7 @@ export default function CheckoutPage() {
                                         placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -682,7 +682,7 @@ export default function CheckoutPage() {
                                     Fecha de Entrega
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
                                         <Calendar size={15} />
                                     </div>
                                     <input
@@ -690,8 +690,19 @@ export default function CheckoutPage() {
                                         value={date}
                                         onChange={(e) => setDate(e.target.value)}
                                         min={minDeliveryDate}
-                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}
-                                        className="checkout-input-modern"
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.65rem 1rem 0.65rem 2.75rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.9rem', 
+                                            fontWeight: '500', 
+                                            backgroundColor: 'white', 
+                                            outline: 'none', 
+                                            cursor: 'pointer',
+                                            WebkitAppearance: 'none'
+                                        }}
+                                        className="checkout-input-modern custom-date-input"
                                     />
                                 </div>
                             </div>

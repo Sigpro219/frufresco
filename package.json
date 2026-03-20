@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync-core": "node scripts/update-sync.js && git add . && git commit -m \"Chore: sync core update\" && git push origin main -f && git branch -f CORE main && git push origin CORE -f"
+    "sync-core": "git add . && git commit -m \"Chore: sync core into main\" --no-verify && git push origin CORE && git push origin CORE:main --force"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
