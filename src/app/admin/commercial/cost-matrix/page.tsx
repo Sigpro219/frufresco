@@ -104,7 +104,7 @@ export default function CostMatrixPage() {
                 if (!pChunk || pChunk.length < pageSize) {
                     pHasMore = false;
                 }
-                if (pChunk) allPurchases = [...allPurchases, ...pChunk as any];
+                if (pChunk) allPurchases = [...allPurchases, ...pChunk as unknown as Purchase[]];
                 pFrom += pageSize;
             }
 
@@ -125,7 +125,7 @@ export default function CostMatrixPage() {
                         let normalizedPrice = p.unit_price;
 
                         if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
-                            const conv = (convData || []).find((c: any) => 
+                            const conv = (convData || []).find((c: { product_id: string; from_unit: string; to_unit: string }) => 
                                 c.product_id === p.product_id && 
                                 c.from_unit === p.purchase_unit && 
                                 c.to_unit === product.unit_of_measure

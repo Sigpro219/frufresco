@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execPromise = promisify(exec);
 
 interface SyncResult {
     name: string;
@@ -37,26 +33,8 @@ export async function POST(req: Request) {
         for (const tenant of fleet) {
             const tenantResults: SyncResult = { name: tenant.tenant_name, success: true, logs: [] };
             try {
-                // --- A. SINCRONIZACIÓN DE CÓDIGO (GIT) ---
-                // Mapeo dinámico de ramas según el Tenant
-                let branchName = '';
-                if (tenant.tenant_name.toLowerCase().includes('showcase') || tenant.tenant_name.toLowerCase().includes('delta')) {
-                    branchName = 'white-label';
-                } else if (tenant.tenant_name.toLowerCase().includes('frufresco') || tenant.tenant_name.toLowerCase().includes('tenant 1')) {
-                    branchName = 'tenant-frufresco';
-                }
-
-                if (branchName) {
-                    try {
-                        console.log(`--- Sincronizando Git para ${tenant.tenant_name} (Rama: ${branchName}) ---`);
-                        await execPromise(`git checkout ${branchName} && git merge CORE -m "Sync: Push from Command Center" && git push origin ${branchName}`);
-                        tenantResults.logs.push({ key: 'git_update', status: 'ok', message: `Rama ${branchName} actualizada.` });
-                    } catch (gitErr: unknown) {
-                        console.error(`Error Git en ${tenant.tenant_name}:`, gitErr instanceof Error ? gitErr.message : String(gitErr));
-                        tenantResults.logs.push({ key: 'git_update', status: 'error', message: 'Fallo al mezclar rama de Git.' });
-                        // No lanzamos el error para intentar al menos actualizar la base de datos
-                    }
-                }
+                // --- A. SINCRONIZACIÓN DE DATOS Y CONFIGURACIÓN ---
+                // (La sincronización de código ahora se maneja exclusivamente en /api/maintenance/update-all)
 
                 // --- B. SINCRONIZACIÓN DE BASE DE DATOS ---
                 const supabaseTenant = createClient(tenant.supabase_url, tenant.service_role_key);
@@ -144,8 +122,7 @@ export async function POST(req: Request) {
                 tenantResults.success = false;
                 tenantResults.error = err instanceof Error ? err.message : String(err);
             } finally {
-                // Volver siempre al CORE para mantener el entorno estable
-                try { await execPromise('git checkout CORE'); } catch { }
+                // Ya no es necesario volver a CORE porque ya no salimos de ella
             }
             results.push(tenantResults);
         }
