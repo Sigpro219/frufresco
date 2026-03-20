@@ -8,6 +8,7 @@ export interface CartItem {
     name: string;
     price: number;
     iva_rate?: number;
+    unit?: string;
     quantity: number;
     image_url?: string;
     variant_label?: string;

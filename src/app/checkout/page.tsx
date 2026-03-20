@@ -24,7 +24,10 @@ import {
     Mail,
     Calendar,
     AlertCircle,
-    X
+    X,
+    ShieldCheck,
+    Truck,
+    Lock as LockIcon
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
 
@@ -48,11 +51,16 @@ export default function CheckoutPage() {
     const [specialNotes, setSpecialNotes] = useState('');
     const { profile } = useAuth();
     
-    const taxAmount = items.reduce((sum, item) => {
-        const rate = item.iva_rate || 0;
-        // Tax included in price formula: Price * (rate / (100 + rate))
-        const itemTax = (item.price * item.quantity) * (rate / (100 + rate));
-        return sum + itemTax;
+    const taxAmount = items.reduce((totalTax, item) => {
+        const rate = Number(item.iva_rate) || 0;
+        if (rate <= 0) return totalTax;
+        
+        // Precio incluye IVA -> IVA = Total * (Rate / (100 + Rate))
+        const itemTotal = item.price * item.quantity;
+        const itemTax = itemTotal * (rate / (100 + rate));
+        
+        console.log(`📊 IVA SKU [${item.name}]: Tasa ${rate}% -> Aporta $${itemTax.toFixed(2)}`);
+        return totalTax + itemTax;
     }, 0);
 
     const isB2B = profile?.role === 'b2b_client';
@@ -447,7 +455,7 @@ export default function CheckoutPage() {
                                                     ${item.price.toLocaleString('es-CO')}
                                                 </span>
                                                 <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '600' }}>
-                                                    Cantidad: {item.quantity}
+                                                    Cantidad: {item.quantity} {item.unit || ''}
                                                 </span>
                                             </div>
                                         </div>
@@ -493,8 +501,8 @@ export default function CheckoutPage() {
                     <div style={{
                         backgroundColor: 'rgba(255, 255, 255, 0.8)',
                         backdropFilter: 'blur(20px)',
-                        padding: '2.5rem',
-                        borderRadius: '32px',
+                        padding: '1.5rem',
+                        borderRadius: '24px',
                         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
                         position: 'sticky',
                         top: '100px',
@@ -502,33 +510,33 @@ export default function CheckoutPage() {
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.4rem', 
+                            fontSize: '1.2rem', 
                             fontWeight: '900', 
-                            marginBottom: '1.75rem', 
+                            marginBottom: '1rem', 
                             color: 'var(--text-main)', 
                             letterSpacing: '-0.04em',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px'
+                            gap: '10px'
                         }}>
-                            <CreditCard size={22} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
+                            <CreditCard size={18} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
                         </h3>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Nombre Completo
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
-                                        <User size={16} />
+                                        <User size={15} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Juan Pérez"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
+                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -536,37 +544,37 @@ export default function CheckoutPage() {
 
                             <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         WhatsApp
                                     </label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
-                                            <Phone size={16} />
+                                            <Phone size={15} />
                                         </div>
                                         <input
                                             type="tel"
                                             placeholder="300 123 4567"
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
-                                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         Email
                                     </label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
-                                            <Mail size={16} />
+                                            <Mail size={15} />
                                         </div>
                                         <input
                                             type="email"
                                             placeholder="ejemplo@correo.com"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
@@ -574,19 +582,19 @@ export default function CheckoutPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Dirección de Entrega
                                 </label>
-                                <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
+                                <div style={{ position: 'relative', marginBottom: '0.6rem' }}>
                                     <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
-                                        <MapPin size={16} />
+                                        <MapPin size={15} />
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Ej: Calle 158 # 93-37, Apto 310"
+                                        placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -615,7 +623,7 @@ export default function CheckoutPage() {
                                             disabled={isGettingLocation}
                                         >
                                             {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                            📍 Mi ubicación actual
+                                            Mi ubicación actual
                                         </button>
 
                                         <button 
@@ -637,7 +645,7 @@ export default function CheckoutPage() {
                                                 gap: '8px'
                                             }}
                                         >
-                                            <MapIcon size={14} /> 🗺️ Seleccionar en Mapa
+                                            <MapIcon size={14} /> Seleccionar en Mapa
                                         </button>
                                     </div>
                                 )}
@@ -670,42 +678,47 @@ export default function CheckoutPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Fecha de Entrega
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.5 }}>
-                                        <Calendar size={18} />
+                                    <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', opacity: 0.4 }}>
+                                        <Calendar size={15} />
                                     </div>
                                     <input
                                         type="date"
                                         value={date}
                                         onChange={(e) => setDate(e.target.value)}
                                         min={minDeliveryDate}
-                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '14px', border: '1px solid #E5E7EB', fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-main)', backgroundColor: 'white', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '0.8rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '800', fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    ¿Alguna recomendación para la entrega?
-                                </label>
+                            <div style={{ marginTop: '0.4rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                    <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        ¿Alguna recomendación para la entrega?
+                                    </label>
+                                    <span style={{ fontSize: '0.65rem', color: specialNotes.length > 130 ? '#EF4444' : '#9CA3AF', fontWeight: '800' }}>
+                                        {specialNotes.length}/150
+                                    </span>
+                                </div>
                                 <textarea
                                     placeholder="Ej: Dejar en portería, local 105, el timbre no sirve..."
                                     value={specialNotes}
-                                    onChange={(e) => setSpecialNotes(e.target.value)}
+                                    onChange={(e) => setSpecialNotes(e.target.value.slice(0, 150))}
                                     style={{ 
                                         width: '100%', 
-                                        padding: '1rem', 
-                                        borderRadius: '16px', 
+                                        padding: '0.65rem 0.85rem', 
+                                        borderRadius: '12px', 
                                         border: '1px solid #E5E7EB', 
-                                        fontSize: '0.95rem', 
+                                        fontSize: '0.9rem', 
                                         fontWeight: '500', 
                                         backgroundColor: 'white', 
                                         outline: 'none', 
-                                        minHeight: '100px', 
+                                        minHeight: '60px', 
                                         resize: 'none',
                                         fontFamily: 'inherit',
                                         transition: 'all 0.3s'
@@ -715,26 +728,26 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
+                        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>Subtotal</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString('es-CO')}</span>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.95rem' }}>Subtotal</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${(totalPrice - taxAmount).toLocaleString('es-CO')}</span>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>Impuestos (IVA)</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString('es-CO')}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.95rem' }}>Impuestos (IVA)</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>${taxAmount.toLocaleString('es-CO')}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem' }}>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '1.4rem', 
+                                    fontSize: '1.2rem', 
                                     fontWeight: '900', 
                                     color: 'var(--text-main)',
                                     letterSpacing: '-0.02em'
                                 }}>Total de compra</span>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '2rem', 
+                                    fontSize: '1.75rem', 
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
                                     letterSpacing: '-0.04em'
@@ -827,7 +840,7 @@ export default function CheckoutPage() {
                                 {loading ? (
                                     <>Procesando <Loader2 size={24} className="animate-spin" /></>
                                 ) : !latitude ? (
-                                    <>📍 Pincha arriba para fijar tu entrega <MapPin size={24} strokeWidth={2.5} /></>
+                                    <><MapPin size={18} strokeWidth={2} style={{ opacity: 0.6 }} /> Selecciona tu punto de entrega</>
                                 ) : (outOfZone && !isB2B) ? (
                                     <>Zona No Soportada <MapPin size={24} /></>
                                 ) : (
@@ -842,22 +855,21 @@ export default function CheckoutPage() {
                             )}
 
                             <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                                <p style={{ 
-                                    fontSize: '0.85rem', 
-                                    fontWeight: '700', 
-                                    color: 'var(--text-muted)', 
-                                    marginBottom: '0.75rem',
-                                    fontFamily: 'var(--font-outfit), sans-serif'
-                                }}>
-                                    Pago seguro 💳 Wompi o Contraentrega
-                                </p>
-                                <div style={{ display: 'flex', justifyContent: 'center', opacity: 0.5, filter: 'grayscale(1)' }}>
-                                    <img 
-                                        src="https://cdn.wompi.co/assets/img/logos-pagos.png" 
-                                        alt="Medios de pago" 
-                                        style={{ height: '20px' }} 
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
+                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pago seguro</span>
+                                    <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
+                                        <ShieldCheck size={13} color="#16A34A" /> Wompi
+                                    </span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
+                                        <Truck size={13} color="#2563EB" /> Contraentrega
+                                    </span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
+                                        <LockIcon size={13} color="#7C3AED" /> SSL
+                                    </span>
                                 </div>
                             </div>
                         </div>

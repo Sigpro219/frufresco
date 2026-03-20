@@ -65,6 +65,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
             name: getFormattedName(),
             price: currentPrice,
             iva_rate: product.iva_rate,
+            unit: product.unit_of_measure,
             quantity: quantity,
             image_url: product.image_url
         });
