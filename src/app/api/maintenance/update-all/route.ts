@@ -23,7 +23,16 @@ export async function POST() {
         // 2. Asegurar que estamos en CORE y empujar al origen
         await execPromise('git push origin CORE');
 
-        // 3. Propagar CORE -> white-label (Showcase)
+        // 3. Sincronizar rama 'main' (Crucial para Vercel Production)
+        console.log('Sincronizando rama main...');
+        try {
+            await execPromise('git push origin CORE:main --force');
+            results.push({ branch: 'main (Producción)', success: true, message: 'Rama principal actualizada' });
+        } catch (err: unknown) {
+            results.push({ branch: 'main (Producción)', success: false, message: 'Fallo al actualizar main: ' + String(err) });
+        }
+
+        // 4. Propagar CORE -> white-label (Showcase)
         console.log('Desplegando a Showcase (white-label)...');
         try {
             await execPromise('git push origin CORE:white-label --force');
@@ -32,7 +41,7 @@ export async function POST() {
             results.push({ branch: 'white-label (Showcase)', success: false, message: 'Fallo al empujar rama: ' + String(err) });
         }
 
-        // 4. Propagar CORE -> tenant-frufresco (FruFresco)
+        // 5. Propagar CORE -> tenant-frufresco (FruFresco)
         console.log('Desplegando a FruFresco (tenant-frufresco)...');
         try {
             await execPromise('git push origin CORE:tenant-frufresco --force');
