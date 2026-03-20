@@ -2,9 +2,11 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { Search, X, Info } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 
 interface Purchase {
@@ -21,6 +23,8 @@ interface Product {
     name: string;
     category: string;
     unit_of_measure: string;
+    keywords?: string;
+    tags?: string[];
 }
 
 export default function CostMatrixPage() {
@@ -31,6 +35,7 @@ export default function CostMatrixPage() {
     const [categories, setCategories] = useState<string[]>([]);
     const [avgWindow, setAvgWindow] = useState<number>(3); // Default: average of last 3 prices
     const [searchTerm, setSearchTerm] = useState<string>('');
+    const [showHelp, setShowHelp] = useState(false);
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -44,19 +49,36 @@ export default function CostMatrixPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch products
-            const { data: productsData, error: pError } = await supabase
-                .from('products')
-                .select('*')
-                .order('category', { ascending: true })
-                .order('name', { ascending: true });
+            // 1. Fetch products (Recursive to bypass 1000 limit)
+            let allProducts: Product[] = [];
+            let from = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            if (pError) throw pError;
+            while (hasMore) {
+                const { data: chunk, error: pError } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('category', { ascending: true })
+                    .order('name', { ascending: true })
+                    .range(from, from + pageSize - 1);
+
+                if (pError) throw pError;
+                if (!chunk || chunk.length < pageSize) {
+                    hasMore = false;
+                }
+                if (chunk) allProducts = [...allProducts, ...chunk];
+                from += pageSize;
+            }
+
             if (!isMounted.current) return;
-            setProducts(productsData || []);
+            setProducts(allProducts);
+
+            const productsData = allProducts; // For reference in next steps
 
             // Extract unique categories
-            const cats = Array.from(new Set(productsData?.map(p => p.category) || [])).filter(Boolean) as string[];
+            const cats = Array.from(new Set(productsData?.map((p: Product) => p.category) || [])).filter(Boolean) as string[];
             setCategories(['Todas', ...cats]);
 
             // 2. Fetch conversions
@@ -66,13 +88,28 @@ export default function CostMatrixPage() {
             }
             if (!isMounted.current) return;
 
-            // 3. Fetch last purchases for ALL products
-            const { data: purchasesData, error: iError } = await supabase
-                .from('purchases')
-                .select('product_id, unit_price, created_at, purchase_unit')
-                .order('created_at', { ascending: false });
+            // 3. Fetch last purchases (Recursive to bypass 1000 limit)
+            let allPurchases: Purchase[] = [];
+            let pFrom = 0;
+            let pHasMore = true;
 
-            if (iError) throw iError;
+            while (pHasMore) {
+                const { data: pChunk, error: iError } = await supabase
+                    .from('purchases')
+                    .select('product_id, unit_price, created_at, purchase_unit')
+                    .order('created_at', { ascending: false })
+                    .range(pFrom, pFrom + pageSize - 1);
+
+                if (iError) throw iError;
+                if (!pChunk || pChunk.length < pageSize) {
+                    pHasMore = false;
+                }
+                if (pChunk) allPurchases = [...allPurchases, ...pChunk as any];
+                pFrom += pageSize;
+            }
+
+            const purchasesData = allPurchases;
+
             if (!isMounted.current) return;
 
             // 4. Normalize and Group
@@ -88,7 +125,7 @@ export default function CostMatrixPage() {
                         let normalizedPrice = p.unit_price;
 
                         if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
-                            const conv = (convData || []).find((c) => 
+                            const conv = (convData || []).find((c: any) => 
                                 c.product_id === p.product_id && 
                                 c.from_unit === p.purchase_unit && 
                                 c.to_unit === product.unit_of_measure
@@ -181,9 +218,30 @@ export default function CostMatrixPage() {
 
     const filteredProducts = products.filter(p => {
         const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
-        const matchesSearch = searchTerm === '' || 
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        if (searchTerm === '') return matchesCategory;
+
+        const searchTerms = searchTerm.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== '');
+        
+        const matchesSearch = searchTerms.every(term => {
+            // Especial: Búsqueda por unidad o categoría (si empieza por @)
+            if (term.startsWith('@')) {
+                const searchVal = term.slice(1);
+                const inUnit = p.unit_of_measure?.toLowerCase().includes(searchVal);
+                const catName = (CATEGORY_MAP[p.category] || p.category).toLowerCase();
+                const inCategory = catName.includes(searchVal);
+                
+                return inUnit || inCategory;
+            }
+
+            const inName = p.name.toLowerCase().includes(term);
+            const inSKU = p.sku?.toLowerCase().includes(term);
+            const inKeywords = p.keywords?.toLowerCase().includes(term);
+            const inTags = p.tags?.some(tag => tag.toLowerCase().includes(term));
+            
+            return inName || inSKU || inKeywords || inTags;
+        });
+
         return matchesCategory && matchesSearch;
     });
 
@@ -230,7 +288,7 @@ export default function CostMatrixPage() {
             const last = history.length >= 2 ? history[history.length - 1].normalized_price : 0;
             const trend = first > 0 ? ((last - first) / first) * 100 : 0;
 
-            const row: any = {
+            const row: Record<string, string | number | null> = {
                 'SKU': p.sku || 'N/A',
                 'PRODUCTO': p.name,
                 'CATEGORÍA': p.category,
@@ -325,13 +383,22 @@ export default function CostMatrixPage() {
                     </div>
                 )}
 
-                {/* --- INTELLIGENT SEARCH BAR --- */}
-                <div style={{ marginBottom: '2rem', position: 'relative' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E5E7EB', padding: '0.2rem 1.2rem', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', gap: '1rem' }}>
-                        <span style={{ fontSize: '1.2rem' }}>🔍</span>
+                <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div style={{ 
+                        flex: 1,
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        backgroundColor: 'white', 
+                        borderRadius: '12px', 
+                        border: '1px solid #E5E7EB', 
+                        padding: '0.2rem 1.2rem', 
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.02)', 
+                        gap: '1rem' 
+                    }}>
+                        <Search size={20} color="#9CA3AF" />
                         <input 
                             type="text"
-                            placeholder="Buscar por nombre de producto o SKU específico (ej: FRU-001)..."
+                            placeholder="Buscar productos... (ej: yuca, @kg, @und)"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
@@ -349,8 +416,55 @@ export default function CostMatrixPage() {
                                 onClick={() => setSearchTerm('')}
                                 style={{ border: 'none', background: 'none', color: '#9CA3AF', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.2rem' }}
                             >
-                                ✕
+                                <X size={20} />
                             </button>
+                        )}
+                    </div>
+                    
+                    {/* Tooltip Icon for search help */}
+                    <div 
+                        style={{ position: 'relative' }} 
+                        onMouseEnter={() => setShowHelp(true)}
+                        onMouseLeave={() => setShowHelp(false)}
+                    >
+                        <div style={{ 
+                            cursor: 'help', 
+                            color: showHelp ? 'var(--primary)' : '#9CA3AF',
+                            backgroundColor: 'white',
+                            padding: '0.8rem',
+                            borderRadius: '10px',
+                            border: '1px solid #E5E7EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            transition: 'all 0.2s'
+                        }}>
+                            <Info size={20} />
+                        </div>
+                        
+                        {showHelp && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '110%',
+                                right: 0,
+                                backgroundColor: '#1F2937',
+                                color: 'white',
+                                padding: '1rem',
+                                borderRadius: '12px',
+                                width: '280px',
+                                fontSize: '0.8rem',
+                                zIndex: 100,
+                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                transition: 'all 0.2s ease',
+                                pointerEvents: 'none',
+                                opacity: 1
+                            }}>
+                                <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#60A5FA' }}>💡 Trucos de búsqueda:</p>
+                                <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.4' }}>
+                                    <li><b>Comas:</b> Varios términos (ej: <code>papa, cebolla</code>)</li>
+                                    <li><b>@unidad:</b> Por unidad o categoría (ej: <code>@kg</code>, <code>@congelados</code>)</li>
+                                    <li><b>SKU:</b> Busca por código exacto.</li>
+                                </ul>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -437,7 +551,7 @@ export default function CostMatrixPage() {
                                                 {showCategoryHeader && (
                                                     <tr style={{ backgroundColor: '#F3F4F6' }}>
                                                         <td colSpan={12} style={{ padding: '0.6rem 1.5rem', fontWeight: '900', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase' }}>
-                                                            📂 {p.category}
+                                                            📂 {CATEGORY_MAP[p.category]?.toUpperCase() || p.category}
                                                         </td>
                                                     </tr>
                                                 )}
