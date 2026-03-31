@@ -80,7 +80,13 @@ export default function Navbar() {
                 }
             } catch (err: unknown) {
                 if (!isMounted) return;
-                logError('Navbar checkSettings', err);
+                // Settings are non-critical UI enhancements — degrade silently on network errors
+                const msg = String((err as Record<string, unknown>)?.message || err || '').toLowerCase();
+                const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('enotfound') || msg.includes('failed');
+                if (!isNetworkError) {
+                    logError('Navbar checkSettings', err);
+                }
+                // Network failures just mean we keep the fallback branding — no action needed
             }
         };
         

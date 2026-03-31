@@ -91,17 +91,30 @@ export function isAbortError(err: unknown): boolean {
 export function logError(context: string, err: unknown) {
     if (isAbortError(err)) return;
     
-    // Better object representation for the console if it looks like an empty object {}
-    if (err && typeof err === 'object' && !('message' in err) && !('stack' in err)) {
-        try {
-            const str = JSON.stringify(err);
-            if (str === '{}') {
-                // If it's literally {}, maybe it's a non-enumerable Error or similar
+    // Better object representation for the console 
+    if (err instanceof Error) {
+        console.error(`❌ [${context}]`, {
+            message: err.message,
+            name: err.name,
+            stack: err.stack,
+            cause: (err as any).cause
+        });
+    } else if (err && typeof err === 'object') {
+        const errorObj = err as Record<string, unknown>;
+        if (!errorObj.message && !errorObj.stack) {
+            try {
+                const str = JSON.stringify(err);
+                if (str === '{}') {
+                    // Try to extract internal properties for standard objects that stringify empty
+                    const detailed = JSON.stringify(err, Object.getOwnPropertyNames(err));
+                    console.error(`❌ [${context}]`, detailed === '{}' ? err : detailed);
+                } else {
+                    console.error(`❌ [${context}]`, str);
+                }
+            } catch (e) {
                 console.error(`❌ [${context}]`, err);
-            } else {
-                console.error(`❌ [${context}]`, str);
             }
-        } catch (e) {
+        } else {
             console.error(`❌ [${context}]`, err);
         }
     } else {
