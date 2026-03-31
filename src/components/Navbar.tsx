@@ -68,8 +68,16 @@ export default function Navbar() {
                     const primaryObj = settings.find((s: {key: string, value: string}) => s.key === 'primary_color');
                     const secondaryObj = settings.find((s: {key: string, value: string}) => s.key === 'secondary_color');
                     const syncObj = settings.find((s: {key: string, value: string}) => s.key === 'last_core_sync');
-                    
-                    if (syncObj?.value) setLastSyncDate(syncObj.value);
+                    if (syncObj?.value) {
+                        const dbDate = new Date(syncObj.value).getTime();
+                        const codeDate = new Date(SYNC_METADATA.lastSync).getTime();
+                        // Mostramos la fecha más reciente (ya sea por actualización de código o de datos)
+                        if (!isNaN(dbDate) && dbDate > codeDate) {
+                            setLastSyncDate(syncObj.value);
+                        } else {
+                            setLastSyncDate(SYNC_METADATA.lastSync);
+                        }
+                    }
                     
                     if (primaryObj?.value || secondaryObj?.value) {
                         setThemeConfig({
@@ -245,7 +253,7 @@ export default function Navbar() {
                                 animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
                             }} />
                         </div>
-                        <span>SYNC: {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
+                        <span>V{SYNC_METADATA.version} | {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
                     </div>
                 </Link>
 
