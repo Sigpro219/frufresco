@@ -1046,16 +1046,37 @@ export default function AdminProductsPage() {
                                             </div>
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                            <span style={{ 
-                                                fontSize: '0.85rem', 
-                                                fontWeight: '800', 
-                                                padding: '4px 12px', 
-                                                backgroundColor: '#F3F4F6', 
-                                                borderRadius: '20px',
-                                                color: '#374151'
-                                            }}>
-                                                {CATEGORY_MAP[product.category] || product.category}
-                                            </span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ 
+                                                    fontSize: '0.85rem', 
+                                                    fontWeight: '800', 
+                                                    padding: '4px 12px', 
+                                                    backgroundColor: '#F3F4F6', 
+                                                    borderRadius: '20px',
+                                                    color: '#374151'
+                                                }}>
+                                                    {CATEGORY_MAP[product.category] || product.category}
+                                                </span>
+                                                
+                                                {/* Cápsula de Jerarquía Minimalista */}
+                                                {product.parent_id && (
+                                                    <div style={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: '900',
+                                                        padding: '2px 5px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: product.parent_id === product.id ? '#4F46E5' : '#10B981',
+                                                        color: 'white',
+                                                        display: 'inline-flex',
+                                                        minWidth: '16px',
+                                                        justifyContent: 'center',
+                                                        lineHeight: '1',
+                                                        marginTop: '4px'
+                                                    }} title={product.parent_id === product.id ? 'Producto Padre' : 'Producto Hijo'}>
+                                                        {product.parent_id === product.id ? 'P' : 'H'}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'center', minWidth: '220px' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

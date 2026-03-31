@@ -270,8 +270,16 @@ export default function CommandCenter() {
         try {
             const { error } = await supabase.from('app_settings').upsert({ key, value: newValue });
             if (error) throw error;
-            setSettings(prev => prev.map(s => s.key === key ? { ...s, value: newValue } : s));
-            setStatusMessage({ text: 'Gobernanza actualizada correctamente', type: 'success' });
+            
+            setSettings(prev => {
+                const exists = prev.find(s => s.key === key);
+                if (exists) {
+                    return prev.map(s => s.key === key ? { ...s, value: newValue } : s);
+                }
+                return [...prev, { key, value: newValue }];
+            });
+            
+            setStatusMessage({ text: 'Configuración actualizada', type: 'success' });
             setTimeout(() => setStatusMessage({ text: '', type: '' }), 3000);
         } catch (error) {
             console.error('Error updating setting:', error);
@@ -344,8 +352,14 @@ export default function CommandCenter() {
     };
 
     const removeRole = async (roleValue: string) => {
-        if (['admin', 'b2b_client', 'b2c_client'].includes(roleValue)) return;
-        if (!window.confirm('¿Eliminar este rol?')) return;
+        // Only CORE system roles are truly protected
+        if (['admin', 'sys_admin'].includes(roleValue)) {
+            alert('Este es un rol raíz del motor CORE y no puede ser eliminado.');
+            return;
+        }
+        
+        if (!window.confirm(`¿Estás seguro de eliminar el rol "${roleValue}"?`)) return;
+        
         const currentRoles = getSystemRoles();
         const newList = currentRoles.filter(r => r.value !== roleValue);
         await handleUpdateSetting('system_roles', JSON.stringify(newList));
@@ -478,15 +492,65 @@ export default function CommandCenter() {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div style={{ marginTop: '1.5rem', padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '16px' }}>
-                                    <h3>{isEditing ? 'Editando Rol' : 'Crear Rol'}</h3>
-                                    <input value={newRole.label} onChange={e => setNewRole({...newRole, label: e.target.value})} placeholder="Nombre" style={{ padding: '10px', marginRight: '10px' }} />
-                                    <input value={newRole.value} onChange={e => setNewRole({...newRole, value: e.target.value})} disabled={isEditing} placeholder="Código" style={{ padding: '10px', marginRight: '10px' }} />
-                                    <button onClick={saveRole} style={{ padding: '10px 20px', background: '#111827', color: 'white', border: 'none', borderRadius: '8px' }}>{isEditing ? 'Actualizar' : 'Guardar'}</button>
-                                    <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
-                                        {AVAILABLE_MODULES.map(m => (
-                                            <label key={m.id}><input type="checkbox" checked={(newRole.permissions || []).includes(m.id)} onChange={() => togglePermission(m.id)} /> {m.label}</label>
-                                        ))}
+                                <div style={{ marginTop: '1.5rem', padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1.5px dashed #CBD5E1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900' }}>{isEditing ? '🛠️ Editando Rol Técnico' : '➕ Crear Nuevo Rol'}</h3>
+                                        {isEditing && <button onClick={() => { setIsEditing(false); setNewRole({ label: '', value: '', color: '#64748B', permissions: [] }); }} style={{ background: 'none', border: 'none', color: '#64748B', fontWeight: '700', cursor: 'pointer' }}>Cancelar</button>}
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
+                                        <input value={newRole.label} onChange={e => setNewRole({...newRole, label: e.target.value})} placeholder="Nombre Comercial" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid #D1D5DB', fontWeight: '700' }} />
+                                        <input value={newRole.value} onChange={e => setNewRole({...newRole, value: e.target.value})} disabled={isEditing} placeholder="Código Sistema" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid #D1D5DB', fontWeight: '800', backgroundColor: isEditing ? '#F3F4F6' : 'white' }} />
+                                        <button onClick={saveRole} style={{ padding: '0 2rem', background: '#111827', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}>{isEditing ? 'ACTUALIZAR' : 'GUARDAR'}</button>
+                                    </div>
+
+                                    <div style={{ padding: '1rem', backgroundColor: '#ECFDF5', borderRadius: '12px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #10B98133' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>💎</span>
+                                            <div>
+                                                <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#065F46' }}>ACCESO MAESTRO (ALL ACCESS)</div>
+                                                <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '600' }}>Acceso total a la plataforma operativa (Excluye Command Center)</div>
+                                            </div>
+                                        </div>
+                                        <input 
+                                            type="checkbox" 
+                                            style={{ width: '22px', height: '22px', cursor: 'pointer' }}
+                                            checked={AVAILABLE_MODULES.filter(m => m.id !== 'command_center').every(m => (newRole.permissions || []).includes(m.id))}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setNewRole(prev => ({ ...prev, permissions: AVAILABLE_MODULES.filter(m => m.id !== 'command_center').map(m => m.id) }));
+                                                } else {
+                                                    setNewRole(prev => ({ ...prev, permissions: [] }));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                        {AVAILABLE_MODULES.map(m => {
+                                            const isCC = m.id === 'command_center';
+                                            return (
+                                                <label 
+                                                    key={m.id} 
+                                                    style={{ 
+                                                        display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', 
+                                                        borderRadius: '10px', backgroundColor: isCC ? '#F1F5F9' : 'white', 
+                                                        border: '1px solid #E2E8F0', cursor: isCC ? 'not-allowed' : 'pointer',
+                                                        opacity: isCC ? 0.5 : 1
+                                                    }}
+                                                >
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={(newRole.permissions || []).includes(m.id)} 
+                                                        disabled={isCC}
+                                                        onChange={() => togglePermission(m.id)} 
+                                                    /> 
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: '700', color: isCC ? '#94A3B8' : '#334155' }}>
+                                                        {m.label} {isCC && '(PROTEGIDO)'}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </section>

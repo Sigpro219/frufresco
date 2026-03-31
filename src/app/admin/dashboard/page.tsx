@@ -18,6 +18,10 @@ export default function AdminDashboard() {
     const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
     interface RecentOrder {
+        id: string;
+        total: number;
+        status: string;
+        created_at: string;
         sequence_id?: number;
         customer_name?: string;
         profiles?: {
@@ -133,46 +137,71 @@ export default function AdminDashboard() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
-                    {/* Canal de Ventas - Destacado */}
-                    <div style={{ backgroundColor: '#F5F3FF', borderRadius: '24px', padding: '2rem', border: '2px solid #DDD6FE', display: 'flex', flexDirection: 'column', gap: '1rem', boxShadow: '0 10px 15px -3px rgba(124, 58, 237, 0.1)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ fontSize: '2.5rem' }}>🛒</div>
-                            <div>
-                                <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#4C1D95', margin: 0 }}>Portal de Compras B2B</h2>
-                                <p style={{ fontSize: '0.85rem', color: '#6D28D9', margin: 0, fontWeight: '600' }}>Vista Cliente / Toma de Pedidos</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {/* Canal de Ventas - Destacado */}
+                        <div style={{ backgroundColor: '#F5F3FF', borderRadius: '24px', padding: '2rem', border: '2px solid #DDD6FE', display: 'flex', flexDirection: 'column', gap: '1rem', boxShadow: '0 10px 15px -3px rgba(124, 58, 237, 0.1)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ fontSize: '2.5rem' }}>🛒</div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#4C1D95', margin: 0 }}>Portal de Compras Institucional</h2>
+                                    <p style={{ fontSize: '0.85rem', color: '#6D28D9', margin: 0, fontWeight: '600' }}>Vista Cliente / Toma de Pedidos</p>
+                                </div>
                             </div>
+                            <Link href="/b2b/dashboard" style={{ textDecoration: 'none' }}>
+                                <button style={{ 
+                                    width: '100%', 
+                                    padding: '1rem', 
+                                    borderRadius: '12px', 
+                                    backgroundColor: '#7C3AED', 
+                                    color: 'white', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '1rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.4)'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.backgroundColor = '#6D28D9';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.backgroundColor = '#7C3AED';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                                >
+                                    IR AL PORTAL CLIENTES →
+                                </button>
+                            </Link>
                         </div>
-                        <Link href="/b2b/dashboard" style={{ textDecoration: 'none' }}>
-                            <button style={{ 
-                                width: '100%', 
-                                padding: '1rem', 
-                                borderRadius: '12px', 
-                                backgroundColor: '#7C3AED', 
-                                color: 'white', 
-                                border: 'none', 
-                                fontWeight: '800', 
-                                fontSize: '1rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.4)'
-                            }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.backgroundColor = '#6D28D9';
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.backgroundColor = '#7C3AED';
-                                e.currentTarget.style.transform = 'translateY(0)';
-                            }}
-                            >
-                                IR AL PORTAL CLIENTES →
-                            </button>
-                        </Link>
+
+                        {/* Módulo de Auditoría - Nuevo */}
+                        <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem 2rem', border: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ fontSize: '1.8rem' }}>🕵️‍♂️</div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.05rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza y Auditoría</h2>
+                                    <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0, fontWeight: '600' }}>Trazabilidad de movimientos</p>
+                                </div>
+                            </div>
+                            <Link href="/admin/audit">
+                                <button style={{ 
+                                    padding: '0.6rem 1.2rem', 
+                                    borderRadius: '10px', 
+                                    backgroundColor: '#F3F4F6', 
+                                    color: '#4B5563', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer'
+                                }}>GESTIONAR</button>
+                            </Link>
+                        </div>
                     </div>
 
                     {/* Accesos Rápidos - Gestión */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                        <AdminCard title="Catálogo B2C" href="/admin/products" icon="🛍️" color="white" textColor="#1E3A8A" />
+                        <AdminCard title="Catálogo Hogar" href="/admin/products" icon="🛍️" color="white" textColor="#1E3A8A" />
                         <AdminCard title="Maestros SKU" href="/admin/master/products" icon="🏗️" color="white" textColor="#4F46E5" />
                         <AdminCard title="Clientes" href="/admin/clients" icon="👥" color="white" textColor="#475569" />
                         <AdminCard title="Ajustes" href="/admin/settings" icon="⚙️" color="white" textColor="#64748B" />
@@ -186,7 +215,7 @@ export default function AdminDashboard() {
                     {/* Radar de Ventas B2C (Actividad Reciente) */}
                     <div style={{ backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E5E7EB', padding: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>🛍️ Radar de Ventas B2C</h2>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>🛍️ Radar de Ventas Hogar</h2>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#10B981', fontWeight: '700' }}>
                                 <span className="pulse-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
                                 VIVO

@@ -260,6 +260,7 @@ export default function CheckoutPage() {
                 product_id: (item as { id: string }).id,
                 quantity: item.quantity,
                 unit_price: item.price,
+                unit: item.unit, // Guardamos la unidad comercial (Libra, Kg, etc)
                 ...(item.variant_label && { variant_label: item.variant_label }),
                 ...(item.selected_options && { selected_options: item.selected_options })
             }));

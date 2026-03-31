@@ -27,6 +27,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [options, setOptions] = useState<any[]>(product.options_config || []);
     const [variants, setVariants] = useState<any[]>(product.variants || []);
     const [variantUploading, setVariantUploading] = useState<string | null>(null);
+    const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
@@ -237,9 +238,11 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     procurement_method: formData.procurement_method,
                     utility_deviation_pct: formData.utility_deviation_pct || 0,
                     options_config: options,
-                    options: options, // Para compatibilidad con versiones anteriores
                     variants: variants,
-                    iva_rate: formData.iva_rate
+                    iva_rate: formData.iva_rate,
+                    display_name: formData.display_name,
+                    web_unit: formData.web_unit,
+                    web_conversion_factor: formData.web_conversion_factor
                 })
                 .eq('id', product.id);
 
@@ -423,13 +426,16 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <input
                             type="text"
                             placeholder="Buscar padre por nombre o SKU..."
-                            value={parentSearch || (formData.parent_id ? allProducts.find(p => p.id === formData.parent_id)?.sku : '')}
+                            value={parentSearch || (formData.parent_id ? (() => {
+                                const p = allProducts.find(i => i.id === formData.parent_id);
+                                return p ? `${p.sku} - ${p.name}` : '';
+                            })() : '')}
                             onChange={(e) => {
                                 setParentSearch(e.target.value);
                                 setShowParentResults(true);
                             }}
                             onFocus={() => setShowParentResults(true)}
-                            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.95rem' }}
+                            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: 'bold', color: formData.parent_id ? '#1E40AF' : 'inherit' }}
                         />
                         {showParentResults && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '8px', marginTop: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
@@ -489,10 +495,16 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                         <span style={{ fontWeight: '800', color: '#2563EB' }}>% ADICIONAL</span>
                                     </div>
                                 </div>
-                                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.75rem', color: '#1E40AF' }}>
-                                    Padre vinculado: <br />
-                                    <strong style={{ fontSize: '0.85rem' }}>{allProducts.find(p => p.id === formData.parent_id)?.sku || 'Cargando...'}</strong>
-                                </div>
+                                {(() => {
+                                    const parent = allProducts.find(p => p.id === formData.parent_id);
+                                    return (
+                                        <div style={{ flex: 1, textAlign: 'right', fontSize: '0.75rem', color: '#1E40AF' }}>
+                                            Padre vinculado: <br />
+                                            <strong style={{ fontSize: '0.85rem' }}>{parent?.sku || 'Cargando...'}</strong>
+                                            {parent && <span style={{ display: 'block', opacity: 0.8, fontSize: '0.75rem', fontWeight: 'bold' }}>{parent.name}</span>}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     )}
@@ -593,7 +605,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         padding: '1rem', 
                         backgroundColor: (formData as any).show_on_web !== false ? '#EFF6FF' : '#F9FAFB', 
                         borderRadius: '12px',
-                        border: `1px solid ${(formData as any).show_on_web !== false ? '#BFDBFE' : '#D1D5DB'}`
+                        border: `1px solid ${(formData as any).show_on_web !== false ? '#BFDBFE' : '#D1D5DB'}`,
+                        marginBottom: '1.5rem'
                     }}>
                         <div>
                             <span style={{ fontWeight: '800', color: (formData as any).show_on_web !== false ? '#1E40AF' : '#4B5563' }}>DISPONIBLE WEB (B2C)</span>
@@ -615,6 +628,79 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         >
                             {(formData as any).show_on_web !== false ? 'VISIBLE' : 'OCULTO'}
                         </button>
+                    </div>
+
+                    {/* SECCIÓN COMERCIAL / VIDAS PARALELAS */}
+                    <div style={{ padding: '1.5rem', backgroundColor: '#FFF7ED', borderRadius: '20px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#9A3412', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            🏷️ Configuración Comercial (Web)
+                        </h3>
+                        <p style={{ fontSize: '0.8rem', color: '#7C2D12', margin: 0 }}>
+                            Personaliza cómo se ve este producto en la página web, independiente del nombre técnico.
+                        </p>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Nombre Público (Web)</label>
+                            <input
+                                type="text"
+                                placeholder="Ej: Manzana Roja Importada"
+                                value={formData.display_name || ''}
+                                onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Unidad Comercial (Web)</label>
+                                <select
+                                    value={formData.web_unit || ''}
+                                    onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
+                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', backgroundColor: 'white', cursor: 'pointer' }}
+                                >
+                                    <option value="">Seleccionar unidad...</option>
+                                    {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>¿Cuántos Kg es 1 {formData.web_unit || 'unidad'}?</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="0,00"
+                                        value={conversionFactorInput}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            // Permitir caracteres de control y números/separadores
+                                            if (/^[0-9,.]*$/.test(val)) {
+                                                setConversionFactorInput(val);
+                                                const normalized = val.replace(',', '.');
+                                                if (!isNaN(parseFloat(normalized))) {
+                                                    setFormData({ ...formData, web_conversion_factor: parseFloat(normalized) });
+                                                }
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            // Limpiar el input al salir si es inválido
+                                            const normalized = conversionFactorInput.replace(',', '.');
+                                            const parsed = parseFloat(normalized);
+                                            if (isNaN(parsed)) {
+                                                setConversionFactorInput('1,0');
+                                                setFormData({ ...formData, web_conversion_factor: 1.0 });
+                                            } else {
+                                                setConversionFactorInput(parsed.toString().replace('.', ','));
+                                            }
+                                        }}
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', textAlign: 'center' }}
+                                    />
+                                    <span style={{ fontSize: '0.7rem', color: '#9A3412', fontWeight: '700', width: '80px' }}>KG equivalentes</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
+                            💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
+                        </div>
                     </div>
 
                         </div>

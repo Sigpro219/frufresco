@@ -281,7 +281,7 @@ export default function Navbar() {
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                                >Línea Institucional</Link>
+                                >Portal Institucional</Link>
                             )}
                         </>
                     )}
@@ -291,7 +291,7 @@ export default function Navbar() {
                         <>
                             <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
                             <Link href="/b2b/orders" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Mis Pedidos</Link>
-                            <Link href="/b2b/catalog" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Catálogo B2B</Link>
+                            <Link href="/b2b/catalog" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Catálogo Institucional</Link>
                         </>
                     )}
 
@@ -303,7 +303,7 @@ export default function Navbar() {
                             </Link>
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Building2 size={18} strokeWidth={2.5} /> Canal B2B
+                                    <Building2 size={18} strokeWidth={2.5} /> Canal Institucional
                                 </Link>
                             )}
                             

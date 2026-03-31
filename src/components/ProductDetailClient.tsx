@@ -10,8 +10,11 @@ import { useRouter } from 'next/navigation';
 interface Product {
     id: string;
     name: string;
+    display_name?: string;
     base_price: number;
     unit_of_measure: string;
+    web_unit?: string;
+    web_conversion_factor?: number;
     image_url: string;
     description: string;
     options?: any;
@@ -50,13 +53,18 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     );
 
     const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
-    const currentPrice = currentVariant ? currentVariant.price : product.base_price;
+    
+    // Aplicar factor de conversión comercial
+    const conversionFactor = product.web_conversion_factor || 1;
+    const basePrice = currentVariant ? currentVariant.price : product.base_price;
+    const currentPrice = basePrice * conversionFactor;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
-        return optionString ? `${product.name} (${optionString})` : product.name;
+        const baseName = product.display_name || product.name;
+        return optionString ? `${baseName} (${optionString})` : baseName;
     };
 
     const handleAdd = () => {
@@ -65,12 +73,12 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             name: getFormattedName(),
             price: currentPrice,
             iva_rate: product.iva_rate,
-            unit: product.unit_of_measure,
+            unit: product.web_unit || product.unit_of_measure,
             quantity: quantity,
             image_url: product.image_url
         });
 
-        alert(`¡${product.name} añadido al carrito!`);
+        alert(`¡${product.display_name || product.name} añadido al carrito!`);
     };
 
     const handleBuyNow = () => {
@@ -79,7 +87,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             name: getFormattedName(),
             price: currentPrice,
             iva_rate: product.iva_rate,
-            unit: product.unit_of_measure,
+            unit: product.web_unit || product.unit_of_measure,
             quantity: quantity,
             image_url: product.image_url
         });
@@ -92,7 +100,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             <nav style={{ marginBottom: '2.5rem', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Link href="/" style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>Inicio</Link> 
                 <ChevronRight size={14} />
-                <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{product.name}</span>
+                <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{product.display_name || product.name}</span>
             </nav>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '4rem', alignItems: 'start' }}>
@@ -107,7 +115,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                 }}>
                     <Image
                         src={product.image_url || '/placeholder_produce.png'}
-                        alt={product.name}
+                        alt={product.display_name || product.name}
                         fill
                         style={{ objectFit: 'cover' }}
                         priority
@@ -117,7 +125,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                 {/* Right: Product Info */}
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
-                        {product.name}
+                        {product.display_name || product.name}
                     </h1>
 
                     <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '1.5rem' }}>
@@ -127,7 +135,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>Precio a consultar</span>
                         )}
                         <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
-                            por {product.unit_of_measure || 'Un'}
+                            por {product.web_unit || product.unit_of_measure || 'Un'}
                         </span>
                     </div>
 

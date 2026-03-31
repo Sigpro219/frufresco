@@ -86,6 +86,8 @@ export default function ClientsModule() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
+    const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
+    const [nicknameClientId, setNicknameClientId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -302,12 +304,26 @@ export default function ClientsModule() {
         <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
             <Toast />
 
+            {/* MODAL MÁSCARAS DE PRODUCTO */}
+            {isNicknameModalOpen && nicknameClientId && (
+                <ProductNicknameModal 
+                    customerId={nicknameClientId}
+                    customerName={clientsB2B.find(c => c.id === nicknameClientId)?.company_name || 'Cliente'}
+                    onClose={() => {
+                        setIsNicknameModalOpen(false);
+                        setNicknameClientId(null);
+                    }}
+                />
+            )}
+
             {/* MODAL DETALLES */}
             {isModalOpen && selectedClient && (
                 <ClientDetailsModal 
                     client={selectedClient} 
                     onClose={() => setIsModalOpen(false)} 
                     pricingModels={pricingModels}
+                    setNicknameClientId={setNicknameClientId}
+                    setIsNicknameModalOpen={setIsNicknameModalOpen}
                 />
             )}
 
@@ -624,6 +640,284 @@ export default function ClientsModule() {
                         )}
                     </>
                 )}
+            </div>
+        </div>
+    );
+}
+
+function ProductNicknameModal({ customerId, customerName, onClose }: { customerId: string, customerName: string, onClose: () => void }) {
+    const [nicknames, setNicknames] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [newNickname, setNewNickname] = useState('');
+    const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+
+    const fetchNicknames = async () => {
+        setLoading(true);
+        try {
+            console.log('Fetching nicknames for customer:', customerId);
+            const { data, error } = await supabase
+                .from('product_nicknames')
+                .select('*')
+                .eq('customer_id', customerId);
+            
+            if (error) {
+                const errorMsg = `Error Supabase [${error.code}]: ${error.message}`;
+                console.error('Supabase error fetching nicknames:', error);
+                window.showToast?.(errorMsg, 'error');
+                throw error;
+            }
+            
+            if (data && data.length > 0) {
+                // Fetch product details separately if the join failed or to be safer
+                const productIds = data.map(n => n.product_id);
+                const { data: productsData } = await supabase
+                    .from('products')
+                    .select('id, name, sku')
+                    .in('id', productIds);
+                
+                const richNicknames = data.map(n => ({
+                    ...n,
+                    products: productsData?.find(p => p.id === n.product_id)
+                }));
+                setNicknames(richNicknames);
+            } else {
+                setNicknames([]);
+            }
+        } catch (err: any) {
+            console.error('Catch error fetching nicknames:', err);
+            // Mostrar mensaje legible si hay error de RLS o tabla
+            if (err.code === '42P01') {
+                window.showToast?.('Error: Tabla product_nicknames no encontrada en base de datos.', 'error');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchNicknames();
+    }, [customerId]);
+
+    // Búsqueda Inteligente con Debounce
+    useEffect(() => {
+        const timeoutId = setTimeout(async () => {
+            if (searchQuery.length < 1) { // Reducido a 1 para IDs cortos
+                setSearchResults([]);
+                return;
+            }
+
+            setSearching(true);
+            try {
+                const isHashSearch = searchQuery.startsWith('#');
+                const cleanQuery = isHashSearch ? searchQuery.slice(1) : searchQuery;
+                const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(cleanQuery);
+                const isNumeric = /^\d+$/.test(cleanQuery);
+                
+                let query = supabase
+                    .from('products')
+                    .select('id, name, sku, accounting_id');
+                
+                if (isHashSearch && isNumeric) {
+                    // MODO BÚSQUEDA DIRECTA: Si usa #, buscamos coincidencia exacta de ID
+                    query = query.eq('accounting_id', parseInt(cleanQuery));
+                } else if (isUUID) {
+                    query = query.eq('id', cleanQuery);
+                } else if (isNumeric) {
+                    // BÚSQUEDA INTELIGENTE NUMÉRICA (ID exacto o parcial en otros campos)
+                    query = query.or(`accounting_id.eq.${cleanQuery},sku.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
+                                 .order('accounting_id', { ascending: true });
+                } else if (cleanQuery.length >= 2) {
+                    // BÚSQUEDA POR TEXTO NORMAL
+                    query = query.or(`name.ilike.%${cleanQuery}%,sku.ilike.%${cleanQuery}%`);
+                } else {
+                    // Por debajo de 2 letras y sin hash, no buscamos nombres para evitar ruido
+                    setSearchResults([]);
+                    setSearching(false);
+                    return;
+                }
+
+                const { data, error } = await query.limit(15);
+                
+                if (data) setSearchResults(data);
+                if (error) throw error;
+            } catch (err) {
+                console.error('Search error:', err);
+            } finally {
+                setSearching(false);
+            }
+        }, 300); // Un poco más rápido para IDs
+
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery]);
+
+    const handleAddNickname = async () => {
+        if (!selectedProduct || !newNickname) return;
+        try {
+            const { error } = await supabase
+                .from('product_nicknames')
+                .upsert({
+                    customer_id: customerId,
+                    product_id: selectedProduct.id,
+                    nickname: newNickname
+                }, { onConflict: 'customer_id,product_id' });
+            
+            if (error) throw error;
+            window.showToast?.('Máscara guardada con éxito', 'success');
+            setSelectedProduct(null);
+            setNewNickname('');
+            setSearchQuery('');
+            setSearchResults([]);
+            fetchNicknames();
+        } catch (err: any) {
+            console.error('Error saving nickname:', err);
+            const errorMsg = `Error al guardar: ${err.message || 'Error desconocido'}`;
+            window.showToast?.(errorMsg, 'error');
+        }
+    };
+
+    const handleDeleteNickname = async (id: string) => {
+        if (!window.confirm('¿Deseas eliminar esta máscara de producto?')) return;
+        try {
+            const { error } = await supabase
+                .from('product_nicknames')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            fetchNicknames();
+        } catch (err) {
+            console.error('Error deleting nickname:', err);
+        }
+    };
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: '#F3F4F6', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+                
+                <div style={{ padding: '2.5rem' }}>
+                    <header style={{ marginBottom: '2rem' }}>
+                        <span style={{ color: '#F59E0B', fontWeight: '900', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1rem' }}>🎭 Gestión de Máscaras (Nicknames)</span>
+                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0' }}>{customerName}</h2>
+                        <p style={{ color: '#64748B', fontSize: '0.9rem' }}>Define excepciones de nombre de producto exclusivas para este cliente.</p>
+                    </header>
+
+                    {/* SEARCH SECTION */}
+                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginBottom: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#1E293B', fontWeight: '800' }}>🔍 Buscar Producto Inteligente</h4>
+                            {searching && <span style={{ fontSize: '0.75rem', color: '#6366F1', fontWeight: '800', animation: 'pulse 1s infinite' }}>Buscando...</span>}
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <input 
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Escribe Nombre, SKU o ID del producto..."
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '1.1rem 1.4rem', 
+                                    borderRadius: '16px', 
+                                    border: '2px solid #E2E8F0', 
+                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.02)'
+                                }}
+                                onFocus={(e) => (e.currentTarget.style.borderColor = '#6366F1')}
+                                onBlur={(e) => (e.currentTarget.style.borderColor = '#E2E8F0')}
+                            />
+                        </div>
+
+                        {searchResults.length > 0 && (
+                            <div style={{ marginTop: '1rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                                {searchResults.map(p => (
+                                    <div 
+                                        key={p.id} 
+                                        onClick={() => setSelectedProduct(p)}
+                                        style={{ 
+                                            padding: '1rem', 
+                                            borderBottom: '1px solid #F1F5F9', 
+                                            cursor: 'pointer', 
+                                            backgroundColor: selectedProduct?.id === p.id ? '#F0F9FF' : 'transparent',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}
+                                        onMouseEnter={(e) => !selectedProduct && (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                                        onMouseLeave={(e) => !selectedProduct && (e.currentTarget.style.backgroundColor = 'transparent')}
+                                    >
+                                        <div>
+                                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.9rem' }}>{p.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                                SKU: <span style={{ fontWeight: '700' }}>{p.sku}</span>
+                                                <span style={{ margin: '0 8px', color: '#CBD5E1' }}>|</span>
+                                                ID: <span style={{ color: '#0891B2', fontWeight: '800' }}>{p.accounting_id}</span>
+                                            </div>
+                                        </div>
+                                        {selectedProduct?.id === p.id && <span style={{ fontSize: '1.2rem' }}>🎯</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {selectedProduct && (
+                            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '2px dashed #CBD5E1' }}>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '900', color: '#B45309', marginBottom: '8px' }}>Escribe el nuevo nombre (Máscara):</label>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <input 
+                                        type="text"
+                                        value={newNickname}
+                                        onChange={(e) => setNewNickname(e.target.value)}
+                                        placeholder={`Ej: ${selectedProduct.name} Especial`}
+                                        style={{ flex: 1, padding: '0.8rem 1.2rem', borderRadius: '12px', border: '2px solid #F59E0B', fontSize: '1rem', fontWeight: '700' }}
+                                    />
+                                    <button 
+                                        onClick={handleAddNickname}
+                                        style={{ padding: '0.8rem 1.5rem', backgroundColor: '#F59E0B', color: 'white', borderRadius: '12px', border: 'none', fontWeight: '950', cursor: 'pointer', boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)' }}
+                                    >
+                                        Vincular Máscara
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* LIST SECTION */}
+                    <div>
+                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#111827', fontWeight: '900' }}>🎭 Máscaras Activas</h4>
+                        {loading ? (
+                            <p style={{ color: '#64748B', fontStyle: 'italic' }}>Cargando excepciones...</p>
+                        ) : nicknames.length === 0 ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px dashed #E2E8F0' }}>
+                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.85rem' }}>No hay máscaras definidas para este cliente.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {nicknames.map(n => (
+                                    <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase' }}>Nombre Técnico (Sistema)</div>
+                                            <div style={{ fontWeight: '700', color: '#64748B', fontSize: '0.85rem' }}>{n.products?.name} <span style={{ opacity: 0.5 }}>[{n.products?.sku}]</span></div>
+                                            <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#F59E0B', fontWeight: '800', textTransform: 'uppercase' }}>Máscara (Lo que ve el cliente)</div>
+                                            <div style={{ fontWeight: '950', color: '#D97706', fontSize: '1.05rem' }}>{n.nickname}</div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleDeleteNickname(n.id)}
+                                            style={{ backgroundColor: '#FEE2E2', color: '#EF4444', border: 'none', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', fontSize: '0.9rem' }}
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -1241,20 +1535,36 @@ function EmptyState({ text }: { text: string }) {
     );
 }
 
-function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profile, onClose: () => void, pricingModels: PricingModel[] }) {
+function ClientDetailsModal({ 
+    client, 
+    onClose, 
+    pricingModels, 
+    setNicknameClientId, 
+    setIsNicknameModalOpen 
+}: { 
+    client: Profile, 
+    onClose: () => void, 
+    pricingModels: PricingModel[],
+    setNicknameClientId: (id: string | null) => void,
+    setIsNicknameModalOpen: (open: boolean) => void
+}) {
     const selectedModel = pricingModels.find((m: PricingModel) => m.id === client.pricing_model_id);
     const [agreements, setAgreements] = useState<any[]>([]);
     const [loadingAgreements, setLoadingAgreements] = useState(true);
 
+    const isB2B = client.role === 'b2b_client';
+    const isB2C = client.role === 'b2c_client';
+    const isLead = (client as unknown as Lead).status !== undefined;
+
     useEffect(() => {
         const fetchAgreements = async () => {
-            if (client.role !== 'b2b_client') {
+            if (!isB2B) {
                 setLoadingAgreements(false);
                 return;
             }
             setLoadingAgreements(true);
             try {
-                const { data, error } = await supabase
+                const { data } = await supabase
                     .from('quotes')
                     .select('*, pricing_models!model_id(name)')
                     .eq('client_id', client.id)
@@ -1269,203 +1579,299 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
             }
         };
         fetchAgreements();
-    }, [client.id, client.role]);
+    }, [client.id, isB2B]);
+
+    const SectionHeader = ({ icon, title, color }: { icon: string, title: string, color: string }) => (
+        <h4 style={{ 
+            fontSize: '0.9rem', 
+            fontWeight: '900', 
+            color: color, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px',
+            marginBottom: '1.25rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05rem'
+        }}>
+            <span style={{ 
+                backgroundColor: `${color}10`, 
+                width: '32px', 
+                height: '32px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                borderRadius: '8px',
+                fontSize: '1.1rem'
+            }}>{icon}</span>
+            {title}
+        </h4>
+    );
+
+    const InfoCard = ({ children, style = {} }: { children: React.ReactNode, style?: any }) => (
+        <div style={{ 
+            backgroundColor: 'white', 
+            borderRadius: '24px', 
+            padding: '1.75rem', 
+            border: '1px solid #F1F5F9',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02)',
+            ...style 
+        }}>
+            {children}
+        </div>
+    );
 
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: '#F3F4F6', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+        <div style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            backgroundColor: 'rgba(15, 23, 42, 0.6)', 
+            backdropFilter: 'blur(12px)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 1000, 
+            padding: '1.5rem' 
+        }}>
+            <div style={{ 
+                backgroundColor: '#F8FAFC', 
+                borderRadius: '40px', 
+                width: '100%', 
+                maxWidth: '1000px', 
+                maxHeight: '92vh', 
+                overflowY: 'auto', 
+                position: 'relative', 
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)'
+            }}>
+                <button 
+                    onClick={onClose} 
+                    style={{ 
+                        position: 'absolute', 
+                        top: '2rem', 
+                        right: '2rem', 
+                        border: 'none', 
+                        background: 'white', 
+                        width: '44px', 
+                        height: '44px', 
+                        borderRadius: '50%', 
+                        cursor: 'pointer', 
+                        fontSize: '1.1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#64748B',
+                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                        zIndex: 10
+                    }}
+                >
+                    ✕
+                </button>
                 
-                <div style={{ padding: '3rem' }}>
-                    <header style={{ marginBottom: '2.5rem' }}>
-                        <span style={{ color: '#0891B2', fontWeight: '800', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.1rem' }}>
-                            {client.role === 'b2c_client' ? 'Ficha de Consumidor Final' : (client as unknown as Lead).status ? 'Ficha de Prospecto (Lead)' : 'Ficha de Cliente Institucional'}
-                        </span>
-                        <h2 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0' }}>
-                            {client.role === 'b2c_client' ? client.contact_name : (client.company_name || client.contact_name)}
-                        </h2>
-                        {client.role !== 'b2c_client' && client.razon_social && <p style={{ color: '#6B7280', fontSize: '1.2rem' }}>{client.razon_social}</p>}
-                    </header>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2.5rem' }}>
-                        {/* COLUMNA IZQUIERDA: EMPRESA, GEOGRAFÍA */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                            {/* EMPRESA Y COMERCIAL */}
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    🏢 Identidad y Perfil Comercial
-                                </h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <ModalRow label="NIT" value={client.nit} />
-                                    <ModalRow 
-                                        label="Modelo" 
-                                        value={client.role === 'b2c_client' ? 'Modelo B2C (Estándar)' : (selectedModel?.name || 'No asignado')} 
-                                    />
-                                    <ModalRow 
-                                        label="Margen Base" 
-                                        value={client.role === 'b2c_client' ? 'Diferencial x Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : 'N/A')} 
-                                    />
-                                </div>
-                                {(client.role !== 'b2c_client' && selectedModel?.description) && (
-                                    <p style={{ fontSize: '0.85rem', color: '#6B7280', marginTop: '0.8rem', fontStyle: 'italic', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: '8px' }}>&quot;{selectedModel.description}&quot;</p>
-                                )}
-                            </section>
-
-                            {/* GEOGRAFÍA Y RUTEO */}
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    📍 Ubicación y Geocercas
-                                </h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div style={{ gridColumn: '1 / -1' }}>
-                                        <ModalRow label="Dirección de Entrega" value={client.address} />
-                                    </div>
-                                    <ModalRow label="Municipio/Ciudad" value={client.municipality || client.city} />
-                                    <ModalRow label="Departamento" value={client.department} />
-                                    <div style={{ gridColumn: '1 / -1', padding: '1rem', backgroundColor: (client.latitude && client.longitude) ? '#F0FDF4' : '#FEF2F2', borderRadius: '12px', border: `1px solid ${(client.latitude && client.longitude) ? '#BBF7D0' : '#FECACA'}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                        <ModalRow label="Latitud" value={client.latitude?.toString() || '---'} />
-                                        <ModalRow label="Longitud" value={client.longitude?.toString() || '---'} />
-                                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '800', color: (client.latitude && client.longitude) ? '#059669' : '#DC2626' }}>
-                                            {(client.latitude && client.longitude) ? '✅ GPS VERIFICADO Y ACTIVO' : '⚠️ SIN COORDENADAS GPS'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* COLUMNA DERECHA: CONTACTO, LOGÍSTICA, LEAD */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                            {/* CONTACTO */}
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#F59E0B', borderBottom: '2px solid #FEF3C7', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    📞 Contacto Principal
-                                </h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <ModalRow label="Responsable Principal" value={client.contact_name} />
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <ModalRow label="Teléfono Directo" value={client.phone} />
-                                        <ModalRow label="Correo Electrónico" value={client.email} />
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* RESTRICCIONES MANUALES */}
-                            {client.delivery_restrictions && (
-                                <section>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#EF4444', borderBottom: '2px solid #FEE2E2', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        ⚠️ Restricciones Especiales
-                                    </h4>
-                                    <div style={{ padding: '1.2rem', backgroundColor: '#FEF2F2', borderRadius: '16px', border: '1px solid #FECACA' }}>
-                                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#991B1B', fontWeight: '600' }}>
-                                            {client.delivery_restrictions}
-                                        </p>
-                                    </div>
-                                </section>
+                <div style={{ padding: '0' }}>
+                    {/* TOP IDENTITY BANNER */}
+                    <div style={{ 
+                        padding: '3.5rem 3.5rem 2.5rem 3.5rem', 
+                        background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)',
+                        color: 'white',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+                            <span style={{ 
+                                padding: '0.4rem 1rem', 
+                                backgroundColor: isB2B ? '#0891B2' : (isLead ? '#8B5CF6' : '#10B981'), 
+                                borderRadius: '100px', 
+                                fontSize: '0.75rem', 
+                                fontWeight: '900', 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '0.05rem',
+                                color: 'white'
+                            }}>
+                                {isB2C ? 'Consumidor Final' : (isLead ? 'Prospecto (Lead)' : 'Cliente Institucional')}
+                            </span>
+                            {client.is_active === false && (
+                                <span style={{ padding: '0.4rem 1rem', backgroundColor: '#EF4444', borderRadius: '100px', fontSize: '0.75rem', fontWeight: '900' }}>INACTIVO</span>
                             )}
+                        </div>
+                        <h2 style={{ fontSize: '2.8rem', fontWeight: '900', color: 'white', margin: 0, letterSpacing: '-0.05rem' }}>
+                            {isB2C ? client.contact_name : (client.company_name || client.contact_name)}
+                        </h2>
+                        {(!isB2C && client.razon_social) && (
+                            <p style={{ color: '#94A3B8', fontSize: '1.2rem', marginTop: '0.5rem', fontWeight: '500' }}>{client.razon_social}</p>
+                        )}
+                    </div>
 
-                            {/* LOGÍSTICA ADICIONAL */}
-                            {(client.role === 'b2b_client' || client.role === 'b2c_client') && (
-                                <section>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        📦 Requerimientos de Entrega
-                                    </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <ModalRow label="Uso de Canastillas" value={client.needs_crates ? '✅ SÍ RECOGE' : '❌ NO USA'} />
-                                        <ModalRow label="Documento Pref." value={client.document_type === 'remission' ? 'Remisión' : 'Factura'} />
-                                        {client.document_type === 'remission' && (
-                                            <div style={{ gridColumn: '1 / -1' }}>
-                                                <ModalRow label="Precios en Remisión" value={client.remission_with_prices ? '✅ MOSTRAR' : '❌ OCULTAR'} />
+                    <div style={{ padding: '2.5rem 3.5rem 3.5rem 3.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                        
+                        {/* MAIN INFO GRID */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+                            
+                            {/* BLOCK 1: IDENTIDAD Y COMERCIAL */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <SectionHeader icon="🏢" title="Identidad Comercial" color="#0891B2" />
+                                <InfoCard>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <ModalRow label="NIT / Documento" value={client.nit} />
+                                        <ModalRow label="Modelo Asignado" value={isB2C ? 'B2C' : (selectedModel?.name || '---')} />
+                                        <ModalRow 
+                                            label="Margen de Operación" 
+                                            value={isB2C ? 'Tarifario Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : '---')} 
+                                            color="#0891B2"
+                                        />
+                                        {isB2B && (
+                                            <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD' }}>
+                                                <button 
+                                                    onClick={() => {
+                                                        setNicknameClientId(client.id);
+                                                        setIsNicknameModalOpen(true);
+                                                    }}
+                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '900', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D97706'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F59E0B'}
+                                                >
+                                                    🎭 Máscaras de Producto
+                                                </button>
                                             </div>
                                         )}
                                     </div>
-                                </section>
-                            )}
+                                </InfoCard>
+                            </div>
 
-                            {/* LOGÍSTICA IA */}
-                            {client.logistics_data && (
-                                <section>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#8B5CF6', borderBottom: '2px solid #EDE9FE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        🚚 Reglas de Logística (IA)
-                                    </h4>
-                                    <div style={{ padding: '1.2rem', backgroundColor: '#F5F3FF', borderRadius: '16px', border: '1px solid #DDD6FE' }}>
-                                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#5B21B6', fontWeight: '800' }}>
-                                            {formatTimeWindow(client.logistics_data)}
-                                        </p>
-                                    </div>
-                                </section>
-                            )}
-                            
-                            {/* LEAD INFO */}
-                            {(client as unknown as Lead).status && (
-                                <section>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#6366F1', borderBottom: '2px solid #E0E7FF', paddingBottom: '0.5rem', marginBottom: '1rem' }}>🔥 Perfilamiento de Prospecto</h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <ModalRow label="Tipo de Negocio" value={(client as unknown as Lead).business_type} />
-                                        <ModalRow label="Tamaño / Escala" value={(client as unknown as Lead).business_size} />
-                                        <ModalRow label="Contactos Realizados" value={(client as unknown as Lead).contact_count || 0} />
-                                        <ModalRow label="Último Contacto" value={(client as unknown as Lead).last_contact_date ? new Date(String((client as unknown as Lead).last_contact_date)).toLocaleDateString() : 'Nunca'} />
-                                    </div>
-                                </section>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* ACUERDOS COMERCIALES (FULL WIDTH AL FINAL) */}
-                    {client.role === 'b2b_client' && (
-                        <div style={{ marginTop: '2.5rem', paddingTop: '2.5rem', borderTop: '2px dashed #E2E8F0' }}>
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span>🤝</span> Acuerdos Comerciales Vigentes
-                                </h4>
-                                
-                                {loadingAgreements ? (
-                                    <p style={{ color: '#94A3B8', fontSize: '0.9rem', fontStyle: 'italic' }}>Buscando acuerdos...</p>
-                                ) : agreements.length > 0 ? (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-                                        {agreements.map(agreement => (
-                                            <div key={agreement.id} style={{ 
-                                                backgroundColor: '#F8FAFC', 
-                                                padding: '1.2rem', 
-                                                borderRadius: '16px', 
-                                                border: '1px solid #E2E8F0',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '0.5rem'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>
-                                                        {agreement.pricing_models?.name || 'Contrato Personalizado'}
-                                                    </div>
-                                                    <span style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', backgroundColor: '#D1FAE5', color: '#065F46', borderRadius: '20px', fontWeight: '900' }}>VIGENTE</span>
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                                                    Ref: <span style={{ fontWeight: '700' }}>{agreement.quote_number || 'N/A'}</span>
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    📅 Expira: <span style={{ color: '#0369A1', fontWeight: '700' }}>{new Date(agreement.valid_until).toLocaleDateString()}</span>
+                            {/* BLOCK 2: LOGÍSTICA Y UBICACIÓN */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <SectionHeader icon="📍" title="Logística y Entrega" color="#10B981" />
+                                <InfoCard>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <ModalRow label="Dirección" value={client.address} />
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <ModalRow label="Ciudad" value={client.municipality || client.city} />
+                                            <ModalRow label="Depto" value={client.department} />
+                                        </div>
+                                        
+                                        {/* GPS STATUS */}
+                                        <div style={{ 
+                                            marginTop: '0.5rem', 
+                                            padding: '1.25rem', 
+                                            backgroundColor: (client.latitude && client.longitude) ? '#F0FDF4' : '#FEF2F2', 
+                                            borderRadius: '20px', 
+                                            border: `1px solid ${(client.latitude && client.longitude) ? '#BBF7D0' : '#FECACA'}`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px'
+                                        }}>
+                                            <div style={{ fontSize: '1.5rem' }}>{(client.latitude && client.longitude) ? '🛰️' : '🚫'}</div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', color: (client.latitude && client.longitude) ? '#166534' : '#991B1B' }}>Coordenadas GPS</div>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: '800', color: (client.latitude && client.longitude) ? '#065F46' : '#DC2626' }}>
+                                                    {(client.latitude && client.longitude) ? `${client.latitude.toFixed(4)}, ${client.longitude.toFixed(4)}` : 'Sin Geo-referencia'}
                                                 </div>
                                             </div>
-                                        ))}
+                                        </div>
+
+                                        {(isB2B || isB2C) && (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                                <div style={{ textAlign: 'center', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px' }}>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', marginBottom: '4px' }}>CANASTILLAS</div>
+                                                    <div style={{ fontWeight: '900', color: '#1E293B' }}>{client.needs_crates ? 'SÍ' : 'NO'}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'center', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px' }}>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', marginBottom: '4px' }}>DOC. PREF</div>
+                                                    <div style={{ fontWeight: '900', color: '#1E293B' }}>{client.document_type === 'remission' ? 'REMISION' : 'FACTURA'}</div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                ) : (
-                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '20px', border: '1px dashed #E2E8F0' }}>
-                                        <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.9rem', fontWeight: '600' }}>Este cliente no tiene acuerdos comerciales (precios fijos) activos.</p>
+                                </InfoCard>
+                            </div>
+
+                            {/* BLOCK 3: CONTACTO Y NOTAS */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <SectionHeader icon="📞" title="Canales de Contacto" color="#F59E0B" />
+                                <InfoCard>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <ModalRow label="Responsable" value={client.contact_name} />
+                                        <ModalRow label="WhatsApp / Cel" value={client.phone} color="#059669" />
+                                        <ModalRow label="Email" value={client.email} />
+                                        
+                                        {client.delivery_restrictions && (
+                                            <div style={{ 
+                                                marginTop: '0.5rem', 
+                                                padding: '1rem', 
+                                                backgroundColor: '#FFFBEB', 
+                                                borderRadius: '16px', 
+                                                border: '1px solid #FEF3C7',
+                                                fontSize: '0.85rem'
+                                            }}>
+                                                <div style={{ fontWeight: '900', color: '#92400E', marginBottom: '4px', fontSize: '0.7rem', textTransform: 'uppercase' }}>Restricciones de Entrega</div>
+                                                <p style={{ margin: 0, color: '#B45309', fontWeight: '600', lineHeight: '1.4' }}>{client.delivery_restrictions}</p>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </section>
+                                </InfoCard>
+                            </div>
                         </div>
-                    )}
+
+                        {/* BOTTOM AREA: AGREEMENTS OR LEAD PROGRESS */}
+                        {isB2B && agreements.length > 0 && (
+                            <div style={{ backgroundColor: '#F1F5F9', borderRadius: '32px', padding: '2rem' }}>
+                                <SectionHeader icon="🤝" title="Acuerdos Comerciales Activos" color="#334155" />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                                    {agreements.map(agreement => (
+                                        <div key={agreement.id} style={{ backgroundColor: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0', position: 'relative' }}>
+                                            <span style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', padding: '0.2rem 0.5rem', backgroundColor: '#D1FAE5', color: '#065F46', borderRadius: '20px', fontSize: '0.6rem', fontWeight: '900' }}>VIGENTE</span>
+                                            <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem', marginBottom: '4px' }}>
+                                                {agreement.pricing_models?.name || 'Específico'}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Quote: #{agreement.quote_number || '---'}</div>
+                                            <div style={{ marginTop: '0.75rem', padding: '0.5rem 0', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>Expira</span>
+                                                <span style={{ fontSize: '0.8rem', color: '#1E293B', fontWeight: '800' }}>{new Date(agreement.valid_until).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {isLead && (
+                            <div style={{ backgroundColor: '#EEF2FF', borderRadius: '32px', padding: '2rem' }}>
+                                <SectionHeader icon="🚀" title="Progreso del Prospecto" color="#4F46E5" />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
+                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Tipo Negocio</div>
+                                        <div style={{ fontSize: '1rem', color: '#1E1B4B', fontWeight: '800' }}>{(client as unknown as Lead).business_type || '---'}</div>
+                                    </div>
+                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
+                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Contactos</div>
+                                        <div style={{ fontSize: '1.5rem', color: '#1E1B4B', fontWeight: '900' }}>{(client as unknown as Lead).contact_count || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
+                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Eficiencia</div>
+                                        <div style={{ fontSize: '1.2rem', color: '#1E1B4B', fontWeight: '900' }}>⚡ Alta</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
-function ModalRow({ label, value }: { label: string, value?: string | number | null }) {
+function ModalRow({ label, value, color }: { label: string, value?: string | number | null, color?: string }) {
     return (
-        <div style={{ marginBottom: '0.8rem' }}>
-            <span style={{ display: 'block', fontSize: '0.75rem', color: '#9CA3AF', fontWeight: '700', textTransform: 'uppercase' }}>{label}</span>
-            <span style={{ fontSize: '1rem', color: '#111827', fontWeight: '600' }}>{value || 'No registrado'}</span>
+        <div>
+            <span style={{ display: 'block', fontSize: '0.65rem', color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.02rem', marginBottom: '2px' }}>
+                {label}
+            </span>
+            <span style={{ 
+                fontSize: '0.95rem', 
+                color: color || '#1E293B', 
+                fontWeight: '700',
+                wordBreak: 'break-word'
+            }}>
+                {value || '---'}
+            </span>
         </div>
     );
 }

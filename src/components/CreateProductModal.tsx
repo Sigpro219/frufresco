@@ -26,13 +26,17 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         is_active: true,
         show_on_web: true,
         min_inventory_level: 0,
-        iva_rate: 19
+        iva_rate: 19,
+        display_name: '',
+        web_unit: 'Kg',
+        web_conversion_factor: 1.0
     });
 
     const [options, setOptions] = useState<any[]>([]);
     const [variants, setVariants] = useState<any[]>([]);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [conversionFactorInput, setConversionFactorInput] = useState('1,0');
 
     // Mapeo técnico de unidades para evitar colisiones (Ej: Lb vs Lt)
 
@@ -492,6 +496,86 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     <p style={{ fontSize: '0.85rem', color: '#3B82F6', marginTop: '6px', marginLeft: '30px' }}>
                                         Si se apaga, el producto solo será visible en el panel administrativo.
                                     </p>
+                                </div>
+
+                                {/* SECCIÓN COMERCIAL / VIDAS PARALELAS */}
+                                <div style={{ 
+                                    padding: '1.5rem', 
+                                    backgroundColor: '#FFF7ED', 
+                                    borderRadius: '20px', 
+                                    border: '1px solid #FFEDD5', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '1.2rem',
+                                    marginTop: '1.5rem'
+                                }}>
+                                    <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#9A3412', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        🏷️ Configuración Comercial (Web)
+                                    </h3>
+                                    <p style={{ fontSize: '0.8rem', color: '#7C2D12', margin: 0 }}>
+                                        Personaliza cómo se ve este producto en la página web.
+                                    </p>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Nombre Público (Web)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej: Manzana Roja Importada"
+                                            value={formData.display_name}
+                                            onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Unidad Comercial (Web)</label>
+                                            <select
+                                                value={formData.web_unit}
+                                                onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
+                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', backgroundColor: 'white', cursor: 'pointer' }}
+                                            >
+                                                <option value="">Seleccionar unidad...</option>
+                                                {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>¿Cuántos Kg es 1 {formData.web_unit || 'unidad'}?</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="0,00"
+                                                    value={conversionFactorInput}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (/^[0-9,.]*$/.test(val)) {
+                                                            setConversionFactorInput(val);
+                                                            const normalized = val.replace(',', '.');
+                                                            if (!isNaN(parseFloat(normalized))) {
+                                                                setFormData({ ...formData, web_conversion_factor: parseFloat(normalized) });
+                                                            }
+                                                        }
+                                                    }}
+                                                    onBlur={() => {
+                                                        const normalized = conversionFactorInput.replace(',', '.');
+                                                        const parsed = parseFloat(normalized);
+                                                        if (isNaN(parsed)) {
+                                                            setConversionFactorInput('1,0');
+                                                            setFormData({ ...formData, web_conversion_factor: 1.0 });
+                                                        } else {
+                                                            setConversionFactorInput(parsed.toString().replace('.', ','));
+                                                        }
+                                                    }}
+                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', textAlign: 'center' }}
+                                                />
+                                                <span style={{ fontSize: '0.7rem', color: '#9A3412', fontWeight: '700', width: '80px' }}>KG equivalentes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
+                                        💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
+                                    </div>
                                 </div>
                             </div>
 

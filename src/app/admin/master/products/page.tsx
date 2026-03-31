@@ -158,26 +158,39 @@ export default function MasterProductsPage() {
     };
 
     const downloadFullMaster = () => {
-        const exportData = products.map(p => ({
-            ID_INTERNO: p.id,
-            SKU: p.sku || '',
-            ID_CONTABLE: p.accounting_id || '',
-            Nombre: p.name || '',
-            Descripcion: p.description || '',
-            Categoria: p.category || '', // Mantener código técnico para recarga
-            Categoria_Nombre: CATEGORY_MAP[p.category] || p.category,
-            Unidad: p.unit_of_measure || '',
-            Costo_Base: p.base_price || 0,
-            IVA: p.iva_rate ?? 19,
-            URL_Imagen: p.image_url || '',
-            Comprador: p.buying_team || '',
-            Metodo_Compra: p.procurement_method || '',
-            Activo: p.is_active ? 'SI' : 'NO',
-            Web: p.show_on_web ? 'SI' : 'NO',
-            Min_Inventario: p.min_inventory_level || 0,
-            Config_Opciones: p.options_config ? JSON.stringify(p.options_config) : '[]',
-            Variantes_JSON: p.variants ? JSON.stringify(p.variants) : '[]'
-        }));
+        const exportData = products.map(p => {
+            const parent = products.find(pr => pr.id === p.parent_id);
+            return {
+                ID_INTERNO: p.id,
+                SKU: p.sku || '',
+                ID_CONTABLE: p.accounting_id || '',
+                Nombre: p.name || '',
+                Descripcion: p.description || '',
+                Categoria: p.category || '', // Mantener código técnico para recarga
+                Categoria_Nombre: CATEGORY_MAP[p.category] || p.category,
+                Unidad: p.unit_of_measure || '',
+                
+                // JERARQUÍA
+                ID_PADRE: p.parent_id || '',
+                SKU_PADRE: parent?.sku || '',
+                Nombre_Padre: parent?.name || '',
+                Tipo_Jerarquia: p.parent_id ? (p.parent_id === p.id ? 'PADRE' : 'HIJO') : 'PRINCIPAL',
+
+                Costo_Base: p.base_price || 0,
+                IVA: p.iva_rate ?? 19,
+                URL_Imagen: p.image_url || '',
+                Comprador: p.buying_team || '',
+                Metodo_Compra: p.procurement_method || '',
+                Activo: p.is_active ? 'SI' : 'NO',
+                Web: p.show_on_web ? 'SI' : 'NO',
+                Nombre_Web: p.display_name || '',
+                Unidad_Web: p.web_unit || '',
+                Factor_Web: p.web_conversion_factor || 1.0,
+                Min_Inventario: p.min_inventory_level || 0,
+                Config_Opciones: p.options_config ? JSON.stringify(p.options_config) : '[]',
+                Variantes_JSON: p.variants ? JSON.stringify(p.variants) : '[]'
+            };
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(exportData);
         // Ajustar anchos de columna básicos
@@ -432,6 +445,9 @@ export default function MasterProductsPage() {
                         procurement_method: (row.Metodo_Compra || row.procurement_method || '').toString(),
                         is_active: (row.Activo || row.is_active) === 'SI' || row.is_active === true,
                         show_on_web: (row.Web || row.show_on_web) === 'SI' || row.show_on_web === true,
+                        display_name: (row.Nombre_Web || row.display_name || '').toString(),
+                        web_unit: (row.Unidad_Web || row.web_unit || '').toString(),
+                        web_conversion_factor: parseFloat(row.Factor_Web || row.web_conversion_factor || '1'),
                         min_inventory_level: parseInt(row.Min_Inventario || row.min_inventory_level || '0'),
                         options_config: typeof row.Config_Opciones === 'string' ? JSON.parse(row.Config_Opciones) : (row.options_config || []),
                         variants: typeof row.Variantes_JSON === 'string' ? JSON.parse(row.Variantes_JSON) : (row.variants || [])
@@ -480,10 +496,17 @@ export default function MasterProductsPage() {
         // Separar términos normales de etiquetas con @
         const parts = query.split(/\s+/);
         const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
-        const searchTerms = parts.filter(p => !p.startsWith('@'));
+        const ids = parts.filter(p => p.startsWith('#')).map(t => t.slice(1));
+        const searchTerms = parts.filter(p => !p.startsWith('@') && !p.startsWith('#'));
 
         return products.filter(p => {
-            // 1. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
+            // 1. Lógica de IDs EXACTOS (#3, #15...)
+            const matchesIds = ids.length === 0 || ids.some(id => 
+                p.accounting_id?.toString() === id
+            );
+            if (!matchesIds) return false;
+
+            // 2. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
             const matchesText = searchTerms.every(term => 
                 p.name?.toLowerCase().includes(term) ||
                 p.sku?.toLowerCase().includes(term) ||
@@ -507,6 +530,15 @@ export default function MasterProductsPage() {
                 // Filtro Estado Maestro (@on, @activo, @off, @inactivo)
                 if (tag === 'on' || tag === 'activo') return p.is_active;
                 if (tag === 'off' || tag === 'inactivo') return !p.is_active;
+
+                // Filtro Jerarquía (@padre, @hijo)
+                if (tag === 'padre') return p.parent_id === p.id;
+                if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+
+                // Filtro Incompletos (@sindatos)
+                if (tag === 'sindatos' || tag === 'incompleto') {
+                    return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
+                }
 
                 // Filtro Categoría (@frutas, @despensa...)
                 const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
@@ -535,13 +567,17 @@ export default function MasterProductsPage() {
     // Dashboard KPIs
     const kpiMetrics = useMemo(() => {
         const total = products.length;
-        if (total === 0) return { total: 0, activeCount: 0, imageCoverage: 0, webCount: 0, noImageCount: 0, alerts: 0 };
+        if (total === 0) return { total: 0, activeCount: 0, imageCoverage: 0, webCount: 0, noImageCount: 0, alerts: 0, parentCount: 0, childCount: 0 };
 
         const withImg = products.filter(p => p.image_url && p.image_url.trim() !== '').length;
         const webVis = products.filter(p => p.show_on_web).length;
         const withAlert = products.filter(p => p.min_inventory_level > 0).length;
         const noImg = products.filter(p => !p.image_url || p.image_url.trim() === '').length;
         const activeCount = products.filter(p => p.is_active).length;
+        
+        // Conteo de Jerarquía
+        const parentCount = products.filter(p => p.parent_id === p.id).length;
+        const childCount = products.filter(p => p.parent_id !== null && p.parent_id !== p.id).length;
 
         return {
             total,
@@ -549,7 +585,9 @@ export default function MasterProductsPage() {
             imageCoverage: Math.round((withImg / total) * 100),
             webCount: webVis,
             noImageCount: noImg,
-            alerts: withAlert
+            alerts: withAlert,
+            parentCount,
+            childCount
         };
     }, [products]);
 
@@ -669,7 +707,7 @@ export default function MasterProductsPage() {
                 {/* KPI DASHBOARD */}
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(5, 1fr)', 
+                    gridTemplateColumns: 'repeat(6, 1fr)', 
                     gap: '1rem', 
                     marginBottom: '2rem' 
                 }}>
@@ -679,6 +717,7 @@ export default function MasterProductsPage() {
                         { label: 'Publicados en Web', value: kpiMetrics.webCount, icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
                         { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#F59E0B', bg: '#FFFBEB' },
                         { label: 'Alertas Inventario', value: kpiMetrics.alerts, icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
+                        { label: 'Jerarquía (P/H)', value: `${kpiMetrics.parentCount} P / ${kpiMetrics.childCount} H`, icon: '💎', color: '#6D28D9', bg: '#F5F3FF' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: 'white',
@@ -804,10 +843,32 @@ export default function MasterProductsPage() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 transition: 'all 0.2s',
-                                boxShadow: isInfoGuideOpen ? '0 0 0 3px rgba(37, 99, 235, 0.2)' : 'none'
+                                boxShadow: isInfoGuideOpen ? '0 0 0 3px rgba(37, 99, 235, 0.2)' : 'none',
+                                position: 'relative'
                             }}
                         >
                             <Info size={24} />
+                            
+                            {/* Conteo de Resultados */}
+                            {(searchQuery.trim() !== '' || filteredProducts.length !== products.length) && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-8px',
+                                    right: '-8px',
+                                    backgroundColor: '#2563EB',
+                                    color: 'white',
+                                    fontSize: '0.65rem',
+                                    fontWeight: '900',
+                                    padding: '2px 6px',
+                                    borderRadius: '10px',
+                                    boxShadow: '0 4px 6px rgba(37, 99, 235, 0.3)',
+                                    whiteSpace: 'nowrap',
+                                    border: '2px solid white',
+                                    zIndex: 10
+                                }}>
+                                    {filteredProducts.length}
+                                </div>
+                            )}
                         </div>
 
                         {isInfoGuideOpen && (
@@ -833,10 +894,12 @@ export default function MasterProductsPage() {
                                         { tag: '@5%', desc: 'IVA reducido' },
                                         { tag: '@0%', desc: 'Productos exentos' },
                                         { tag: '@web', desc: 'Visibles en tienda' },
-                                        { tag: '@virtual', desc: 'Equiv. a @web' },
-                                        { tag: '@oculto', desc: 'No publicados' },
+                                        { tag: '@padre', desc: 'Principal' },
+                                        { tag: '@hijo', desc: 'Fraccionado' },
+                                        { tag: '@sindatos', desc: 'Faltan campos' },
                                         { tag: '@on', desc: 'SKUs activos' },
-                                        { tag: '@fruta', desc: 'Filtro por Categoría' }
+                                        { tag: '#ID', desc: 'ID EXACTO' },
+                                        { tag: '@fruta', desc: 'Por Categoría' }
                                     ].map((item, i) => (
                                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
                                             <code style={{ backgroundColor: '#F3F4F6', padding: '2px 6px', borderRadius: '4px', color: '#2563EB', fontWeight: 'bold' }}>{item.tag}</code>
@@ -958,40 +1021,48 @@ export default function MasterProductsPage() {
                                                         ID: {p.accounting_id}
                                                     </span>
                                                 )}
-                                                {p.parent_id && (
-                                                    <span style={{ 
-                                                        fontSize: '0.7rem', 
-                                                        fontWeight: '800', 
-                                                        color: '#7C3AED',
-                                                        backgroundColor: '#F5F3FF',
-                                                        padding: '1px 6px',
-                                                        borderRadius: '4px',
-                                                        border: '1px solid #DDD6FE'
-                                                    }}>
-                                                        🔗 {products.find(pr => pr.id === p.parent_id)?.sku || 'Hijo'}
-                                                    </span>
-                                                )}
                                             </div>
                                         </div>
                                     </td>
                                     <td style={{ padding: '1rem' }}>
                                         <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.9rem' }}>{p.name}</div>
                                     </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <span style={{ 
-                                            padding: '0.4rem 0.8rem', 
-                                            borderRadius: '8px', 
-                                            backgroundColor: '#F3F4F6', 
-                                            fontSize: '0.8rem', 
-                                            fontWeight: '800', 
-                                            color: '#374151',
-                                            border: '1px solid #E5E7EB',
-                                            display: 'inline-block',
-                                            whiteSpace: 'nowrap'
-                                        }}>
-                                            {CATEGORY_MAP[p.category] || p.category}
-                                        </span>
-                                    </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                                <span style={{ 
+                                                    padding: '0.4rem 0.8rem', 
+                                                    borderRadius: '8px', 
+                                                    backgroundColor: '#F3F4F6', 
+                                                    fontSize: '0.8rem', 
+                                                    fontWeight: '800', 
+                                                    color: '#374151',
+                                                    border: '1px solid #E5E7EB',
+                                                    display: 'inline-block',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    {CATEGORY_MAP[p.category] || p.category}
+                                                </span>
+                                                
+                                                {/* Cápsula de Jerarquía en Categoría */}
+                                                {p.parent_id && (
+                                                    <div style={{
+                                                        fontSize: '0.6rem',
+                                                        fontWeight: '900',
+                                                        padding: '2px 5px',
+                                                        borderRadius: '4px',
+                                                        backgroundColor: p.parent_id === p.id ? '#4F46E5' : '#10B981',
+                                                        color: 'white',
+                                                        display: 'inline-flex',
+                                                        minWidth: '16px',
+                                                        justifyContent: 'center',
+                                                        lineHeight: '1',
+                                                        marginLeft: '4px'
+                                                    }}>
+                                                        {p.parent_id === p.id ? 'P' : 'H'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
                                     <td style={{ padding: '1rem' }}>
                                         <div style={{ 
                                             backgroundColor: '#F9FAFB', 

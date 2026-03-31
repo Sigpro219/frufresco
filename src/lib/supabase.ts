@@ -80,6 +80,7 @@ export interface Product {
     description: string;
     base_price: number;
     unit_of_measure: string;
+    display_name?: string;
     image_url: string;
     category: string;
     options?: any;
@@ -98,4 +99,7 @@ export interface Product {
     tags?: string[];
     keywords?: string;
     utility_deviation_pct?: number;
+    // Commercial / Multi-Catalog Fields
+    web_unit?: string;
+    web_conversion_factor?: number;
 }

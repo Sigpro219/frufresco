@@ -95,7 +95,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       .select('key, value');
 
   const getSetting = (key: string, defaultValue: string) => {
-      const s = appSettings?.find(x => x.key === key);
+      const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
       return s ? s.value : defaultValue;
   };
 
@@ -124,7 +124,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       ];
   }
 
-  const dynamicCategories: string[] = ['Todos', ...Array.from(new Set(categoriesData?.map((c: { category: string }) => c.category) || []))];
+  const dynamicCategories: string[] = ['Todos', ...Array.from(new Set((categoriesData || []).map((c: { category: string }) => c.category)))];
 
   // 3. Build Query
   let query = supabase
@@ -158,21 +158,32 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
     .order('image_url', { ascending: false, nullsFirst: false }) // Prioridad DB (fotos primero)
     .limit(250); 
 
-  // 4. Catálogo Dinámico: Shuffle total pero manteniendo fotos arriba
-  // Usamos el mismo dailySeed definido arriba para consistencia
-  const products = rawProducts ? [...rawProducts].sort((a, b) => {
-      // 1. Prioridad absoluta: tiene foto (URL válida)
-      const hasA = a.image_url && a.image_url.includes('http');
-      const hasB = b.image_url && b.image_url.includes('http');
-      
-      if (hasA && !hasB) return -1;
-      if (!hasA && hasB) return 1;
-      
-      // 2. Shuffle aleatorio estable por día entre iguales
-      const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
-      const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
-      return (scoreA % 100) - (scoreB % 100);
-  }) : [];
+  // 4. Fetch Nicknames if User is Logged In
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  let nicknameMap: Record<string, string> = {};
+
+  if (userId) {
+    const { data: nicknames } = await supabase
+      .from('product_nicknames')
+      .select('product_id, custom_name')
+      .eq('profile_id', userId);
+    
+    if (nicknames) {
+      nicknameMap = nicknames.reduce((acc, item) => ({
+        ...acc,
+        [item.product_id]: item.custom_name
+      }), {} as Record<string, string>);
+    }
+  }
+
+  const applyNicknames = (plist: Product[]) => plist.map(p => ({
+    ...p,
+    display_name: nicknameMap[p.id] || p.display_name || p.name
+  }));
+
+  const products = applyNicknames(rawProducts || []);
+  const finalFeatured = applyNicknames(featuredProducts);
 
   return (
     <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
@@ -327,7 +338,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             </div>
           </div>
 
-          <FeaturedProductsCarousel products={featuredProducts || []} />
+          <FeaturedProductsCarousel products={finalFeatured || []} />
         </div>
       </section>
       
@@ -412,7 +423,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-            {error ? 'Error cargando productos' : 'No encontramos productos con ese nombre.'}
+            {error ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <span style={{ fontWeight: '800', color: '#ef4444' }}>Error cargando productos</span>
+                <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{(error as { message: string }).message || JSON.stringify(error)}</span>
+              </div>
+            ) : 'No encontramos productos con ese nombre.'}
           </div>
         )}
         

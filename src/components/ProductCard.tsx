@@ -156,17 +156,17 @@ export default function ProductCard({ product }: { product: Product }) {
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden'
-                        }}>{product.name}</h3>
+                        }}>{product.display_name || product.name}</h3>
                     </Link>
 
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                         {product.base_price > 0 ? (
                             <>
                                 <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                    ${product.base_price.toLocaleString('es-CO')}
+                                    ${((product.base_price || 0) * (product.web_conversion_factor || 1)).toLocaleString('es-CO')}
                                 </span>
                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                    / {product.unit_of_measure || 'Un'}
+                                    / {product.web_unit || product.unit_of_measure || 'Un'}
                                 </span>
                             </>
                         ) : (
