@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync-core": "git add . && git commit -m \"Chore: sync core into main\" --no-verify && git push origin CORE && git push origin CORE:main --force"
+    "sync-core": "git add . && git commit -m \"Chore: sync core into main\" --no-verify && git push origin CORE && git push origin CORE:main --force",
+    "sync:frufresco": "node scripts/mirror-to-tenant1.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

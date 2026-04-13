@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
 
 export default function QuotesListPage() {
     const [quotes, setQuotes] = useState<any[]>([]);
@@ -23,6 +24,21 @@ export default function QuotesListPage() {
     useEffect(() => {
         fetchQuotes();
     }, []);
+
+    const handleDelete = async (id: string, quoteNumber: string) => {
+        if (!window.confirm(`¿Estás seguro de ELIMINAR permanentemente la cotización #${quoteNumber}?`)) return;
+
+        try {
+            const { error } = await supabase.from('quotes').delete().eq('id', id);
+            if (error) throw error;
+            
+            setQuotes(prev => prev.filter(q => q.id !== id));
+            alert('Cotización eliminada correctamente');
+        } catch (err: any) {
+            console.error('Error deleting quote:', err);
+            alert('Error al eliminar: ' + err.message);
+        }
+    };
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('es-CO', {
@@ -102,12 +118,21 @@ export default function QuotesListPage() {
                                         <td style={{ padding: '1rem' }}>
                                             {getStatusBadge(quote.status)}
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                                             <Link href={`/admin/commercial/quotes/${quote.id}`}>
                                                 <button style={{ color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
                                                     Ver Detalle →
                                                 </button>
                                             </Link>
+                                            <button 
+                                                onClick={() => handleDelete(quote.id, quote.quote_number)}
+                                                style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', borderRadius: '4px', display: 'flex', alignItems: 'center', transition: 'background 0.2s' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                title="Eliminar permanentemente"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

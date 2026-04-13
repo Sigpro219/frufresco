@@ -34,6 +34,10 @@ interface Profile {
     total_orders?: number;
     total_spent?: number;
     last_order?: string;
+    parent_id?: string;
+    is_corporate_parent?: boolean;
+    billing_nit?: string;
+    billing_razon_social?: string;
     created_at: string;
 }
 
@@ -93,12 +97,12 @@ export default function AdminClientsPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Clientes B2B (Profiles)
+            // 1. Clientes B2B (Profiles) - Traemos TODO para filtrar luego o mostrar padres
             const { data: b2bData } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('role', 'b2b_client')
-                .order('created_at', { ascending: false });
+                .order('company_name', { ascending: true });
 
             // 2. Leads (Prospectos)
             const { data: leadData } = await supabase
@@ -256,6 +260,7 @@ export default function AdminClientsPage() {
     const tabs = [
         { id: 'dashboard', label: 'Resumen', icon: '📊' },
         { id: 'b2b', label: 'Institucionales', icon: '🏢' },
+        { id: 'groups', label: 'Grupos / Padres', icon: '🏦' }, // Nueva pestaña estratégica
         { id: 'b2c', label: 'Consumidor Final', icon: '🏠' },
         { id: 'leads', label: 'Prospectos', icon: '🔥' },
     ];
@@ -274,7 +279,7 @@ export default function AdminClientsPage() {
                     const tag = term.slice(1);
                     
                     // Tags para Leads
-                    if (tag === 'vencido') return itemObj.next_contact_date && new Date(itemObj.next_contact_date) < new Date();
+                    if (tag === 'vencido') return !!itemObj.next_contact_date && new Date(String(itemObj.next_contact_date)) < new Date();
                     if (tag === 'nuevo') return itemObj.status === 'new';
                     if (tag === 'contactado') return itemObj.status === 'contacted';
                     if (tag === 'crm') return itemObj.status !== 'converted' && itemObj.status !== 'rejected';
@@ -322,6 +327,7 @@ export default function AdminClientsPage() {
                     onRefresh={fetchData}
                     pricingModels={pricingModels}
                     editData={editTarget}
+                    availableParents={clientsB2B.filter(c => c.is_corporate_parent && c.id !== editTarget?.id)}
                 />
             )}
 
@@ -479,14 +485,14 @@ export default function AdminClientsPage() {
                                             subtitle="Atención prioritaria" 
                                         />
                                     </div>
-                                    <div onClick={() => { setActiveTab('leads'); setSearchTerm('@nuevo'); }} style={{ cursor: 'pointer' }}>
+                                    <div onClick={() => { setActiveTab('groups'); setSearchTerm(''); }} style={{ cursor: 'pointer' }}>
                                         <KPICard 
-                                            title="Tasa Conversión" 
-                                            value={leads.length > 0 ? `${Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)}%` : '0%'} 
-                                            icon="💎" 
+                                            title="Grupos Corporativos" 
+                                            value={clientsB2B.filter(c => c.is_corporate_parent).length} 
+                                            icon="🏦" 
                                             color="#F3E8FF" 
                                             textColor="#7E22CE" 
-                                            subtitle="Éxito comercial" 
+                                            subtitle="Padres de sucursales" 
                                         />
                                     </div>
                                 </div>
@@ -585,6 +591,7 @@ export default function AdminClientsPage() {
                                             type="b2b" 
                                             data={client} 
                                             pricingModels={pricingModels} 
+                                            availableParents={clientsB2B.filter(c => c.is_corporate_parent)} // Pasamos los padres para el nombre
                                             onUpdatePricingModel={handleUpdatePricingModel}
                                             onViewDetails={() => handleViewDetails(client)}
                                             onEdit={() => handleEditClient(client)}
@@ -629,6 +636,43 @@ export default function AdminClientsPage() {
                                         />
                                     ))}
                                     {clientsB2C.length === 0 && <EmptyState text="No hay consumidores registrados aún." />}
+                                </div>
+                            </>
+                        )}
+
+                        {/* GROUPS VIEW */}
+                        {activeTab === 'groups' && (
+                            <>
+                                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <p style={{ color: '#64748B', fontWeight: '600' }}>Listado de Nodos de Facturación y Grupos Empresariales.</p>
+                                    <button 
+                                        onClick={() => handleCreateClient('b2b_client')}
+                                        style={{ 
+                                            backgroundColor: '#7E22CE', 
+                                            color: 'white', 
+                                            padding: '0.8rem 1.5rem', 
+                                            borderRadius: '12px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        ➕ Crear Nuevo Grupo Padre
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
+                                    {filterData(clientsB2B.filter(c => c.is_corporate_parent), ['company_name', 'nit', 'contact_name']).map(client => (
+                                        <ClientCard 
+                                            key={client.id} 
+                                            type="b2b" 
+                                            data={client} 
+                                            pricingModels={pricingModels}
+                                            availableParents={clientsB2B.filter(c => c.is_corporate_parent)} 
+                                            onViewDetails={() => handleViewDetails(client)}
+                                            onEdit={() => handleEditClient(client)}
+                                        />
+                                    ))}
+                                    {clientsB2B.filter(c => c.is_corporate_parent).length === 0 && <EmptyState text="No hay grupos corporativos definidos." />}
                                 </div>
                             </>
                         )}
@@ -880,10 +924,11 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask }: { 
+function ClientCard({ type, data, pricingModels, availableParents, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
+    availableParents?: Profile[],
     onUpdatePricingModel?: (id: string, modelId: string) => void,
     onUpdateStatus?: (id: string, status: string) => void,
     onViewDetails?: () => void,
@@ -935,18 +980,23 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 borderRadius: '8px',
                 fontSize: '0.7rem',
                 fontWeight: '900',
-                backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
-                color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
+                backgroundColor: isB2B ? (profileData?.is_corporate_parent ? '#7E22CE' : '#E0F2FE') : isB2C ? '#DCFCE7' : '#FEE2E2',
+                color: isB2B ? (profileData?.is_corporate_parent ? 'white' : '#0369A1') : isB2C ? '#15803D' : '#991B1B',
                 textTransform: 'uppercase'
             }}>
-                {isB2B ? 'Institucional' : isB2C ? 'Consumidor' : 'Prospecto'}
+                {isB2B ? (profileData?.is_corporate_parent ? '🏦 GRUPO/PADRE' : '🏢 SUCURSAL') : isB2C ? 'Consumidor' : 'Prospecto'}
             </div>
 
             {/* Header */}
             <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#1A202C', paddingRight: '120px' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
+                {isB2B && profileData?.parent_id && (
+                    <div style={{ fontSize: '0.75rem', color: '#6366F1', fontWeight: '800', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        🖇️ Sucursal de <span style={{ textDecoration: 'underline' }}>{availableParents?.find(p => p.id === profileData.parent_id)?.company_name || 'Grupo Corporativo'}</span>
+                    </div>
+                )}
                 {isB2B && profileData?.razon_social && <p style={{ margin: '0.2rem 0', fontSize: '0.85rem', color: '#718096', fontStyle: 'italic' }}>{profileData.razon_social}</p>}
                 {(isB2B || isLead) && <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
@@ -1288,6 +1338,16 @@ function ClientDetailsModal({ client, onClose, pricingModels }: { client: Profil
                                 value={client.role === 'b2c_client' ? 'Modelo B2C (Estándar)' : (selectedModel?.name || 'No asignado')} 
                             />
                             <ModalRow 
+                                label="Estructura" 
+                                value={client.is_corporate_parent ? '🏦 GRUPO CORPORATIVO (PADRE)' : (client.parent_id ? '🖇️ Sucursal Asociada' : '👤 Independiente')} 
+                            />
+                            {client.parent_id && (
+                                <ModalRow 
+                                    label="Pertenece a" 
+                                    value="Ver en lista (Jerarquía activa)" 
+                                />
+                            )}
+                            <ModalRow 
                                 label="Margen Base" 
                                 value={client.role === 'b2c_client' ? 'Diferencial x Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : 'N/A')} 
                             />
@@ -1328,7 +1388,7 @@ function ModalRow({ label, value }: { label: string, value?: string | number | n
     );
 }
 
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, availableParents }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, availableParents: Profile[] }) {
     const isEdit = !!editData;
     const [formData, setFormData] = useState({
         company_name: editData?.company_name || '',
@@ -1347,7 +1407,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
         delivery_restrictions: editData?.delivery_restrictions || '',
         latitude: editData?.latitude || '',
         longitude: editData?.longitude || '',
-        geocoding_status: editData?.geocoding_status || 'manual'
+        geocoding_status: editData?.geocoding_status || 'manual',
+        is_corporate_parent: editData?.is_corporate_parent || false,
+        parent_id: editData?.parent_id || '',
+        billing_nit: editData?.billing_nit || '',
+        billing_razon_social: editData?.billing_razon_social || ''
     });
     const [saving, setSaving] = useState(false);
 
@@ -1417,13 +1481,55 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                         />
                     </section>
 
+                    {/* SECCIÓN JERARQUÍA CORPORATIVA */}
+                    <section style={{ gridColumn: '1 / -1', backgroundColor: '#F3E8FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E9D5FF' }}>
+                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#7E22CE', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>🏦</span> ESTRUCTURA CORPORATIVA
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={formData.is_corporate_parent}
+                                    onChange={(e) => setFormData({...formData, is_corporate_parent: e.target.checked, parent_id: ''})}
+                                    style={{ width: '20px', height: '20px', accentColor: '#7E22CE' }}
+                                />
+                                <label style={{ fontWeight: '800', color: '#581C87' }}>¿Es un GRUPO PADRE / NODO DE FACTURACIÓN?</label>
+                            </div>
+
+                            {!formData.is_corporate_parent && (
+                                <div>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#581C87', display: 'block', marginBottom: '0.5rem' }}>ASOCIAR A UN PADRE Existente (Sede de...)</label>
+                                    <select 
+                                        value={formData.parent_id}
+                                        onChange={(e) => setFormData({...formData, parent_id: e.target.value})}
+                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '2px solid #E9D5FF', fontWeight: '700' }}
+                                    >
+                                        <option value="">-- CLIENTE INDEPENDIENTE --</option>
+                                        {availableParents.map(parent => (
+                                            <option key={parent.id} value={parent.id}>{parent.company_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
                     {/* SECCIÓN DATOS BÁSICOS */}
                     <section style={{ gridColumn: '1 / -1' }}>
                         <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>DATOS DE LA EMPRESA</h4>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
-                            <FormField label="Nombre Comercial" value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
-                            <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} />
-                            <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
+                            <FormField label="Nombre Comercial (Sede)" value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
+                            <FormField 
+                                label={formData.is_corporate_parent ? "Razón Social Factura" : "Razón Social Oficina"} 
+                                value={formData.razon_social} 
+                                onChange={(v: string) => setFormData({...formData, razon_social: v})} 
+                            />
+                            <FormField 
+                                label={formData.is_corporate_parent ? "NIT Facturación" : "NIT Local"} 
+                                value={formData.nit} 
+                                onChange={(v: string) => setFormData({...formData, nit: v})} 
+                            />
                         </div>
                     </section>
 
