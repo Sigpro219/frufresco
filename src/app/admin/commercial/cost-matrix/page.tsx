@@ -510,6 +510,29 @@ export default function CostMatrixPage() {
                     
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Protocolo de Costo:</label>
+                            <button 
+                                onClick={() => setIsSmartModalOpen(true)}
+                                style={{ 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #DBEAFE', 
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#1E40AF', 
+                                    fontWeight: '700', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.5rem',
+                                    cursor: 'pointer',
+                                    transition: 'transform 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                            >
+                                <Brain size={18} /> Smart CI-Delta
+                            </button>
+                         </div>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                             <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Categoría:</label>
                             <select 
                                 value={selectedCategory}
