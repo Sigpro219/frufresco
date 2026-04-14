@@ -1,0 +1,248 @@
+[
+  {
+    "key": "suspended_units",
+    "value": "",
+    "description": null,
+    "updated_at": "2026-03-19T02:58:54.589446+00:00"
+  },
+  {
+    "key": "hero_title",
+    "value": "Excelencia en Frescura para tu Negocio y Hogar",
+    "description": "Título principal del Hero",
+    "updated_at": "2026-03-18T16:22:05.656+00:00"
+  },
+  {
+    "key": "enable_b2b_lead_capture",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-03T18:24:59.173+00:00"
+  },
+  {
+    "key": "b2b_page_content",
+    "value": "{\"badge\":\"Exclusivo HORECA e Institucional Bogotá , Girardot, Melgar y Anapoima\",\"title\":\"Tu Operación Merece \\n Lo Mejor del Campo\",\"description\":\"Únete a los +500 restaurantes, hoteles, casinos y comedores que ya compran sin intermediarios. Calidad estandarizada, trazabilidad y precios fijos para tu volumen.\",\"benefits\":[{\"icon\":\"🚀\",\"title\":\"Entrega AM\",\"desc\":\"Todo listo antes de abrir cocina.\"},{\"icon\":\"💰\",\"title\":\"Precios Justos\",\"desc\":\"Ahorro directo sin intermediarios.\"},{\"icon\":\"🥕\",\"title\":\"Frescura Total\",\"desc\":\"Cosechado ayer, entregado hoy.\"},{\"icon\":\"💳\",\"title\":\"Crédito B2B\",\"desc\":\"Paga a 15 o 30 días fácil.\"}]}",
+    "description": null,
+    "updated_at": "2026-03-09T10:24:24.669+00:00"
+  },
+  {
+    "key": "enable_cutoff_rules",
+    "value": "false",
+    "description": "Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)",
+    "updated_at": "2026-02-11T22:26:47.719701+00:00"
+  },
+  {
+    "key": "delivery_fee",
+    "value": "5000",
+    "description": "Costo de envío estándar",
+    "updated_at": "2026-03-05T02:59:00.914932+00:00"
+  },
+  {
+    "key": "min_order_hogar",
+    "value": "30000",
+    "description": "Pedido mínimo Línea Hogar",
+    "updated_at": "2026-03-05T23:19:04.090193+00:00"
+  },
+  {
+    "key": "min_order_institucional",
+    "value": "150000",
+    "description": "Pedido mínimo Línea Institucional",
+    "updated_at": "2026-03-05T23:19:04.090193+00:00"
+  },
+  {
+    "key": "store_status",
+    "value": "open",
+    "description": "Estado de la tienda (open/closed)",
+    "updated_at": "2026-03-05T23:19:04.090193+00:00"
+  },
+  {
+    "key": "global_banner",
+    "value": "¡Paraíso de frescura! Despachos de lunes a viernes.",
+    "description": "Mensaje superior",
+    "updated_at": "2026-03-05T04:16:36.693458+00:00"
+  },
+  {
+    "key": "hero_description",
+    "value": "Somos el aliado estratégico de los mejores restaurantes y casinos de Bogotá. Llevamos la calidad de Corabastos a tu puerta, con cero desperdicio y puntualidad suiza.",
+    "description": "Descripción del Hero",
+    "updated_at": "2026-03-06T01:28:27.755017+00:00"
+  },
+  {
+    "key": "value_proposition_items",
+    "value": "[\r\n        { \"icon\": \"⏱️\", \"title\": \"Entrega Puntual\", \"desc\": \"Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.\" },\r\n        { \"icon\": \"🥬\", \"title\": \"Frescura Absoluta\", \"desc\": \"Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.\" },\r\n        { \"icon\": \"💎\", \"title\": \"Precios Competitivos\", \"desc\": \"Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.\" }\r\n    ]",
+    "description": "Items de la sección de propuesta de valor (JSON)",
+    "updated_at": "2026-03-06T01:28:27.755017+00:00"
+  },
+  {
+    "key": "standard_units",
+    "value": "Atado,Caja,Saco,Cubeta,Kg,Bulto,Paquete 500 gramos,Paquete 250 gramos,Unidad,Libra,Litro,Paquete de 1 kilogramo",
+    "description": null,
+    "updated_at": "2026-03-19T02:58:54.470766+00:00"
+  },
+  {
+    "key": "contact_email",
+    "value": "gerencia@deltacoretech.com",
+    "description": null,
+    "updated_at": "2026-03-07T22:45:35.522+00:00"
+  },
+  {
+    "key": "product_categories",
+    "value": "[{\"id\":\"FR\",\"name\":\"Frutas\"},{\"id\":\"VE\",\"name\":\"Verduras\"},{\"id\":\"TU\",\"name\":\"Tubérculos\"},{\"id\":\"HO\",\"name\":\"Hortalizas\"},{\"id\":\"LA\",\"name\":\"Lácteos\"},{\"id\":\"DE\",\"name\":\"Despensa\"},{\"id\":\"CO\",\"name\":\"Congelados\"}]",
+    "description": "Categorías de productos del catálogo",
+    "updated_at": "2026-03-18T21:14:01.980208+00:00"
+  },
+  {
+    "key": "top_bar_enabled",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:15:00.394195+00:00"
+  },
+  {
+    "key": "footer_description",
+    "value": "Tu despensa gourmet del campo a la ciudad.",
+    "description": "Descripción en el pie de página",
+    "updated_at": "2026-03-05T23:19:04.090193+00:00"
+  },
+  {
+    "key": "home_featured_title",
+    "value": "🔥 Lo más vendido de la semana",
+    "description": "Título de la sección de destacados",
+    "updated_at": "2026-03-06T01:28:27.755017+00:00"
+  },
+  {
+    "key": "home_catalog_title",
+    "value": "Nuestro Catálogo",
+    "description": "Título de la sección del catálogo",
+    "updated_at": "2026-03-06T01:28:27.755017+00:00"
+  },
+  {
+    "key": "last_core_sync",
+    "value": "2026-03-20T22:28:35.247Z",
+    "description": null,
+    "updated_at": "2026-03-10T13:56:00.208108+00:00"
+  },
+  {
+    "key": "app_name",
+    "value": "FruFresco",
+    "description": "Nombre oficial de la aplicación",
+    "updated_at": "2026-03-18T16:21:47.812+00:00"
+  },
+  {
+    "key": "provider_nit",
+    "value": "901393217",
+    "description": null,
+    "updated_at": "2026-03-09T15:46:52.047+00:00"
+  },
+  {
+    "key": "geofence_b2c_poly",
+    "value": "[{\"lat\":4.749654510843865,\"lng\":-74.02311470700798},{\"lat\":4.756326282345369,\"lng\":-74.04551651670036},{\"lat\":4.763042962997738,\"lng\":-74.06407356262207},{\"lat\":4.759377027988564,\"lng\":-74.06609442426262},{\"lat\":4.752384527580891,\"lng\":-74.06521465970573},{\"lat\":4.746739154385425,\"lng\":-74.06555798245964},{\"lat\":4.734079664840436,\"lng\":-74.06813290311393},{\"lat\":4.729032911827751,\"lng\":-74.07130863858757},{\"lat\":4.7250125907375455,\"lng\":-74.07452728940544},{\"lat\":4.720157168528671,\"lng\":-74.0759434957653},{\"lat\":4.717933135532525,\"lng\":-74.07688763333854},{\"lat\":4.713442277960069,\"lng\":-74.07976296140251},{\"lat\":4.708034265430646,\"lng\":-74.0821264735481},{\"lat\":4.702645156144563,\"lng\":-74.08229813492505},{\"lat\":4.700164441026997,\"lng\":-74.08349976456373},{\"lat\":4.699052393452278,\"lng\":-74.08719048416822},{\"lat\":4.69178126945118,\"lng\":-74.09351018968904},{\"lat\":4.685451052770176,\"lng\":-74.0980592161783},{\"lat\":4.671140315415143,\"lng\":-74.11007551256502},{\"lat\":4.657091282616151,\"lng\":-74.12221659512065},{\"lat\":4.65070452243963,\"lng\":-74.12876204953773},{\"lat\":4.644887228153479,\"lng\":-74.13442687497718},{\"lat\":4.639412083811453,\"lng\":-74.13665847287757},{\"lat\":4.640438676611197,\"lng\":-74.14180831418616},{\"lat\":4.635134597749198,\"lng\":-74.15021972165687},{\"lat\":4.634792397745406,\"lng\":-74.15296630368812},{\"lat\":4.629573827165007,\"lng\":-74.15622786985023},{\"lat\":4.621617571729347,\"lng\":-74.13966254697425},{\"lat\":4.620868058514015,\"lng\":-74.13892677292299},{\"lat\":4.630043419375266,\"lng\":-74.1371994303174},{\"lat\":4.640549676448524,\"lng\":-74.13399782492185},{\"lat\":4.647063200313592,\"lng\":-74.12510677890833},{\"lat\":4.640048185607442,\"lng\":-74.12253185825404},{\"lat\":4.633546402413262,\"lng\":-74.11369129734095},{\"lat\":4.62755786498752,\"lng\":-74.10759731845911},{\"lat\":4.626274600374037,\"lng\":-74.09360691623743},{\"lat\":4.6246491285249585,\"lng\":-74.08317848758753},{\"lat\":4.624050269534912,\"lng\":-74.07867237644251},{\"lat\":4.623321105046082,\"lng\":-74.07209715040065},{\"lat\":4.622765020672572,\"lng\":-74.06922182233669},{\"lat\":4.621438971559374,\"lng\":-74.06686147840358},{\"lat\":4.626315398015238,\"lng\":-74.06467279584743},{\"lat\":4.626657602119883,\"lng\":-74.06171163709499},{\"lat\":4.6435042869157686,\"lng\":-74.05596172956152},{\"lat\":4.654528728461351,\"lng\":-74.05093972605916},{\"lat\":4.667984270459951,\"lng\":-74.04514350077449},{\"lat\":4.679518459440758,\"lng\":-74.03927374710447},{\"lat\":4.6826658591291075,\"lng\":-74.03499026657273},{\"lat\":4.693658201986099,\"lng\":-74.02692218185594},{\"lat\":4.7149589810978005,\"lng\":-74.02881894646208},{\"lat\":4.733327451150841,\"lng\":-74.02440820239194}]",
+    "description": "B2C Delivery Zone (Chapinero/Usaquén)",
+    "updated_at": "2026-02-26T16:57:28.467+00:00"
+  },
+  {
+    "key": "contact_address",
+    "value": "Dirección de pruebas",
+    "description": null,
+    "updated_at": "2026-03-07T22:45:43.199+00:00"
+  },
+  {
+    "key": "system_roles",
+    "value": "[{\"value\":\"admin\",\"label\":\"Admin Principal\",\"color\":\"#1E293B\",\"permissions\":[\"dashboard\",\"hr\",\"inventory\",\"commercial\",\"transport\",\"maintenance\",\"command_center\",\"client_portal_b2b\",\"client_portal_b2c\"]},{\"value\":\"sys_admin\",\"label\":\"Administrador del Sistema\",\"color\":\"#1E293B\",\"permissions\":[\"dashboard\",\"hr\",\"inventory\",\"commercial\",\"transport\",\"maintenance\",\"command_center\",\"client_portal_b2b\",\"client_portal_b2c\"]},{\"value\":\"b2b_client\",\"label\":\"Cliente B2B\",\"color\":\"#2563EB\",\"permissions\":[\"client_portal_b2b\"]},{\"value\":\"b2c_client\",\"label\":\"Cliente B2C\",\"color\":\"#DB2777\",\"permissions\":[\"client_portal_b2c\"]}]",
+    "description": null,
+    "updated_at": "2026-03-31T16:48:28.401474+00:00"
+  },
+  {
+    "key": "contact_phone",
+    "value": "+57 300 000000",
+    "description": null,
+    "updated_at": "2026-03-07T22:45:16.556+00:00"
+  },
+  {
+    "key": "enable_b2b",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:02:31.242257+00:00"
+  },
+  {
+    "key": "enable_operations",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:02:31.242257+00:00"
+  },
+  {
+    "key": "showcase_mode",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:02:31.242257+00:00"
+  },
+  {
+    "key": "admin_override",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:08:14.934381+00:00"
+  },
+  {
+    "key": "welcome_message",
+    "value": "\"¡Bienvenidos a FruFresco! Despachos de lunes a sábado.\"",
+    "description": null,
+    "updated_at": "2026-03-05T04:15:00.394195+00:00"
+  },
+  {
+    "key": "geofence_b2b_poly",
+    "value": "[{\"lat\":4.515031792062369,\"lng\":-74.11532440185546},{\"lat\":4.548682101810015,\"lng\":-74.21314210891724},{\"lat\":4.487870446847946,\"lng\":-74.34529209136963},{\"lat\":4.327890476990699,\"lng\":-74.33630714416503},{\"lat\":4.22882415429139,\"lng\":-74.56833477020264},{\"lat\":4.184532277231663,\"lng\":-74.63831405639648},{\"lat\":4.272403484408172,\"lng\":-74.76065006256104},{\"lat\":4.264638874761537,\"lng\":-74.80465192794799},{\"lat\":4.273308040985903,\"lng\":-74.83835411071777},{\"lat\":4.308668429003189,\"lng\":-74.81798095703125},{\"lat\":4.332827248034112,\"lng\":-74.78684768676759},{\"lat\":4.286022276645609,\"lng\":-74.74793510437013},{\"lat\":4.235228382008855,\"lng\":-74.68728008270263},{\"lat\":4.239275716697298,\"lng\":-74.63909978866577},{\"lat\":4.288546716461597,\"lng\":-74.5683177471161},{\"lat\":4.363162537163326,\"lng\":-74.3928510427475},{\"lat\":4.510683488396858,\"lng\":-74.39094837903977},{\"lat\":4.552947459273339,\"lng\":-74.29386667609215},{\"lat\":4.583042024201795,\"lng\":-74.38893399313092},{\"lat\":4.529631068282911,\"lng\":-74.47713485509158},{\"lat\":4.539854770420346,\"lng\":-74.54710652530194},{\"lat\":4.560003240421966,\"lng\":-74.54635370820762},{\"lat\":4.561275690185544,\"lng\":-74.4756126780063},{\"lat\":4.5896324209854455,\"lng\":-74.45088516827674},{\"lat\":4.6090905560318545,\"lng\":-74.39731854721906},{\"lat\":4.580151145343303,\"lng\":-74.23661041259767},{\"lat\":4.640179538461698,\"lng\":-74.20555572509765},{\"lat\":4.754534803146212,\"lng\":-74.12531204223632},{\"lat\":4.777186395189911,\"lng\":-74.08146057128906},{\"lat\":4.778133994524811,\"lng\":-74.01435699462888},{\"lat\":4.7157847918913705,\"lng\":-73.99978179931641},{\"lat\":4.543422447037537,\"lng\":-74.09210357666015},{\"lat\":4.528358542264885,\"lng\":-74.09687625541683}]",
+    "description": "B2B Delivery Zone (Sabana de Bogotá/Soacha)",
+    "updated_at": "2026-02-27T21:55:30.811+00:00"
+  },
+  {
+    "key": "app_short_name",
+    "value": "",
+    "description": "Nombre corto para UI/Headers",
+    "updated_at": "2026-03-05T23:19:04.090193+00:00"
+  },
+  {
+    "key": "app_logo_url",
+    "value": "/logo.png",
+    "description": "URL del logo principal (se cargará después)",
+    "updated_at": "2026-03-06T01:29:28.861+00:00"
+  },
+  {
+    "key": "app_logosymbol_url",
+    "value": "",
+    "description": "URL del logosímbolo (se cargará después)",
+    "updated_at": "2026-03-06T01:29:35.358+00:00"
+  },
+  {
+    "key": "provider_legal_name",
+    "value": "Investments Cortés SAS",
+    "description": null,
+    "updated_at": "2026-03-09T15:46:48.661+00:00"
+  },
+  {
+    "key": "provider_logo_url",
+    "value": "",
+    "description": null,
+    "updated_at": "2026-03-09T16:24:02.121+00:00"
+  },
+  {
+    "key": "system_status",
+    "value": "active",
+    "description": null,
+    "updated_at": "2026-03-17T17:33:07.145967+00:00"
+  },
+  {
+    "key": "primary_color",
+    "value": "#286a36",
+    "description": "Verde FruFresco",
+    "updated_at": "2026-03-09T15:49:51.547+00:00"
+  },
+  {
+    "key": "secondary_color",
+    "value": "#1f9040",
+    "description": null,
+    "updated_at": "2026-03-09T15:50:14.707+00:00"
+  },
+  {
+    "key": "enable_admin",
+    "value": "true",
+    "description": null,
+    "updated_at": "2026-03-05T04:02:31.242257+00:00"
+  }
+]

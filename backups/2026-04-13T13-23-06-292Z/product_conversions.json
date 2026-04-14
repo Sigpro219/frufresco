@@ -1,0 +1,626 @@
+[
+  {
+    "id": "0e9f8096-3115-4f91-b783-1deac815477e",
+    "product_id": "dbf01b33-8231-4204-801d-62cdbca3745b",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-19T21:36:24.866305+00:00"
+  },
+  {
+    "id": "7e5613cb-41c6-4b2b-976a-1ffa692c7323",
+    "product_id": "dbf01b33-8231-4204-801d-62cdbca3745b",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T21:36:50.185319+00:00"
+  },
+  {
+    "id": "c2cd568f-b831-4562-8848-ad74b7771709",
+    "product_id": "4701c75b-b5f5-44ae-8b03-d69462e33d1b",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T21:45:25.419459+00:00"
+  },
+  {
+    "id": "6642b5c5-da89-473a-8d38-2e7cb8814fa5",
+    "product_id": "2800c998-4454-4f09-bc87-ab1efa26f93b",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-19T22:57:16.807504+00:00"
+  },
+  {
+    "id": "2a0331ef-5240-440d-8a8b-b5bd2933ca43",
+    "product_id": "2800c998-4454-4f09-bc87-ab1efa26f93b",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T22:57:34.216365+00:00"
+  },
+  {
+    "id": "a9d82243-ef6e-4676-9d75-157f79d7f55f",
+    "product_id": "04f5dfd7-dccb-4240-b62a-01bcb6445c0e",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-19T22:58:51.170632+00:00"
+  },
+  {
+    "id": "75fe97a0-7d19-4ddb-b94d-edfaa292ddf0",
+    "product_id": "04f5dfd7-dccb-4240-b62a-01bcb6445c0e",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T22:58:57.703225+00:00"
+  },
+  {
+    "id": "8b26ddb4-d47f-4184-bf42-39853f548c88",
+    "product_id": "2a7dd336-9d10-463b-a272-6bc0fd6978e1",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:06:41.873944+00:00"
+  },
+  {
+    "id": "b3342391-0f83-4660-9a0e-8f89b34891a8",
+    "product_id": "a8e96344-a1d8-4d7f-a579-d89f9387be24",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.1,
+    "created_at": "2026-03-19T23:09:51.683182+00:00"
+  },
+  {
+    "id": "38822fe0-c200-47d4-82e3-e90676bcbbde",
+    "product_id": "a8e96344-a1d8-4d7f-a579-d89f9387be24",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:10:03.800038+00:00"
+  },
+  {
+    "id": "fdb10451-3b0e-4c08-a22d-8e26efcb584c",
+    "product_id": "f56f6061-cacf-4fdc-a73b-57c40280f6f4",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 1.2,
+    "created_at": "2026-03-19T23:22:30.934857+00:00"
+  },
+  {
+    "id": "d21f117d-a429-4b30-b4d2-a89f3f218f92",
+    "product_id": "ef9e0632-2ad4-4f89-8b77-b32e7dbfbec5",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-19T23:25:57.324477+00:00"
+  },
+  {
+    "id": "2aefc9d1-1261-4230-993b-1c8c1665baa7",
+    "product_id": "ef9e0632-2ad4-4f89-8b77-b32e7dbfbec5",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:26:05.10358+00:00"
+  },
+  {
+    "id": "ddd94ad1-a779-4b56-9eca-d7ecd4868e55",
+    "product_id": "2fdecc0b-5eb8-4f00-8c5a-a69eab3c5615",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.4,
+    "created_at": "2026-03-19T23:30:42.76243+00:00"
+  },
+  {
+    "id": "42c51ff3-7fd2-4856-9cfe-9dcd0995c875",
+    "product_id": "2fdecc0b-5eb8-4f00-8c5a-a69eab3c5615",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:31:18.434581+00:00"
+  },
+  {
+    "id": "3cdb4c7f-e68f-4682-9f9f-81cbacb032cd",
+    "product_id": "2fdecc0b-5eb8-4f00-8c5a-a69eab3c5615",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-19T23:31:54.213977+00:00"
+  },
+  {
+    "id": "9de0d652-5c32-49e8-857b-7f8ac925dcd5",
+    "product_id": "c8214543-569d-470c-8fe8-a416e6b38e82",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 1.5,
+    "created_at": "2026-03-19T23:41:49.821011+00:00"
+  },
+  {
+    "id": "8dc257bc-ec39-46fd-8c55-39726ae42559",
+    "product_id": "c8214543-569d-470c-8fe8-a416e6b38e82",
+    "from_unit": "Kg",
+    "to_unit": "Kg",
+    "conversion_factor": 1,
+    "created_at": "2026-03-19T23:42:34.732333+00:00"
+  },
+  {
+    "id": "a3dcf541-1504-4bdc-bc65-02bf8147b8f2",
+    "product_id": "c8214543-569d-470c-8fe8-a416e6b38e82",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-19T23:42:49.555007+00:00"
+  },
+  {
+    "id": "06f9f944-f227-432c-8bb3-aea1fdcbbe6e",
+    "product_id": "05533a23-2ec4-4985-82b5-604d8b5664b9",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-19T23:46:45.410565+00:00"
+  },
+  {
+    "id": "9f749871-a955-4b27-8a3a-208c6579b04c",
+    "product_id": "05533a23-2ec4-4985-82b5-604d8b5664b9",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:46:53.264222+00:00"
+  },
+  {
+    "id": "817a83af-3c20-4b07-94ab-3ab97dc5d2ef",
+    "product_id": "1d2da569-d9c1-4f3a-a44d-7783be574767",
+    "from_unit": "Kg",
+    "to_unit": "Kg",
+    "conversion_factor": 0.7,
+    "created_at": "2026-03-19T23:54:03.720585+00:00"
+  },
+  {
+    "id": "76269332-f017-494f-8904-c4ed60492991",
+    "product_id": "9ca9cb0b-2481-42aa-ba22-bc0974ea5639",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.1,
+    "created_at": "2026-03-19T23:56:05.752446+00:00"
+  },
+  {
+    "id": "83125d87-9370-4ea7-bcda-b6419ac4723e",
+    "product_id": "9ca9cb0b-2481-42aa-ba22-bc0974ea5639",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:56:21.164261+00:00"
+  },
+  {
+    "id": "84cbe9c5-89de-4857-8093-24a627f1b346",
+    "product_id": "9ca9cb0b-2481-42aa-ba22-bc0974ea5639",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-19T23:56:46.214801+00:00"
+  },
+  {
+    "id": "63123dff-acf0-4936-a352-5039423720bd",
+    "product_id": "9ca9cb0b-2481-42aa-ba22-bc0974ea5639",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-19T23:56:53.923008+00:00"
+  },
+  {
+    "id": "4e9189da-45a2-4c8c-a0a5-91dd5265b465",
+    "product_id": "00010691-e9bc-4eda-a4e7-8722b572ab94",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T00:03:41.774644+00:00"
+  },
+  {
+    "id": "f3d5a3fc-df56-4da6-ab1c-f281ec539566",
+    "product_id": "00010691-e9bc-4eda-a4e7-8722b572ab94",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T00:03:50.418994+00:00"
+  },
+  {
+    "id": "c94b2862-e39d-448d-a1ee-4531c78d3aff",
+    "product_id": "6fa951b8-e72b-48ea-ad4d-ff32e128a292",
+    "from_unit": "Atado",
+    "to_unit": "Atado",
+    "conversion_factor": 0.1,
+    "created_at": "2026-03-20T00:05:13.016541+00:00"
+  },
+  {
+    "id": "f47bc53e-b57a-4351-a727-c15f0d7af393",
+    "product_id": "6fa951b8-e72b-48ea-ad4d-ff32e128a292",
+    "from_unit": "Libra",
+    "to_unit": "Atado",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T00:05:18.595167+00:00"
+  },
+  {
+    "id": "566d87b8-1e38-44ba-a996-6ea59b039ecb",
+    "product_id": "57f26113-14fc-4216-992f-1dea3c6f5d63",
+    "from_unit": "Atado",
+    "to_unit": "Atado",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T00:11:02.727418+00:00"
+  },
+  {
+    "id": "2ef123a9-e3bd-42d9-abb1-f257c8850224",
+    "product_id": "57f26113-14fc-4216-992f-1dea3c6f5d63",
+    "from_unit": "Libra",
+    "to_unit": "Atado",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T00:11:17.348582+00:00"
+  },
+  {
+    "id": "e4842c61-eb52-4b5f-a57d-9a0acd1ec689",
+    "product_id": "4ffd4818-3b53-4543-bc56-573088e7446e",
+    "from_unit": "Unidad",
+    "to_unit": "Unidad",
+    "conversion_factor": 0.7,
+    "created_at": "2026-03-20T00:13:37.460526+00:00"
+  },
+  {
+    "id": "b7d80849-1125-4129-8230-5dcdc158ec63",
+    "product_id": "4ffd4818-3b53-4543-bc56-573088e7446e",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Unidad",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T00:14:03.328446+00:00"
+  },
+  {
+    "id": "1cdd561f-d0e5-4cc0-8d2f-1ea04e95a3a1",
+    "product_id": "4ffd4818-3b53-4543-bc56-573088e7446e",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Unidad",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T00:14:14.238632+00:00"
+  },
+  {
+    "id": "3821c00d-8c0d-4644-aedf-a5254d00e825",
+    "product_id": "336c836f-cd39-4b14-913e-6e05f55ca940",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:31:09.10364+00:00"
+  },
+  {
+    "id": "a244c9fd-5623-4f08-804d-ff5e34a42956",
+    "product_id": "336c836f-cd39-4b14-913e-6e05f55ca940",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T20:31:17.184394+00:00"
+  },
+  {
+    "id": "0a86c313-58dd-49d8-a74c-38f6ac597648",
+    "product_id": "3a29af80-76eb-4713-9712-5824b7b79be0",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T20:34:45.340159+00:00"
+  },
+  {
+    "id": "1c1c5c69-e238-45d0-9585-e6c68182176d",
+    "product_id": "3a29af80-76eb-4713-9712-5824b7b79be0",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:34:52.264483+00:00"
+  },
+  {
+    "id": "92bd5d76-84e7-4c5c-a147-345261eb8a39",
+    "product_id": "58d3ecae-a0e0-453c-9303-363776b760d5",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T20:36:24.357143+00:00"
+  },
+  {
+    "id": "115bc482-1384-4efd-b450-08a1121332b2",
+    "product_id": "58d3ecae-a0e0-453c-9303-363776b760d5",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:36:32.021277+00:00"
+  },
+  {
+    "id": "c9719962-2a42-434b-b81a-f3b6dfe5a1de",
+    "product_id": "e91a0e09-dc30-403c-a495-f9eff4d79bef",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T20:38:29.857921+00:00"
+  },
+  {
+    "id": "d050e745-d98d-40ec-b463-32b2aeeb3406",
+    "product_id": "e91a0e09-dc30-403c-a495-f9eff4d79bef",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:38:34.59547+00:00"
+  },
+  {
+    "id": "a86f2b86-c646-4b2b-93a3-43342aaa58fc",
+    "product_id": "21cf64d0-f4b5-48c5-85b3-666a5c797b5d",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T20:41:14.264664+00:00"
+  },
+  {
+    "id": "8ca89ae2-b77d-483c-980b-77e650a02185",
+    "product_id": "21cf64d0-f4b5-48c5-85b3-666a5c797b5d",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:41:21.745979+00:00"
+  },
+  {
+    "id": "922ade19-27b2-47f7-9b13-240314ffaa14",
+    "product_id": "5d5eca50-b6b4-482d-b470-40c53ea0d2c0",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T20:42:54.260167+00:00"
+  },
+  {
+    "id": "3a5d7226-ac8e-49ed-a4f9-8d82a36b2f00",
+    "product_id": "5d5eca50-b6b4-482d-b470-40c53ea0d2c0",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:42:58.752318+00:00"
+  },
+  {
+    "id": "14027dea-d862-4b6d-91ce-05906eb9507b",
+    "product_id": "f3d504a3-46cc-468b-870d-70c71d4bdfe0",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T20:44:24.024961+00:00"
+  },
+  {
+    "id": "97b446ef-88eb-47f0-9132-50a65d7d0633",
+    "product_id": "f3d504a3-46cc-468b-870d-70c71d4bdfe0",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:44:28.491318+00:00"
+  },
+  {
+    "id": "37ba4e7e-1e61-4a96-acc2-230b189deaab",
+    "product_id": "d141cd7e-fc5c-4b6e-90b0-cebd2e24a3c7",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:48:28.445585+00:00"
+  },
+  {
+    "id": "08a74247-da55-44c8-b231-42dd50e59bb4",
+    "product_id": "d141cd7e-fc5c-4b6e-90b0-cebd2e24a3c7",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T20:48:35.349359+00:00"
+  },
+  {
+    "id": "4dd6cb6a-b96b-45d1-948c-bc03185ebb36",
+    "product_id": "7c74b9af-bb83-4bc9-8342-e0aaaf042a0f",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T20:55:59.373438+00:00"
+  },
+  {
+    "id": "ee9fa7d6-cfb4-4065-83e3-b54d4e627452",
+    "product_id": "7c74b9af-bb83-4bc9-8342-e0aaaf042a0f",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T20:56:04.740863+00:00"
+  },
+  {
+    "id": "de55be51-4c57-4330-850c-5c16600d740c",
+    "product_id": "bfac909f-79b1-4ff6-91c8-fe30fd633fc4",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T21:12:51.770346+00:00"
+  },
+  {
+    "id": "a8330334-3245-4411-a297-fdff17d96a55",
+    "product_id": "bfac909f-79b1-4ff6-91c8-fe30fd633fc4",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:12:57.903442+00:00"
+  },
+  {
+    "id": "e6fb5851-4028-40aa-af9d-2b73dc745035",
+    "product_id": "8abc6398-69b5-470f-b17a-a990834518aa",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:16:04.540697+00:00"
+  },
+  {
+    "id": "46d62c8b-c76a-4e80-bd27-ce0d7e79a9ea",
+    "product_id": "8abc6398-69b5-470f-b17a-a990834518aa",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T21:16:09.667559+00:00"
+  },
+  {
+    "id": "bbb016a0-ecdd-4653-8093-67707855d321",
+    "product_id": "41dde65d-3dea-4bf0-a951-20e97ba32710",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:20:10.980956+00:00"
+  },
+  {
+    "id": "51f787d5-e4d9-4444-84a7-a9d23ad97208",
+    "product_id": "5dd142c2-47a8-43bc-b75b-afe1f3991505",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:23:51.229674+00:00"
+  },
+  {
+    "id": "3172a0de-3fcf-4903-9890-4f38cd3a41d7",
+    "product_id": "5dd142c2-47a8-43bc-b75b-afe1f3991505",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:24:01.763608+00:00"
+  },
+  {
+    "id": "0f1a7e96-5108-41d5-8bb9-e3a662c751c2",
+    "product_id": "5dd142c2-47a8-43bc-b75b-afe1f3991505",
+    "from_unit": "Paquete 250 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.25,
+    "created_at": "2026-03-20T21:24:11.683544+00:00"
+  },
+  {
+    "id": "7965be7c-2369-4dd9-bbc7-357998bdbdac",
+    "product_id": "40e52f48-9a3c-4249-bb13-87fa7f71e65b",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T21:29:08.411365+00:00"
+  },
+  {
+    "id": "36719238-bb63-4ef8-8b1f-f596cf016a2d",
+    "product_id": "40e52f48-9a3c-4249-bb13-87fa7f71e65b",
+    "from_unit": "Paquete 500 gramos",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:29:14.67549+00:00"
+  },
+  {
+    "id": "3b012b7e-6e47-48b1-bc53-e06a708ad5e2",
+    "product_id": "d22b8e3b-e879-4ab3-862f-f9e99b6c08ce",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.8,
+    "created_at": "2026-03-20T21:30:19.315933+00:00"
+  },
+  {
+    "id": "21d177ea-f561-4dcd-9104-c4adece66dbf",
+    "product_id": "95fb06e5-32a2-4552-bc5b-9dca0a584acb",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:31:49.490979+00:00"
+  },
+  {
+    "id": "09716a75-17af-4d36-b76f-85df47b46388",
+    "product_id": "95fb06e5-32a2-4552-bc5b-9dca0a584acb",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:31:57.926674+00:00"
+  },
+  {
+    "id": "3c68a28a-6619-4427-b6cb-34899c4a6000",
+    "product_id": "083e37c3-dc21-4591-9304-3c0edcee9120",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:33:44.729173+00:00"
+  },
+  {
+    "id": "74ff5938-29ea-4b9c-9e66-77115b5538d4",
+    "product_id": "083e37c3-dc21-4591-9304-3c0edcee9120",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:33:49.534001+00:00"
+  },
+  {
+    "id": "1e4a3a05-00d2-4ad6-9b7f-d7cce1d2e41f",
+    "product_id": "71c62e2f-a3da-49f3-bbce-b535524ab728",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:34:51.537164+00:00"
+  },
+  {
+    "id": "54eebb77-9f3c-4a08-8833-0f1cc28d2bb0",
+    "product_id": "fa6e87ad-1e84-4a4f-bb3b-5ae7ac073748",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:36:04.556653+00:00"
+  },
+  {
+    "id": "3bc4565e-334f-469f-a982-d4945c9b67f1",
+    "product_id": "fa6e87ad-1e84-4a4f-bb3b-5ae7ac073748",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:36:09.551348+00:00"
+  },
+  {
+    "id": "c49dfcb1-642a-491b-9568-e9e426afe6d7",
+    "product_id": "9f9afe91-6db2-42f0-be77-5ba1c482fcfc",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:38:40.539201+00:00"
+  },
+  {
+    "id": "a281b344-4903-480b-bb3f-467172d720e0",
+    "product_id": "9f9afe91-6db2-42f0-be77-5ba1c482fcfc",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:38:49.396578+00:00"
+  },
+  {
+    "id": "97190219-b357-4846-96e6-317ce4ef311a",
+    "product_id": "680fab7e-459b-477b-b840-0cb435b7f0b3",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.2,
+    "created_at": "2026-03-20T21:40:14.585053+00:00"
+  },
+  {
+    "id": "33089f96-cd41-4801-ab4b-4482b1397d32",
+    "product_id": "680fab7e-459b-477b-b840-0cb435b7f0b3",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:40:19.028886+00:00"
+  },
+  {
+    "id": "9ec4c21c-7b0a-4a6f-bb1e-39d68d1472e5",
+    "product_id": "ced6063c-8ae2-44d3-9102-ed548c5408ec",
+    "from_unit": "Atado",
+    "to_unit": "Kg",
+    "conversion_factor": 0.3,
+    "created_at": "2026-03-20T21:41:16.494792+00:00"
+  },
+  {
+    "id": "79ee7bd4-b186-4fdc-bf07-93a3d9fb89d1",
+    "product_id": "ced6063c-8ae2-44d3-9102-ed548c5408ec",
+    "from_unit": "Libra",
+    "to_unit": "Kg",
+    "conversion_factor": 0.5,
+    "created_at": "2026-03-20T21:41:20.806223+00:00"
+  },
+  {
+    "id": "0934fb05-ef7b-4e38-bea1-6f7584da2ed6",
+    "product_id": "cdaeef23-7b30-4f05-9256-682d279da7c3",
+    "from_unit": "Unidad",
+    "to_unit": "Kg",
+    "conversion_factor": 0.45,
+    "created_at": "2026-03-31T18:51:57.518185+00:00"
+  }
+]
