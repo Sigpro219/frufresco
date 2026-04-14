@@ -2,12 +2,14 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, X, Info } from 'lucide-react';
+import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
+import { format, differenceInDays } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface Purchase {
     product_id: string;
@@ -25,6 +27,7 @@ interface Product {
     unit_of_measure: string;
     keywords?: string;
     tags?: string[];
+    capabilities?: string[];
 }
 
 export default function CostMatrixPage() {
@@ -33,10 +36,60 @@ export default function CostMatrixPage() {
     const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Purchase[]>>({}); // { productId: [purchases] }
     const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
     const [categories, setCategories] = useState<string[]>([]);
-    const [avgWindow, setAvgWindow] = useState<number>(3); // Default: average of last 3 prices
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [showHelp, setShowHelp] = useState(false);
+    const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
+    const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
+    const [sortField, setSortField] = useState<'name' | 'smartCost' | 'trend' | null>(null);
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const [manualOverrides, setManualOverrides] = useState<Record<string, {manual_cost: number, expires_at: string}>>({});
     const isMounted = useRef(true);
+
+    const handleSaveManualCost = async (productId: string, cost: string) => {
+        if (!cost || isNaN(Number(cost))) return;
+        
+        try {
+            const { error } = await supabase
+                .from('commercial_overrides')
+                .upsert({ 
+                    product_id: productId, 
+                    manual_cost: Number(cost),
+                    updated_by: 'Admin',
+                    expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days
+                });
+
+            if (error) throw error;
+            
+            // Update local state
+            setManualOverrides(prev => ({
+                ...prev,
+                [productId]: { manual_cost: Number(cost), expires_at: new Date().toISOString() }
+            }));
+        } catch (err) {
+            console.error('Error saving manual cost:', err);
+            alert('Error al guardar el costo manual. Verifica si la tabla commercial_overrides ya existe.');
+        }
+    };
+
+    const handleSort = (field: 'name' | 'smartCost' | 'trend') => {
+        if (sortField === field) {
+            if (sortDir === 'asc') {
+                setSortDir('desc');
+            } else {
+                // Third click: reset to default (category grouping)
+                setSortField(null);
+                setSortDir('asc');
+            }
+        } else {
+            setSortField(field);
+            setSortDir('asc');
+        }
+    };
+
+    const SortIcon = ({ field }: { field: 'name' | 'smartCost' | 'trend' }) => {
+        if (sortField !== field) return <span style={{ opacity: 0.55, marginLeft: '5px', fontSize: '0.9rem' }}>↕</span>;
+        return <span style={{ marginLeft: '5px', color: '#2563EB', fontSize: '0.95rem', fontWeight: '900' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+    };
 
     useEffect(() => {
         isMounted.current = true;
@@ -49,6 +102,13 @@ export default function CostMatrixPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
+            // 0. Verify Auth Session first to provide clear error
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                console.warn('⚠️ No active session found. Redirecting to login might be needed.');
+                // We continue, as some tables might be public, but this is a likely cause of errors.
+            }
+
             // 1. Fetch products (Recursive to bypass 1000 limit)
             let allProducts: Product[] = [];
             let from = 0;
@@ -60,11 +120,16 @@ export default function CostMatrixPage() {
                     .from('products')
                     .select('*')
                     .eq('is_active', true)
+                    .eq('show_on_web', true)
                     .order('category', { ascending: true })
                     .order('name', { ascending: true })
                     .range(from, from + pageSize - 1);
 
-                if (pError) throw pError;
+                if (pError) {
+                    console.error('❌ Error fetching products:', pError);
+                    throw new Error(`Error en tabla de productos: ${pError.message || JSON.stringify(pError)}`);
+                }
+                
                 if (!chunk || chunk.length < pageSize) {
                     hasMore = false;
                 }
@@ -75,92 +140,176 @@ export default function CostMatrixPage() {
             if (!isMounted.current) return;
             setProducts(allProducts);
 
-            const productsData = allProducts; // For reference in next steps
+            const productsData = allProducts; 
 
             // Extract unique categories
             const cats = Array.from(new Set(productsData?.map((p: Product) => p.category) || [])).filter(Boolean) as string[];
             setCategories(['Todas', ...cats]);
 
-            // 2. Fetch conversions
-            const { data: convData, error: cError } = await supabase.from('product_conversions').select('*');
-            if (cError) {
-                logError('Matrix fetchData conversions', cError);
+            // 2. Fetch conversions (Non-blocking)
+            let convData: any[] = [];
+            try {
+                const { data, error: cError } = await supabase.from('product_conversions').select('*');
+                if (cError) logError('Matrix fetchData conversions', cError);
+                else convData = data || [];
+            } catch (ce) {
+                console.warn('Could not load conversions:', ce);
             }
+
             if (!isMounted.current) return;
 
-            // 3. Fetch last purchases (Recursive to bypass 1000 limit)
+            // 3. Fetch last purchases
             let allPurchases: Purchase[] = [];
-            let pFrom = 0;
-            let pHasMore = true;
-
-            while (pHasMore) {
+            try {
                 const { data: pChunk, error: iError } = await supabase
                     .from('purchases')
                     .select('product_id, unit_price, created_at, purchase_unit')
                     .order('created_at', { ascending: false })
-                    .range(pFrom, pFrom + pageSize - 1);
+                    .limit(5000); // 5k should be enough for last 8 per product
 
                 if (iError) throw iError;
-                if (!pChunk || pChunk.length < pageSize) {
-                    pHasMore = false;
-                }
-                if (pChunk) allPurchases = [...allPurchases, ...pChunk as unknown as Purchase[]];
-                pFrom += pageSize;
+                allPurchases = pChunk as unknown as Purchase[] || [];
+            } catch (pe: any) {
+                console.error('❌ Error fetching purchases:', pe);
             }
 
             const purchasesData = allPurchases;
+
+            // 3.5 Fetch Manual Overrides
+            try {
+                const { data: overData, error: overError } = await supabase
+                    .from('commercial_overrides')
+                    .select('product_id, manual_cost, expires_at');
+                
+                if (!overError && overData) {
+                    const overMap: Record<string, any> = {};
+                    overData.forEach(o => {
+                        overMap[o.product_id] = { manual_cost: o.manual_cost, expires_at: o.expires_at };
+                    });
+                    setManualOverrides(overMap);
+                }
+            } catch (e) {
+                console.warn('Overrides fetch skipped');
+            }
 
             if (!isMounted.current) return;
 
             // 4. Normalize and Group
             const historyMap: Record<string, Purchase[]> = {};
             
-            if (purchasesData) {
-                purchasesData.forEach((p: { product_id: string; unit_price: number; created_at: string; purchase_unit: string }) => {
-                    if (!p.product_id) return;
-                    if (!historyMap[p.product_id]) historyMap[p.product_id] = [];
-                    if (historyMap[p.product_id].length < 8) {
-                        // Normalization logic (Same as Quote Page)
-                        const product = productsData?.find((pd) => pd.id === p.product_id);
-                        let normalizedPrice = p.unit_price;
+            purchasesData.forEach((p: any) => {
+                if (!p.product_id) return;
+                if (!historyMap[p.product_id]) historyMap[p.product_id] = [];
+                
+                if (historyMap[p.product_id].length < 8) {
+                    const product = allProducts.find((pd) => pd.id === p.product_id);
+                    let normalizedPrice = Number(p.unit_price);
 
-                        if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
-                            const conv = (convData || []).find((c: { product_id: string; from_unit: string; to_unit: string }) => 
-                                c.product_id === p.product_id && 
-                                c.from_unit === p.purchase_unit && 
-                                c.to_unit === product.unit_of_measure
-                            );
-                            if (conv && conv.conversion_factor) {
-                                normalizedPrice = normalizedPrice / conv.conversion_factor;
-                            }
+                    if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
+                        const conv = (convData || []).find((c: any) => 
+                            c.product_id === p.product_id && 
+                            c.from_unit === p.purchase_unit && 
+                            c.to_unit === product.unit_of_measure
+                        );
+                        if (conv && conv.conversion_factor) {
+                            normalizedPrice = normalizedPrice / conv.conversion_factor;
                         }
-
-                        historyMap[p.product_id].push({
-                            ...p,
-                            normalized_price: normalizedPrice
-                        });
                     }
-                });
-            }
 
-            // Reverse each list so it's Oldest -> Newest 
+                    historyMap[p.product_id].push({
+                        ...p,
+                        normalized_price: normalizedPrice
+                    });
+                }
+            });
+
+            // Reverse for chronological order
             Object.keys(historyMap).forEach(pid => {
                 historyMap[pid].reverse();
             });
 
+            console.log('✅ Matrix Ready: History for', Object.keys(historyMap).length, 'products');
             setPurchaseHistory(historyMap);
 
-        } catch (err: unknown) {
+        } catch (err: any) {
             if (!isMounted.current) return;
+            // Enhanced logging for "empty" objects
+            const descriptiveError = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+            console.error('❌ Detailed Matrix Error:', descriptiveError, err);
             logError('Matrix fetchData', err);
         } finally {
             if (isMounted.current) setLoading(false);
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const d = new Date(dateString);
-        return d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
+
+    /**
+     * CI-Delta Algorithm: Adaptive Exponential Smoothing
+     * Rules: 
+     * 1. Time-Decay: Alpha decreases as data ages (> 7 days)
+     * 2. Perishability: Higher sensitivity for IS_PERISHABLE products
+     * 3. Volatility: Jump to Reactive mode if price spike > 10%
+     */
+    const calculateSmartCost = (productId: string) => {
+        const history = purchaseHistory[productId] || [];
+        if (history.length === 0) return 0;
+        
+        const sortedHistory = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const latest = sortedHistory[0];
+        const product = products.find(p => p.id === productId);
+        
+        const ageInDays = differenceInDays(new Date(), new Date(latest.created_at));
+        const isPerishable = product?.capabilities?.includes('IS_PERISHABLE');
+        
+        // Base Alpha logic
+        let alpha = 0.5;
+        if (isPerishable) alpha = 0.7; // More weight to the very latest pulse
+        
+        // Time-Decay penalty
+        if (ageInDays > 7) {
+            const penalty = Math.min(0.3, (ageInDays - 7) * 0.05); // Max penalty 0.3
+            alpha = Math.max(0.1, alpha - penalty);
+        }
+
+        // Volatility Spike Check
+        if (sortedHistory.length >= 2) {
+            const prev = sortedHistory[1];
+            const change = Math.abs((latest.normalized_price - prev.normalized_price) / prev.normalized_price);
+            if (change > 0.1) alpha = 0.8; // Trigger reactive mode
+        }
+
+        // Apply Smoothing: Ci = (Alpha * Pi) + ((1 - Alpha) * Ci-1)
+        // For simplicity in UI, we calculate based on the current window
+        let smartCost = latest.normalized_price;
+        if (sortedHistory.length >= 2) {
+            const prevPrice = sortedHistory[1].normalized_price;
+            smartCost = (alpha * latest.normalized_price) + ((1 - alpha) * prevPrice);
+        }
+
+        return smartCost;
+    };
+
+    const getHarvestStatus = (productId: string) => {
+        const history = purchaseHistory[productId] || [];
+        if (history.length < 5) return 'stable';
+        
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        
+        // Compare with same month last year (11-13 months back)
+        const lastYearSameMonth = history.filter(p => {
+            const d = new Date(p.created_at);
+            return d.getMonth() === currentMonth && differenceInDays(now, d) > 300;
+        });
+
+        if (lastYearSameMonth.length > 0) {
+            const avgLastYear = lastYearSameMonth.reduce((a, b) => a + b.normalized_price, 0) / lastYearSameMonth.length;
+            const currentAvg = history.slice(0, 3).reduce((a, b) => a + b.normalized_price, 0) / 3;
+            
+            if (currentAvg < avgLastYear * 0.9) return 'harvest'; // Buying opportunity!
+            if (currentAvg > avgLastYear * 1.1) return 'risk'; // Prices rising compared to last year
+        }
+        return 'stable';
     };
 
     const Sparkline = ({ data }: { data: { normalized_price: number; created_at: string }[] }) => {
@@ -245,15 +394,39 @@ export default function CostMatrixPage() {
         return matchesCategory && matchesSearch;
     });
 
+    // --- SORT ---
+    const sortedProducts = [...filteredProducts].sort((a, b) => {
+        if (!sortField) return 0;
+        const dir = sortDir === 'asc' ? 1 : -1;
+        if (sortField === 'name') return dir * a.name.localeCompare(b.name);
+        if (sortField === 'smartCost') return dir * (calculateSmartCost(a.id) - calculateSmartCost(b.id));
+        if (sortField === 'trend') {
+            const getTrend = (id: string) => {
+                const h = purchaseHistory[id];
+                if (!h || h.length < 2) return 0;
+                return ((h[h.length-1].normalized_price - h[0].normalized_price) / h[0].normalized_price) * 100;
+            };
+            return dir * (getTrend(a.id) - getTrend(b.id));
+        }
+        return 0;
+    });
+
     // --- DASHBOARD STATS ---
     const stats = (() => {
         let totalTrend = 0;
         let productsWithTrend = 0;
         let rising = 0;
         let falling = 0;
+        let pendingCost = 0;
+        let expiringSoon = 0;
+        const now = new Date();
 
         filteredProducts.forEach(p => {
             const history = purchaseHistory[p.id];
+            const smartCost = calculateSmartCost(p.id);
+            const override = manualOverrides[p.id];
+
+            // AI/Algorithm stats
             if (history && history.length >= 2) {
                 const first = history[0].normalized_price;
                 const last = history[history.length - 1].normalized_price;
@@ -264,13 +437,26 @@ export default function CostMatrixPage() {
                 if (last > first) rising++;
                 else if (last < first) falling++;
             }
+
+            // Commercial alerts stats
+            if (smartCost === 0 && !override) {
+                pendingCost++;
+            }
+
+            if (override && override.expires_at) {
+                const expiry = new Date(override.expires_at);
+                const daysLeft = (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24);
+                if (daysLeft <= 7) expiringSoon++;
+            }
         });
 
         return {
             avgTrend: productsWithTrend > 0 ? totalTrend / productsWithTrend : 0,
             rising,
             falling,
-            totalSKU: filteredProducts.length
+            totalSKU: filteredProducts.length,
+            pendingCost,
+            expiringSoon
         };
     })();
 
@@ -278,10 +464,7 @@ export default function CostMatrixPage() {
         const exportData = filteredProducts.map(p => {
             const history = purchaseHistory[p.id] || [];
             
-            // Calculate Average based on window
-            const lastNPurchases = history.slice(-avgWindow);
-            const sum = lastNPurchases.reduce((acc, curr) => acc + curr.normalized_price, 0);
-            const avg = lastNPurchases.length > 0 ? sum / lastNPurchases.length : 0;
+            const smartCost = calculateSmartCost(p.id);
             
             // Calculate Trend
             const first = history.length >= 2 ? history[0].normalized_price : 0;
@@ -291,16 +474,15 @@ export default function CostMatrixPage() {
             const row: Record<string, string | number | null> = {
                 'SKU': p.sku || 'N/A',
                 'PRODUCTO': p.name,
-                'CATEGORÍA': p.category,
+                'CATEGORÍA': CATEGORY_MAP[p.category] || p.category,
                 'UNIDAD BASE': p.unit_of_measure,
             };
 
-            // Add purchase columns (8 columns)
             for (let i = 0; i < 8; i++) {
                 row[`COMPRA ${i + 1}`] = history[i] ? Math.round(history[i].normalized_price) : null;
             }
 
-            row['COSTO PROMEDIO'] = avg > 0 ? Math.round(avg) : null;
+            row['COSTO INTELIGENTE'] = smartCost > 0 ? Math.round(smartCost) : null;
             row['TENDENCIA'] = trend !== 0 ? `${trend > 0 ? '+' : ''}${trend.toFixed(1)}%` : '0%';
 
             return row;
@@ -308,17 +490,16 @@ export default function CostMatrixPage() {
 
         const worksheet = XLSX.utils.json_to_sheet(exportData);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Matriz de Precios');
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Matriz de Costos Inteligente');
         
-        // Final filename with date
         const date = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(workbook, `Frubana_Matriz_Costos_${date}.xlsx`);
+        XLSX.writeFile(workbook, `FruFresco_Matriz_Inteligente_${date}.xlsx`);
     };
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
             <Navbar />
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ width: '98%', margin: '0 auto', padding: '2rem 4rem' }}>
                 
                 <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
@@ -326,27 +507,17 @@ export default function CostMatrixPage() {
                         <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0 0 0' }}>Matriz de Precios Históricos 📊</h1>
                         <p style={{ color: '#6B7280', margin: '0.2rem 0 0 0' }}>Historial, tendencia y SKUs de los últimos precios registrados.</p>
                     </div>
-
+                    
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Promediar últimos:</label>
-                            <select 
-                                value={avgWindow}
-                                onChange={(e) => setAvgWindow(Number(e.target.value))}
-                                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: '#F3F4F6', fontWeight: '700', color: '#111827' }}
-                            >
-                                {[2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n} precios</option>)}
-                            </select>
-                         </div>
-
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                             <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Categoría:</label>
                             <select 
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '700' }}
+                                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '700', minWidth: '150px' }}
                             >
-                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                <option value="Todas">Todas las Categorías</option>
+                                {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
                             </select>
                          </div>
                          
@@ -354,31 +525,59 @@ export default function CostMatrixPage() {
                             onClick={fetchData} 
                             style={{ padding: '0.8rem 1.2rem', borderRadius: '10px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: 'bold', cursor: 'pointer', alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                          >
-                            🔄 Actualizar
+                            🔄 Sincronizar
+                         </button>
+                         <button
+                            onClick={handleExport}
+                            style={{ padding: '0.8rem 1.2rem', borderRadius: '10px', border: '1px solid #10B981', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', cursor: 'pointer', alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                         >
+                            📊 Excel
                          </button>
                     </div>
                 </div>
 
                 {/* --- DASHBOARD LINE (Stats Bar) --- */}
                 {!loading && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
-                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
+                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Productos Analizados</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827' }}>{stats.totalSKU} <small style={{ fontSize: '0.8rem', color: '#9CA3AF', fontWeight: '500' }}>SKUs</small></span>
+                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827' }}>{stats.totalSKU}</span>
                         </div>
-                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Tendencia Global (AVG)</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: stats.avgTrend > 0 ? '#EF4444' : '#10B981', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: stats.avgTrend > 0 ? '#EF4444' : '#10B981' }}>
                                 {stats.avgTrend > 0 ? '▲' : '▼'} {Math.abs(stats.avgTrend).toFixed(1)}%
                             </span>
                         </div>
-                        <div style={{ backgroundColor: '#FEF2F2', padding: '1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <div style={{ backgroundColor: '#FEF2F2', padding: '1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B91C1C', textTransform: 'uppercase' }}>Costos en Alza</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#991B1B' }}>{stats.rising} <small style={{ fontSize: '0.8rem', color: '#F87171', fontWeight: '500' }}>Productos</small></span>
+                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#991B1B' }}>{stats.rising}</span>
                         </div>
-                        <div style={{ backgroundColor: '#F0FDF4', padding: '1.2rem', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <div style={{ backgroundColor: '#F0FDF4', padding: '1.2rem', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase' }}>Costos en Baja</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#166534' }}>{stats.falling} <small style={{ fontSize: '0.8rem', color: '#4ADE80', fontWeight: '500' }}>Oportunidades</small></span>
+                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#166534' }}>{stats.falling}</span>
+                        </div>
+                        <div style={{ 
+                            backgroundColor: stats.pendingCost > 0 ? '#FFF7ED' : 'white', 
+                            padding: '1.2rem', 
+                            borderRadius: '12px', 
+                            border: stats.pendingCost > 0 ? '1px solid #FED7AA' : '1px solid #E5E7EB', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: '0.3rem', 
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)', 
+                            alignItems: 'center'
+                        }}>
+                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#C2410C', textTransform: 'uppercase' }}>Alertas Comerciales</span>
+                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline' }}>
+                                <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#9A3412' }} title="Sin costo definido">{stats.pendingCost}</div>
+                                {stats.expiringSoon > 0 && (
+                                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#EA580C', backgroundColor: '#FFEDD5', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                                        ⌛ {stats.expiringSoon}
+                                    </div>
+                                )}
+                             </div>
+                             <div style={{ fontSize: '0.55rem', color: '#EA580C', fontWeight: '700' }}>{stats.pendingCost > 0 ? 'SKUS POR DEFINIR' : 'COSTOS AL DÍA'}</div>
                         </div>
                     </div>
                 )}
@@ -469,19 +668,7 @@ export default function CostMatrixPage() {
                     </div>
                 </div>
 
-                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem' }}>
-                    {searchTerm && (
-                        <div style={{ marginRight: 'auto', fontSize: '0.9rem', color: '#6B7280', fontWeight: '600' }}>
-                            Resultados para: <span style={{ color: '#2563EB' }}>&quot;{searchTerm}&quot;</span> ({filteredProducts.length} encontrados)
-                        </div>
-                    )}
-                    <button 
-                        onClick={handleExport}
-                        style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', border: '1px solid #10B981', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}
-                    >
-                        📊 Exportar a Excel
-                    </button>
-                </div>
+
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '5rem', color: '#6B7280' }}>Cargando historial de precios...</div>
@@ -497,16 +684,23 @@ export default function CostMatrixPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
-                                        <th style={{ 
-                                            padding: '1.2rem 1.5rem', 
-                                            minWidth: '250px', 
-                                            position: 'sticky', 
-                                            left: 0, 
-                                            backgroundColor: '#F9FAFB', 
-                                            zIndex: 10,
-                                            boxShadow: '2px 0 5px rgba(0,0,0,0.02)'
-                                        }}>
-                                            <div style={{ fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900' }}>PRODUCTO / CATEGORÍA</div>
+                                        <th 
+                                            onClick={() => handleSort('name')}
+                                            style={{ 
+                                                padding: '1.2rem 1.5rem', 
+                                                minWidth: '250px', 
+                                                position: 'sticky', 
+                                                left: 0, 
+                                                backgroundColor: '#F9FAFB', 
+                                                zIndex: 10,
+                                                boxShadow: '2px 0 5px rgba(0,0,0,0.02)',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>
+                                                PRODUCTO / CATEGORÍA <SortIcon field="name" />
+                                            </div>
                                         </th>
                                         {/* Column Headers for 8 purchases */}
                                         {[...Array(8)].map((_, i) => (
@@ -515,36 +709,52 @@ export default function CostMatrixPage() {
                                             </th>
                                         ))}
 
-                                        <th style={{ 
-                                            padding: '1.2rem', 
-                                            minWidth: '130px', 
-                                            borderLeft: '2px solid #E5E7EB',
-                                            backgroundColor: '#F0FDF4',
-                                            textAlign: 'center'
-                                        }}>
-                                            <div style={{ fontSize: '0.7rem', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900' }}>COSTO PROMEDIO</div>
-                                            <div style={{ fontSize: '0.6rem', color: '#22C55E', fontWeight: '800' }}>ÚLTIMOS {avgWindow}</div>
+                                        <th 
+                                            onClick={() => handleSort('smartCost')}
+                                            style={{ 
+                                                padding: '1.2rem', 
+                                                minWidth: '130px', 
+                                                borderLeft: '2px solid #E5E7EB',
+                                                backgroundColor: '#F0FDF4',
+                                                textAlign: 'center',
+                                                verticalAlign: 'middle',
+                                                cursor: 'pointer',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                                                <div style={{ fontSize: '0.75rem', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center' }}>COSTO <SortIcon field="smartCost" /></div>
+                                            </div>
                                         </th>
 
-                                        <th style={{ 
-                                            padding: '1.2rem', 
-                                            minWidth: '160px', 
-                                            borderLeft: '2px solid #E5E7EB',
-                                            position: 'sticky',
-                                            right: 0,
-                                            backgroundColor: '#F9FAFB',
-                                            zIndex: 10,
-                                            boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
-                                        }}>
-                                            <div style={{ fontSize: '0.75rem', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900' }}>TENDENCIA</div>
+                                        <th 
+                                            onClick={() => handleSort('trend')}
+                                            style={{ 
+                                                padding: '1.2rem', 
+                                                minWidth: '160px', 
+                                                borderLeft: '2px solid #E5E7EB',
+                                                position: 'sticky',
+                                                right: 0,
+                                                backgroundColor: '#F9FAFB',
+                                                zIndex: 10,
+                                                boxShadow: '-2px 0 5px rgba(0,0,0,0.02)',
+                                                cursor: 'pointer',
+                                                userSelect: 'none',
+                                                textAlign: 'center',
+                                                verticalAlign: 'middle'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '0.75rem', color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>TENDENCIA <SortIcon field="trend" /></div>
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredProducts.map((p, idx) => {
+                                    {sortedProducts.map((p, idx) => {
                                         const prevProduct = idx > 0 ? filteredProducts[idx - 1] : null;
                                         const showCategoryHeader = !prevProduct || prevProduct.category !== p.category;
                                         const history = purchaseHistory[p.id] || [];
+                                        const smartCost = calculateSmartCost(p.id);
+                                        const harvestStatus = getHarvestStatus(p.id);
 
                                         return (
                                             <Fragment key={p.id}>
@@ -555,7 +765,11 @@ export default function CostMatrixPage() {
                                                         </td>
                                                     </tr>
                                                 )}
-                                                <tr style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}>
+                                                <tr 
+                                                    style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                >
                                                     <td style={{ 
                                                         padding: '1rem 1.5rem', 
                                                         position: 'sticky', 
@@ -564,7 +778,11 @@ export default function CostMatrixPage() {
                                                         zIndex: 5,
                                                         boxShadow: '2px 0 5px rgba(0,0,0,0.02)'
                                                     }}>
-                                                        <div style={{ fontWeight: '800', color: '#111827', fontSize: '1rem' }}>{p.name}</div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <div style={{ fontWeight: '800', color: '#111827', fontSize: '1rem' }}>{p.name}</div>
+                                                            {harvestStatus === 'harvest' && <div title="Temporada de Cosecha: Alta oferta, precios bajos" style={{ color: '#10B981' }}><Leaf size={16} /></div>}
+                                                            {harvestStatus === 'risk' && <div title="Alerta de Escasez: Históricamente los precios suben este mes" style={{ color: '#EF4444' }}><ShieldAlert size={16} /></div>}
+                                                        </div>
                                                         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.3rem' }}>
                                                             <span style={{ 
                                                                 fontSize: '0.7rem', 
@@ -613,7 +831,7 @@ export default function CostMatrixPage() {
                                                                                 )}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: 'bold' }}>
-                                                                                {formatDate(purchase.created_at)}
+                                                                                {format(new Date(purchase.created_at), 'dd MMM', { locale: es })}
                                                                             </div>
                                                                         </div>
                                                                     ) : (
@@ -624,32 +842,62 @@ export default function CostMatrixPage() {
                                                         });
                                                     })()}
 
-                                                    {/* NEW: Smart Average Cost Column */}
-                                                    {(() => {
-                                                        const lastNPurchases = history.slice(-avgWindow);
-                                                        const sum = lastNPurchases.reduce((acc, curr) => acc + curr.normalized_price, 0);
-                                                        const avg = lastNPurchases.length > 0 ? sum / lastNPurchases.length : 0;
-                                                        return (
-                                                            <td style={{ 
-                                                                padding: '1rem', 
-                                                                borderLeft: '2px solid #E5E7EB', 
-                                                                textAlign: 'center',
-                                                                backgroundColor: '#F0FDF4'
-                                                            }}>
-                                                                {avg > 0 ? (
-                                                                    <div style={{ 
-                                                                        fontWeight: '900', 
-                                                                        color: '#166534', 
-                                                                        fontSize: '1.1rem'
-                                                                    }}>
-                                                                        ${Math.round(avg).toLocaleString()}
-                                                                    </div>
-                                                                ) : (
-                                                                    <span style={{ color: '#D1D5DB' }}>—</span>
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    })()}
+                                                    {/* Smart Average Cost Column */}
+                                                    <td style={{ 
+                                                        padding: '1rem', 
+                                                        borderLeft: '2px solid #E5E7EB', 
+                                                        textAlign: 'center',
+                                                        backgroundColor: manualOverrides[p.id] ? '#EFF6FF' : '#F0FDF4',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        minHeight: '70px',
+                                                        position: 'relative'
+                                                    }}>
+                                                        
+                                                        {smartCost > 0 ? (
+                                                            <div style={{ fontWeight: '900', color: '#166534', fontSize: '1.2rem' }}>
+                                                                ${Math.round(smartCost).toLocaleString()}
+                                                            </div>
+                                                        ) : manualOverrides[p.id] ? (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'center' }}>
+                                                                <div style={{ fontWeight: '900', color: '#1E40AF', fontSize: '1.2rem' }}>
+                                                                    ${Math.round(manualOverrides[p.id].manual_cost).toLocaleString()}
+                                                                </div>
+                                                                <span style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>✍️ Manual</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+                                                                <input 
+                                                                    type="number"
+                                                                    placeholder="Set cost"
+                                                                    onClick={(e) => e.stopPropagation()} 
+                                                                    onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') {
+                                                                            e.stopPropagation();
+                                                                            handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        width: '90px',
+                                                                        padding: '0.4rem',
+                                                                        borderRadius: '6px',
+                                                                        border: '2px solid #D1D5DB',
+                                                                        textAlign: 'center',
+                                                                        fontSize: '0.9rem',
+                                                                        fontWeight: '700',
+                                                                        color: '#1E40AF',
+                                                                        outline: 'none',
+                                                                        backgroundColor: 'white',
+                                                                        position: 'relative',
+                                                                        zIndex: 20
+                                                                    }}
+                                                                />
+                                                                <span style={{ fontSize: '0.55rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>Filtro Sin Costo</span>
+                                                            </div>
+                                                        )}
+                                                    </td>
 
                                                     {/* Trend Chart column - STICKY to the right */}
                                                     <td style={{ 
@@ -673,11 +921,139 @@ export default function CostMatrixPage() {
                     </div>
                 )}
 
+                {/* --- SMART METHODOLOGY MODAL --- */}
+                {isSmartModalOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '1rem',
+                        backdropFilter: 'blur(4px)'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '24px',
+                            maxWidth: '900px',
+                            width: '100%',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            padding: '2.5rem',
+                            position: 'relative',
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                        }}>
+                            <button 
+                                onClick={() => {
+                                    setIsSmartModalOpen(false);
+                                    setSelectedProductForModal(null);
+                                }}
+                                style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                            >
+                                <X size={30} />
+                            </button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                                <div style={{ backgroundColor: '#DBEAFE', padding: '1rem', borderRadius: '16px', color: '#1E40AF' }}>
+                                    <Brain size={40} />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.8rem', fontWeight: '900', color: '#111827' }}>Protocolo CI-Delta (Costo Inteligente)</h2>
+                                    <p style={{ margin: 0, color: '#6B7280', fontWeight: '600' }}>Metodología de Suavizado Exponencial Adaptativo v2.0</p>
+                                </div>
+                            </div>
+
+                            {selectedProductForModal && (
+                                <div style={{ marginBottom: '2rem', padding: '1.2rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+                                    <div style={{ fontWeight: '800', color: '#374151' }}>Análisis Maestro para: <span style={{ color: '#2563EB' }}>{selectedProductForModal.name}</span></div>
+                                    <div style={{ fontSize: '0.85rem', color: '#6B7280' }}>SKU: {selectedProductForModal.sku} | Cat: {CATEGORY_MAP[selectedProductForModal.category]}</div>
+                                </div>
+                            )}
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2.5rem' }}>
+                                <div>
+                                    <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}>
+                                        <Clock size={20} color="#3B82F6" /> 1. Factor de Frescura (Time-Decay)
+                                    </h4>
+                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6' }}>
+                                        El sistema evalúa la antigüedad de la última compra. Si el dato tiene menos de 7 días, se le otorga confianza plena (Alpha = 0.5). 
+                                        A partir del día 8, el sistema aplica una <b>degradación de confianza del 5% diario</b> para proteger el margen contra la inflación acumulada.
+                                    </p>
+
+                                    <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem', marginTop: '1.5rem' }}>
+                                        <Cpu size={20} color="#10B981" /> 2. Modo Reactivo vs. Estable
+                                    </h4>
+                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6' }}>
+                                        Si detectamos un cambio brusco (mayor al 10%) entre las últimas dos compras, el algoritmo "espabila" y sube su sensibilidad (Alpha = 0.8) 
+                                        para recalibrar el costo de inmediato. En mercados estables, mantiene la inercia para evitar ruido.
+                                    </p>
+                                </div>
+
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
+                                    <h4 style={{ color: '#111827', fontWeight: '900', textAlign: 'center', marginBottom: '1rem' }}>Impacto en la Curva CI</h4>
+                                    {/* SVG REPRESENTATION OF THE SMOOTHING */}
+                                    <div style={{ height: '160px', width: '100%', position: 'relative' }}>
+                                        <svg width="100%" height="100%" viewBox="0 0 100 50">
+                                            {/* Reference Line */}
+                                            <line x1="0" y1="40" x2="100" y2="40" stroke="#E2E8F0" strokeWidth="0.5" />
+                                            {/* Raw Price Line (Jagged) */}
+                                            <path d="M 0 40 L 20 10 L 40 45 L 60 15 L 80 40 L 100 20" fill="none" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="2" />
+                                            {/* Smart Cost Line (Smooth) */}
+                                            <path d="M 0 40 Q 20 20, 40 30 Q 60 20, 80 30 T 100 25" fill="none" stroke="#3B82F6" strokeWidth="2.5" />
+                                            
+                                            <circle cx="100" cy="25" r="3" fill="#3B82F6" />
+                                        </svg>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 'bold', color: '#64748B' }}>
+                                                <div style={{ width: '10px', height: '2px', borderBottom: '2px dashed #CBD5E1' }}></div> Precio Real
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 'bold', color: '#3B82F6' }}>
+                                                <div style={{ width: '10px', height: '3px', backgroundColor: '#3B82F6' }}></div> Costo Smart
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic' }}>
+                                        "Promedio Ponderado por relevancia temporal y volatilidad de mercado."
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2rem', borderTop: '1px solid #F1F5F9', paddingTop: '2rem' }}>
+                                <div>
+                                    <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}>
+                                        <Sun size={20} color="#F59E0B" /> 3. Agente de Cosecha (Seasonality)
+                                    </h4>
+                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6' }}>
+                                        El CI-Delta analiza 15 meses de historia para detectar ciclos de abundancia. 
+                                        Si el costo actual es un 10% menor al histórico del mismo mes (Año anterior), 
+                                        el sistema marca el producto como <b>"Temporada de Cosecha"</b> para priorizar su aprovisionamiento.
+                                    </p>
+                                </div>
+                                <div style={{ backgroundColor: '#FFF7ED', padding: '1rem', borderRadius: '12px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Estatus Peritaje Comercial</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#C2410C', fontWeight: '800' }}>
+                                        <ShieldAlert size={20} /> Auditable para Revisoría
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: '#9A3412', marginTop: '0.4rem' }}>Basado en modelo de Holt-Winters simplificado para fluctuación local.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ marginTop: '2rem', backgroundColor: '#EFF6FF', padding: '1.5rem', borderRadius: '12px', border: '1px solid #DBEAFE' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#1E40AF', fontWeight: '800' }}>💡 Sobre esta matriz</h3>
-                    <p style={{ margin: '0.5rem 0 0 0', color: '#3B82F6', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                        Esta vista permite a los comerciales ver rápidamente qué precios se han ofrecido anteriormente. 
-                        Es ideal para mantener consistencia en las ofertas y detectar variaciones de precios entre clientes.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.5rem' }}>
+                        <Brain size={24} color="#1E40AF" />
+                        <h3 style={{ margin: 0, fontSize: '1rem', color: '#1E40AF', fontWeight: '800' }}>Dashboard de Inteligencia Comercial Delta</h3>
+                    </div>
+                    <p style={{ margin: 0, color: '#3B82F6', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Esta matriz no utiliza promedios simples. El costo que visualizas es el resultado del <b>Protocolo CI-Delta</b>, 
+                        que calibra automáticamente la sensibilidad del precio según la frescura del dato y la volatilidad del SKU.
                     </p>
                 </div>
             </div>

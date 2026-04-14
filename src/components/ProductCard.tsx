@@ -10,6 +10,7 @@ import QuickViewModal from './QuickViewModal';
 export default function ProductCard({ product }: { product: Product }) {
     const [isHovered, setIsHovered] = useState(false);
     const [showQuickView, setShowQuickView] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
 
     const handleQuickViewClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -38,19 +39,34 @@ export default function ProductCard({ product }: { product: Product }) {
             >
                 {/* IMAGE HEADER - Link specifically the image */}
                 <Link href={`/products/${product.id}`} style={{ display: 'block', position: 'relative', height: '220px', width: '100%', backgroundColor: '#f9fafb', overflow: 'hidden' }}>
+                    
+                    {/* SKELETON LOADER (Shimmer) */}
+                    {!imageLoaded && product.image_url && (
+                        <div className="shimmer" style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            zIndex: 2
+                        }} />
+                    )}
+
                     {product.image_url ? (
                         <Image
                             src={product.image_url}
                             alt={product.name}
                             fill
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            quality={60} // Calidad optimizada para miniaturas
+                            quality={75} 
+                            onLoadingComplete={() => setImageLoaded(true)}
                             style={{ 
                                 objectFit: 'cover',
-                                transition: 'transform 0.8s cubic-bezier(0.2, 0, 0.2, 1)',
-                                transform: isHovered ? 'scale(1.15)' : 'scale(1)'
+                                transition: 'transform 0.8s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.5s ease-in-out',
+                                transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                opacity: imageLoaded ? 1 : 0
                             }}
-                            priority={false} // Lazy load by default
+                            priority={false} 
                         />
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', backgroundColor: '#f3f4f6', color: 'var(--primary)', opacity: 0.3 }}>
@@ -115,7 +131,6 @@ export default function ProductCard({ product }: { product: Product }) {
                         zIndex: 10
                     }}>
                         {product.tags?.map((tag, i) => {
-                            // Colores según el tag (lógica simple)
                             const isPromo = tag.toLowerCase().includes('oferta') || tag.toLowerCase().includes('descuento');
                             const isFresh = tag.toLowerCase().includes('fresco') || tag.toLowerCase().includes('viva');
                             
