@@ -43,18 +43,22 @@ export default function CostMatrixPage() {
     const [sortField, setSortField] = useState<'name' | 'smartCost' | 'trend' | null>(null);
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [manualOverrides, setManualOverrides] = useState<Record<string, {manual_cost: number, expires_at: string}>>({});
+    const [effectiveCosts, setEffectiveCosts] = useState<Record<string, number>>({});
+    const [user, setUser] = useState<any>(null);
+    const [savingId, setSavingId] = useState<string | null>(null);
     const isMounted = useRef(true);
 
     const handleSaveManualCost = async (productId: string, cost: string) => {
         if (!cost || isNaN(Number(cost))) return;
         
+        setSavingId(productId);
         try {
             const { error } = await supabase
                 .from('commercial_overrides')
                 .upsert({ 
                     product_id: productId, 
                     manual_cost: Number(cost),
-                    updated_by: 'Admin',
+                    updated_by: user?.email || 'Admin',
                     expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days
                 });
 
@@ -65,9 +69,19 @@ export default function CostMatrixPage() {
                 ...prev,
                 [productId]: { manual_cost: Number(cost), expires_at: new Date().toISOString() }
             }));
+            setEffectiveCosts(prev => ({
+                ...prev,
+                [productId]: Number(cost)
+            }));
+            
+            // Clear feedback after 1s
+            setTimeout(() => {
+                if (isMounted.current) setSavingId(null);
+            }, 1000);
         } catch (err) {
             console.error('Error saving manual cost:', err);
-            alert('Error al guardar el costo manual. Verifica si la tabla commercial_overrides ya existe.');
+            // Non-blocking logError instead of alert
+            logError('Matrix SaveManualCost', err);
         }
     };
 
@@ -104,9 +118,10 @@ export default function CostMatrixPage() {
         try {
             // 0. Verify Auth Session first to provide clear error
             const { data: { session } } = await supabase.auth.getSession();
+            if (isMounted.current) setUser(session?.user || null);
+            
             if (!session) {
-                console.warn('⚠️ No active session found. Redirecting to login might be needed.');
-                // We continue, as some tables might be public, but this is a likely cause of errors.
+                console.warn('⚠️ No active session found. Some features like saving might fail.');
             }
 
             // 1. Fetch products (Recursive to bypass 1000 limit)
@@ -231,6 +246,28 @@ export default function CostMatrixPage() {
             console.log('✅ Matrix Ready: History for', Object.keys(historyMap).length, 'products');
             setPurchaseHistory(historyMap);
 
+            // 5. Pre-calculate effective costs for performance
+            const costMap: Record<string, number> = {};
+            allProducts.forEach(p => {
+                const history = historyMap[p.id] || [];
+                let smart = 0;
+                if (history.length > 0) {
+                    const sortedH = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                    const latest = sortedH[0];
+                    let alpha = 0.5;
+                    if (p.capabilities?.includes('IS_PERISHABLE')) alpha = 0.7;
+                    const age = differenceInDays(new Date(), new Date(latest.created_at));
+                    if (age > 7) alpha = Math.max(0.1, alpha - Math.min(0.3, (age - 7) * 0.05));
+                    if (sortedH.length >= 2) {
+                        if (Math.abs((latest.normalized_price - sortedH[1].normalized_price) / sortedH[1].normalized_price) > 0.1) alpha = 0.8;
+                    }
+                    smart = sortedH.length >= 2 ? (alpha * latest.normalized_price) + ((1 - alpha) * sortedH[1].normalized_price) : latest.normalized_price;
+                }
+                const manual = overMap[p.id]?.manual_cost;
+                costMap[p.id] = smart > 0 ? smart : (manual || 0);
+            });
+            setEffectiveCosts(costMap);
+
         } catch (err: any) {
             if (!isMounted.current) return;
             // Enhanced logging for "empty" objects
@@ -289,6 +326,13 @@ export default function CostMatrixPage() {
         return smartCost;
     };
 
+    const getEffectiveCost = (productId: string) => {
+        const smart = calculateSmartCost(productId);
+        if (smart > 0) return smart;
+        const manual = manualOverrides[productId]?.manual_cost;
+        return manual || 0;
+    };
+
     const getHarvestStatus = (productId: string) => {
         const history = purchaseHistory[productId] || [];
         if (history.length < 5) return 'stable';
@@ -329,12 +373,12 @@ export default function CostMatrixPage() {
 
         const pathData = `M ${points.map(p => `${p.x} ${p.y}`).join(' L ')}`;
         
-        // Trend calculation
+        // Trend calculation (Harden against 0)
         const first = prices[0];
         const last = prices[prices.length - 1];
-        const trendPercent = ((last - first) / first) * 100;
+        const trendPercent = first > 0 ? ((last - first) / first) * 100 : 0;
         const isUp = last > first;
-        const isNeutral = last === first;
+        const isNeutral = last === first || Math.abs(trendPercent) < 0.1;
 
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center' }}>
@@ -399,7 +443,7 @@ export default function CostMatrixPage() {
         if (!sortField) return 0;
         const dir = sortDir === 'asc' ? 1 : -1;
         if (sortField === 'name') return dir * a.name.localeCompare(b.name);
-        if (sortField === 'smartCost') return dir * (calculateSmartCost(a.id) - calculateSmartCost(b.id));
+        if (sortField === 'smartCost') return dir * ((effectiveCosts[a.id] || 0) - (effectiveCosts[b.id] || 0));
         if (sortField === 'trend') {
             const getTrend = (id: string) => {
                 const h = purchaseHistory[id];
@@ -430,7 +474,7 @@ export default function CostMatrixPage() {
             if (history && history.length >= 2) {
                 const first = history[0].normalized_price;
                 const last = history[history.length - 1].normalized_price;
-                const trend = ((last - first) / first) * 100;
+                const trend = first > 0 ? ((last - first) / first) * 100 : 0;
                 
                 totalTrend += trend;
                 productsWithTrend++;
@@ -890,35 +934,38 @@ export default function CostMatrixPage() {
                                                                 <span style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>✍️ Manual</span>
                                                             </div>
                                                         ) : (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
-                                                                <input 
-                                                                    type="number"
-                                                                    placeholder="Set cost"
-                                                                    onClick={(e) => e.stopPropagation()} 
-                                                                    onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') {
-                                                                            e.stopPropagation();
-                                                                            handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
-                                                                        }
-                                                                    }}
-                                                                    style={{
-                                                                        width: '90px',
-                                                                        padding: '0.4rem',
-                                                                        borderRadius: '6px',
-                                                                        border: '2px solid #D1D5DB',
-                                                                        textAlign: 'center',
-                                                                        fontSize: '0.9rem',
-                                                                        fontWeight: '700',
-                                                                        color: '#1E40AF',
-                                                                        outline: 'none',
-                                                                        backgroundColor: 'white',
-                                                                        position: 'relative',
-                                                                        zIndex: 20
-                                                                    }}
-                                                                />
-                                                                <span style={{ fontSize: '0.55rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>Filtro Sin Costo</span>
-                                                            </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+                                                                        <input 
+                                                                            type="number"
+                                                                            placeholder="Set cost"
+                                                                            onClick={(e) => e.stopPropagation()} 
+                                                                            onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') {
+                                                                                    e.stopPropagation();
+                                                                                    handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
+                                                                                }
+                                                                            }}
+                                                                            style={{
+                                                                                width: '90px',
+                                                                                padding: '0.4rem',
+                                                                                borderRadius: '6px',
+                                                                                border: savingId === p.id ? '2px solid #10B981' : '2px solid #D1D5DB',
+                                                                                textAlign: 'center',
+                                                                                fontSize: '0.9rem',
+                                                                                fontWeight: '700',
+                                                                                color: '#1E40AF',
+                                                                                outline: 'none',
+                                                                                backgroundColor: savingId === p.id ? '#F0FDF4' : 'white',
+                                                                                position: 'relative',
+                                                                                zIndex: 20,
+                                                                                transition: 'all 0.3s ease'
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: '0.55rem', color: savingId === p.id ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                            {savingId === p.id ? '✓ Guardado' : 'Filtro Sin Costo'}
+                                                                        </span>
+                                                                    </div>
                                                         )}
                                                     </td>
 
@@ -1020,7 +1067,7 @@ export default function CostMatrixPage() {
                                 <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
                                     <h4 style={{ color: '#111827', fontWeight: '900', textAlign: 'center', marginBottom: '1rem' }}>Impacto en la Curva CI</h4>
                                     {/* SVG REPRESENTATION OF THE SMOOTHING */}
-                                    <div style={{ height: '160px', width: '100%', position: 'relative' }}>
+                                    <div style={{ height: '140px', width: '100%', position: 'relative' }}>
                                         <svg width="100%" height="100%" viewBox="0 0 100 50">
                                             {/* Reference Line */}
                                             <line x1="0" y1="40" x2="100" y2="40" stroke="#E2E8F0" strokeWidth="0.5" />
@@ -1031,16 +1078,16 @@ export default function CostMatrixPage() {
                                             
                                             <circle cx="100" cy="25" r="3" fill="#3B82F6" />
                                         </svg>
-                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 'bold', color: '#64748B' }}>
-                                                <div style={{ width: '10px', height: '2px', borderBottom: '2px dashed #CBD5E1' }}></div> Precio Real
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 'bold', color: '#3B82F6' }}>
-                                                <div style={{ width: '10px', height: '3px', backgroundColor: '#3B82F6' }}></div> Costo Smart
-                                            </div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid #F1F5F9' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748B' }}>
+                                            <div style={{ width: '12px', height: '0px', borderBottom: '2px dashed #CBD5E1' }}></div> Precio Real
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', fontWeight: 'bold', color: '#3B82F6' }}>
+                                            <div style={{ width: '12px', height: '3px', backgroundColor: '#3B82F6' }}></div> Costo Smart
                                         </div>
                                     </div>
-                                    <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic' }}>
+                                    <div style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.85rem', color: '#64748B', fontStyle: 'italic', lineHeight: '1.3' }}>
                                         "Promedio Ponderado por relevancia temporal y volatilidad de mercado."
                                     </div>
                                 </div>
@@ -1051,18 +1098,28 @@ export default function CostMatrixPage() {
                                     <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}>
                                         <Sun size={20} color="#F59E0B" /> 3. Agente de Cosecha (Seasonality)
                                     </h4>
-                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6' }}>
+                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6', marginBottom: '1.5rem' }}>
                                         El CI-Delta analiza 15 meses de historia para detectar ciclos de abundancia. 
                                         Si el costo actual es un 10% menor al histórico del mismo mes (Año anterior), 
                                         el sistema marca el producto como <b>"Temporada de Cosecha"</b> para priorizar su aprovisionamiento.
                                     </p>
+
+                                    <h4 style={{ color: '#111827', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}>
+                                        <ShieldAlert size={20} color="#EF4444" /> 4. Peritaje y Vigencia Manual
+                                    </h4>
+                                    <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: '1.6' }}>
+                                        Cuando no se recibe señal de precio (compras) por más de <b>60 días</b>, el sistema requiere un peritaje manual para garantizar la precisión comercial. 
+                                        Toda entrada manual tiene una <b>vigencia de 60 días</b> antes de solicitar una nueva validación.
+                                    </p>
                                 </div>
-                                <div style={{ backgroundColor: '#FFF7ED', padding: '1rem', borderRadius: '12px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Estatus Peritaje Comercial</div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#C2410C', fontWeight: '800' }}>
-                                        <ShieldAlert size={20} /> Auditable para Revisoría
+                                <div style={{ backgroundColor: '#FFF7ED', padding: '1.5rem', borderRadius: '12px', border: '1px solid #FFEDD5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', marginBottom: '0.8rem' }}>Estatus Peritaje Comercial</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#C2410C', fontWeight: '800', fontSize: '1.1rem' }}>
+                                        <ShieldAlert size={24} /> Auditable para Revisoría
                                     </div>
-                                    <div style={{ fontSize: '0.7rem', color: '#9A3412', marginTop: '0.4rem' }}>Basado en modelo de Holt-Winters simplificado para fluctuación local.</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#9A3412', marginTop: '0.8rem', lineHeight: '1.4' }}>
+                                        Basado en el modelo de Holt-Winters simplificado. Las señales manuales se integran con un peso prioritario sobre la inercia del algoritmo.
+                                    </div>
                                 </div>
                             </div>
                         </div>

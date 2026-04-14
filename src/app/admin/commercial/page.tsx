@@ -33,6 +33,7 @@ interface DashboardStats {
 
 export default function CommercialDashboard() {
     const [activeMainTab, setActiveMainTab] = useState('dashboard');
+    const [trendView, setTrendView] = useState<'alzas' | 'bajas'>('alzas');
     const [stats, setStats] = useState<DashboardStats>({
         topTrends: [],
         topModels: [],
@@ -93,9 +94,7 @@ export default function CommercialDashboard() {
                 const trend = ((last - first) / first) * 100;
                 return { id: p.id, name: p.name, sku: p.sku, trend, lastPrice: last };
             }) || [])
-            .filter((t): t is TrendItem => t !== null && t.trend > 0)
-            .sort((a, b) => b.trend - a.trend)
-            .slice(0, 10);
+            .filter((t): t is TrendItem => t !== null && Math.abs(t.trend) > 0.1);
 
             // 4. Inventory Insights (Connected to Store/Ops)
             const inventoryStats = { lowStockItems: 0, totalValue: 0, activeAudits: 0 };
@@ -178,6 +177,11 @@ export default function CommercialDashboard() {
         }
     ];
 
+    const displayTrends = stats.topTrends
+        .filter(t => trendView === 'alzas' ? t.trend > 0 : t.trend < 0)
+        .sort((a, b) => trendView === 'alzas' ? b.trend - a.trend : a.trend - b.trend)
+        .slice(0, 10);
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
             <Navbar />
@@ -188,7 +192,7 @@ export default function CommercialDashboard() {
                     <button 
                         onClick={() => setActiveMainTab('dashboard')}
                         style={{
-                            padding: '1.2rem 0',
+                            padding: '1rem 0',
                             border: 'none',
                             background: 'transparent',
                             color: activeMainTab === 'dashboard' ? '#0F172A' : '#64748B',
@@ -207,7 +211,7 @@ export default function CommercialDashboard() {
                     <button 
                         onClick={() => setActiveMainTab('clients')}
                         style={{
-                            padding: '1.2rem 0',
+                            padding: '1rem 0',
                             border: 'none',
                             background: 'transparent',
                             color: activeMainTab === 'clients' ? '#0F172A' : '#64748B',
@@ -227,39 +231,75 @@ export default function CommercialDashboard() {
             </div>
 
             {activeMainTab === 'dashboard' ? (
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 1rem' }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem 1rem' }}>
 
-                <div style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-1px' }}>
                             Gestión Comercial
                         </h1>
-                        <p style={{ fontSize: '1.1rem', color: '#64748B', marginTop: '0.5rem' }}>
+                        <p style={{ fontSize: '1.1rem', color: '#64748B', marginTop: '0.2rem' }}>
                             Monitorización de precios y eficiencia de ventas.
                         </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px' }}>Cotizaciones (30 días)</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '2px' }}>Cotizaciones (30 días)</div>
                         <div style={{ fontSize: '2rem', fontWeight: '950', color: '#2563EB' }}>{stats.quotesLast30}</div>
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2rem', marginBottom: '3rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
                     {/* Trend Card */}
                     <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', border: '1px solid #E2E8F0' }}>
-                        <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: '#1E293B', fontSize: '1.1rem' }}>📈 Alzas de Costo (Top 10)</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3 style={{ margin: 0, fontWeight: '800', color: '#1E293B', fontSize: '1.1rem' }}>
+                                {trendView === 'alzas' ? '📈 Alzas de Costo' : '📉 Bajas de Costo'}
+                            </h3>
+                            <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '8px' }}>
+                                <button 
+                                    onClick={() => setTrendView('alzas')}
+                                    style={{ 
+                                        padding: '4px 10px', 
+                                        border: 'none', 
+                                        borderRadius: '6px', 
+                                        fontSize: '0.7rem', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        backgroundColor: trendView === 'alzas' ? 'white' : 'transparent',
+                                        color: trendView === 'alzas' ? '#EF4444' : '#64748B',
+                                        boxShadow: trendView === 'alzas' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >ALZAS</button>
+                                <button 
+                                    onClick={() => setTrendView('bajas')}
+                                    style={{ 
+                                        padding: '4px 10px', 
+                                        border: 'none', 
+                                        borderRadius: '6px', 
+                                        fontSize: '0.7rem', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        backgroundColor: trendView === 'bajas' ? 'white' : 'transparent',
+                                        color: trendView === 'bajas' ? '#10B981' : '#64748B',
+                                        boxShadow: trendView === 'bajas' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >BAJAS</button>
+                            </div>
+                        </div>
                         {stats.loading ? (
                             <div style={{ color: '#94A3B8' }}>...</div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto' }}>
-                                {stats.topTrends.length === 0 ? (
-                                    <div style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.85rem' }}>Sin alzas significativas.</div>
-                                ) : stats.topTrends.map((t: TrendItem) => (
+                                {displayTrends.length === 0 ? (
+                                    <div style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.85rem' }}>Sin {trendView} registradas.</div>
+                                ) : displayTrends.map((t: TrendItem) => (
                                     <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem', backgroundColor: '#F8FAFC', borderRadius: '10px' }}>
                                         <div style={{ maxWidth: '60%' }}>
                                             <div style={{ fontWeight: '700', color: '#334155', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</div>
                                         </div>
-                                        <div style={{ color: '#EF4444', fontWeight: '900', fontSize: '0.9rem' }}>▲{t.trend.toFixed(1)}%</div>
+                                        <div style={{ color: trendView === 'alzas' ? '#EF4444' : '#10B981', fontWeight: '900', fontSize: '0.9rem' }}>
+                                            {trendView === 'alzas' ? '▲' : '▼'}{Math.abs(t.trend).toFixed(1)}%
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -324,8 +364,8 @@ export default function CommercialDashboard() {
                     </div>
                 </div>
 
-                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '3rem' }}>
-                    <h3 style={{ margin: '0 0 1.5rem 0', fontWeight: '800', color: '#1E293B', fontSize: '1.25rem' }}>Módulos de Gestión</h3>
+                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+                    <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: '#1E293B', fontSize: '1.25rem' }}>Módulos de Gestión</h3>
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
@@ -335,7 +375,7 @@ export default function CommercialDashboard() {
                             <Link href={mod.href} key={mod.title} style={{ textDecoration: 'none' }}>
                                 <div style={{
                                     backgroundColor: 'white',
-                                    padding: '2rem',
+                                    padding: '1.2rem',
                                     borderRadius: '16px',
                                     height: '100%',
                                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -343,7 +383,7 @@ export default function CommercialDashboard() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: '1rem',
+                                    gap: '0.6rem',
                                     border: '1px solid #F1F5F9'
                                 }}
                                     onMouseEnter={(e) => {
@@ -356,25 +396,25 @@ export default function CommercialDashboard() {
                                     }}
                                 >
                                     <div style={{
-                                        width: '50px', height: '50px',
-                                        borderRadius: '12px',
+                                        width: '40px', height: '40px',
+                                        borderRadius: '10px',
                                         backgroundColor: mod.color,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '1.5rem'
+                                        fontSize: '1.2rem'
                                     }}>
                                         {mod.icon}
                                     </div>
 
                                     <div>
-                                        <h2 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#1E293B', marginBottom: '0.5rem' }}>
+                                        <h2 style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#1E293B', marginBottom: '0.3rem' }}>
                                             {mod.title}
                                         </h2>
-                                        <p style={{ color: '#64748B', lineHeight: '1.5', fontSize: '0.95rem' }}>
+                                        <p style={{ color: '#64748B', lineHeight: '1.4', fontSize: '0.85rem' }}>
                                             {mod.description}
                                         </p>
                                     </div>
 
-                                    <div style={{ marginTop: 'auto', paddingTop: '1rem', fontWeight: '700', color: mod.textColor, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+                                    <div style={{ marginTop: 'auto', paddingTop: '0.5rem', fontWeight: '700', color: mod.textColor, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
                                         Acceder <span>→</span>
                                     </div>
                                 </div>
