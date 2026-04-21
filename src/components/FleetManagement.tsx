@@ -111,7 +111,10 @@ export default function FleetManagement() {
                 .order('plate', { ascending: true });
 
             if (!isMounted.current) return;
-            if (error) throw error;
+            if (error) {
+                console.error('Error fetching vehicles:', error.message || error);
+                throw error;
+            }
 
             // 2. Fetch active routes for these vehicles to calculate progress and dynamic avg
             const plates = vehiclesData?.map((v: any) => v.plate) || [];

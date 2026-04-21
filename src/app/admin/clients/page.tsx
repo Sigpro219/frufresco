@@ -89,6 +89,7 @@ export default function AdminClientsPage() {
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
     const [editTargetLead, setEditTargetLead] = useState<Lead | null>(null);
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
     useEffect(() => {
         fetchData();
@@ -339,124 +340,110 @@ export default function AdminClientsPage() {
                 />
             )}
 
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1rem' }}>
-                <header style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.2rem 2rem' }}>
+                <header style={{ marginBottom: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#1A202C', margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: '#0891B2' }}>Clientes</span></h1>
-                        <p style={{ color: '#4A5568', fontSize: '1rem', marginTop: '0.1rem', fontWeight: '500', opacity: 0.8 }}>Gestión comercial y prospectos.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
+                             <span style={{ color: '#94A3B8', fontSize: '0.7rem', fontWeight: '700' }}>/ GESTIÓN PRINCIPAL</span>
+                        </div>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>Centro de <span style={{ color: 'var(--primary)' }}>Clientes</span></h1>
                     </div>
                 </header>
 
-                {/* TOOLBAR CONCENTRADA */}
+                {/* UNIFIED CONTROL BAR (SLENDER) */}
                 <div style={{ 
                     display: 'flex', 
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '1rem', 
-                    marginBottom: '1rem', 
-                    backgroundColor: 'rgba(255,255,255,0.9)', 
-                    padding: '0.5rem 0.8rem', 
-                    borderRadius: '20px', 
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid #E2E8F0'
+                    marginBottom: '1.5rem', 
+                    backgroundColor: 'white', 
+                    padding: '0.4rem 0.6rem', 
+                    borderRadius: '12px', 
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                    border: '1px solid #E5E7EB'
                 }}>
-                    <div style={{ display: 'flex', gap: '0.2rem' }}>
+                    {/* TABS (LEFT) */}
+                    <div style={{ display: 'flex', gap: '2px', backgroundColor: '#F9FAFB', padding: '3px', borderRadius: '10px' }}>
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
                                 style={{
-                                    padding: '0.6rem 1.1rem',
+                                    padding: '0.5rem 0.9rem',
                                     border: 'none',
-                                    borderRadius: '15px',
-                                    background: activeTab === tab.id ? '#0891B2' : 'transparent',
-                                    color: activeTab === tab.id ? 'white' : '#4A5568',
-                                    fontWeight: activeTab === tab.id ? '800' : '600',
+                                    borderRadius: '8px',
+                                    background: activeTab === tab.id ? 'white' : 'transparent',
+                                    color: activeTab === tab.id ? '#111827' : '#6B7280',
+                                    boxShadow: activeTab === tab.id ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                                    fontWeight: '800',
+                                    fontSize: '0.75rem',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    boxShadow: activeTab === tab.id ? '0 4px 10px rgba(8, 145, 178, 0.2)' : 'none'
+                                    transition: 'all 0.15s'
                                 }}
                             >
-                                <span style={{ fontSize: '1rem' }}>{tab.icon}</span>
+                                <span style={{ fontSize: '0.9rem' }}>{tab.icon}</span>
                                 {tab.label}
                             </button>
                         ))}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1, justifyContent: 'flex-end' }}>
+                    {/* SEARCH & ACTIONS (RIGHT) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {activeTab !== 'dashboard' && (
-                            <div style={{ position: 'relative', width: '380px' }}>
-                                <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', color: '#A0AEC0' }}>🔍</span>
-                                <input 
-                                    placeholder={`Power Search en ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    style={{ 
-                                        width: '100%', 
-                                        padding: '0.7rem 2.8rem 0.7rem 2.5rem', 
-                                        borderRadius: '16px', 
-                                        border: '1px solid #E2E8F0', 
-                                        fontSize: '0.9rem',
-                                        fontWeight: '600',
-                                        outline: 'none',
-                                        backgroundColor: '#F8FAFC'
-                                    }}
-                                />
+                            <>
+                                <div style={{ position: 'relative', width: '240px' }}>
+                                    <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#9CA3AF' }}>🔍</span>
+                                    <input 
+                                        placeholder={`Buscar...`}
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.5rem 1rem 0.5rem 2rem', 
+                                            borderRadius: '8px', 
+                                            border: '1px solid #E5E7EB', 
+                                            fontSize: '0.8rem',
+                                            fontWeight: '700',
+                                            outline: 'none',
+                                            backgroundColor: '#F9FAFB'
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB', margin: '0 4px' }} />
+
+                                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
+                                    <button onClick={() => setViewMode('table')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'table' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'table' ? '#111827' : '#9CA3AF', boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none' }}>📋</button>
+                                    <button onClick={() => setViewMode('cards')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'cards' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'cards' ? '#111827' : '#9CA3AF', boxShadow: viewMode === 'cards' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none' }}>📇</button>
+                                </div>
+
                                 <button 
-                                    onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '0.8rem',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'white',
-                                        border: '1px solid #E2E8F0',
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: '50%',
+                                    onClick={() => {
+                                        if (activeTab === 'leads') handleCreateLead();
+                                        else handleCreateClient(activeTab === 'b2c' ? 'b2c_client' : 'b2b_client');
+                                    }}
+                                    style={{ 
+                                        backgroundColor: '#111827', 
+                                        color: 'white', 
+                                        padding: '0.5rem 1rem', 
+                                        borderRadius: '8px', 
+                                        border: 'none', 
+                                        fontWeight: '900', 
+                                        fontSize: '0.75rem',
                                         cursor: 'pointer',
-                                        fontSize: '0.8rem',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center'
+                                        gap: '6px'
                                     }}
                                 >
-                                    💡
+                                    <span>➕</span> Crear {activeTab === 'leads' ? 'Prospecto' : 'Cliente'}
                                 </button>
-                                
-                                {isInfoGuideOpen && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '120%',
-                                        right: 0,
-                                        width: '300px',
-                                        backgroundColor: 'white',
-                                        borderRadius: '20px',
-                                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                                        border: '1px solid #E5E7EB',
-                                        padding: '1.2rem',
-                                        zIndex: 100
-                                    }}>
-                                        <h4 style={{ margin: '0 0 0.8rem 0', color: '#111827', fontSize: '0.9rem', fontWeight: '800' }}>🚀 Comandos Inteligentes</h4>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                            {[
-                                                { tag: '@vencido', desc: 'Tareas atrasadas' },
-                                                { tag: '@nuevo', desc: 'Prospectos recientes' },
-                                                { tag: '@geo', desc: 'Con GPS verificado' }
-                                            ].map((item, i) => (
-                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                                    <code style={{ color: '#0891B2', fontWeight: 'bold' }}>{item.tag}</code>
-                                                    <span style={{ color: '#6B7280' }}>{item.desc}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            </>
                         )}
                     </div>
                 </div>
@@ -472,55 +459,53 @@ export default function AdminClientsPage() {
                         {activeTab === 'dashboard' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
                                 {/* Top Row: Main KPIs */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-                                    <KPICard title="Clientes B2B" value={clientsB2B.length} icon="🏛️" color="#E0F2FE" textColor="#0369A1" subtitle="Empresas operativas" />
-                                    <KPICard title="Clientes B2C" value={clientsB2C.length} icon="👥" color="#DCFCE7" textColor="#15803D" subtitle="Consumidores activos" />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.2rem' }}>
+                                    <KPICard title="Clientes B2B" value={clientsB2B.length} icon="🏢" color="#6366F1" subtitle="Institucionales" />
+                                    <KPICard title="Clientes B2C" value={clientsB2C.length} icon="🏠" color="#10B981" subtitle="Consumidores" />
                                     <div onClick={() => { setActiveTab('leads'); setSearchTerm('@vencido'); }} style={{ cursor: 'pointer' }}>
                                         <KPICard 
                                             title="Tareas Críticas" 
                                             value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
                                             icon="🚩" 
-                                            color="#FEE2E2" 
-                                            textColor="#991B1B" 
-                                            subtitle="Atención prioritaria" 
+                                            color="#EF4444" 
+                                            subtitle="Prioridad comercial" 
                                         />
                                     </div>
                                     <div onClick={() => { setActiveTab('groups'); setSearchTerm(''); }} style={{ cursor: 'pointer' }}>
                                         <KPICard 
-                                            title="Grupos Corporativos" 
+                                            title="Grupos" 
                                             value={clientsB2B.filter(c => c.is_corporate_parent).length} 
                                             icon="🏦" 
-                                            color="#F3E8FF" 
-                                            textColor="#7E22CE" 
-                                            subtitle="Padres de sucursales" 
+                                            color="#8B5CF6" 
+                                            subtitle="Corporativos" 
                                         />
                                     </div>
                                 </div>
 
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
                                     {/* Funnel Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '1.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #F0F2F5' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                             <div>
-                                                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>🌪️ Embudo Comercial</h3>
-                                                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Trayectoria desde prospecto a cliente</p>
+                                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>🌪️ Embudo Comercial</h3>
+                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#6B7280', fontWeight: '600' }}>Trayectoria del prospecto</p>
                                             </div>
-                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', textAlign: 'right' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Oportunidades</div>
-                                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A' }}>{leads.length}</div>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.4rem 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'right' }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: '900', color: '#111827' }}>{leads.length}</div>
                                             </div>
                                         </div>
                                         <FunnelGraphic leads={leads} />
                                     </div>
 
                                     {/* Sales Distribution Pie Chart */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ marginBottom: '2.5rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>💰 Distribución de Ventas</h3>
-                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Balance B2B vs B2C (Histórico)</p>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '1.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #F0F2F5' }}>
+                                        <div style={{ marginBottom: '1.5rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>💰 Distribución de Ventas</h3>
+                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#6B7280', fontWeight: '600' }}>Balance B2B vs B2C</p>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '180px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '140px' }}>
                                             <SalesPieChart 
                                                 totalB2B={orders.filter(o => o.is_b2b).reduce((sum, o) => sum + (o.total || 0), 0)}
                                                 totalB2C={orders.filter(o => !o.is_b2b).reduce((sum, o) => sum + (o.total || 0), 0)}
@@ -563,160 +548,53 @@ export default function AdminClientsPage() {
 
                         {/* B2B VIEW */}
                         {activeTab === 'b2b' && (
-                            <>
-                                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <button 
-                                        onClick={() => handleCreateClient('b2b_client')}
-                                        style={{ 
-                                            backgroundColor: '#0891B2', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.5rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                    >
-                                        <span>➕</span> Nuevo Cliente Institucional
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'city', 'municipality', 'department', 'address']).map(client => (
-                                        <ClientCard 
-                                            key={client.id} 
-                                            type="b2b" 
-                                            data={client} 
-                                            pricingModels={pricingModels} 
-                                            availableParents={clientsB2B.filter(c => c.is_corporate_parent)} // Pasamos los padres para el nombre
-                                            onUpdatePricingModel={handleUpdatePricingModel}
-                                            onViewDetails={() => handleViewDetails(client)}
-                                            onEdit={() => handleEditClient(client)}
-                                        />
-                                    ))}
-                                </div>
-                            </>
+                            <ListView 
+                                data={filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'city', 'municipality', 'department', 'address'])}
+                                type="b2b"
+                                viewMode={viewMode}
+                                pricingModels={pricingModels}
+                                availableParents={clientsB2B.filter(c => c.is_corporate_parent)}
+                                onEdit={handleEditClient}
+                                onViewDetails={handleViewDetails}
+                                onUpdatePricingModel={handleUpdatePricingModel}
+                            />
                         )}
 
                         {/* B2C VIEW */}
                         {activeTab === 'b2c' && (
-                            <>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem', marginTop: '0.5rem' }}>
-                                    <button 
-                                        onClick={() => handleCreateClient('b2c_client')}
-                                        style={{ 
-                                            backgroundColor: '#10B981', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.6rem', 
-                                            borderRadius: '14px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <span>👤</span> Nuevo Cliente Consumidor
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2C, ['contact_name', 'phone', 'email', 'address', 'municipality', 'department']).map((client, idx) => (
-                                        <ClientCard 
-                                            key={client.id || idx} 
-                                            type="b2c" 
-                                            data={client} 
-                                            onViewDetails={() => handleViewDetails(client)}
-                                            onEdit={() => handleEditClient(client)}
-                                        />
-                                    ))}
-                                    {clientsB2C.length === 0 && <EmptyState text="No hay consumidores registrados aún." />}
-                                </div>
-                            </>
+                            <ListView 
+                                data={filterData(clientsB2C, ['contact_name', 'phone', 'email', 'address', 'municipality', 'department'])}
+                                type="b2c"
+                                viewMode={viewMode}
+                                onEdit={handleEditClient}
+                                onViewDetails={handleViewDetails}
+                            />
                         )}
 
                         {/* GROUPS VIEW */}
                         {activeTab === 'groups' && (
-                            <>
-                                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <p style={{ color: '#64748B', fontWeight: '600' }}>Listado de Nodos de Facturación y Grupos Empresariales.</p>
-                                    <button 
-                                        onClick={() => handleCreateClient('b2b_client')}
-                                        style={{ 
-                                            backgroundColor: '#7E22CE', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.5rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        ➕ Crear Nuevo Grupo Padre
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2B.filter(c => c.is_corporate_parent), ['company_name', 'nit', 'contact_name']).map(client => (
-                                        <ClientCard 
-                                            key={client.id} 
-                                            type="b2b" 
-                                            data={client} 
-                                            pricingModels={pricingModels}
-                                            availableParents={clientsB2B.filter(c => c.is_corporate_parent)} 
-                                            onViewDetails={() => handleViewDetails(client)}
-                                            onEdit={() => handleEditClient(client)}
-                                        />
-                                    ))}
-                                    {clientsB2B.filter(c => c.is_corporate_parent).length === 0 && <EmptyState text="No hay grupos corporativos definidos." />}
-                                </div>
-                            </>
+                            <ListView 
+                                data={filterData(clientsB2B.filter(c => c.is_corporate_parent), ['company_name', 'nit', 'contact_name'])}
+                                type="b2b"
+                                viewMode={viewMode}
+                                pricingModels={pricingModels}
+                                availableParents={clientsB2B.filter(c => c.is_corporate_parent)}
+                                onEdit={handleEditClient}
+                                onViewDetails={handleViewDetails}
+                            />
                         )}
 
                         {/* LEADS VIEW */}
                         {activeTab === 'leads' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem', marginTop: '0.5rem' }}>
-                                    <button 
-                                        onClick={handleCreateLead}
-                                        style={{ 
-                                            backgroundColor: '#0891B2', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.6rem', 
-                                            borderRadius: '14px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <span>🔥</span> Nuevo Prospecto Manual
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'notes', 'business_type']).map(lead => (
-                                    <ClientCard 
-                                        key={lead.id} 
-                                        type="lead" 
-                                        data={lead} 
-                                        onUpdateStatus={handleUpdateLeadStatus} 
-                                        onEdit={() => handleEditLead(lead as Lead)}
-                                        onViewDetails={() => handleViewDetails(lead as unknown as Profile)}
-                                        onRegisterContact={() => handleUpdateLeadContact(lead.id)}
-                                        onScheduleTask={(date) => handleScheduleLeadTask(lead.id, date)}
-                                    />
-                                ))}
-                                    {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
-                                </div>
-                            </div>
+                            <ListView 
+                                data={filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'notes', 'business_type'])}
+                                type="lead"
+                                viewMode={viewMode}
+                                onEdit={(lead) => handleEditLead(lead as Lead)}
+                                onViewDetails={(lead) => handleViewDetails(lead as unknown as Profile)}
+                                onUpdateStatus={handleUpdateLeadStatus}
+                                onRegisterContact={handleUpdateLeadContact}
+                            />
                         )}
                     </>
                 )}
@@ -736,33 +614,34 @@ export default function AdminClientsPage() {
     );
 }
 
-function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: string, color: string, textColor: string, subtitle: string }) {
+function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: string, color: string, subtitle: string }) {
     return (
         <div style={{
             backgroundColor: 'white',
-            padding: '2.2rem',
-            borderRadius: '28px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.03)',
+            padding: '1.5rem',
+            borderRadius: '24px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
             display: 'flex',
             alignItems: 'center',
-            gap: '1.8rem',
-            border: '1px solid #F0F2F5',
+            gap: '1.2rem',
+            border: '1px solid #E5E7EB',
+            borderTop: `4px solid ${color}`,
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            cursor: 'default'
+            cursor: 'pointer'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-8px)';
-            e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.08)';
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.06)';
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.03)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
         }}>
-            <div style={{ backgroundColor: color, width: '72px', height: '72px', borderRadius: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>
+            <div style={{ backgroundColor: `${color}10`, width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08rem' }}>{title}</div>
-                <div style={{ fontSize: '2.2rem', fontWeight: '900', color: textColor, margin: '0.3rem 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '700' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: '700' }}>{subtitle}</div>
             </div>
         </div>
     );
@@ -776,11 +655,11 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem', width: '100%', justifyContent: 'center' }}>
             <div style={{
-                width: '160px',
-                height: '160px',
+                width: '120px',
+                height: '120px',
                 borderRadius: '50%',
-                background: `conic-gradient(#0369A1 ${b2bPercent}%, #15803D 0)`,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                background: `conic-gradient(#6366F1 ${b2bPercent}%, #10B981 0)`,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
@@ -788,8 +667,8 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                 flexShrink: 0
             }}>
                 <div style={{
-                    width: '100px',
-                    height: '100px',
+                    width: '80px',
+                    height: '80px',
                     backgroundColor: 'white',
                     borderRadius: '50%',
                     display: 'flex',
@@ -826,41 +705,44 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
 
 function FunnelGraphic({ leads }: { leads: Lead[] }) {
     const stages = [
-        { label: 'Prospectos (Nuevos)', status: 'new', color: '#6366F1' },
-        { label: 'En Contacto / Gestión', status: 'contacted', color: '#F59E0B' },
-        { label: 'Convertidos a Clientes', status: 'converted', color: '#10B981' },
+        { label: 'Prospectos', status: 'new', color: '#6366F1' },
+        { label: 'En Gestión', status: 'contacted', color: '#F59E0B' },
+        { label: 'Convertidos', status: 'converted', color: '#10B981' },
         { label: 'Descartados', status: 'rejected', color: '#EF4444' }
     ];
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', alignItems: 'center' }}>
-            {stages.map((stage) => {
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+            {stages.map((stage, index) => {
                 const count = leads.filter(l => l.status === stage.status).length;
                 const percent = leads.length > 0 ? (count / leads.length) * 100 : 0;
+                // Efecto de reducción de ancho intencional para forma de embudo (opcional pero estético)
+                const containerWidth = 100 - (index * 8); 
+                
                 return (
-                    <div key={stage.status} style={{ width: '100%', maxWidth: '400px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '0.8rem', fontSize: '0.9rem', fontWeight: '800', color: '#4A5568' }}>
-                            <div style={{ textTransform: 'uppercase', letterSpacing: '0.05rem', fontSize: '0.75rem', color: '#94A3B8', marginBottom: '0.2rem' }}>{stage.label}</div>
-                            <div style={{ color: stage.color, fontSize: '1.1rem' }}>{count} <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>({Math.round(percent)}%)</span></div>
+                    <div key={stage.status} style={{ width: `${containerWidth}%`, minWidth: '140px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8rem', fontWeight: '800' }}>
+                            <div style={{ textTransform: 'uppercase', letterSpacing: '0.05rem', fontSize: '0.65rem', color: '#94A3B8' }}>{stage.label}</div>
+                            <div style={{ color: stage.color, fontSize: '0.85rem' }}>{count} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({Math.round(percent)}%)</span></div>
                         </div>
                         <div style={{ 
-                            height: '24px', 
-                            backgroundColor: '#F8FAFC', 
-                            borderRadius: '12px', 
-                            border: '1px solid #E2E8F0',
+                            height: '10px', 
+                            backgroundColor: '#F8FAFB', 
+                            borderRadius: '20px', 
+                            border: '1px solid #E5E7EB',
                             display: 'flex',
-                            justifyContent: 'center',
+                            justifyContent: 'center', // AQUÍ CENTRAMOS EL CONTENIDO
                             overflow: 'hidden',
-                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                            position: 'relative'
                         }}>
                             <div style={{ 
                                 height: '100%', 
                                 width: `${percent}%`, 
                                 backgroundColor: stage.color, 
-                                borderRadius: '12px',
+                                borderRadius: '20px',
                                 transition: 'all 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: `0 4px 12px ${stage.color}33`,
-                                border: `2px solid ${stage.color}`
+                                boxShadow: `0 0 10px ${stage.color}44`,
+                                border: `1px solid ${stage.color}`
                             }} />
                         </div>
                     </div>
@@ -877,45 +759,45 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     return (
         <div style={{ 
             backgroundColor: '#FFF1F2', 
-            padding: '1.4rem', 
+            padding: '1.2rem', 
             borderRadius: '20px', 
             border: '1px solid #FFE4E6', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between',
             gap: '1.2rem',
-            boxShadow: '0 4px 10px rgba(159, 18, 57, 0.05)',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 4px rgba(159, 18, 57, 0.03)'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateX(5px)';
-            e.currentTarget.style.borderColor = '#FDA4AF';
+            e.currentTarget.style.transform = 'translateX(4px)';
+            e.currentTarget.style.boxShadow = '0 6px 12px rgba(159, 18, 57, 0.08)';
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateX(0)';
-            e.currentTarget.style.borderColor = '#FFE4E6';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(159, 18, 57, 0.03)';
         }}>
             <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: '900', color: '#9F1239', fontSize: '1rem', marginBottom: '0.2rem' }}>{lead.company_name || lead.contact_name}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', backgroundColor: '#BE123C', color: 'white', borderRadius: '6px', fontWeight: '900' }}>⚠️ VENCIDA</span>
-                    <span style={{ fontSize: '0.8rem', color: '#E11D48', fontWeight: '700' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.65rem', padding: '2px 8px', backgroundColor: '#BE123C', color: 'white', borderRadius: '6px', fontWeight: '900', letterSpacing: '0.05em' }}>⚠️ VENCIDA</span>
+                    <span style={{ fontSize: '0.8rem', color: '#E11D48', fontWeight: '800' }}>
                         {overdueDays <= 0 ? 'Para hoy' : `Hace ${overdueDays} días`}
                     </span>
                 </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
                 <button 
                     onClick={() => {
                         const cleanPhone = lead.phone.replace(/\D/g, '');
-                        window.open(`https://wa.me/57${cleanPhone}?text=Hola ${lead.contact_name}, te escribimos de Frubana Express...`, '_blank');
+                        window.open(`https://wa.me/57${cleanPhone}?text=Hola ${lead.contact_name}, te escribimos de FruFresco...`, '_blank');
                     }}
-                    style={{ backgroundColor: '#10B981', color: 'white', border: 'none', width: '42px', height: '42px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)' }}
+                    style={{ backgroundColor: '#10B981', color: 'white', border: 'none', width: '38px', height: '38px', borderRadius: '10px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)' }}
                     title="WhatsApp Directo"
                 >
                     💬
                 </button>
                 <button 
                     onClick={onWaitlist}
-                    style={{ backgroundColor: 'white', color: '#9F1239', border: '2px solid #FFE4E6', padding: '0 1.2rem', borderRadius: '12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '800', height: '42px' }}
+                    style={{ backgroundColor: 'white', color: '#9F1239', border: '1px solid #FFE4E6', padding: '0 1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '900', height: '38px' }}
                 >
                     Gestionar
                 </button>
@@ -989,16 +871,16 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
 
             {/* Header */}
             <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#1A202C', paddingRight: '120px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827', paddingRight: '120px', letterSpacing: '-0.02em' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
                 {isB2B && profileData?.parent_id && (
-                    <div style={{ fontSize: '0.75rem', color: '#6366F1', fontWeight: '800', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        🖇️ Sucursal de <span style={{ textDecoration: 'underline' }}>{availableParents?.find(p => p.id === profileData.parent_id)?.company_name || 'Grupo Corporativo'}</span>
+                    <div style={{ fontSize: '0.75rem', color: '#6366F1', fontWeight: '800', marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ opacity: 0.8 }}>🖇️ Membro de:</span> <span style={{ textDecoration: 'underline' }}>{availableParents?.find(p => p.id === profileData.parent_id)?.company_name || 'Grupo Corporativo'}</span>
                     </div>
                 )}
-                {isB2B && profileData?.razon_social && <p style={{ margin: '0.2rem 0', fontSize: '0.85rem', color: '#718096', fontStyle: 'italic' }}>{profileData.razon_social}</p>}
-                {(isB2B || isLead) && <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
+                {isB2B && profileData?.razon_social && <p style={{ margin: '0.4rem 0', fontSize: '0.85rem', color: '#6B7280', fontStyle: 'italic', fontWeight: '600' }}>{profileData.razon_social}</p>}
+                {(isB2B || isLead) && <p style={{ margin: '0.6rem 0', fontSize: '0.95rem', color: '#374151', fontWeight: '800' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
 
             {/* Content Fields */}
@@ -1199,52 +1081,41 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
             </div>
 
             {/* Actions */}
-            <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}>
+            <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F3F4F6', display: 'flex', gap: '0.6rem' }}>
                 {(onViewDetails && !isLead) && (
                     <button 
                         onClick={onViewDetails}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem' }} 
+                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.8rem', color: '#374151' }} 
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
-                        Ficha
+                        Expediente
                     </button>
                 )}
                 {(isB2B || isB2C || isLead) && (
                     <button 
                         onClick={onEdit}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem' }}
+                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', background: 'white', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem', color: '#374151' }}
                     >
-                        Editar
+                        Gestionar
                     </button>
                 )}
                 {isLead && onRegisterContact && (
                     <button 
                         onClick={onRegisterContact}
-                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}
                     >
-                        <span>✅</span> Registrar Contacto
-                    </button>
-                )}
-                {isLead && onScheduleTask && (
-                    <button 
-                        onClick={() => {
-                            const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', new Date(Date.now() + 86400000).toISOString().split('T')[0]);
-                            if (date) onScheduleTask(date);
-                        }}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                        📅 Tarea
+                        <span>✅</span> Reportar Contacto
                     </button>
                 )}
                 <button 
                     onClick={handleWhatsApp}
                     title="Enviar WhatsApp"
                     style={{ 
-                        padding: '0.8rem 1.2rem', 
+                        padding: '0.8rem 1rem', 
                         borderRadius: '12px', 
                         border: 'none', 
-                        background: '#25D366', 
+                        background: '#22C55E', 
                         color: 'white', 
                         fontWeight: '800', 
                         cursor: 'pointer',
@@ -1252,8 +1123,11 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
-                        boxShadow: '0 4px 12px rgba(37, 211, 102, 0.2)'
+                        boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)',
+                        transition: 'all 0.2s'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
                     <span style={{ fontSize: '1.2rem' }}>💬</span>
                 </button>
@@ -1276,9 +1150,99 @@ function InfoRow({ icon, label, value }: { icon: string, label: string, value: s
 
 function EmptyState({ text }: { text: string }) {
     return (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: '24px', border: '2px dashed #E2E8F0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔦</div>
-            <p style={{ color: '#718096', fontWeight: '700' }}>{text}</p>
+        <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', marginTop: '1rem' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🏆</div>
+            <p style={{ color: '#6B7280', fontWeight: '800', fontSize: '1.1rem' }}>{text}</p>
+        </div>
+    );
+}
+
+function ListView({ data, type, viewMode, pricingModels, availableParents, onEdit, onViewDetails, onUpdatePricingModel, onUpdateStatus, onRegisterContact }: any) {
+    if (data.length === 0) return <EmptyState text={`No se encontraron ${type === 'lead' ? 'prospectos' : 'clientes'} en este momento.`} />;
+
+    if (viewMode === 'table') {
+        return (
+            <div style={{ backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#F8FAFB' }}>
+                            <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontWeight: '900', fontSize: '0.7rem', textTransform: 'uppercase' }}>Nombre / Empresa</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontWeight: '900', fontSize: '0.7rem', textTransform: 'uppercase' }}>Contacto Principal</th>
+                            <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontWeight: '900', fontSize: '0.7rem', textTransform: 'uppercase' }}>Ubicación</th>
+                            {type !== 'b2c' && <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontWeight: '900', fontSize: '0.7rem', textTransform: 'uppercase' }}>Modelo / Estado</th>}
+                            <th style={{ padding: '1rem', textAlign: 'center', color: '#111827', fontWeight: '900', fontSize: '0.7rem', textTransform: 'uppercase' }}>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.map((item: any, i: number) => {
+                            const isLeads = type === 'lead';
+                            const title = isLeads ? (item.company_name || item.contact_name) : (type === 'b2c' ? item.contact_name : item.company_name);
+                            const subtitle = type === 'b2b' && item.is_corporate_parent ? '🏦 GRUPO PADRE' : '';
+                            
+                            return (
+                                <tr key={item.id || i} style={{ borderTop: '1px solid #F3F4F6', transition: 'all 0.1s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                    <td style={{ padding: '1rem' }}>
+                                        <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.9rem' }}>{title}</div>
+                                        {subtitle && <div style={{ fontSize: '0.65rem', color: '#7E22CE', fontWeight: '900', marginTop: '2px' }}>{subtitle}</div>}
+                                        {item.nit && <div style={{ fontSize: '0.7rem', color: '#9CA3AF', fontWeight: '700' }}>NIT: {item.nit}</div>}
+                                    </td>
+                                    <td style={{ padding: '1rem' }}>
+                                        <div style={{ fontWeight: '700', color: '#374151', fontSize: '0.85rem' }}>{item.contact_name}</div>
+                                        <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>📞 {item.phone}</div>
+                                    </td>
+                                    <td style={{ padding: '1rem' }}>
+                                        <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{item.city || item.municipality || 'N/A'}</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{item.address?.slice(0, 30)}...</div>
+                                    </td>
+                                    {type !== 'b2c' && (
+                                        <td style={{ padding: '1rem' }}>
+                                            {isLeads ? (
+                                                <span style={{ 
+                                                    padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                                                    backgroundColor: item.status === 'new' ? '#E0E7FF' : item.status === 'contacted' ? '#FEF3C7' : '#DCFCE7',
+                                                    color: item.status === 'new' ? '#4338CA' : item.status === 'contacted' ? '#92400E' : '#15803D'
+                                                }}>
+                                                    {item.status?.toUpperCase()}
+                                                </span>
+                                            ) : (
+                                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#111827' }}>
+                                                    {pricingModels?.find((m: any) => m.id === item.pricing_model_id)?.name || 'Sin Modelo'}
+                                                </div>
+                                            )}
+                                        </td>
+                                    )}
+                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                            <button onClick={() => onViewDetails(item)} style={{ padding: '6px', borderRadius: '8px', border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer' }} title="Ver Expediente">📄</button>
+                                            <button onClick={() => onEdit(item)} style={{ padding: '6px', borderRadius: '8px', border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer' }} title="Editar">⚙️</button>
+                                            {isLeads && onRegisterContact && <button onClick={() => onRegisterContact(item.id)} style={{ padding: '6px', borderRadius: '8px', border: 'none', background: '#10B981', color: 'white', cursor: 'pointer' }} title="Reportar Contacto">✅</button>}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+            {data.map((item: any) => (
+                <ClientCard 
+                    key={item.id} 
+                    type={type} 
+                    data={item} 
+                    pricingModels={pricingModels}
+                    availableParents={availableParents}
+                    onUpdatePricingModel={onUpdatePricingModel}
+                    onUpdateStatus={onUpdateStatus}
+                    onViewDetails={() => onViewDetails(item)}
+                    onEdit={() => onEdit(item)}
+                    onRegisterContact={() => onRegisterContact && onRegisterContact(item.id)}
+                />
+            ))}
         </div>
     );
 }

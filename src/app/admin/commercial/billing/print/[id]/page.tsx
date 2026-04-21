@@ -25,7 +25,7 @@ export default function BillingPrintPage() {
                     .select(`
                         id, sequence_id, created_at, total,
                         profiles(company_name, contact_name, contact_phone, address),
-                        order_items(quantity, unit_price, products(name, sku, unit_of_measure))
+                        order_items(quantity, unit_price, nickname, products(name, sku, unit_of_measure))
                     `)
                     .eq('billing_cut_id', id);
                 
@@ -104,7 +104,7 @@ export default function BillingPrintPage() {
                             {order.order_items.map((item: any, i: number) => (
                                 <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                                     <td style={{ padding: '10px 5px' }}>{item.products.sku}</td>
-                                    <td style={{ padding: '10px 5px' }}>{item.products.name}</td>
+                                    <td style={{ padding: '10px 5px' }}>{item.nickname || item.products.name}</td>
                                     <td style={{ padding: '10px 5px', textAlign: 'right' }}>{item.quantity}</td>
                                     <td style={{ padding: '10px 5px', textAlign: 'right' }}>${item.unit_price?.toLocaleString()}</td>
                                     <td style={{ padding: '10px 5px', textAlign: 'right' }}>${(item.quantity * item.unit_price)?.toLocaleString()}</td>

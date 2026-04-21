@@ -25,7 +25,8 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     display: flex;
                     gap: 1.5rem;
                     width: fit-content;
-                    animation: ticker 80s linear infinite;
+                    animation: ticker 120s linear infinite;
+                    padding-right: 1.5rem; /* Gap for the loop */
                 }
 
                 @keyframes ticker {
@@ -33,7 +34,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                         transform: translateX(0);
                     }
                     100% {
-                        transform: translateX(calc(-33.33% - 0.5rem));
+                        transform: translateX(-33.3333%);
                     }
                 }
 
@@ -44,6 +45,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 .product-item {
                     min-width: 280px;
                     max-width: 280px;
+                    flex-shrink: 0;
                 }
             `}</style>
 
@@ -55,14 +57,14 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 ))}
             </div>
             
-            {/* Sombras difuminadas en los bordes para un toque premium */}
+            {/* Sombras difuminadas en los bordes - Más suaves para no cortar */}
             <div style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: '100px',
+                width: '60px',
                 height: '100%',
-                background: 'linear-gradient(to right, white, transparent)',
+                background: 'linear-gradient(to right, rgba(255,255,255,0.9), transparent)',
                 zIndex: 10,
                 pointerEvents: 'none'
             }} />
@@ -70,9 +72,9 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 position: 'absolute',
                 top: 0,
                 right: 0,
-                width: '100px',
+                width: '60px',
                 height: '100%',
-                background: 'linear-gradient(to left, white, transparent)',
+                background: 'linear-gradient(to left, rgba(255,255,255,0.9), transparent)',
                 zIndex: 10,
                 pointerEvents: 'none'
             }} />

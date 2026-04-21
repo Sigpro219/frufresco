@@ -5,9 +5,30 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 
+const getStatusLabel = (s: string) => {
+    switch (s) {
+        case 'pending_approval': return 'RECIBIDO';
+        case 'para_compra': return 'COMPRAS / QA';
+        case 'approved': return 'APROBADO';
+        case 'picking': return 'EN PREPARACIÓN';
+        case 'shipped': return 'DESPACHADO';
+        case 'delivered': return 'ENTREGADO';
+        case 'cancelled': return 'CANCELADO';
+        default: return s?.replace('_', ' ').toUpperCase() || '';
+    }
+};
+
 export default function OrderLoadingPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setCurrentUser(user);
+        });
+    }, []);
+
     const [selectedDate, setSelectedDate] = useState(() => {
         const now = new Date();
         const bogota = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
@@ -16,6 +37,7 @@ export default function OrderLoadingPage() {
     const [refreshTrigger, setRefreshTrigger] = useState(0); 
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
+    const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
     // Modal States
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -320,7 +342,7 @@ export default function OrderLoadingPage() {
             // 2. Sincronizar ítems
             const { data: originalItems, error: fetchErr } = await supabase
                 .from('order_items')
-                .select('id')
+                .select('*')
                 .eq('order_id', selectedOrder.id);
             
             if (fetchErr) throw fetchErr;
@@ -378,6 +400,32 @@ export default function OrderLoadingPage() {
                 }
             }
             
+            // --- INYECCIÓN DE AUDITORÍA MÓDULO 3.7 ---
+            const auditReason = window.prompt("Razón de la modificación (opcional para justificar cambios de precios o cantidades al equipo Logístico):");
+            const auditLog = {
+                order_id: selectedOrder.id,
+                changed_by: currentUser?.id || null,
+                change_type: 'modification',
+                reason: auditReason || 'Edición manual en Control Tower',
+                old_data: { 
+                    status: selectedOrder.status, 
+                    delivery_date: selectedOrder.delivery_date, 
+                    total: selectedOrder.total,
+                    items: originalItems 
+                },
+                new_data: { 
+                    status: editStatus, 
+                    delivery_date: editDeliveryDate, 
+                    total: currentTotal,
+                    items: orderItems 
+                }
+            };
+            const { error: auditError } = await supabase.from('order_audit_logs').insert([auditLog]);
+            if (auditError) {
+                console.warn('⚠️ No se pudo guardar el registro de auditoría:', auditError);
+            }
+            // -----------------------------------------
+
             // Refrescar estado local
             setOrders(orders.map(o => o.id === selectedOrder.id ? { 
                 ...o, 
@@ -540,84 +588,124 @@ export default function OrderLoadingPage() {
 
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#F0F2F5' }}>
             <Navbar />
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem' }}>
+            
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.2rem 2rem' }}>
+                <header style={{ marginBottom: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', marginBottom: '0.2rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
-                            Cargue de Pedidos
-                        </h1>
-                        <p style={{ color: '#64748B', fontSize: '1rem', fontWeight: '500', margin: 0 }}>Gestión y monitoreo de la demanda diaria</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
+                             <span style={{ color: '#94A3B8', fontSize: '0.7rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
+                        </div>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>Cargue de <span style={{ color: 'var(--primary)' }}>Pedidos</span></h1>
                     </div>
-                    
-                    {/* Acciones Secundarias (Menos protagonismo) */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                </header>
 
-
-
-                        
-                        <Link href="/admin/orders/create" style={{
-                            textDecoration: 'none',
-                            padding: '8px 16px',
-                            backgroundColor: '#2563EB',
-                            color: 'white',
-                            borderRadius: '10px',
-                            border: '1px solid #1D4ED8',
-                            fontSize: '0.8rem',
-                            fontWeight: '700',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.2s',
-                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.1)'
-                        }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1D4ED8'}>
-                            <span>➕</span> NUEVO PEDIDO
-                        </Link>
-                    </div>
-                    </div>
-
-                {/* Dashboard de Indicadores - Slim Version */}
+                {/* DASHBOARD INDICATORS (SLIM & PREMIUM) */}
                 <div style={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(5, 1fr)', 
-                    gap: '1rem', 
-                    marginBottom: '2rem'
+                    gap: '1.2rem', 
+                    marginBottom: '1.5rem'
                 }}>
-                    {[
-                        { label: 'TOTAL PEDIDOS', value: totalOrders, sub: 'HOY', icon: '📦', color: '#F8FAFC' },
-                        { label: 'VALOR CARGA', value: `$${totalSales.toLocaleString()}`, sub: 'Bruto', icon: '💰', color: '#F8FAFC' },
-                        { label: 'PESO TOTAL', value: `${totalWeightTons.toFixed(2)} TON`, sub: 'Logística', icon: '🚜', color: '#F8FAFC' },
-                        { label: 'EFECTIVIDAD', value: `${approvalRate.toFixed(0)}%`, sub: 'Procesado', icon: '✅', color: approvalRate >= 80 ? '#F0FDF4' : '#F8FAFC', textColor: approvalRate >= 80 ? '#16A34A' : '#1E293B' },
-                        { label: 'ALERTAS', value: incompleteCount, sub: 'Incompletos', icon: '⚠️', color: incompleteCount > 0 ? '#FEF2F2' : '#F8FAFC', textColor: incompleteCount > 0 ? '#E11D48' : '#1E293B' }
-                    ].map((card, i) => (
-                        <div key={i} style={{
-                            backgroundColor: card.color || 'white',
-                            padding: '0.875rem 1.25rem',
-                            borderRadius: '16px',
-                            border: '1px solid #E2E8F0',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    <KPICard title="Total Pedidos" value={totalOrders} icon="📦" color="#6366F1" subtitle="Para entrega hoy" />
+                    <KPICard title="Valor Carga" value={`$${totalSales.toLocaleString()}`} icon="💰" color="#10B981" subtitle="Monto bruto" />
+                    <KPICard title="Peso Total" value={`${totalWeightTons.toFixed(2)} TON`} icon="🚜" color="#F59E0B" subtitle="Logística" />
+                    <KPICard title="Efectividad" value={`${approvalRate.toFixed(0)}%`} icon="✅" color="#0891B2" subtitle="Tasa de aprobación" />
+                    <KPICard title="Alertas" value={incompleteCount} icon="⚠️" color="#EF4444" subtitle="Info incompleta" />
+                </div>
+
+                {/* UNIFIED SLENDER CONTROL BAR */}
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem', 
+                    marginBottom: '1.5rem', 
+                    backgroundColor: 'white', 
+                    padding: '0.4rem 0.6rem', 
+                    borderRadius: '12px', 
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                    border: '1px solid #E5E7EB'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Date Selector Segment */}
+                        <div style={{ 
                             display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px',
-                            transition: 'all 0.2s ease',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }} onMouseEnter={e => {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05)';
-                        }} onMouseLeave={e => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                            alignItems: 'center',
+                            padding: '0.4rem 0.8rem',
+                            backgroundColor: '#F9FAFB',
+                            borderRadius: '8px',
+                            border: '1px solid #E5E7EB',
+                            cursor: 'pointer'
+                        }} onClick={(e) => {
+                            const input = e.currentTarget.querySelector('input');
+                            if (input) (input as any).showPicker?.();
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94A3B8', letterSpacing: '0.05em' }}>{card.label}</span>
-                                <span style={{ fontSize: '1rem', opacity: 0.7 }}>{card.icon}</span>
-                            </div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: card.textColor || '#0F172A', lineHeight: '1.2' }}>{card.value}</div>
-                            <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#94A3B8' }}>{card.sub}</div>
+                             <span style={{ fontSize: '0.8rem', marginRight: '8px' }}>📅</span>
+                             <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    color: '#111827',
+                                    outline: 'none',
+                                    cursor: 'pointer',
+                                    width: '115px'
+                                }}
+                            />
                         </div>
-                    ))}
+
+                        {/* Search Segment */}
+                        <div style={{ position: 'relative', width: '320px' }}>
+                            <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#9CA3AF' }}>🔍</span>
+                            <input 
+                                placeholder="Buscar por ID, empresa, @estado..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0.5rem 1rem 0.5rem 2.2rem', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #E5E7EB', 
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    outline: 'none',
+                                    backgroundColor: '#F9FAFB'
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* View Switcher */}
+                        <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
+                            <button onClick={() => setViewMode('table')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'table' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'table' ? '#111827' : '#9CA3AF' }}>📋</button>
+                            <button onClick={() => setViewMode('cards')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'cards' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'cards' ? '#111827' : '#9CA3AF' }}>📇</button>
+                        </div>
+
+                        <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
+
+                        <Link href="/admin/orders/create" style={{ 
+                            backgroundColor: '#111827', 
+                            color: 'white', 
+                            padding: '0.5rem 1rem', 
+                            borderRadius: '8px', 
+                            textDecoration: 'none',
+                            fontWeight: '900', 
+                            fontSize: '0.75rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                            <span>➕</span> Nuevo Pedido
+                        </Link>
+                    </div>
                 </div>
                     
                     {/* Bulk Action Floating Bar (Placeholder for now) */}
@@ -684,198 +772,6 @@ export default function OrderLoadingPage() {
                     )}
 
 
-                {/* Unified Premium Search Bar */}
-                <div style={{ 
-                    display: 'flex',
-                    alignItems: 'stretch',
-                    backgroundColor: 'white',
-                    borderRadius: '16px',
-                    border: '2px solid #E2E8F0',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                    marginBottom: '2rem',
-                    overflow: 'hidden',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    height: '56px'
-                }}>
-                    {/* Date Segment */}
-                    <div style={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '0 1rem',
-                        backgroundColor: '#F8FAFC',
-                        borderRight: '2px solid #E2E8F0',
-                        minWidth: '220px',
-                        position: 'relative',
-                        cursor: 'pointer'
-                    }} onClick={(e) => {
-                        const input = e.currentTarget.querySelector('input');
-                        if (input) (input as any).showPicker?.();
-                    }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            marginRight: '12px',
-                            pointerEvents: 'none'
-                        }}>
-                             <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Entrega
-                             </span>
-                             <span style={{ fontSize: '1rem', lineHeight: '1' }}>📅</span>
-                        </div>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                (e.target as any).showPicker?.();
-                            }}
-                            style={{
-                                border: 'none',
-                                background: 'transparent',
-                                fontSize: '0.95rem',
-                                fontWeight: '700',
-                                color: '#1E293B',
-                                outline: 'none',
-                                cursor: 'pointer',
-                                padding: '4px 0',
-                                width: '130px'
-                            }}
-                        />
-                    </div>
-
-                    {/* Search Segment */}
-                    <div style={{ 
-                        flex: 1,
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center'
-                    }}>
-                        <span style={{ 
-                            position: 'absolute', 
-                            left: '16px', 
-                            fontSize: '1.2rem',
-                            color: '#94A3B8',
-                            pointerEvents: 'none'
-                        }}>🔍</span>
-                        
-                        <input
-                            type="text"
-                            placeholder="Buscar por ID, nombre, @estado, @canal..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                                padding: '0.75rem 3rem 0.75rem 3.5rem',
-                                border: 'none',
-                                background: 'transparent',
-                                fontSize: '1rem',
-                                fontWeight: '600',
-                                color: '#1E293B',
-                                outline: 'none'
-                            }}
-                            onFocus={(e) => {
-                                const parent = e.target.parentElement?.parentElement;
-                                if (parent) {
-                                    parent.style.borderColor = '#2563EB';
-                                    parent.style.boxShadow = '0 0 0 4px rgba(37, 99, 235, 0.1)';
-                                }
-                            }}
-                            onBlur={(e) => {
-                                const parent = e.target.parentElement?.parentElement;
-                                if (parent) {
-                                    parent.style.borderColor = '#E2E8F0';
-                                    parent.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)';
-                                }
-                            }}
-                        />
-
-                        {/* Smart Help Icon Integrated */}
-                        <div 
-                            style={{ 
-                                position: 'absolute', 
-                                right: searchTerm ? '45px' : '16px', 
-                                cursor: 'help',
-                                display: 'flex',
-                                alignItems: 'center',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={() => setShowHelpTooltip(true)}
-                            onMouseLeave={() => setShowHelpTooltip(false)}
-                        >
-                            <span style={{ 
-                                backgroundColor: '#E2E8F0', 
-                                color: '#64748B', 
-                                borderRadius: '50%', 
-                                width: '22px', 
-                                height: '22px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold'
-                            }}>?</span>
-                            
-                            {showHelpTooltip && (
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: '35px',
-                                    right: '0',
-                                    width: '300px',
-                                    backgroundColor: '#1E293B',
-                                    color: 'white',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                    zIndex: 100,
-                                    fontSize: '0.75rem',
-                                    lineHeight: '1.4',
-                                    animation: 'fadeIn 0.2s ease-out'
-                                }}>
-                                    <div style={{ fontWeight: '800', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.3rem' }}>
-                                        COMANDOS INTELIGENTES
-                                    </div>
-                                    <div style={{ display: 'grid', gap: '0.4rem' }}>
-                                        <p><strong>@Estados:</strong> pendiente, aprobado...</p>
-                                        <p><strong>@Canales:</strong> @web, @whatsapp, @telefono</p>
-                                        <p><strong>@Pago:</strong> @efectivo, @transferencia...</p>
-                                        <p><strong>@Logística:</strong> @sin coordenadas, @error</p>
-                                    </div>
-                                    <style>{`
-                                        @keyframes fadeIn {
-                                            from { opacity: 0; transform: translateY(5px); }
-                                            to { opacity: 1; transform: translateY(0); }
-                                        }
-                                    `}</style>
-                                </div>
-                            )}
-                        </div>
-
-                        {searchTerm && (
-                            <button 
-                                onClick={() => setSearchTerm('')}
-                                style={{
-                                    position: 'absolute',
-                                    right: '12px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    border: 'none',
-                                    background: '#F1F5F9',
-                                    color: '#64748B',
-                                    borderRadius: '50%',
-                                    width: '24px',
-                                    height: '24px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8rem'
-                                }}
-                            >✕</button>
-                        )}
-                    </div>
-                </div>
 
 
                 {/* Loading */}
@@ -894,182 +790,115 @@ export default function OrderLoadingPage() {
                     </div>
                 )}
 
-                {/* List View (Table) */}
+                {/* List View (Conditional) */}
                 {!loading && filteredOrders.length > 0 && (
-                    <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)', border: '1px solid #F1F5F9' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        ID / TIPO
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        CLIENTE
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        DIRECCIÓN / GPS
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        ORIGEN
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        PESO
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        VALOR TOTAL
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        ESTADO
-                                    </th>
-                                    <th style={{ padding: '1.25rem 1rem', width: '40px', textAlign: 'center' }}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
-                                            onChange={toggleSelectAll}
-                                            style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                                        />
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredOrders.map((order) => {
-                                    const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
-                                    const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
-                                    const friendlyId = getFriendlyOrderId(order);
-
-                                    return (
-                                        <tr key={order.id} 
-                                            onClick={() => handleOrderClick(order)}
-                                            style={{ 
-                                                borderBottom: '1px solid #F1F5F9', 
-                                                transition: 'all 0.2s', 
-                                                cursor: 'pointer',
-                                                backgroundColor: !order.isComplete ? '#FFF1F2' : 'transparent',
-                                                borderLeft: !order.isComplete ? '4px solid #F43F5E' : 'none'
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFE4E6' : '#F8FAFC'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFF1F2' : 'transparent'}
-                                        >
-                                            <td style={{ padding: '1rem' }}>
-                                                <div style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '1rem', color: '#1E293B' }}>
-                                                    {friendlyId}
-                                                </div>
-                                                <div style={{ 
-                                                    display: 'inline-block',
-                                                    marginTop: '4px',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.6rem',
-                                                    fontWeight: '800',
-                                                    backgroundColor: isB2B ? '#F5F3FF' : '#FDF2F8',
-                                                    color: isB2B ? '#7C3AED' : '#EC4899',
-                                                    border: `1px solid ${isB2B ? '#DDD6FE' : '#FBCFE8'}`
-                                                }}>
-                                                    {isB2B ? '🏢 B2B' : '🏠 B2C'}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem' }}>
-                                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0F172A' }}>{order.customer_name}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
-                                                    🆔 {order.customer_nit || <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>Sin NIT</span>}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                                                    <span>📞</span> {order.customer_phone || order.profiles?.contact_phone || 'Sin tel.'}
-                                                </div>
-                                                <div style={{ 
-                                                    marginTop: '4px', 
-                                                    display: 'inline-block', 
-                                                    padding: '2px 6px', 
-                                                    backgroundColor: order.paymentMethod ? '#ECFCCB' : '#F1F5F9', 
-                                                    color: order.paymentMethod ? '#365314' : '#64748B', 
-                                                    borderRadius: '4px', 
-                                                    fontSize: '0.7rem', 
-                                                    fontWeight: '700', 
-                                                    border: `1px solid ${order.paymentMethod ? '#D9F99D' : '#E2E8F0'}` 
-                                                }}>
-                                                    💳 {order.paymentMethod || 'Método no especificado'}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem' }}>
-                                                <div style={{ fontSize: '0.875rem', color: '#334155', fontWeight: '500' }}>{order.shipping_address}</div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                                    {hasGPS ? (
-                                                        <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700', backgroundColor: '#D1FAE5', padding: '1px 6px', borderRadius: '4px' }}>
-                                                            📍 COORDENADAS OK
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700', backgroundColor: '#F1F5F9', padding: '1px 6px', borderRadius: '4px' }}>
-                                                            ⚠ SIN COORDENADAS
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center', fontSize: '1.5rem' }}>
-                                                {order.origin_source === 'web' ? <span title="Web / B2B">🛒</span> :
-                                                 order.origin_source === 'whatsapp' ? <span title="WhatsApp">💬</span> :
-                                                 order.origin_source === 'flat_file' ? <span title="Archivo Plano">📁</span> :
-                                                 <span title="Teléfono / Otro">📞</span>}
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                <div style={{ fontWeight: '800', color: '#475569', fontSize: '0.9rem' }}>
-                                                    {order.total_weight_kg ? `${order.total_weight_kg.toFixed(1)} kg` : '0 kg'}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                <div style={{ fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
-                                                    ${order.total.toLocaleString()}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                <div style={{
-                                                    display: 'inline-block',
-                                                    padding: '4px 12px',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: '800',
-                                                    backgroundColor: 
-                                                        order.status === 'pending_approval' ? '#FEF3C7' : 
-                                                        order.status === 'approved' ? '#D1FAE5' :
-                                                        order.status === 'shipped' ? '#DBEAFE' : '#F1F5F9',
-                                                    color: 
-                                                        order.status === 'pending_approval' ? '#92400E' : 
-                                                        order.status === 'approved' ? '#065F46' :
-                                                        order.status === 'shipped' ? '#1E40AF' : '#475569'
-                                                }}>
-                                                    {order.status.replace('_', ' ').toUpperCase()}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <>
+                        {viewMode === 'table' ? (
+                            <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)', border: '1px solid #E5E7EB' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ID / TIPO</th>
+                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>CLIENTE</th>
+                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>DIRECCIÓN / GPS</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ORIGEN</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>PESO</th>
+                                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>VALOR</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ESTADO</th>
+                                            <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
                                                 <input 
                                                     type="checkbox" 
-                                                    checked={selectedOrders.has(order.id)}
-                                                    disabled={!order.isComplete}
-                                                    onChange={(e) => { 
-                                                        e.stopPropagation(); 
-                                                        if (!order.isComplete) {
-                                                            alert('⚠️ Este pedido no puede procesarse porque tiene información incompleta.');
-                                                            return;
-                                                        }
-                                                        toggleSelectOrder(order.id); 
-                                                    }}
-                                                    style={{ 
-                                                        cursor: order.isComplete ? 'pointer' : 'not-allowed', 
-                                                        transform: 'scale(1.2)',
-                                                        opacity: order.isComplete ? 1 : 0.5
-                                                    }}
-                                                    title={!order.isComplete ? 'Información incompleta' : ''}
+                                                    checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
+                                                    onChange={toggleSelectAll}
+                                                    style={{ cursor: 'pointer' }}
                                                 />
-                                            </td>
+                                            </th>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                    </thead>
+                                    <tbody>
+                                        {filteredOrders.map((order) => {
+                                            const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+                                            const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
+                                            const friendlyId = getFriendlyOrderId(order);
+
+                                            return (
+                                                <tr key={order.id} 
+                                                    onClick={() => handleOrderClick(order)}
+                                                    style={{ 
+                                                        borderBottom: '1px solid #F1F5F9', 
+                                                        transition: 'all 0.1s', 
+                                                        cursor: 'pointer',
+                                                        backgroundColor: !order.isComplete ? '#FFF1F2' : 'transparent'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFE4E6' : '#F9FAFB'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !order.isComplete ? '#FFF1F2' : 'transparent'}
+                                                >
+                                                    <td style={{ padding: '0.8rem 1rem' }}>
+                                                        <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>{friendlyId}</div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899' }}>{isB2B ? '🏢 B2B' : '🏠 B2C'}</div>
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem' }}>
+                                                        <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>📞 {order.customer_phone || 'Sin tel.'}</div>
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{order.shipping_address?.slice(0, 35)}...</div>
+                                                        {hasGPS ? (
+                                                            <span style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '900' }}>📍 GPS OK</span>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontSize: '1.2rem' }}>
+                                                        {order.origin_source === 'web' ? '🛒' : order.origin_source === 'whatsapp' ? '💬' : '📞'}
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
+                                                        {order.total_weight_kg?.toFixed(1)} kg
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
+                                                        ${order.total.toLocaleString()}
+                                                    </td>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                                                        <div style={{
+                                                            padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                                                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : order.status === 'approved' ? '#DCFCE7' : '#F3F4F6',
+                                                            color: order.status === 'pending_approval' ? '#92400E' : order.status === 'approved' ? '#15803D' : '#4B5563'
+                                                        }}>
+                                                            {getStatusLabel(order.status)}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedOrders.has(order.id)}
+                                                            disabled={!order.isComplete}
+                                                            onChange={(e) => { e.stopPropagation(); toggleSelectOrder(order.id); }}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                                {filteredOrders.map(order => (
+                                    <OrderCard 
+                                        key={order.id} 
+                                        order={order} 
+                                        isSelected={selectedOrders.has(order.id)}
+                                        onToggleSelect={() => toggleSelectOrder(order.id)}
+                                        onClick={() => handleOrderClick(order)} 
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
 
-                <div style={{ textAlign: 'center', marginTop: '1.5rem', color: '#94A3B8', fontSize: '0.875rem' }}>
-                    {filteredOrders.length} pedido(s) encontrado(s)
+                <div style={{ textAlign: 'center', marginTop: '1.5rem', color: '#94A3B8', fontSize: '0.8rem', fontWeight: '700' }}>
+                    {filteredOrders.length} pedido(s) encontrado(s) en {viewMode === 'table' ? 'vista lista' : 'vista cuadrícula'}
                 </div>
 
                 {/* Order Details Modal */}
@@ -1127,10 +956,11 @@ export default function OrderLoadingPage() {
                                                     backgroundColor: '#F8FAFC'
                                                 }}
                                             >
-                                                <option value="pending_approval">PENDIENTE APROBACIÓN</option>
+                                                <option value="pending_approval">RECIBIDO (QA LOGÍSTICO)</option>
                                                 <option value="para_compra">PARA COMPRA</option>
                                                 <option value="approved">APROBADO</option>
-                                                <option value="shipped">ENVIADO</option>
+                                                <option value="picking">EN PREPARACIÓN</option>
+                                                <option value="shipped">DESPACHADO</option>
                                                 <option value="delivered">ENTREGADO</option>
                                                 <option value="cancelled">CANCELADO</option>
                                             </select>
@@ -1143,13 +973,15 @@ export default function OrderLoadingPage() {
                                                 backgroundColor: 
                                                     selectedOrder.status === 'pending_approval' ? '#FEF3C7' : 
                                                     selectedOrder.status === 'approved' ? '#D1FAE5' :
+                                                    selectedOrder.status === 'picking' ? '#FEF08A' :
                                                     selectedOrder.status === 'shipped' ? '#DBEAFE' : '#F1F5F9',
                                                 color: 
                                                     selectedOrder.status === 'pending_approval' ? '#92400E' : 
                                                     selectedOrder.status === 'approved' ? '#065F46' :
+                                                    selectedOrder.status === 'picking' ? '#854D0E' :
                                                     selectedOrder.status === 'shipped' ? '#1E40AF' : '#475569'
                                             }}>
-                                                {selectedOrder.status.replace('_', ' ').toUpperCase()}
+                                                {getStatusLabel(selectedOrder.status)}
                                             </span>
                                         )}
                                     </div>
@@ -1583,6 +1415,104 @@ export default function OrderLoadingPage() {
                         </div>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: string, color: string, subtitle: string }) {
+    return (
+        <div style={{
+            backgroundColor: 'white',
+            padding: '1.2rem',
+            borderRadius: '16px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            border: '1px solid #E5E7EB',
+            borderTop: `4px solid ${color}`,
+            transition: 'all 0.2s',
+            cursor: 'pointer'
+        }} onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.05)';
+        }} onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+        }}>
+            <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', color: color, flexShrink: 0 }}>
+                {icon}
+            </div>
+            <div>
+                <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: '2px 0', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700' }}>{subtitle}</div>
+            </div>
+        </div>
+    );
+}
+
+function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
+    const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+    const friendlyId = getFriendlyOrderId(order);
+
+    return (
+        <div 
+            onClick={onClick}
+            style={{
+                backgroundColor: 'white',
+                padding: '1.2rem',
+                borderRadius: '16px',
+                border: '1px solid #E5E7EB',
+                boxShadow: isSelected ? '0 0 0 2px #6366F1' : '0 2px 8px rgba(0,0,0,0.04)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.2s',
+                opacity: order.isComplete ? 1 : 0.8,
+                backgroundColor: !order.isComplete ? '#FFF1F2' : 'white'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div>
+                    <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '2px' }}>
+                        {isB2B ? '🏢 CORPORATIVO' : '🏠 CONSUMIDOR'}
+                    </div>
+                </div>
+                <div style={{
+                    padding: '4px 10px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '900',
+                    backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : '#DCFCE7',
+                    color: order.status === 'pending_approval' ? '#92400E' : '#15803D',
+                    height: 'fit-content'
+                }}>
+                    {getStatusLabel(order.status)}
+                </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+                <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#111827' }}>{order.customer_name}</div>
+                <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '4px' }}>📍 {order.shipping_address?.slice(0, 45)}...</div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F3F4F6', paddingTop: '0.8rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>${order.total.toLocaleString()}</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{order.total_weight_kg?.toFixed(1)} kg</div>
+            </div>
+
+            <div 
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+                style={{
+                    position: 'absolute', top: '12px', right: '12px',
+                    width: '24px', height: '24px', borderRadius: '50%',
+                    border: '2px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: isSelected ? '#6366F1' : 'white',
+                    color: 'white', fontSize: '0.8rem'
+                }}
+            >
+                {isSelected && '✓'}
             </div>
         </div>
     );

@@ -4,6 +4,7 @@ import { CartProvider } from '../lib/cartContext';
 import { AuthProvider } from '../lib/authContext';
 import { useEffect } from 'react';
 import { isAbortError } from '../lib/errorUtils';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     useEffect(() => {
@@ -48,10 +49,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <AuthProvider>
-            <CartProvider>
-                {children}
-            </CartProvider>
-        </AuthProvider>
+        <APIProvider 
+            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} 
+            libraries={['places', 'marker', 'geometry']}
+        >
+            <AuthProvider>
+                <CartProvider>
+                    {children}
+                </CartProvider>
+            </AuthProvider>
+        </APIProvider>
     );
 }

@@ -174,6 +174,14 @@ export default function CommercialDashboard() {
             href: '/admin/commercial/cost-matrix',
             color: '#ECFDF5',
             textColor: '#047857'
+        },
+        {
+            title: 'Campañas Temporales',
+            description: 'Programar alzas o bajas de precio para grupos de clientes por tiempo limitado.',
+            icon: '🚀',
+            href: '/admin/commercial/campaigns',
+            color: '#FFF7ED',
+            textColor: '#C2410C'
         }
     ];
 

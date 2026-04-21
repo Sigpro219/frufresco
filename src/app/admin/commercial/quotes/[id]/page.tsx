@@ -136,7 +136,8 @@ export default function QuoteDetailPage() {
                         product_id: qi.product_id,
                         quantity: qi.quantity_estimated || 1,
                         unit_price: (qi.final_price || 0) * (1 + ((qi.iva_rate || 0) / 100)),
-                        variant_label: '' 
+                        variant_label: '', // Podría sacarse del nombre si se desea
+                        nickname: qi.product_name || (qi.products?.name || '')
                     }))
                 );
 

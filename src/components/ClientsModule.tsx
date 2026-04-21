@@ -334,6 +334,8 @@ export default function ClientsModule() {
                     onRefresh={fetchData}
                     pricingModels={pricingModels}
                     editData={editTarget}
+                    setNicknameClientId={setNicknameClientId}
+                    setIsNicknameModalOpen={setIsNicknameModalOpen}
                 />
             )}
 
@@ -1876,7 +1878,7 @@ function ModalRow({ label, value, color }: { label: string, value?: string | num
     );
 }
 
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void }) {
     const isEdit = !!editData && !!editData.id;
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
@@ -2380,7 +2382,37 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData }: { onCl
                                     ))}
                                 </select>
                             </div>
-                            {/* Cupo de Crédito y Términos eliminados a petición */}
+
+                            {isEdit && setNicknameClientId && setIsNicknameModalOpen && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Máscaras de Productos</label>
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            setNicknameClientId((editData as Profile).id);
+                                            setIsNicknameModalOpen(true);
+                                        }}
+                                        style={{ 
+                                            padding: '0.8rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #10B981', 
+                                            backgroundColor: '#D1FAE5',
+                                            color: '#065F46',
+                                            fontWeight: '900',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                    >
+                                        🏷️ Gestionar Nicknames
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>

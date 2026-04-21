@@ -6,10 +6,12 @@ import Navbar from '../../components/Navbar';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { APIProvider, Map } from '@vis.gl/react-google-maps';
+import { Map } from '@vis.gl/react-google-maps';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
 import { DEFAULT_CUTOFF_HOUR } from '../../lib/constants';
+import { translations, Locale } from '../../lib/translations';
+ import { useSearchParams } from 'next/navigation';
 import { 
     Trash2, 
     MapPin, 
@@ -50,6 +52,10 @@ export default function CheckoutPage() {
     const [outOfZone, setOutOfZone] = useState(false);
     const [specialNotes, setSpecialNotes] = useState('');
     const { profile } = useAuth();
+    const searchParams = useSearchParams();
+    
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
     
     const taxAmount = items.reduce((totalTax, item) => {
         const rate = Number(item.iva_rate) || 0;
@@ -83,7 +89,7 @@ export default function CheckoutPage() {
 
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
-            return alert('Tu navegador no soporta geolocalización.');
+            return alert(locale === 'es' ? 'Tu navegador no soporta geolocalización.' : 'Your browser does not support geolocation.');
         }
 
         setIsGettingLocation(true);
@@ -92,12 +98,12 @@ export default function CheckoutPage() {
                 setLatitude(position.coords.latitude);
                 setLongitude(position.coords.longitude);
                 setIsGettingLocation(false);
-                alert('📍 Ubicación capturada con éxito. Ahora tu entrega será más precisa.');
+                alert(locale === 'es' ? '📍 Ubicación capturada con éxito. Ahora tu entrega será más precisa.' : '📍 Location captured successfully. Your delivery will now be more precise.');
             },
             (error) => {
                 console.error('Error getting location:', error);
                 setIsGettingLocation(false);
-                alert('No pudimos obtener tu ubicación. Por favor asegúrate de dar permisos en tu navegador.');
+                alert(locale === 'es' ? 'No pudimos obtener tu ubicación. Por favor asegúrate de dar permisos en tu navegador.' : 'We could not get your location. Please ensure you grant permissions in your browser.');
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -192,16 +198,16 @@ export default function CheckoutPage() {
         if (!date || date === '' || date === 'dd/mm/aaaa') {
             const recoveryDate = getSafeBogotaDate(1);
             setDate(recoveryDate);
-            return alert('Hubo un problema con la fecha. Se ha corregido, por favor intenta de nuevo.');
+            return alert(locale === 'es' ? 'Hubo un problema con la fecha. Se ha corregido, por favor intenta de nuevo.' : 'There was a problem with the date. It has been fixed, please try again.');
         }
 
-        if (items.length === 0) return alert('Tu carrito está vacío.');
-        if (!name) return alert('Por favor ingresa tu Nombre Completo.');
-        if (!phone) return alert('Por favor ingresa tu Número de Celular.');
-        if (!email) return alert('Por favor ingresa tu Email.');
-        if (!address) return alert('Por favor ingresa la Dirección de Entrega.');
-        if (!isMinOrderMet) return alert(`El pedido mínimo es de $${minOrder.toLocaleString('es-CO')}.`);
-        if (outOfZone) return alert('📍 Lo sentimos, aún no llegamos a tu ubicación para entregas B2C. Te invitamos a registrarte como Cliente Institucional (B2B) para entregas en toda la Sabana.');
+        if (items.length === 0) return alert(t.emptyCart);
+        if (!name) return alert(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.');
+        if (!phone) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
+        if (!email) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
+        if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
+        if (!isMinOrderMet) return alert(`${t.minOrderMsg}: $${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}.`);
+        if (outOfZone) return alert(t.outOfZoneMsg);
 
         setLoading(true);
 
@@ -333,10 +339,10 @@ export default function CheckoutPage() {
         } catch (err: unknown) {
             console.error('❌ Checkout Failed:', err);
             
-            let userMsg = 'Error al procesar el pedido.';
+            let userMsg = locale === 'es' ? 'Error al procesar el pedido.' : 'Error processing the order.';
             
             if (isAbortError(err)) {
-                 userMsg = 'La conexión tardó demasiado (Timeout). Por favor verifica tu internet e intenta de nuevo.';
+                 userMsg = locale === 'es' ? 'La conexión tardó demasiado (Timeout). Por favor verifica tu internet e intenta de nuevo.' : 'Connection timed out. Please check your internet and try again.';
             } else if (err instanceof Error) {
                 userMsg = err.message;
             }
@@ -378,7 +384,7 @@ export default function CheckoutPage() {
                             gap: '12px',
                             letterSpacing: '-0.04em'
                         }}>
-                            <ShoppingCart size={28} strokeWidth={2.5} color="var(--primary)" /> Resumen de Compra
+                            <ShoppingCart size={28} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
                         </h1>
                         {items.length > 0 && (
                             <button
@@ -399,7 +405,7 @@ export default function CheckoutPage() {
                                     cursor: 'pointer'
                                 }}
                             >
-                                <Trash2 size={16} /> Vaciar Carrito
+                                <Trash2 size={16} /> {t.clearCart}
                             </button>
                         )}
                     </div>
@@ -413,9 +419,9 @@ export default function CheckoutPage() {
                             border: '1px dashed var(--border)'
                         }}>
                             <ShoppingCart size={64} color="var(--border)" style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500' }}>Tu carrito está vacío.</p>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500' }}>{t.emptyCart}</p>
                             <Link href="/" className="btn-premium" style={{ display: 'inline-flex', marginTop: '1.5rem', padding: '0.8rem 2rem' }}>
-                                Explorar Productos
+                                {t.exploreProducts}
                             </Link>
                         </div>
                     ) : (
@@ -456,7 +462,7 @@ export default function CheckoutPage() {
                                                     ${item.price.toLocaleString('es-CO')}
                                                 </span>
                                                 <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '600' }}>
-                                                    Cantidad: {item.quantity} {item.unit || ''}
+                                                    {t.quantity}: {item.quantity} {item.unit || ''}
                                                 </span>
                                             </div>
                                         </div>
@@ -488,7 +494,7 @@ export default function CheckoutPage() {
                                                 marginLeft: 'auto'
                                             }}
                                         >
-                                            <Trash2 size={14} /> Eliminar
+                                            <Trash2 size={14} /> {t.remove}
                                         </button>
                                     </div>
                                 </div>
@@ -520,13 +526,13 @@ export default function CheckoutPage() {
                             alignItems: 'center',
                             gap: '10px'
                         }}>
-                            <CreditCard size={18} color="var(--primary)" strokeWidth={2.5} /> Detalle de Entrega
+                            <CreditCard size={18} color="var(--primary)" strokeWidth={2.5} /> {t.deliveryDetail}
                         </h3>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Nombre Completo
+                                    {t.fullName}
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
@@ -534,7 +540,7 @@ export default function CheckoutPage() {
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Juan Pérez"
+                                        placeholder={t.fullNamePlaceholder}
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
                                         style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
@@ -546,7 +552,7 @@ export default function CheckoutPage() {
                             <div className="mobile-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        WhatsApp
+                                        {t.whatsapp}
                                     </label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
@@ -554,7 +560,7 @@ export default function CheckoutPage() {
                                         </div>
                                         <input
                                             type="tel"
-                                            placeholder="300 123 4567"
+                                            placeholder={t.whatsappPlaceholder}
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
                                             style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
@@ -564,7 +570,7 @@ export default function CheckoutPage() {
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Email
+                                        {t.email}
                                     </label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
@@ -572,7 +578,7 @@ export default function CheckoutPage() {
                                         </div>
                                         <input
                                             type="email"
-                                            placeholder="ejemplo@correo.com"
+                                            placeholder={t.emailPlaceholder}
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
@@ -624,7 +630,7 @@ export default function CheckoutPage() {
                                             disabled={isGettingLocation}
                                         >
                                             {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
-                                            Mi ubicación actual
+                                            {t.currentLocation}
                                         </button>
 
                                         <button 
@@ -646,7 +652,7 @@ export default function CheckoutPage() {
                                                 gap: '8px'
                                             }}
                                         >
-                                            <MapIcon size={14} /> Seleccionar en Mapa
+                                            <MapIcon size={14} /> {t.selectOnMap}
                                         </button>
                                     </div>
                                 )}
@@ -665,14 +671,14 @@ export default function CheckoutPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <CheckCircle2 size={16} color="#166534" strokeWidth={2.5} />
                                             <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0, fontWeight: '700' }}>
-                                                Punto de entrega verificado y en cobertura
+                                                {t.locationVerified}
                                             </p>
                                         </div>
                                         <button 
                                             onClick={() => { setLatitude(null); setLongitude(null); }}
                                             style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: '0.7rem', fontWeight: '800', textDecoration: 'underline' }}
                                         >
-                                            Cambiar
+                                            {t.change}
                                         </button>
                                     </div>
                                 )}
@@ -680,7 +686,7 @@ export default function CheckoutPage() {
 
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Fecha de Entrega
+                                    {t.deliveryDate}
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
@@ -711,14 +717,14 @@ export default function CheckoutPage() {
                             <div style={{ marginTop: '0.4rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                     <label style={{ display: 'block', margin: 0, fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        ¿Alguna recomendación para la entrega?
+                                        {t.specialNotes}
                                     </label>
                                     <span style={{ fontSize: '0.65rem', color: specialNotes.length > 130 ? '#EF4444' : '#9CA3AF', fontWeight: '800' }}>
                                         {specialNotes.length}/150
                                     </span>
                                 </div>
                                 <textarea
-                                    placeholder="Ej: Dejar en portería, local 105, el timbre no sirve..."
+                                    placeholder={t.specialNotesPlaceholder}
                                     value={specialNotes}
                                     onChange={(e) => setSpecialNotes(e.target.value.slice(0, 150))}
                                     style={{ 
@@ -742,12 +748,12 @@ export default function CheckoutPage() {
 
                         <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>Subtotal</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString('es-CO')}</span>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.subtotal}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>Impuestos (IVA)</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString('es-CO')}</span>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.taxes}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem' }}>
                                 <span style={{ 
@@ -756,14 +762,14 @@ export default function CheckoutPage() {
                                     fontWeight: '900', 
                                     color: 'var(--text-main)',
                                     letterSpacing: '-0.02em'
-                                }}>Total de compra</span>
+                                }}>{t.totalPurchase}</span>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
                                     fontSize: '1.75rem', 
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
                                     letterSpacing: '-0.04em'
-                                }}>${totalPrice.toLocaleString('es-CO')}</span>
+                                }}>${totalPrice.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
                             </div>
 
                             {!isMinOrderMet && (
@@ -782,7 +788,7 @@ export default function CheckoutPage() {
                                     justifyContent: 'center',
                                     gap: '8px'
                                 }}>
-                                    <AlertCircle size={18} /> Mínimo pedido: ${minOrder.toLocaleString('es-CO')}
+                                    <AlertCircle size={18} /> {t.minOrderMsg}: ${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}
                                 </div>
                             )}
 
@@ -807,10 +813,10 @@ export default function CheckoutPage() {
                                         justifyContent: 'center',
                                         gap: '6px'
                                     }}>
-                                        <MapPin size={18} /> Fuera de Cobertura
+                                        <MapPin size={18} /> {locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}
                                     </p>
                                     <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: '600', opacity: 0.8 }}>
-                                        B2C solo disponible en Zona Norte. 
+                                        {locale === 'es' ? 'B2C solo disponible en Zona Norte.' : 'B2C only available in North Zone.'} 
                                     </p>
                                     <Link href="/b2b/register" style={{ 
                                         color: 'white', 
@@ -822,7 +828,7 @@ export default function CheckoutPage() {
                                         display: 'inline-block',
                                         fontSize: '0.8rem'
                                     }}>
-                                        Registrar mi Negocio (B2B)
+                                        {locale === 'es' ? 'Registrar mi Negocio (B2B)' : 'Register my Business (B2B)'}
                                     </Link>
                                 </div>
                             )}
@@ -850,26 +856,26 @@ export default function CheckoutPage() {
                                 onClick={handleSubmit}
                             >
                                 {loading ? (
-                                    <>Procesando <Loader2 size={24} className="animate-spin" /></>
+                                    <>{t.processing} <Loader2 size={24} className="animate-spin" /></>
                                 ) : !latitude ? (
-                                    <><MapPin size={18} strokeWidth={2} style={{ opacity: 0.6 }} /> Selecciona tu punto de entrega</>
+                                    <><MapPin size={18} strokeWidth={2} style={{ opacity: 0.6 }} /> {locale === 'es' ? 'Selecciona tu punto de entrega' : 'Select your delivery point'}</>
                                 ) : (outOfZone && !isB2B) ? (
-                                    <>Zona No Soportada <MapPin size={24} /></>
+                                    <>{locale === 'es' ? 'Zona No Soportada' : 'Unsupported Zone'} <MapPin size={24} /></>
                                 ) : (
-                                    <>Pagar Pedido Seguro <Rocket size={24} strokeWidth={2.5} /></>
+                                    <>{locale === 'es' ? 'Pagar Pedido Seguro' : 'Secure Order Payment'} <Rocket size={24} strokeWidth={2.5} /></>
                                 )}
                             </button>
 
                             {!latitude && address.trim().length > 3 && (
                                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontWeight: '600', opacity: 0.7 }}>
-                                    📍 Necesitamos tu ubicación exacta para que el repartidor llegue sin problemas.
+                                    {locale === 'es' ? '📍 Necesitamos tu ubicación exacta para que el repartidor llegue sin problemas.' : '📍 We need your exact location so the driver can arrive without issues.'}
                                 </p>
                             )}
 
                             <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '0.75rem' }}>
                                     <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
-                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pago seguro</span>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{locale === 'es' ? 'Pago seguro' : 'Secure Payment'}</span>
                                     <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -923,9 +929,9 @@ export default function CheckoutPage() {
                                     alignItems: 'center',
                                     gap: '12px'
                                 }}>
-                                    <MapPin size={24} color="var(--primary)" /> Selecciona tu Ubicación
+                                    <MapPin size={24} color="var(--primary)" /> {locale === 'es' ? 'Selecciona tu Ubicación' : 'Select your Location'}
                                 </h3>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>Mueve el mapa para centrar el marcador en tu puerta.</p>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>{locale === 'es' ? 'Mueve el mapa para centrar el marcador en tu puerta.' : 'Move the map to center the marker on your door.'}</p>
                             </div>
                             <button 
                                 onClick={() => setShowMapPicker(false)}
@@ -941,12 +947,12 @@ export default function CheckoutPage() {
                                     fontSize: '0.85rem'
                                 }}
                             >
-                                <X size={18} /> Cerrar
+                                <X size={18} /> {locale === 'es' ? 'Cerrar' : 'Close'}
                             </button>
                         </div>
                         
                         <div style={{ flex: 1, position: 'relative' }}>
-                            <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
+
                                 <Map
                                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }} // Bogota
                                     defaultZoom={15}
@@ -985,12 +991,11 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </Map>
-                            </APIProvider>
                         </div>
 
                         <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '2rem', borderTop: '1px solid var(--border)' }}>
                             <div style={{ marginRight: 'auto' }}>
-                                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Coordenadas Detectadas</p>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{locale === 'es' ? 'Coordenadas Detectadas' : 'Detected Coordinates'}</p>
                                 <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '700', fontFamily: 'monospace' }}>
                                     {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
                                 </p>
@@ -1008,7 +1013,7 @@ export default function CheckoutPage() {
                                     gap: '10px'
                                 }}
                             >
-                                <CheckCircle2 size={20} /> Confirmar Ubicación
+                                <CheckCircle2 size={20} /> {locale === 'es' ? 'Confirmar Ubicación' : 'Confirm Location'}
                             </button>
                         </div>
                     </div>

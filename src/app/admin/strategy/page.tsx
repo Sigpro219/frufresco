@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
-import { APIProvider, Map, Marker, useMapsLibrary, MapMouseEvent } from '@vis.gl/react-google-maps';
+import { Map, Marker, useMapsLibrary, MapMouseEvent } from '@vis.gl/react-google-maps';
 
 type Tab = 'geofencing' | 'seo' | 'it';
 
@@ -243,16 +243,15 @@ function GeofencingView({ settings, mapsKey, onSave, saving }: { settings: AppSe
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
             <div style={{ height: '600px', borderRadius: '20px', overflow: 'hidden', border: '1px solid #E2E8F0', position: 'relative' }}>
-                <APIProvider apiKey={mapsKey}>
-                    <Map
-                        defaultCenter={{ lat: 4.67, lng: -74.06 }}
-                        defaultZoom={12}
-                        mapId="frufresco_strategy_map"
-                        gestureHandling={'greedy'}
-                        disableDefaultUI={false}
-                        onClick={handleMapClick}
-                        onIdle={(e) => setMapInstance(e.map)}
-                    >
+                <Map
+                    defaultCenter={{ lat: 4.67, lng: -74.06 }}
+                    defaultZoom={12}
+                    mapId="frufresco_strategy_map"
+                    gestureHandling={'greedy'}
+                    disableDefaultUI={false}
+                    onClick={handleMapClick}
+                    onIdle={(e) => setMapInstance(e.map)}
+                >
                         {/* Shaded Polygons */}
                         {visibleB2C && (
                             <Polygon 
@@ -308,7 +307,6 @@ function GeofencingView({ settings, mapsKey, onSave, saving }: { settings: AppSe
                             <Marker key={`temp-${k}`} position={p} icon={{ path: 'M 0,-1 1,0 0,1 -1,0 z', scale: 10, fillColor: '#0EA5E9', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' } as any} />
                         ))}
                     </Map>
-                </APIProvider>
 
                 {editMode && (
                     <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 1, backgroundColor: 'rgba(255,255,255,0.9)', padding: '1rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)', width: '280px' }}>

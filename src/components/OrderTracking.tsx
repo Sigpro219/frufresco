@@ -2,8 +2,13 @@
 
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useSearchParams } from 'next/navigation';
+import { translations, Locale } from '../lib/translations';
 
 export default function OrderTracking() {
+    const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
     const [orderId, setOrderId] = useState('');
     const [trackingData, setTrackingData] = useState<{
         status: string;
@@ -36,14 +41,14 @@ export default function OrderTracking() {
                 .single();
 
             if (stopErr || !stop) {
-                setError('No encontramos información de despacho para este pedido. Puede que aún esté en alistamiento.');
+                setError(t.trackingError);
                 setTrackingData(null);
                 return;
             }
 
             setTrackingData(stop);
         } catch {
-            setError('Error al consultar el rastreo.');
+            setError(t.trackingQueryError);
         } finally {
             setLoading(false);
         }
@@ -61,13 +66,13 @@ export default function OrderTracking() {
                 padding: '0.5rem 0'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: '850', color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rastrear Pedido</h3>
+                    <h3 style={{ fontSize: '0.85rem', fontWeight: '850', color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t.orderTracking}</h3>
                 </div>
 
                 <form onSubmit={handleTrack} style={{ display: 'flex', gap: '0.4rem', maxWidth: '400px', flex: '1' }}>
                     <input 
                         type="text" 
-                        placeholder="ID de Pedido..." 
+                        placeholder={t.orderIdPlaceholder} 
                         value={orderId}
                         onChange={(e) => setOrderId(e.target.value)}
                         style={{ 
@@ -102,13 +107,13 @@ export default function OrderTracking() {
                         </div>
                         <div style={{ height: '12px', width: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <CompactStep active={true} completed={true} title="Cargue" />
+                            <CompactStep active={true} completed={true} title={t.trackingStepLoad} />
                             <CompactStep 
                                 active={(Array.isArray(trackingData.routes) ? trackingData.routes[0]?.status : trackingData.routes?.status) === 'in_transit'} 
                                 completed={trackingData.status === 'delivered'} 
-                                title="En Ruta" 
+                                title={t.trackingStepRoute} 
                             />
-                            <CompactStep active={trackingData.status === 'delivered'} completed={trackingData.status === 'delivered'} title="OK" />
+                            <CompactStep active={trackingData.status === 'delivered'} completed={trackingData.status === 'delivered'} title={t.trackingStepDelivered} />
                         </div>
                     </div>
                 )}

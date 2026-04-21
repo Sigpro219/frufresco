@@ -115,7 +115,7 @@ export default function LoginPage() {
                         backgroundColor: 'rgba(255, 255, 255, 0.08)',
                         backdropFilter: 'blur(16px)',
                         WebkitBackdropFilter: 'blur(16px)',
-                        padding: '3.5rem 2.5rem',
+                        padding: '2rem 2.5rem',
                         borderRadius: '32px',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
@@ -125,21 +125,21 @@ export default function LoginPage() {
                     }}>
                         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                             <div style={{
-                                width: '70px',
-                                height: '70px',
+                                width: '50px',
+                                height: '50px',
                                 backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                borderRadius: '20px',
+                                borderRadius: '15px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                margin: '0 auto 1.5rem',
+                                margin: '0 auto 1rem',
                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                             }}>
-                                <Lock size={32} color="var(--secondary)" strokeWidth={2.5} />
+                                <Lock size={24} color="var(--secondary)" strokeWidth={2.5} />
                             </div>
                             <h1 style={{ 
                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                fontSize: '2.5rem', 
+                                fontSize: '2rem', 
                                 fontWeight: '900', 
                                 color: 'white', 
                                 marginTop: '0',
@@ -149,15 +149,15 @@ export default function LoginPage() {
                             </h1>
                             <p style={{ 
                                 color: 'rgba(255, 255, 255, 0.6)', 
-                                marginTop: '0.5rem',
-                                fontSize: '1rem',
+                                marginTop: '0.2rem',
+                                fontSize: '0.9rem',
                                 fontWeight: '500'
                             }}>
                                 Portal de ingreso al sistema Logistics Pro
                             </p>
                         </div>
 
-                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {error && (
                                 <div style={{ 
                                     padding: '1rem', 
@@ -173,7 +173,7 @@ export default function LoginPage() {
                             )}
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Correo Electrónico
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -188,7 +188,7 @@ export default function LoginPage() {
                                         placeholder="socio@frubana.com"
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.85rem 1rem 0.85rem 2.8rem', 
+                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
                                             borderRadius: '14px', 
                                             border: '1px solid rgba(255,255,255,0.1)',
                                             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -203,7 +203,7 @@ export default function LoginPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Contraseña
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -218,7 +218,7 @@ export default function LoginPage() {
                                         placeholder="••••••••"
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.85rem 1rem 0.85rem 2.8rem', 
+                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
                                             borderRadius: '14px', 
                                             border: '1px solid rgba(255,255,255,0.1)',
                                             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -239,8 +239,8 @@ export default function LoginPage() {
                                 style={{ 
                                     marginTop: '0.5rem', 
                                     width: '100%', 
-                                    fontSize: '1.2rem',
-                                    padding: '1rem',
+                                    fontSize: '1rem',
+                                    padding: '0.8rem',
                                     borderRadius: 'var(--radius-full)',
                                     fontWeight: '900',
                                     fontFamily: 'var(--font-outfit), sans-serif',
@@ -342,7 +342,7 @@ export default function LoginPage() {
                             </div>
                         )}
 
-                        <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
+                        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', fontWeight: '500' }}>
                                 ¿No tienes cuenta para tu negocio? 
                                 <br />

@@ -563,29 +563,25 @@ export default function AdminProductsPage() {
                             display: 'flex', 
                             gap: '12px', 
                             alignItems: 'center',
-                            backgroundColor: 'rgba(255, 255, 255, 0.45)',
-                            backdropFilter: 'blur(12px)',
-                            padding: '0.6rem 1.2rem',
+                            padding: '0.4rem',
                             borderRadius: '16px',
-                            border: '1px solid rgba(255, 255, 255, 0.6)',
-                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)'
                         }}>
                             <Link href="/admin/master/products" style={{ 
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '8px',
-                                color: '#4F46E5', 
-                                fontWeight: '700', 
+                                color: '#111827', 
+                                fontWeight: '800', 
                                 textDecoration: 'none', 
                                 fontSize: '0.8rem',
                                 backgroundColor: 'white',
-                                padding: '0.6rem 1rem',
-                                borderRadius: '10px',
-                                border: '1px solid #E0E7FF',
+                                padding: '0.65rem 1.2rem',
+                                borderRadius: '12px',
+                                border: '1px solid #E5E7EB',
                                 transition: 'all 0.2s',
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                             }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFF')}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
                             >
                                 <Info size={16} /> Panel Maestro
@@ -599,18 +595,18 @@ export default function AdminProductsPage() {
                                     alignItems: 'center',
                                     gap: '10px',
                                     color: 'white',
-                                    backgroundColor: isSyncingPrices ? '#9CA3AF' : '#10B981',
-                                    padding: '0.6rem 1.4rem',
-                                    borderRadius: '11px',
+                                    backgroundColor: isSyncingPrices ? '#9CA3AF' : 'var(--primary)',
+                                    padding: '0.65rem 1.4rem',
+                                    borderRadius: '12px',
                                     border: 'none',
-                                    fontWeight: '800',
+                                    fontWeight: '900',
                                     fontSize: '0.85rem',
                                     cursor: isSyncingPrices ? 'not-allowed' : 'pointer',
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(26, 77, 46, 0.2)',
                                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                 }}
-                                onMouseEnter={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'scale(1.02)')}
-                                onMouseLeave={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'scale(1)')}
+                                onMouseEnter={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'translateY(-2px)')}
+                                onMouseLeave={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'translateY(0)')}
                             >
                                 <Globe size={18} />
                                 {isSyncingPrices ? 'Publicando...' : 'Publicar Precios en Tienda'}
@@ -658,65 +654,13 @@ export default function AdminProductsPage() {
                     </div>
                 </header>
 
-                {/* KPI DASHBOARD MINIMALISTA */}
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(5, 1fr)', 
-                    gap: '1rem', 
-                    marginBottom: '2rem' 
-                }}>
-                    {[
-                        { label: 'Total Catálogo', value: kpiMetrics.total, icon: '📦', color: '#6366F1', bg: '#EEF2FF', desc: 'SKUs Disponibles' },
-                        { label: 'Stock Activo', value: `${kpiMetrics.activeCoverage}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5', desc: 'Productos Visibles' },
-                        { label: 'Cobertura Visual', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#3B82F6', bg: '#EFF6FF', desc: 'Items con Foto' },
-                        { label: 'Cobertura Precios', value: `${kpiMetrics.pricingStatus}%`, icon: '💰', color: kpiMetrics.pricingStatus < 90 ? '#EF4444' : '#F59E0B', bg: kpiMetrics.pricingStatus < 90 ? '#FEF2F2' : '#FFFBEB', desc: 'Precios Públicos' },
-                        { label: 'Mix Variaciones', value: `${kpiMetrics.variantsCoverage}%`, icon: '⚖️', color: '#8B5CF6', bg: '#F5F3FF', desc: 'Complejidad SKU' },
-                    ].map((card, i) => (
-                        <div key={i} style={{
-                            backgroundColor: 'white',
-                            padding: '1.2rem',
-                            borderRadius: '16px',
-                            border: '1px solid #E5E7EB',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            cursor: 'default',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-3px)';
-                            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
-                            e.currentTarget.style.borderColor = card.color;
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.01)';
-                            e.currentTarget.style.borderColor = '#E5E7EB';
-                        }}
-                        >
-                            <div style={{ 
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '12px', 
-                                backgroundColor: card.bg, 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center', 
-                                fontSize: '1.2rem' 
-                            }}>
-                                {card.icon}
-                            </div>
-                            <div>
-                                <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                                    {card.label}
-                                </p>
-                                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
-                                    {card.value}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
+                {/* KPI DASHBOARD PREMIUM */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
+                    <KPIMiniCard label="Total Catálogo" value={kpiMetrics.total} icon="📦" color="#6366F1" />
+                    <KPIMiniCard label="Stock Activo" value={`${kpiMetrics.activeCoverage}%`} icon="✅" color="#10B981" />
+                    <KPIMiniCard label="Visualización" value={`${kpiMetrics.imageCoverage}%`} icon="📸" color="#3B82F6" />
+                    <KPIMiniCard label="Precios Web" value={`${kpiMetrics.pricingStatus}%`} icon="💰" color="#F59E0B" />
+                    <KPIMiniCard label="Mix Variantes" value={`${kpiMetrics.variantsCoverage}%`} icon="⚖️" color="#8B5CF6" />
                 </div>
 
 
@@ -921,10 +865,10 @@ export default function AdminProductsPage() {
                         overflow: 'hidden',
                         border: '1px solid var(--border)'
                     }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
                             <thead>
-                                <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                                    <th style={{ padding: '1rem', width: '50px', textAlign: 'center' }}>
+                                <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #E5E7EB' }}>
+                                    <th style={{ padding: '1.2rem 1rem', width: '50px', textAlign: 'center' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
@@ -935,13 +879,13 @@ export default function AdminProductsPage() {
                                                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                                             />
                                     </th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRODUCTO</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>CATEGORÍA</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ETIQUETAS & BÚSQUEDA</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>PRECIO</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>VARIANTES</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ESTADO</th>
-                                    <th style={{ padding: '1rem', fontSize: '1.1rem', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'center' }}>ACCIÓN</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Producto</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Categoría</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Atributos & Tags</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Precio</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Oferta / Var.</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Presencia</th>
+                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1078,21 +1022,22 @@ export default function AdminProductsPage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center', minWidth: '220px' }}>
+                                        <td style={{ padding: '1rem', textAlign: 'center', minWidth: '240px' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                 {/* Tags Input */}
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px', justifyContent: 'center' }}>
                                                     {product.tags?.map((tag, i) => (
                                                         <span key={i} style={{ 
-                                                            fontSize: '0.7rem', 
+                                                            fontSize: '0.65rem', 
                                                             padding: '2px 8px', 
-                                                            backgroundColor: 'var(--accent)', 
-                                                            color: 'var(--primary-dark)', 
-                                                            borderRadius: '12px',
-                                                            fontWeight: '700',
+                                                            backgroundColor: '#F3F4F6', 
+                                                            color: '#374151', 
+                                                            borderRadius: '6px',
+                                                            fontWeight: '800',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '4px'
+                                                            gap: '4px',
+                                                            border: '1px solid #E5E7EB'
                                                         }}>
                                                             {tag}
                                                             <X size={10} style={{ cursor: 'pointer' }} onClick={() => {
@@ -1105,8 +1050,16 @@ export default function AdminProductsPage() {
                                                 <div style={{ position: 'relative' }}>
                                                     <input 
                                                         type="text"
-                                                        placeholder="Añadir tag..."
-                                                        style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%' }}
+                                                        placeholder="+ tag estratégico"
+                                                        style={{ 
+                                                            fontSize: '0.75rem', 
+                                                            padding: '6px 12px', 
+                                                            borderRadius: '8px', 
+                                                            border: '1px solid #E5E7EB', 
+                                                            width: '100%',
+                                                            backgroundColor: '#F9FAFB',
+                                                            fontWeight: '600'
+                                                        }}
                                                         onFocus={(e) => {
                                                             const box = e.currentTarget.nextElementSibling as HTMLElement;
                                                             if (box) box.style.display = 'flex';
@@ -1139,14 +1092,14 @@ export default function AdminProductsPage() {
                                                         right: 0, 
                                                         backgroundColor: 'white', 
                                                         border: '1px solid #E5E7EB', 
-                                                        borderRadius: '8px', 
-                                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                                                        borderRadius: '12px', 
+                                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)', 
                                                         zIndex: 20,
-                                                        padding: '8px',
+                                                        padding: '10px',
                                                         flexDirection: 'column',
-                                                        gap: '4px'
+                                                        gap: '6px'
                                                     }}>
-                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px' }}>Sugerencias</div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>Sugerencias</div>
                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                             {(categorySuggestions[product.category] || []).filter(t => !product.tags?.includes(t)).length > 0 ? (
                                                                 (categorySuggestions[product.category] || [])
@@ -1158,7 +1111,7 @@ export default function AdminProductsPage() {
                                                                                 const newTags = Array.from(new Set([...(product.tags || []), tag]));
                                                                                 updateProductField(product.id, 'tags', newTags);
                                                                             }}
-                                                                            style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #EEF2FF', backgroundColor: '#F5F7FF', cursor: 'pointer', fontWeight: '600' }}
+                                                                            style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E0E7FF', backgroundColor: '#F0F4FF', cursor: 'pointer', fontWeight: '700', color: '#4F46E5' }}
                                                                         >
                                                                             + {tag}
                                                                         </button>
@@ -1171,7 +1124,7 @@ export default function AdminProductsPage() {
                                                                             const newTags = Array.from(new Set([...(product.tags || []), tag]));
                                                                             updateProductField(product.id, 'tags', newTags);
                                                                         }}
-                                                                        style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', border: '1px solid #F3F4F6', backgroundColor: '#F9FAFB', cursor: 'pointer', fontWeight: '600' }}
+                                                                        style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '6px', border: '1px solid #F3F4F6', backgroundColor: '#F9FAFB', cursor: 'pointer', fontWeight: '700', color: '#374151' }}
                                                                     >
                                                                         + {tag}
                                                                     </button>
@@ -1183,9 +1136,9 @@ export default function AdminProductsPage() {
                                                 {/* Keywords Input */}
                                                 <input 
                                                     type="text"
-                                                    placeholder="Keywords (ej: ensalada, verde...)"
+                                                    placeholder="Keywords de búsqueda..."
                                                     defaultValue={product.keywords || ''}
-                                                    style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', width: '100%', fontStyle: 'italic' }}
+                                                    style={{ fontSize: '0.75rem', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E5E7EB', width: '100%', fontStyle: 'italic', backgroundColor: 'transparent' }}
                                                     onBlur={(e) => {
                                                         if (e.target.value !== (product.keywords || '')) {
                                                             updateProductField(product.id, 'keywords', e.target.value);
@@ -1345,6 +1298,54 @@ export default function AdminProductsPage() {
                         />
                     )
                 }
+            </div>
+        </div>
+    );
+}
+
+function KPIMiniCard({ label, value, icon, color }: { label: string, value: string | number, icon: string, color: string }) {
+    return (
+        <div style={{
+            backgroundColor: 'white',
+            padding: '1.2rem',
+            borderRadius: '20px',
+            border: '1px solid #E5E7EB',
+            borderTop: `4px solid ${color}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+        }}
+        onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-3px)';
+            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+        }}
+        onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+        }}
+        >
+            <div style={{ 
+                width: '42px', 
+                height: '42px', 
+                borderRadius: '12px', 
+                backgroundColor: `${color}10`, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                fontSize: '1.3rem',
+                color: color
+            }}>
+                {icon}
+            </div>
+            <div>
+                <p style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                    {label}
+                </p>
+                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                    {value}
+                </p>
             </div>
         </div>
     );

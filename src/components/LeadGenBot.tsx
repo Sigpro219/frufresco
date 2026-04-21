@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import { isInsidePolygon, Point } from '../lib/geoUtils';
-import { APIProvider, Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
+import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
 import { User } from 'lucide-react';
 
 type Message = {
@@ -29,7 +29,7 @@ type LeadData = {
 
 export default function LeadGenBotV2() {
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de Logistics Pro.', sender: 'bot' },
+        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de FruFresco.', sender: 'bot' },
         { id: 2, text: 'Me encantaría acompañarte en el proceso de activación de tu cuenta institucional con precios de origen.', sender: 'bot' },
         { id: 3, text: 'Para comenzar, ¿cuál es el nombre de tu empresa o negocio?', sender: 'bot' }
     ]);
@@ -284,17 +284,18 @@ export default function LeadGenBotV2() {
                 zIndex: 10
             }}>
                 <div style={{ 
-                    width: '48px', 
-                    height: '48px', 
+                    width: '52px', 
+                    height: '52px', 
                     backgroundColor: 'rgba(255,255,255,0.2)', 
-                    borderRadius: 'var(--radius-md)', 
+                    borderRadius: '50%', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
                     backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255,255,255,0.3)'
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    overflow: 'hidden'
                 }}>
-                    <User size={24} strokeWidth={2} />
+                    <img src="/assistant_avatar.png" alt="Asistente" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div>
                     <h3 style={{ 
@@ -303,7 +304,7 @@ export default function LeadGenBotV2() {
                         fontWeight: '900', 
                         fontFamily: 'var(--font-outfit), sans-serif',
                         letterSpacing: '-0.02em' 
-                    }}>Asistente Personal B2B</h3>
+                    }}>Asistente Clientes Institucionales</h3>
                     <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80', boxShadow: '0 0 10px #4ADE80' }}></div>
                         Conectado · Respuesta Inmediata
@@ -363,8 +364,7 @@ export default function LeadGenBotV2() {
 
                 {currentStep === 4 && (
                     <div style={{ width: '100%', minHeight: '300px', height: '300px', borderRadius: '16px', overflow: 'hidden', border: '3px solid var(--primary)', marginTop: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
-                        <APIProvider apiKey={MAPS_KEY}>
-                            <Map
+                        <Map
                                 defaultCenter={{ lat: 4.67, lng: -74.06 }}
                                 defaultZoom={11}
                                 gestureHandling={'greedy'}
@@ -388,7 +388,7 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-                                                    text: 'Lo sentimos, por el momento Logistics Pro solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
+                                                    text: 'Lo sentimos, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
@@ -405,12 +405,11 @@ export default function LeadGenBotV2() {
                                     <Marker position={{ lat: leadData.latitude, lng: leadData.longitude }} />
                                 )}
                             </Map>
-                        </APIProvider>
                     </div>
                 )}
                 {isTyping && (
                     <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        Logistics Pro está escribiendo...
+                        FruFresco está escribiendo...
                     </div>
                 )}
                 <div ref={messagesEndRef} />

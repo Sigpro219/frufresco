@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCart } from '../lib/cartContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { translations, Locale } from '../lib/translations';
 
 // Keep interface consistent with usage
 interface Product {
@@ -27,6 +28,9 @@ interface QuickViewModalProps {
 const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     const { addItem } = useCart();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
     const [quantity, setQuantity] = useState(1);
 
     // Normalizar las opciones
@@ -210,7 +214,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
 
                 <div style={{ marginBottom: '2rem' }}>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>
-                        Seleccionar Cantidad
+                        {t.selectionQuantity}
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <div style={{ 
@@ -268,7 +272,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             >+</button>
                         </div>
                         <div style={{ flex: 1, textAlign: 'right' }}>
-                             <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>TOTAL</span>
+                             <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>{t.total}</span>
                              <div style={{ fontSize: '1.35rem', fontWeight: '900', color: isAvailable ? '#111827' : '#9CA3AF' }}>
                                  ${(currentPrice * (isAvailable ? quantity : 1)).toLocaleString('es-CO')}
                              </div>
@@ -289,7 +293,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             border: '1px solid #FEE2E2',
                             marginBottom: '0.5rem'
                         }}>
-                            ⚠️ Combinación no disponible actualmente
+                                                         ⚠️ {t.notAvailableAlt}
                         </div>
                     )}
                     <button
@@ -320,7 +324,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             }
                         }}
                     >
-                        {isAvailable ? 'Agregar al Pedido' : 'No disponible'}
+                        {isAvailable ? t.addToOrder : t.unavailable}
                     </button>
                     <button
                         onClick={handleBuyNow}
@@ -351,7 +355,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                             }
                         }}
                     >
-                        {isAvailable ? 'Pagar Ahora' : 'Agotado'}
+                        {isAvailable ? t.payNow : t.outOfStock}
                     </button>
                 </div>
             </div>

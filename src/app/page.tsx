@@ -6,7 +6,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
 import { LucideIcon, Building2, ShoppingCart, Timer, Sprout, Coins, Flame, Apple, Leaf, Carrot, Milk, Package, LayoutGrid } from 'lucide-react';
-import { CATEGORY_MAP } from '../lib/constants';
+import { CATEGORY_MAP, REVERSE_CATEGORY_MAP } from '../lib/constants';
+import { translations, Locale } from '../lib/translations';
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
   'FR': Apple,
@@ -19,17 +20,25 @@ const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
 };
 
 // SEO Metadata
-export const metadata = {
-  title: 'Logistics Pro | Soluciones de Abastecimiento Inteligente',
-  description: 'Líderes en gestión logística y abastecimiento para tu negocio. Eficiencia garantizada y tecnología de punta.',
-  keywords: ['logística integral', 'gestión de suministros', 'transporte inteligente', 'logistics pro'],
-};
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lang?: string }> }) {
+  const { lang } = await searchParams;
+  const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+  const t = translations[locale];
+  
+  return {
+    title: `Logistics Pro | ${locale === 'es' ? 'Soluciones de Abastecimiento Inteligente' : 'Intelligent Sourcing Solutions'}`,
+    description: t.heroDescription,
+    keywords: ['logística integral', 'gestión de suministros', 'transporte inteligente', 'logistics pro'],
+  };
+}
 
 // Opt out of caching (for dev)
 export const dynamic = 'force-dynamic';
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
-  const { q, category } = await searchParams;
+export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; lang?: string }> }) {
+  const { q, category, lang } = await searchParams;
+  const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+  const t = translations[locale];
 
   // 1. Fetch Featured Products (Top 10) - Balaceado por categorías
   const { data: allVisibleResponse } = await supabase
@@ -100,29 +109,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   };
 
   const isB2bEnabled = getSetting('enable_b2b_lead_capture', 'true') === 'true';
-  const heroTitle = getSetting('hero_title', 'Excelencia en Frescura \n para tu Negocio y Hogar');
-  const heroDescription = getSetting('hero_description', 'Somos el aliado estratégico de los mejores restaurantes y casinos de Bogotá. Llevamos la calidad de Corabastos a tu puerta, con cero desperdicio y puntualidad suiza.');
+  const heroTitle = (locale === 'en' ? getSetting('hero_title_en', '') : getSetting('hero_title', '')) || t.heroTitle;
+  const heroDescription = (locale === 'en' ? getSetting('hero_description_en', '') : getSetting('hero_description', '')) || t.heroDescription;
   const heroImageUrl = getSetting('hero_image_url', '/hero_fresh_produce.png');
-  const featuredTitle = getSetting('home_featured_title', '🔥 Lo más vendido de la semana');
-  const catalogTitle = getSetting('home_catalog_title', 'Nuestro Catálogo');
+  const featuredTitleRaw = (locale === 'en' ? getSetting('home_featured_title_en', '') : getSetting('home_featured_title', ''));
+  const featuredTitle = featuredTitleRaw || t.featuredTitle;
+  const catalogTitleRaw = (locale === 'en' ? getSetting('home_catalog_title_en', '') : getSetting('home_catalog_title', ''));
+  const catalogTitle = catalogTitleRaw || t.catalogTitle;
   
-  const valuePropsRaw = getSetting('value_proposition_items', '');
-  let valueProps: { icon: string; title: string; desc: string }[] = [];
-  try {
-      if (valuePropsRaw) {
-          valueProps = JSON.parse(valuePropsRaw);
-      }
-      // If it's an empty array or parsing failed, we use the hardcoded defaults
-      if (!Array.isArray(valueProps) || valueProps.length === 0) {
-          throw new Error('Fallback');
-      }
-  } catch {
-      valueProps = [
-        { icon: '⏱️', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
-        { icon: '🥬', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
-        { icon: '💎', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
-      ];
-  }
+  const valueProps = t.valueProps;
 
   const dynamicCategories: string[] = ['Todos', ...Array.from(new Set((categoriesData || []).map((c: { category: string }) => c.category)))];
 
@@ -176,14 +171,38 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       }), {} as Record<string, string>);
     }
   }
+  
+  // 5. Intelligent Global Translation (AI Cache)
+  let translationCache: Record<string, string> = {};
+  if (locale === 'en') {
+      const { data: translations } = await supabase
+          .from('product_translations_cache')
+          .select('source_text, translated_text')
+          .eq('lang', 'en');
+      
+      if (translations) {
+          translationCache = translations.reduce((acc, item) => ({
+              ...acc,
+              [item.source_text]: item.translated_text
+          }), {} as Record<string, string>);
+      }
+  }
 
   const applyNicknames = (plist: Product[]) => plist.map(p => ({
     ...p,
-    display_name: nicknameMap[p.id] || p.display_name || p.name
+    display_name: nicknameMap[p.id] || translationCache[p.name] || p.display_name || p.name
   }));
 
   const products = applyNicknames(rawProducts || []);
   const finalFeatured = applyNicknames(featuredProducts);
+  
+  // Helper to get translated category name
+  const getCategoryName = (cat: string) => {
+    if (cat === 'Todos') return t.allCategories;
+    const code = REVERSE_CATEGORY_MAP[cat] || cat.toUpperCase();
+    return (t.categories as any)[code] || cat;
+  };
+
 
   return (
     <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
@@ -259,7 +278,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 gap: '0.6rem',
                 backgroundColor: 'var(--primary)'
               }}>
-                <span><Building2 size={22} strokeWidth={2.5} /></span> Institucional
+                <span><Building2 size={22} strokeWidth={2.5} /></span> {t.btnInstitutional}
               </button>
             </Link>
             )}
@@ -277,7 +296,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 border: '1px solid rgba(255, 255, 255, 0.3)',
                 cursor: 'pointer'
               }}>
-                <span><ShoppingCart size={22} strokeWidth={2.5} /></span> Hogar / Mi cuenta
+                <span><ShoppingCart size={22} strokeWidth={2.5} /></span> {t.btnHome}
               </button>
             </Link>
           </div>
@@ -344,20 +363,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       
       <section id="catalog" className="container" style={{ padding: '4rem 1rem', scrollMarginTop: '80px' }}>
         <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-          <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900', letterSpacing: '-0.03em' }}>{catalogTitle}</h2>
+          <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900', letterSpacing: '-0.03em' }}>{catalogTitle === 'Nuestro Catálogo' ? t.catalogTitle : catalogTitle}</h2>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <SearchBar />
+            <SearchBar placeholder={t.searchPlaceholder} />
           </div>
 
           <div style={{
             display: 'flex',
+            flexWrap: 'wrap',
             justifyContent: 'center',
-            gap: '0.75rem',
+            gap: '0.6rem',
             marginTop: '1.5rem',
-            flexWrap: 'wrap'
+            maxWidth: '1200px',
+            margin: '1.5rem auto 0',
+            width: '100%',
+            padding: '0 1rem'
           }}>
             {dynamicCategories.map((cat: string) => {
-              const Icon = CATEGORY_ICON_MAP[cat] || (cat === 'Todos' ? CATEGORY_ICON_MAP['Todos'] : null);
               return (
                 <Link
                   key={cat}
@@ -368,15 +390,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                   scroll={false}
                   className={`category-pill ${((!category && cat === 'Todos') || category === cat) ? 'active' : ''}`}
                   style={{
-                    padding: '0.8rem 1.8rem',
-                    fontSize: '1rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.6rem'
+                    justifyContent: 'center'
                   }}
                 >
-                  {Icon && <Icon size={18} strokeWidth={2.5} />}
-                  {CATEGORY_MAP[cat.trim().toUpperCase()] || cat}
+                  {getCategoryName(cat)}
                 </Link>
               );
             })}
@@ -389,17 +408,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               id="catalog-scroll-area"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '2.5rem',
-                maxHeight: '850px', // Altura más humana (~2.5 filas visibles a la vez, invita a scrollear)
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: '2rem',
+                maxHeight: '1000px', 
                 overflowY: 'auto',
+                overflowX: 'hidden',
                 padding: '1.5rem',
                 borderRadius: 'var(--radius-lg)',
                 scrollbarWidth: 'thin',
                 scrollbarColor: 'var(--primary) transparent',
                 scrollBehavior: 'smooth',
                 border: '1px solid rgba(0,0,0,0.03)',
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                width: '100%'
               }}
               className="custom-scrollbar"
             >
@@ -408,14 +429,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
               ))}
             </div>
             
-            {/* Fade Effect at the bottom */}
+            {/* Shadow Effect at the bottom - subtle */}
             <div style={{
               position: 'absolute',
               bottom: 0,
               left: 0,
               right: 0,
-              height: '150px',
-              background: 'linear-gradient(to top, rgba(255,255,255,0.95), transparent)',
+              height: '80px',
+              background: 'linear-gradient(to top, rgba(255,255,255,0.8), transparent)',
               zIndex: 10,
               pointerEvents: 'none',
               borderRadius: '0 0 var(--radius-lg) var(--radius-lg)'
@@ -443,11 +464,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           .custom-scrollbar::-webkit-scrollbar-thumb {
             background-color: var(--primary);
             border-radius: 20px;
-            border: 3px solid transparent;
           }
           .custom-scrollbar {
-            mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
-            -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+            /* Mask removed to prevent clipping */
           }
         `}} />
       </section>

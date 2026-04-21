@@ -5,6 +5,7 @@ import GlobalBanner from '@/components/GlobalBanner';
 import Footer from '@/components/Footer';
 import HelpDeskWidget from '@/components/HelpDeskWidget';
 import { Providers } from '@/app/providers';
+import { Suspense } from 'react';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -12,9 +13,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     return (
         <Providers>
-            {!isOpsOrAdmin && <GlobalBanner />}
-            {children}
-            {!isOpsOrAdmin && <Footer />}
+            <Suspense fallback={null}>
+                {!isOpsOrAdmin && <GlobalBanner />}
+                {children}
+                {!isOpsOrAdmin && <Footer />}
+            </Suspense>
             {isOpsOrAdmin && <HelpDeskWidget />}
         </Providers>
     );

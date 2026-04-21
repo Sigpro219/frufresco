@@ -1,16 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Product } from '../lib/supabase';
 import { Apple, Eye, Info } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import QuickViewModal from './QuickViewModal';
+import { useSearchParams } from 'next/navigation';
+import { translations, Locale } from '../lib/translations';
 
 export default function ProductCard({ product }: { product: Product }) {
     const [isHovered, setIsHovered] = useState(false);
     const [showQuickView, setShowQuickView] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
+    const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
+    const [displayName, setDisplayName] = useState(product.display_name || product.name);
+
+    useEffect(() => {
+        // Al cargar, si ya tiene un display_name diferente al original, lo usamos
+        setDisplayName(product.display_name || product.name);
+    }, [product.display_name, product.name]);
+
+    useEffect(() => {
+        // Lazy Translation: Si estamos en Inglés y el nombre sigue siendo el original (sin caché)
+        if (locale === 'en' && displayName === product.name) {
+             console.log(`🤖 Solicitando traducción para: ${product.name}...`);
+             async function triggerLazyTranslate() {
+                 try {
+                     const response = await fetch('/api/translate', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ text: product.name, targetLang: 'en' })
+                     });
+                     if (response.ok) {
+                         const result = await response.json();
+                         if (result.translatedText && result.translatedText !== product.name) {
+                             console.log(`✅ Traducido: ${product.name} -> ${result.translatedText}`);
+                             setDisplayName(result.translatedText);
+                         }
+                     }
+                 } catch (err) {
+                     console.error('Lazy Translation Error:', err);
+                 }
+             }
+             triggerLazyTranslate();
+        }
+    }, [locale, product.name, displayName]);
 
     const handleQuickViewClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -116,7 +153,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                 letterSpacing: '0.05em'
                             }}
                         >
-                            <Eye size={14} strokeWidth={2.5} /> VISTA RÁPIDA
+                            <Eye size={14} strokeWidth={2.5} /> {t.quickView}
                         </button>
                     </div>
 
@@ -171,14 +208,15 @@ export default function ProductCard({ product }: { product: Product }) {
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden'
-                        }}>{product.display_name || product.name}</h3>
+                        }}>{displayName}</h3>
                     </Link>
 
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                         {product.base_price > 0 ? (
                             <>
                                 <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                    ${((product.base_price || 0) * (product.web_conversion_factor || 1)).toLocaleString('es-CO')}
+                                    ${((product.base_price || 0) * (product.web_conversion_factor || 1)).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                    {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
                                 </span>
                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
                                     / {product.web_unit || product.unit_of_measure || 'Un'}
@@ -223,7 +261,7 @@ export default function ProductCard({ product }: { product: Product }) {
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
                             >
-                                Ver producto <Info size={16} strokeWidth={2} />
+                                {t.viewProduct} <Info size={16} strokeWidth={2} />
                             </div>
                         </Link>
                     </div>

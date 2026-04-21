@@ -30,6 +30,41 @@ interface Product {
     capabilities?: string[];
 }
 
+function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: any) {
+    return (
+        <div style={{ 
+            backgroundColor: bg, 
+            padding: '1.5rem', 
+            borderRadius: '20px', 
+            border: '1px solid #E2E8F0', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '0.4rem', 
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', 
+            transition: 'all 0.3s ease',
+            position: 'relative',
+            overflow: 'hidden'
+        }} onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.05)';
+        }} onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.02)';
+        }}>
+            <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05, transform: 'scale(3)', color: color }}>
+                {icon}
+            </div>
+            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                <span style={{ fontSize: '2rem', fontWeight: '900', color: color, letterSpacing: '-0.03em' }}>
+                    {trend === 'up' && '▲ '}{trend === 'down' && '▼ '}{value}
+                </span>
+                {subValue && <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{subValue}</span>}
+            </div>
+        </div>
+    );
+}
+
 export default function CostMatrixPage() {
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
@@ -191,13 +226,13 @@ export default function CostMatrixPage() {
             const purchasesData = allPurchases;
 
             // 3.5 Fetch Manual Overrides
+            let overMap: Record<string, any> = {};
             try {
                 const { data: overData, error: overError } = await supabase
                     .from('commercial_overrides')
                     .select('product_id, manual_cost, expires_at');
                 
                 if (!overError && overData) {
-                    const overMap: Record<string, any> = {};
                     overData.forEach(o => {
                         overMap[o.product_id] = { manual_cost: o.manual_cost, expires_at: o.expires_at };
                     });
@@ -381,27 +416,29 @@ export default function CostMatrixPage() {
         const isNeutral = last === first || Math.abs(trendPercent) < 0.1;
 
         return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', backgroundColor: '#F8FAFC', padding: '0.5rem 1rem', borderRadius: '14px' }}>
                 <svg width={width} height={height} style={{ overflow: 'visible' }}>
                     <path
                         d={pathData}
                         fill="none"
-                        stroke={isUp ? '#EF4444' : isNeutral ? '#6B7280' : '#10B981'}
-                        strokeWidth="2"
+                        stroke={isUp ? '#EF4444' : isNeutral ? '#94A3B8' : '#10B981'}
+                        strokeWidth="2.5"
                         strokeLinejoin="round"
                         strokeLinecap="round"
                     />
                     {points.map((p, i) => (
-                        <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={isUp ? '#EF4444' : isNeutral ? '#6B7280' : '#10B981'} />
+                        <circle key={i} cx={p.x} cy={p.y} r="3" fill={i === points.length - 1 ? (isUp ? '#EF4444' : isNeutral ? '#94A3B8' : '#10B981') : 'white'} stroke={isUp ? '#EF4444' : isNeutral ? '#94A3B8' : '#10B981'} strokeWidth="1.5" />
                     ))}
                 </svg>
                 <div style={{ 
-                    fontSize: '0.75rem', 
+                    fontSize: '0.85rem', 
                     fontWeight: '900', 
-                    color: isUp ? '#EF4444' : isNeutral ? '#6B7280' : '#10B981',
+                    color: isUp ? '#EF4444' : isNeutral ? '#64748B' : '#10B981',
                     display: 'flex',
                     alignItems: 'center',
-                    minWidth: '45px'
+                    minWidth: '55px',
+                    justifyContent: 'flex-end',
+                    fontFamily: 'Outfit, sans-serif'
                 }}>
                     {isNeutral ? '—' : isUp ? '▲' : '▼'} {Math.abs(trendPercent).toFixed(1)}%
                 </div>
@@ -541,146 +578,210 @@ export default function CostMatrixPage() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
             <Navbar />
-            <div style={{ width: '98%', margin: '0 auto', padding: '2rem 4rem' }}>
+            <div style={{ width: '96%', margin: '0 auto', padding: '2.5rem 2rem' }}>
                 
-                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <Link href="/admin/commercial" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.9rem' }}>← Volver al Panel</Link>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0 0 0' }}>Matriz de Precios Históricos 📊</h1>
-                        <p style={{ color: '#6B7280', margin: '0.2rem 0 0 0' }}>Historial, tendencia y SKUs de los últimos precios registrados.</p>
+                <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '2rem', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 400px' }}>
+                        <Link href="/admin/commercial" style={{ 
+                            textDecoration: 'none', 
+                            color: '#94A3B8', 
+                            fontWeight: '700', 
+                            fontSize: '0.85rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            marginBottom: '0.8rem',
+                            transition: 'color 0.2s'
+                        }} onMouseEnter={(e) => e.currentTarget.style.color = '#0EA5E9'} onMouseLeave={(e) => e.currentTarget.style.color = '#94A3B8'}>
+                            ← Volver al Centro de Operaciones
+                        </Link>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            Matriz Comercial <span style={{ color: '#0EA5E9', filter: 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.2))' }}>Delta</span>
+                        </h1>
+                        <p style={{ color: '#64748B', margin: '0.5rem 0 0 0', fontSize: '1.1rem', fontWeight: '500' }}>
+                            Inteligencia de precios y tendencias históricas para optimización de margen.
+                        </p>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Protocolo de Costo:</label>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', padding: '0.8rem', borderRadius: '20px', backdropFilter: 'blur(10px)', border: '1px solid #E2E8F0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.5rem' }}>Estrategia:</label>
                             <button 
                                 onClick={() => setIsSmartModalOpen(true)}
                                 style={{ 
-                                    padding: '0.5rem 1rem', 
-                                    borderRadius: '8px', 
-                                    border: '1px solid #DBEAFE', 
-                                    backgroundColor: '#EFF6FF', 
-                                    color: '#1E40AF', 
-                                    fontWeight: '700', 
+                                    padding: '0.6rem 1.2rem', 
+                                    borderRadius: '14px', 
+                                    border: '1px solid #BAE6FD', 
+                                    backgroundColor: '#F0F9FF', 
+                                    color: '#0369A1', 
+                                    fontWeight: '800', 
                                     display: 'flex', 
                                     alignItems: 'center', 
-                                    gap: '0.5rem',
+                                    gap: '0.6rem',
                                     cursor: 'pointer',
-                                    transition: 'transform 0.2s'
+                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    fontSize: '0.9rem'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
                             >
-                                <Brain size={18} /> Smart CI-Delta
+                                <Brain size={18} /> CI-Delta v2
                             </button>
                          </div>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <label style={{ fontWeight: '800', fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>Categoría:</label>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <label style={{ fontWeight: '900', fontSize: '0.65rem', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '0.5rem' }}>Filtrar:</label>
                             <select 
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '700', minWidth: '150px' }}
+                                style={{ 
+                                    padding: '0.6rem 1.2rem', 
+                                    borderRadius: '14px', 
+                                    border: '1px solid #E2E8F0', 
+                                    backgroundColor: 'white', 
+                                    fontWeight: '800', 
+                                    minWidth: '180px',
+                                    fontSize: '0.9rem',
+                                    color: '#1E293B',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
                             >
-                                <option value="Todas">Todas las Categorías</option>
+                                <option value="Todas">Todo el Catálogo</option>
                                 {categories.map(c => <option key={c} value={c}>{CATEGORY_MAP[c] || c}</option>)}
                             </select>
                          </div>
                          
-                         <button 
-                            onClick={fetchData} 
-                            style={{ padding: '0.8rem 1.2rem', borderRadius: '10px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: 'bold', cursor: 'pointer', alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                         >
-                            🔄 Sincronizar
-                         </button>
-                         <button
-                            onClick={handleExport}
-                            style={{ padding: '0.8rem 1.2rem', borderRadius: '10px', border: '1px solid #10B981', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', cursor: 'pointer', alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                         >
-                            📊 Excel
-                         </button>
+                         <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end' }}>
+                            <button 
+                                onClick={fetchData} 
+                                title="Sincronizar Datos"
+                                style={{ 
+                                    width: '45px',
+                                    height: '45px',
+                                    borderRadius: '14px', 
+                                    border: 'none', 
+                                    backgroundColor: '#0F172A', 
+                                    color: 'white', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
+                            >
+                                <TrendingUp size={20} />
+                            </button>
+                            <button
+                                onClick={handleExport}
+                                style={{ 
+                                    padding: '0 1.2rem', 
+                                    height: '45px',
+                                    borderRadius: '14px', 
+                                    border: '1px solid #10B981', 
+                                    backgroundColor: '#ECFDF5', 
+                                    color: '#065F46', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.5rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D1FAE5'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                            >
+                                <BarChart3 size={18} /> Exportar
+                            </button>
+                         </div>
                     </div>
                 </div>
 
                 {/* --- DASHBOARD LINE (Stats Bar) --- */}
                 {!loading && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
-                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Productos Analizados</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827' }}>{stats.totalSKU}</span>
-                        </div>
-                        <div style={{ backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.3rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase' }}>Tendencia Global (AVG)</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: stats.avgTrend > 0 ? '#EF4444' : '#10B981' }}>
-                                {stats.avgTrend > 0 ? '▲' : '▼'} {Math.abs(stats.avgTrend).toFixed(1)}%
-                            </span>
-                        </div>
-                        <div style={{ backgroundColor: '#FEF2F2', padding: '1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B91C1C', textTransform: 'uppercase' }}>Costos en Alza</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#991B1B' }}>{stats.rising}</span>
-                        </div>
-                        <div style={{ backgroundColor: '#F0FDF4', padding: '1.2rem', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase' }}>Costos en Baja</span>
-                            <span style={{ fontSize: '1.8rem', fontWeight: '900', color: '#166534' }}>{stats.falling}</span>
-                        </div>
-                        <div style={{ 
-                            backgroundColor: stats.pendingCost > 0 ? '#FFF7ED' : 'white', 
-                            padding: '1.2rem', 
-                            borderRadius: '12px', 
-                            border: stats.pendingCost > 0 ? '1px solid #FED7AA' : '1px solid #E5E7EB', 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: '0.3rem', 
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)', 
-                            alignItems: 'center'
-                        }}>
-                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#C2410C', textTransform: 'uppercase' }}>Alertas Comerciales</span>
-                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline' }}>
-                                <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#9A3412' }} title="Sin costo definido">{stats.pendingCost}</div>
-                                {stats.expiringSoon > 0 && (
-                                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#EA580C', backgroundColor: '#FFEDD5', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
-                                        ⌛ {stats.expiringSoon}
-                                    </div>
-                                )}
-                             </div>
-                             <div style={{ fontSize: '0.55rem', color: '#EA580C', fontWeight: '700' }}>{stats.pendingCost > 0 ? 'SKUS POR DEFINIR' : 'COSTOS AL DÍA'}</div>
-                        </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.2rem', marginBottom: '2.5rem' }}>
+                        <StatCard 
+                            label="SKUS Analizados" 
+                            value={stats.totalSKU} 
+                            color="#334155" 
+                            icon={<Cpu size={20} />} 
+                        />
+                        <StatCard 
+                            label="Tendencia Global" 
+                            value={`${Math.abs(stats.avgTrend).toFixed(1)}%`} 
+                            trend={stats.avgTrend > 0 ? 'up' : 'down'}
+                            color={stats.avgTrend > 0 ? '#EF4444' : '#10B981'} 
+                            icon={<TrendingUp size={20} />}
+                        />
+                        <StatCard 
+                            label="Costos en Alza" 
+                            value={stats.rising} 
+                            color="#B91C1C" 
+                            bg="#FEF2F2"
+                            icon={<TrendingUp size={20} />}
+                        />
+                        <StatCard 
+                            label="Costos en Baja" 
+                            value={stats.falling} 
+                            color="#15803D" 
+                            bg="#F0FDF4"
+                            icon={<TrendingDown size={20} />}
+                        />
+                        <StatCard 
+                            label="Alertas Comerciales" 
+                            value={stats.pendingCost} 
+                            subValue={stats.expiringSoon > 0 ? `⌛ ${stats.expiringSoon}` : 'Al día'}
+                            color="#C2410C" 
+                            bg="#FFF7ED"
+                            icon={<ShieldAlert size={20} />}
+                        />
                     </div>
                 )}
 
-                <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div style={{ marginBottom: '2.5rem', display: 'flex', gap: '1.2rem', alignItems: 'center' }}>
                     <div style={{ 
                         flex: 1,
                         display: 'flex', 
                         alignItems: 'center', 
                         backgroundColor: 'white', 
-                        borderRadius: '12px', 
-                        border: '1px solid #E5E7EB', 
-                        padding: '0.2rem 1.2rem', 
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.02)', 
-                        gap: '1rem' 
-                    }}>
-                        <Search size={20} color="#9CA3AF" />
+                        borderRadius: '16px', 
+                        border: '1px solid #E2E8F0', 
+                        padding: '0.2rem 1.5rem', 
+                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.03)', 
+                        gap: '1rem',
+                        transition: 'all 0.3s ease'
+                    }} onFocusCapture={(e) => e.currentTarget.style.borderColor = '#0EA5E9'}>
+                        <Search size={22} color="#94A3B8" />
                         <input 
                             type="text"
-                            placeholder="Buscar productos... (ej: yuca, @kg, @und)"
+                            placeholder="Buscar productos por nombre, SKU o etiquetas..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             style={{ 
                                 width: '100%', 
-                                padding: '1rem 0', 
+                                padding: '1.1rem 0', 
                                 border: 'none', 
                                 outline: 'none', 
-                                fontSize: '1.05rem', 
-                                fontWeight: '500',
-                                color: '#111827'
+                                fontSize: '1.1rem', 
+                                fontWeight: '600',
+                                color: '#1E293B',
+                                background: 'transparent'
                             }}
                         />
                         {searchTerm && (
                             <button 
                                 onClick={() => setSearchTerm('')}
-                                style={{ border: 'none', background: 'none', color: '#9CA3AF', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.2rem' }}
+                                style={{ border: 'none', background: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex' }}
                             >
                                 <X size={20} />
                             </button>
@@ -817,10 +918,11 @@ export default function CostMatrixPage() {
                                 </thead>
                                 <tbody>
                                     {sortedProducts.map((p, idx) => {
-                                        const prevProduct = idx > 0 ? filteredProducts[idx - 1] : null;
-                                        const showCategoryHeader = !prevProduct || prevProduct.category !== p.category;
+                                        const prevProduct = idx > 0 ? sortedProducts[idx - 1] : null;
+                                        const isGroupedView = !sortField || sortField === 'name';
+                                        const showCategoryHeader = isGroupedView && (!prevProduct || prevProduct.category !== p.category);
                                         const history = purchaseHistory[p.id] || [];
-                                        const smartCost = calculateSmartCost(p.id);
+                                        const smartCost = effectiveCosts[p.id] || 0;
                                         const harvestStatus = getHarvestStatus(p.id);
 
                                         return (
@@ -923,15 +1025,13 @@ export default function CostMatrixPage() {
                                                     }}>
                                                         
                                                         {smartCost > 0 ? (
-                                                            <div style={{ fontWeight: '900', color: '#166534', fontSize: '1.2rem' }}>
+                                                            <div style={{ fontWeight: '900', color: manualOverrides[p.id] ? '#1E40AF' : '#166534', fontSize: '1.2rem' }}>
                                                                 ${Math.round(smartCost).toLocaleString()}
-                                                            </div>
-                                                        ) : manualOverrides[p.id] ? (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'center' }}>
-                                                                <div style={{ fontWeight: '900', color: '#1E40AF', fontSize: '1.2rem' }}>
-                                                                    ${Math.round(manualOverrides[p.id].manual_cost).toLocaleString()}
-                                                                </div>
-                                                                <span style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>✍️ Manual</span>
+                                                                {manualOverrides[p.id] && (
+                                                                    <span style={{ display: 'block', fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
+                                                                        ✍️ Manual
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>

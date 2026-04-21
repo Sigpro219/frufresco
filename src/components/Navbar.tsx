@@ -10,6 +10,9 @@ import { logError } from '@/lib/errorUtils';
 import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
+import { translations, Locale } from '@/lib/translations';
+import { Globe } from 'lucide-react';
+ import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function Navbar() {
     const { totalItems } = useCart();
@@ -27,6 +30,11 @@ export default function Navbar() {
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const [roles, setRoles] = useState<Role[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
 
     interface Role {
         value: string;
@@ -112,9 +120,16 @@ export default function Navbar() {
 
     useEffect(() => {
         if (appName && typeof document !== 'undefined') {
-            document.title = `${appName} | Proveedor de Alimentos`;
+            document.title = `${appName} | ${locale === 'es' ? 'Proveedor de Alimentos' : 'Food Provider'}`;
         }
-    }, [appName]);
+    }, [appName, locale]);
+
+    const changeLanguage = (newLang: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (newLang === 'es') params.delete('lang');
+        else params.set('lang', newLang);
+        router.push(`${pathname}?${params.toString()}`);
+    };
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -267,8 +282,8 @@ export default function Navbar() {
                     {/* B2C (Sin login) o Usuario Genérico */}
                     {!user && (
                         <>
-                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>Inicio</Link>
-                            <Link href="/#catalog" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>Catálogo</Link>
+                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navHome}</Link>
+                            <Link href="/#catalog" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navCatalog}</Link>
                             {b2bEnabled && (
                                 <Link href="/b2b/register" style={{ 
                                     fontWeight: '800', 
@@ -281,7 +296,7 @@ export default function Navbar() {
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                                >Portal Institucional</Link>
+                                >{t.navInstitutional}</Link>
                             )}
                         </>
                     )}
@@ -445,6 +460,47 @@ export default function Navbar() {
                     </Link>
                     )}
 
+                    {/* Language Toggle */}
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        backgroundColor: 'rgba(0,0,0,0.03)', 
+                        padding: '4px', 
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid rgba(0,0,0,0.05)'
+                    }}>
+                        <button 
+                            onClick={() => changeLanguage('es')}
+                            style={{
+                                padding: '4px 8px',
+                                borderRadius: 'var(--radius-full)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: '900',
+                                backgroundColor: locale === 'es' ? 'white' : 'transparent',
+                                color: locale === 'es' ? 'var(--primary)' : '#94A3B8',
+                                boxShadow: locale === 'es' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                                transition: 'all 0.2s'
+                            }}
+                        >ES</button>
+                        <button 
+                            onClick={() => changeLanguage('en')}
+                            style={{
+                                padding: '4px 8px',
+                                borderRadius: 'var(--radius-full)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: '900',
+                                backgroundColor: locale === 'en' ? 'white' : 'transparent',
+                                color: locale === 'en' ? 'var(--primary)' : '#94A3B8',
+                                boxShadow: locale === 'en' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                                transition: 'all 0.2s'
+                            }}
+                        >EN</button>
+                    </div>
+
                     {!loading && (
                         user ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -483,19 +539,19 @@ export default function Navbar() {
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff1f1'}
                                 >
-                                    <LogOut size={16} /> Salir
+                                    <LogOut size={16} /> {t.navSignOut}
                                 </button>
                             </div>
                         ) : (
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                 <Link href="/register">
                                     <button className="btn" style={{ border: '1px solid var(--border)', backgroundColor: 'transparent', fontWeight: '600' }}>
-                                        Registrarse
+                                        {t.navRegister}
                                     </button>
                                 </Link>
                                 <Link href="/login">
                                     <button className="btn btn-primary">
-                                        Ingresar
+                                        {t.navLogin}
                                     </button>
                                 </Link>
                             </div>

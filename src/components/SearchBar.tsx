@@ -3,10 +3,13 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, Suspense, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
+import { translations, Locale } from '../lib/translations';
 
-function SearchBarContent() {
+function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
     const [query, setQuery] = useState(searchParams.get('q') || '');
 
     // Debounce to avoid excessive router calls
@@ -39,7 +42,7 @@ function SearchBarContent() {
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                     type="text"
-                    placeholder="Buscar productos (ej: Tomate, Cebolla...)"
+                    placeholder={placeholder || "Buscar productos (ej: Tomate, Cebolla...)"}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     style={{
@@ -112,18 +115,18 @@ function SearchBarContent() {
                 marginTop: '0.75rem',
                 opacity: 0.8
             }}>
-                💡 Tip: Puedes buscar múltiples productos separando por comas.
+                {t.searchTip}
             </p>
         </div>
     );
 }
 
-export default function SearchBar() {
+export default function SearchBar({ placeholder }: { placeholder?: string }) {
     return (
         <Suspense fallback={
             <div style={{ marginBottom: '2.5rem', height: '64px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-full)', maxWidth: '750px', margin: '0 auto' }}></div>
         }>
-            <SearchBarContent />
+            <SearchBarContent placeholder={placeholder} />
         </Suspense>
     );
 }

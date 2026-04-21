@@ -1,7 +1,4 @@
-'use client';
-
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { translations, Locale } from '../../../lib/translations';
 
 function SimulatorContent() {
     const searchParams = useSearchParams();
@@ -10,6 +7,10 @@ function SimulatorContent() {
     const reference = searchParams.get('reference');
     const amountInCents = searchParams.get('amount-in-cents');
     const currency = searchParams.get('currency') || 'COP';
+    const lang = searchParams.get('lang');
+
+    const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<'idle' | 'processing'>('idle');
@@ -43,14 +44,14 @@ function SimulatorContent() {
                 })
             });
 
-            if (!response.ok) throw new Error('Error al notificar al webhook');
+            if (!response.ok) throw new Error('Error notifying webhook');
 
             // 3. Redirigir a la página de resultados usando EL MISMO ID
-            router.push(`/checkout/result?id=${transactionId}`);
+            router.push(`/checkout/result?id=${transactionId}${lang ? `&lang=${lang}` : ''}`);
 
         } catch (error) {
             console.error('Simulation Error:', error);
-            alert('Error en la simulación del pago');
+            alert(locale === 'es' ? 'Error en la simulación del pago' : 'Error in payment simulation');
         } finally {
             setLoading(false);
         }
@@ -74,17 +75,21 @@ function SimulatorContent() {
                 textAlign: 'center'
             }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '4px' }}>Wompi <span style={{ fontWeight: '300' }}>Mock</span></div>
-                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>ENTORNO DE SIMULACIÓN FRUBANA</div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: '800', letterSpacing: '0.05em' }}>
+                    {locale === 'es' ? 'ENTORNO DE SIMULACIÓN FRUFRESCO' : 'FRUFRESCO SIMULATION ENVIRONMENT'}
+                </div>
             </div>
 
             <div style={{ padding: '2rem' }}>
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                    <div style={{ fontSize: '0.9rem', color: '#6B7280', marginBottom: '0.5rem' }}>Estás pagando a</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#111827' }}>FRUBANA EXPRESS</div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#3B0F6E', marginTop: '1rem' }}>
-                        ${amount.toLocaleString('es-CO')}
+                    <div style={{ fontSize: '0.9rem', color: '#6B7280', marginBottom: '0.5rem' }}>
+                        {locale === 'es' ? 'Estás pagando a' : 'You are paying to'}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '0.5rem' }}>Ref: {reference}</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#111827' }}>FRUFRESCO EXPRESS</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#3B0F6E', marginTop: '1rem' }}>
+                        ${amount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '0.5rem' }}>{t.paymentReference}: {reference}</div>
                 </div>
 
                 {status === 'processing' ? (
@@ -97,12 +102,12 @@ function SimulatorContent() {
                             borderRadius: '50%',
                             margin: '0 auto 1.5rem'
                         }}></div>
-                        <p style={{ fontWeight: '600' }}>Procesando con el banco...</p>
+                        <p style={{ fontWeight: '600' }}>{locale === 'es' ? 'Procesando con el banco...' : 'Processing with the bank...'}</p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <p style={{ fontSize: '0.9rem', color: '#4B5563', textAlign: 'center', marginBottom: '0.5rem' }}>
-                            Selecciona el resultado que deseas simular para este pedido:
+                            {locale === 'es' ? 'Selecciona el resultado que deseas simular para este pedido:' : 'Select the result you want to simulate for this order:'}
                         </p>
 
                         <button
@@ -120,7 +125,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ✅ Simular Pago Exitoso
+                            ✅ {t.simulateSuccess}
                         </button>
 
                         <button
@@ -138,7 +143,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ❌ Simular Pago Rechazado
+                            ❌ {t.simulateDecline}
                         </button>
 
                         <button
@@ -156,7 +161,7 @@ function SimulatorContent() {
                                 transition: 'opacity 0.2s'
                             }}
                         >
-                            ⚠️ Simular Error Técnico
+                            ⚠️ {locale === 'es' ? 'Simular Error Técnico' : 'Simulate Technical Error'}
                         </button>
                     </div>
                 )}
@@ -170,7 +175,7 @@ function SimulatorContent() {
                 color: '#9CA3AF',
                 borderTop: '1px solid #E5E7EB'
             }}>
-                Este es un entorno de pruebas controlado y no procesa dinero real.
+                {locale === 'es' ? 'Este es un entorno de pruebas controlado y no procesa dinero real.' : 'This is a controlled test environment and does not process real money.'}
             </div>
 
             <style jsx>{`
@@ -188,7 +193,7 @@ function SimulatorContent() {
 export default function PaymentSimulatorPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Suspense fallback={<div>Cargando simulador...</div>}>
+            <Suspense fallback={<div>Loading simulator...</div>}>
                 <SimulatorContent />
             </Suspense>
         </main>

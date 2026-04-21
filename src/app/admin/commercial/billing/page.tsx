@@ -243,7 +243,7 @@ export default function BillingDashboard() {
             const { data: items, error: itemsError } = await supabase
                 .from('order_items')
                 .select(`
-                    id, quantity, unit_price,
+                    id, quantity, unit_price, nickname,
                     orders!inner(id, billing_cut_id, sequence_id, profiles(nit, company_name)),
                     products(sku, name)
                 `)
@@ -261,7 +261,7 @@ export default function BillingDashboard() {
                 item.orders.profiles?.nit || 'N/A',
                 item.orders.profiles?.company_name || 'Invitado',
                 item.products?.sku || 'Ref-00',
-                item.products?.name || '',
+                item.nickname || item.products?.name || '',
                 item.quantity,
                 item.unit_price,
                 (item.quantity * item.unit_price).toFixed(2)
@@ -291,39 +291,43 @@ export default function BillingDashboard() {
     const handleSaveProvider = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedProvider) return;
+        
+        // Validaciones básicas
+        if (!selectedProvider.name) {
+            alert('El nombre o razón social es obligatorio');
+            return;
+        }
+
         setIsProcessing(true);
         try {
-            const { error } = await supabase
-                .from('providers')
-                .update({
-                    name: selectedProvider.name,
-                    tax_id: selectedProvider.tax_id,
-                    contact_name: selectedProvider.contact_name,
-                    contact_phone: selectedProvider.contact_phone,
-                    email: selectedProvider.email,
-                    address: selectedProvider.address,
-                    location: selectedProvider.location,
-                    category: selectedProvider.category,
-                    is_active: selectedProvider.is_active,
-                    is_archived: selectedProvider.is_archived,
-                    payment_terms_days: selectedProvider.payment_terms_days,
-                    bank_name: selectedProvider.bank_name,
-                    bank_account_number: selectedProvider.bank_account_number,
-                    bank_account_type: selectedProvider.bank_account_type,
-                    notes: selectedProvider.notes,
-                    created_at: selectedProvider.created_at
-                })
-                .eq('id', selectedProvider.id);
-
-            if (error) throw error;
-            setIsProcessing(false); // Liberar UI antes del alert
+            const isNew = !selectedProvider.id || selectedProvider.id === 'NEW';
+            
+            // Preparar payload
+            const { id: _id, ...payload } = selectedProvider;
+            
+            if (isNew) {
+                const { error } = await supabase
+                    .from('providers')
+                    .insert([payload]);
+                if (error) throw error;
+                alert('✅ Proveedor creado correctamente.');
+            } else {
+                const { error } = await supabase
+                    .from('providers')
+                    .update(payload)
+                    .eq('id', selectedProvider.id);
+                if (error) throw error;
+                alert('✅ Proveedor actualizado correctamente.');
+            }
+            
             setIsModalOpen(false);
             fetchData();
-            alert('✅ Proveedor actualizado correctamente.');
         } catch (err: any) {
+            console.error('Error saving provider:', err);
+            alert('Error al guardar: ' + (err.message || 'Error desconocido'));
+        } finally {
+            setIsProcessing(true);
             setIsProcessing(false);
-            console.error('Error updating provider:', err);
-            alert('Error al actualizar: ' + (err.message || 'Error desconocido'));
         }
     };
 
@@ -611,27 +615,68 @@ export default function BillingDashboard() {
 
                     {(activeTab === 'providers' || activeTab === 'archived') && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', backgroundColor: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0' }}>
                                 <div style={{ position: 'relative', width: '400px' }}>
-                                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }}>🔍</span>
+                                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem' }}>🔍</span>
                                     <input 
                                         type="text" 
-                                        placeholder="Buscar por nombre, NIT, contacto o categoría..." 
+                                        placeholder="Buscar por nombre, NIT, contacto..." 
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.8rem 1rem 0.8rem 2.8rem', 
+                                            padding: '0.85rem 1rem 0.85rem 2.8rem', 
                                             borderRadius: '12px', 
                                             border: '1px solid #E2E8F0',
                                             fontSize: '0.95rem',
                                             outline: 'none',
-                                            transition: 'border-color 0.2s'
+                                            backgroundColor: '#F8FAFC'
                                         }}
-                                        onFocus={(e) => e.target.style.borderColor = '#0F172A'}
-                                        onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
                                     />
                                 </div>
+                                
+                                {activeTab === 'providers' && (
+                                    <button 
+                                        onClick={() => {
+                                            setSelectedProvider({
+                                                id: 'NEW',
+                                                name: '',
+                                                location: '',
+                                                contact_phone: '',
+                                                contact_name: '',
+                                                email: '',
+                                                address: '',
+                                                category: 'Varios',
+                                                is_active: true,
+                                                is_archived: false,
+                                                tax_id: '',
+                                                payment_terms_days: 0,
+                                                bank_name: '',
+                                                bank_account_number: '',
+                                                bank_account_type: null,
+                                                notes: '',
+                                                created_at: new Date().toISOString()
+                                            });
+                                            setIsDateEditable(false);
+                                            setIsModalOpen(true);
+                                        }}
+                                        style={{ 
+                                            backgroundColor: '#0F172A', 
+                                            color: 'white', 
+                                            padding: '0.85rem 1.5rem', 
+                                            borderRadius: '12px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+                                        }}
+                                    >
+                                        <span>➕</span> Nuevo Proveedor
+                                    </button>
+                                )}
                             </div>
 
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -830,9 +875,39 @@ export default function BillingDashboard() {
             {isModalOpen && selectedProvider && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
                     <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                        <div style={{ padding: '2rem', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', margin: 0 }}>Ficha del Proveedor</h2>
-                            <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>✕</button>
+                        <div style={{ 
+                            padding: '2.5rem', 
+                            background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)', 
+                            color: 'white',
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center' 
+                        }}>
+                            <div>
+                                <h2 style={{ fontSize: '2rem', fontWeight: '900', margin: 0, letterSpacing: '-0.025em' }}>
+                                    {selectedProvider.id === 'NEW' ? 'Nuevo Proveedor' : 'Ficha del Proveedor'}
+                                </h2>
+                                <p style={{ color: '#94A3B8', marginTop: '0.5rem', fontSize: '1.1rem' }}>
+                                    {selectedProvider.id === 'NEW' ? 'Registra un nuevo aliado comercial.' : (selectedProvider.name || 'Detalles')}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setIsModalOpen(false)} 
+                                style={{ 
+                                    background: 'rgba(255,255,255,0.1)', 
+                                    border: 'none', 
+                                    width: '44px', 
+                                    height: '44px', 
+                                    borderRadius: '12px', 
+                                    cursor: 'pointer', 
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.2rem',
+                                    fontWeight: 'bold'
+                                }}
+                            >✕</button>
                         </div>
                         
                         <form onSubmit={handleSaveProvider} style={{ padding: '2rem' }}>

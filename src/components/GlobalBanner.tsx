@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useSearchParams } from 'next/navigation';
 
 export default function GlobalBanner() {
+  const searchParams = useSearchParams();
+  const locale = searchParams.get('lang') === 'en' ? 'en' : 'es';
   const [bannerText, setBannerText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,8 +17,8 @@ export default function GlobalBanner() {
         const { data, error } = await supabase
           .from('app_settings')
           .select('value')
-          .eq('key', 'global_banner')
-          .maybeSingle(); // Use maybeSingle to avoid error if 0 rows
+          .eq('key', locale === 'en' ? 'global_banner_en' : 'global_banner')
+          .maybeSingle(); 
         
         if (!isMounted) return;
 
@@ -28,12 +31,16 @@ export default function GlobalBanner() {
 
         if (data?.value) {
           let text = data.value;
-          
-          // Branding dinámico: reemplaza "Logistic Pro" por el nombre configurado en FruFresco
-          // si el mensaje original contenía el nombre base.
           text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
-          
           setBannerText(text);
+        } else if (locale === 'en') {
+          // Fallback to Spanish banner if English one is not defined yet
+          const { data: esData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'global_banner')
+            .maybeSingle();
+          if (esData?.value) setBannerText(esData.value.replace(/Logistic\s*Pro/gi, 'FruFresco'));
         }
       } catch (err: unknown) {
         if (!isMounted) return;

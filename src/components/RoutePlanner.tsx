@@ -53,12 +53,14 @@ export default function RoutePlanner() {
         try {
             setLoading(true);
             
-            // Fetch Logistic Parameters
-            const { data: paramData } = await supabase.from('logistic_parameters').select('*');
+            // 1. Fetch Logistic Parameters
+            const { data: paramData, error: pErr } = await supabase.from('logistic_parameters').select('*');
+            if (pErr) console.warn('Note: Could not fetch logistic parameters:', pErr.message);
+            
             if (paramData && isMounted.current) {
                 const pMap: Record<string, number> = {};
                 paramData.forEach((p: any) => pMap[p.id] = parseFloat(p.value));
-                setParams(pMap);
+                setParams(prev => ({ ...prev, ...pMap }));
             }
 
             // 2. Fetch Orders (with conditional cutoff)
@@ -79,6 +81,7 @@ export default function RoutePlanner() {
             if (!isMounted.current) return;
             if (oErr) throw oErr;
 
+            // 3. Fetch Fleet
             const { data: fleetData, error: fErr } = await supabase
                 .from('fleet_vehicles')
                 .select('*, driver:profiles(contact_name)')
@@ -87,7 +90,7 @@ export default function RoutePlanner() {
             if (!isMounted.current) return;
             if (fErr) throw fErr;
 
-            // Use actual total_weight_kg if available, otherwise mock for UI dev
+            // Update State
             setOrders((orderData || []).map((o: any) => ({
                 ...o,
                 total_weight_kg: o.total_weight_kg || Math.floor(Math.random() * 200) + 50,
@@ -100,8 +103,8 @@ export default function RoutePlanner() {
                 driver_name: v.driver?.contact_name
             })));
 
-        } catch (err: unknown) {
-            console.error('Error fetching planner data:', err);
+        } catch (err: any) {
+            console.error('Error fetching planner data:', err.message || err.details || err);
         } finally {
             if (isMounted.current) setLoading(false);
         }

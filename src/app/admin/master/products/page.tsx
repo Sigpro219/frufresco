@@ -596,7 +596,7 @@ export default function MasterProductsPage() {
             <Navbar />
             <Toast />
             
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+            <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto', padding: '1.5rem 2rem', boxSizing: 'border-box' }}>
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -604,7 +604,7 @@ export default function MasterProductsPage() {
                             <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Maestro de SKUs 🏗️</h1>
                             <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={sanitizeMasterData}
                                 style={{
@@ -707,7 +707,7 @@ export default function MasterProductsPage() {
                 {/* KPI DASHBOARD */}
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(6, 1fr)', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
                     gap: '1rem', 
                     marginBottom: '2rem' 
                 }}>
@@ -915,7 +915,14 @@ export default function MasterProductsPage() {
                     </div>
                 </div>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+                <div style={{ 
+                    backgroundColor: 'white', 
+                    borderRadius: '16px', 
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.05)', 
+                    overflowX: 'auto', 
+                    border: '1px solid #E5E7EB',
+                    width: '100%'
+                }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
@@ -927,8 +934,7 @@ export default function MasterProductsPage() {
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Unidad</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>IVA</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Mínimo</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Equivalencias</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Variantes</th>
+                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Configuración</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Descripción</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '60px', textAlign: 'center' }}>Web</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '100px' }}>Estado</th>
@@ -1155,38 +1161,40 @@ export default function MasterProductsPage() {
                                             <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '500', opacity: 0.6 }}>—</span>
                                         )}
                                     </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <button 
-                                            onClick={() => setConversionProduct(p)}
-                                            style={{ 
-                                                fontSize: '0.75rem', 
-                                                color: '#2563EB', 
-                                                background: '#EFF6FF', 
-                                                border: '1px solid #BFDBFE', 
-                                                borderRadius: '6px', 
-                                                cursor: 'pointer', 
-                                                padding: '6px 10px',
-                                                fontWeight: '700',
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
-                                            ⚖️ {conversions.filter(c => c.product_id === p.id).length} Eq.
-                                        </button>
-                                    </td>
                                     <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                        <div style={{ 
-                                            fontSize: '0.75rem', 
-                                            color: '#7C3AED', 
-                                            background: '#F5F3FF', 
-                                            border: '1px solid #DDD6FE', 
-                                            borderRadius: '6px', 
-                                            padding: '6px 10px',
-                                            fontWeight: '800',
-                                            display: 'inline-block',
-                                            whiteSpace: 'nowrap',
-                                            opacity: (p.variants?.length || 0) > 0 ? 1 : 0.4
-                                        }}>
-                                            🧬 {p.variants?.length || 0} Var.
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+                                            <button 
+                                                onClick={() => setConversionProduct(p)}
+                                                style={{ 
+                                                    fontSize: '0.7rem', 
+                                                    color: '#2563EB', 
+                                                    background: '#EFF6FF', 
+                                                    border: '1px solid #BFDBFE', 
+                                                    borderRadius: '6px', 
+                                                    cursor: 'pointer', 
+                                                    padding: '4px 8px',
+                                                    fontWeight: '700',
+                                                    whiteSpace: 'nowrap',
+                                                    width: 'fit-content'
+                                                }}
+                                            >
+                                                ⚖️ {conversions.filter(c => c.product_id === p.id).length} Eq.
+                                            </button>
+                                            <div style={{ 
+                                                fontSize: '0.7rem', 
+                                                color: '#7C3AED', 
+                                                background: '#F5F3FF', 
+                                                border: '1px solid #DDD6FE', 
+                                                borderRadius: '6px', 
+                                                padding: '4px 8px',
+                                                fontWeight: '800',
+                                                display: 'inline-block',
+                                                whiteSpace: 'nowrap',
+                                                width: 'fit-content',
+                                                opacity: (p.variants?.length || 0) > 0 ? 1 : 0.4
+                                            }}>
+                                                🧬 {p.variants?.length || 0} Var.
+                                            </div>
                                         </div>
                                     </td>
                                     <td style={{ padding: '1rem', width: '250px' }}>

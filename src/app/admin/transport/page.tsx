@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Navbar from '@/components/Navbar';
-import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';
 import RoutePlanner from '@/components/RoutePlanner';
@@ -43,7 +43,8 @@ export default function TransportControlTower() {
     const [stats, setStats] = useState({
         totalActive: 0,
         completedToday: 0,
-        totalNovedades: 0
+        totalNovedades: 0,
+        totalKilos: 0
     });
     const [appName, setAppName] = useState('Logistics Pro');
 
@@ -53,7 +54,6 @@ export default function TransportControlTower() {
         try {
             setLoading(true);
             
-            // 1. Fetch main routes (only today's or recent for performance)
             const { data: routes, error: rErr } = await supabase
                 .from('routes')
                 .select('*')
@@ -92,13 +92,12 @@ export default function TransportControlTower() {
 
             const active = formatted.filter(r => r.status === 'in_transit' || r.status === 'loading').length;
             const completed = formatted.filter(r => r.status === 'completed').length;
+            const weight = formatted.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
             
             let novedadesCount = 0;
             try {
-                // Only count events from today for performance and relevance
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                
                 const { count } = await supabase
                     .from('delivery_events')
                     .select('*', { count: 'exact', head: true })
@@ -113,11 +112,11 @@ export default function TransportControlTower() {
                 setStats({
                     totalActive: active,
                     completedToday: completed,
-                    totalNovedades: novedadesCount
+                    totalNovedades: novedadesCount,
+                    totalKilos: weight
                 });
             }
 
-            // Fetch app name for dynamic branding
             const { data: nameData } = await supabase
                 .from('app_settings')
                 .select('value')
@@ -127,10 +126,10 @@ export default function TransportControlTower() {
             if (nameData?.value && isMounted.current) {
                 setAppName(nameData.value);
             }
-        } catch (err: unknown) {
-            if (isAbortError(err)) return; // Silently handle aborts
+        } catch (err: any) {
+            if (isAbortError(err)) return;
             if (!isMounted.current) return;
-            console.error('Error fetching transport data:', err);
+            console.error('Error fetching transport data:', err.message || err.details || err.code || err);
         } finally {
             if (isMounted.current) setLoading(false);
         }
@@ -139,294 +138,135 @@ export default function TransportControlTower() {
     useEffect(() => {
         isMounted.current = true;
         const controller = new AbortController();
-        
         fetchTransportData(controller.signal);
-        
         return () => { 
             isMounted.current = false;
             controller.abort();
         };
     }, [fetchTransportData]);
 
-    const [scrolled, setScrolled] = useState(false);
-
-    useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 50);
-        };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
     return (
-        <main style={{ 
-            minHeight: '150vh', 
-            backgroundColor: '#F9FAFB', 
-            color: '#111827',
-            fontFamily: 'apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
-        }}>
-            <style jsx global>{`
-                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
-                
-                :root {
-                    --accent: #0891B2;
-                    --accent-glow: rgba(8, 145, 178, 0.15);
-                    --glass-bg: rgba(255, 255, 255, 0.7);
-                    --glass-border: rgba(255, 255, 255, 0.5);
-                    --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-                }
-
-                @keyframes pulse-cyan {
-                    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.4); }
-                    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(8, 145, 178, 0); }
-                    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(8, 145, 178, 0); }
-                }
-                
-                @keyframes slide-in {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-
-                .live-pulse {
-                    width: 10px;
-                    height: 10px;
-                    background: #0891B2;
-                    border-radius: 50%;
-                    display: inline-block;
-                    margin-right: 8px;
-                    animation: pulse-cyan 2s infinite;
-                }
-                
-                .glass-card {
-                    background: var(--glass-bg);
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
-                    border: 1px solid var(--glass-border);
-                    border-radius: 24px;
-                    box-shadow: var(--card-shadow);
-                }
-
-                .premium-nav-item {
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                
-                .premium-nav-item:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-                }
-
-                ::-webkit-scrollbar { width: 6px; }
-                ::-webkit-scrollbar-track { background: transparent; }
-                ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
-                ::-webkit-scrollbar-thumb:hover { background: #D1D5DB; }
-            `}</style>
-            
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
             <Navbar />
             
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem' }}>
-                <div style={{ 
-                    marginBottom: '1rem', 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    gap: '1rem',
-                    padding: '1.5rem 2.5rem',
-                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
-                    borderRadius: '32px',
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 10px 30px -10px rgba(0,0,0,0.04)',
-                    position: 'relative',
-                    overflow: 'hidden'
-                }}>
-                    {/* Decorative Background Element */}
-                    <div style={{ 
-                        position: 'absolute', top: '-10%', right: '-5%', width: '300px', height: '300px', 
-                        background: 'radial-gradient(circle, rgba(8, 145, 178, 0.03) 0%, transparent 70%)',
-                        zIndex: 0
-                    }}></div>
-                    
-                    {/* Header & Stats Section - Hidden on Scroll */}
-                    <div style={{ 
-                        maxHeight: scrolled ? '0px' : '400px', 
-                        opacity: scrolled ? 0 : 1, 
-                        overflow: 'hidden', 
-                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                        pointerEvents: scrolled ? 'none' : 'auto',
-                        marginBottom: scrolled ? '0rem' : '1.5rem'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1, padding: '1rem 0' }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
-                                    <span className="live-pulse"></span>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0891B2', letterSpacing: '0.15rem', textTransform: 'uppercase' }}>CENTRO DE MANDO</span>
-                                </div>
-                                <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.1rem', lineHeight: 1 }}>
-                                    Torre de <span style={{ color: '#0891B2' }}>Control</span>
-                                </h1>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem' }}>
-                                    <p style={{ color: '#64748B', fontSize: '0.9rem', fontWeight: '500', margin: 0 }}>Rutas estratégicas <span style={{ color: '#0F172A', fontWeight: '700' }}>{appName}</span>.</p>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                <div style={{ display: 'flex', gap: '1rem' }}>
-                                    <StatBox label="EN TRÁNSITO" value={stats.totalActive} color="#0891B2" icon="⚡" bg="linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%)" />
-                                    <StatBox label="ENTREGAS" value={stats.completedToday} color="#10B981" icon="✨" bg="linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)" />
-                                    <StatBox label="ALERTAS" value={stats.totalNovedades} color="#EF4444" icon="🔥" bg="linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)" />
-                                </div>
-                                
-                                <button 
-                                    onClick={() => fetchTransportData()}
-                                    disabled={loading}
-                                    style={{ 
-                                        padding: '0.7rem', borderRadius: '14px', 
-                                        backgroundColor: 'white', color: '#64748B', border: '1px solid #E2E8F0', 
-                                        fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', opacity: loading ? 0.5 : 1,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.backgroundColor = '#F8FAFC';
-                                        e.currentTarget.style.transform = 'scale(1.05)';
-                                        e.currentTarget.style.color = '#0F172A';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.backgroundColor = 'white';
-                                        e.currentTarget.style.transform = 'scale(1)';
-                                        e.currentTarget.style.color = '#64748B';
-                                    }}
-                                    title="Actualizar Datos"
-                                >
-                                    <span style={{ fontSize: '1.2rem', animation: loading ? 'spin 1s linear infinite' : 'none', display: 'inline-block' }}>{loading ? '⌛' : '🔄'}</span> 
-                                </button>
-                            </div>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.25rem' }}>
+                
+                {/* Slim Premium Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', padding: '0 0.5rem' }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0EA5E9', boxShadow: '0 0 10px #0EA5E9' }}></div>
+                            <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>LOGISTICS & SUPPLY CHAIN / TOWER</span>
                         </div>
+                        <h1 style={{ fontSize: '1.85rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+                            Torre de <span style={{ color: '#0EA5E9' }}>Control</span>
+                        </h1>
                     </div>
 
-                    {/* Sticky Navigation Area (Nested inside the header but with sticky behavior) */}
-                    <nav style={{ 
-                        position: 'sticky', 
-                        top: '0px', 
-                        zIndex: 10, 
-                        display: 'flex', 
-                        gap: '0.8rem', 
-                        flexWrap: 'wrap',
-                        backgroundColor: scrolled ? 'rgba(255, 255, 255, 0.9)' : 'transparent',
-                        backdropFilter: scrolled ? 'blur(8px)' : 'none',
-                        margin: '0 -1rem',
-                        padding: '0.5rem 1rem',
-                        borderRadius: scrolled ? '16px' : '0',
-                        transition: 'all 0.3s ease'
-                    }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 180px)', gap: '1rem' }}>
+                        <KPICard title="EN TRÁNSITO" value={stats.totalActive} icon="🚛" color="#0EA5E9" subtitle="Rutas activas hoy" />
+                        <KPICard title="ENTREGAS" value={stats.completedToday} icon="✅" color="#10B981" subtitle="Rutas finalizadas" />
+                        <KPICard title="VOLUMEN" value={`${stats.totalKilos.toFixed(0)} kg`} icon="⚖️" color="#6366F1" subtitle="Carga total gestionada" />
+                        <KPICard title="ALERTAS" value={stats.totalNovedades} icon="⚠️" color="#F43F5E" subtitle="Novedades reportadas" />
+                    </div>
+                </div>
+
+                {/* Integrated Control Bar */}
+                <div style={{ 
+                    backgroundColor: 'white', 
+                    padding: '0.75rem 1rem', 
+                    borderRadius: '20px', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)', 
+                    border: '1px solid #E2E8F0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1.5rem'
+                }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
                         {[
                             { id: 'map', label: 'Monitor Global', icon: '🌍' },
                             { id: 'planner', label: 'Planeación', icon: '🧭' },
                             { id: 'fleet', label: 'Flota', icon: '🚛' },
                             { id: 'drivers_panel', label: 'Conductores', icon: '👥' },
                             { id: 'maintenance', label: 'Mantenimiento', icon: '🛠️' },
-                            { id: 'kpis', label: 'Insights / KPIs', icon: '📈' }
+                            { id: 'kpis', label: 'Insights', icon: '📈' }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id as 'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis')}
-                                className="premium-nav-item"
+                                onClick={() => setActiveTab(tab.id as any)}
                                 style={{
-                                    background: activeTab === tab.id ? '#0F172A' : '#FFFFFF',
-                                    border: '1px solid',
-                                    borderColor: activeTab === tab.id ? '#0F172A' : '#E2E8F0',
-                                    padding: '0.6rem 1.2rem',
-                                    borderRadius: '14px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '700',
+                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '14px', border: 'none',
+                                    backgroundColor: activeTab === tab.id ? '#0F172A' : 'transparent',
                                     color: activeTab === tab.id ? 'white' : '#64748B',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.6rem',
-                                    boxShadow: activeTab === tab.id ? '0 8px 12px -3px rgba(15, 23, 42, 0.2)' : 'none',
-                                    transform: activeTab === tab.id ? 'translateY(-1px)' : 'none',
-                                    transition: 'all 0.2s ease'
+                                    fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
                                 }}
                             >
-                                <span style={{ fontSize: '1rem', filter: activeTab === tab.id ? 'none' : 'grayscale(1)' }}>{tab.icon}</span>
-                                <span style={{ letterSpacing: '0.01rem' }}>{tab.label.toUpperCase()}</span>
+                                <span>{tab.icon}</span>
+                                {tab.label.toUpperCase()}
                             </button>
                         ))}
-                    </nav>
+                    </div>
+
+                    <button 
+                        onClick={() => fetchTransportData()}
+                        disabled={loading}
+                        style={{ 
+                            padding: '10px 20px', borderRadius: '14px', border: '1px solid #E2E8F0', backgroundColor: 'white',
+                            color: '#0F172A', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+                        }}
+                    >
+                        {loading ? 'Sincronizando...' : '🔄 ACTUALIZAR'}
+                    </button>
                 </div>
 
-                <div className="glass-card" style={{ 
-                    padding: '1.5rem', 
-                    minHeight: 'calc(100vh - 150px)', 
-                    position: 'relative', 
-                    overflow: 'visible', 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    marginTop: '0.5rem'
-                }}>
-                    {/* Background Soft Glow */}
-                    <div style={{ 
-                        position: 'absolute', bottom: '-20%', left: '-10%', width: '600px', height: '600px', 
-                        background: 'radial-gradient(circle, rgba(8, 145, 178, 0.05) 0%, transparent 70%)',
-                        zIndex: 0
-                    }}></div>
-                    
-                    <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
-                    {loading && (
-                        <div style={{ 
-                            position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                            zIndex: 100, borderRadius: '24px', backdropFilter: 'blur(4px)'
-                        }}>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📡</div>
-                                <div style={{ fontWeight: '800', color: '#0891B2' }}>Sincronizando Torre de Control...</div>
-                            </div>
-                        </div>
-                    )}
+                {/* Main Content Area */}
+                <div style={{ position: 'relative', minHeight: 'calc(100vh - 280px)' }}>
                     {activeTab === 'map' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '1.5rem', alignItems: 'start' }}>
-                            {/* Feed Sidebar - Natural Scroll */}
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>ESTADO DE RUTAS</h3>
-                                    <span style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '600' }}>{activeRoutes.length} ACTIVAS</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 280px)' }}>
+                            {/* Route Feed */}
+                            <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '1.25rem', overflowY: 'auto' }}>
+                                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: '900', color: '#0F172A' }}>ESTADO DE RUTAS</h3>
+                                    <span style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '700' }}>{activeRoutes.length} TOTAL</span>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                
+                                {activeRoutes.length === 0 && !loading && (
+                                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8' }}>
+                                        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📭</div>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>No hay rutas activas en este momento</div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     {activeRoutes.map(route => {
-                                        const total = route.route_stops.length;
                                         const done = route.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
-                                        const progress = total > 0 ? (done / total) * 100 : 0;
+                                        const progress = route.route_stops.length > 0 ? (done / route.route_stops.length) * 100 : 0;
                                         const isInTransit = route.status === 'in_transit';
 
                                         return (
                                             <div key={route.id} style={{ 
-                                                padding: '1.2rem', 
-                                                borderRadius: '20px', 
-                                                backgroundColor: isInTransit ? '#FFFFFF' : '#F9FAFB',
-                                                border: isInTransit ? '1px solid #0891B2' : '1px solid #F3F4F6',
-                                                marginBottom: '0.5rem',
-                                                boxShadow: isInTransit ? '0 10px 15px -3px rgba(8, 145, 178, 0.1)' : 'none',
-                                                transition: 'all 0.3s ease'
+                                                padding: '1rem', borderRadius: '16px', border: '1px solid',
+                                                borderColor: isInTransit ? '#0EA5E9' : '#E2E8F0',
+                                                backgroundColor: isInTransit ? '#F0F9FF' : 'white',
+                                                transition: 'all 0.2s'
                                             }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                     <div>
-                                                        <div style={{ fontWeight: '900', fontSize: '1rem', color: '#111827' }}>{route.vehicle_plate}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: '700' }}>ID-{route.id.slice(0, 5)}</div>
+                                                        <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0F172A' }}>{route.vehicle_plate}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700' }}>ID-{route.id.slice(0, 5)}</div>
                                                     </div>
                                                     <span style={{ 
-                                                        fontSize: '0.6rem', fontWeight: '900', padding: '0.3rem 0.6rem', borderRadius: '20px',
-                                                        backgroundColor: isInTransit ? '#0891B2' : '#6B7280',
-                                                        color: 'white', letterSpacing: '0.05rem'
+                                                        fontSize: '0.6rem', fontWeight: '900', padding: '4px 8px', borderRadius: '8px',
+                                                        backgroundColor: isInTransit ? '#0EA5E9' : '#F1F5F9', color: isInTransit ? 'white' : '#64748B'
                                                     }}>{route.status.toUpperCase()}</span>
                                                 </div>
-                                                <div style={{ height: '4px', backgroundColor: '#E5E7EB', borderRadius: '10px', marginBottom: '0.8rem', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${progress}%`, height: '100%', backgroundColor: isInTransit ? '#0891B2' : '#10B981', transition: 'width 1s' }}></div>
+                                                <div style={{ height: '4px', backgroundColor: '#E2E8F0', borderRadius: '10px', margin: '12px 0 8px 0', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${progress}%`, height: '100%', backgroundColor: isInTransit ? '#0EA5E9' : '#10B981', transition: 'width 0.5s' }}></div>
                                                 </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                                                    <span style={{ color: '#4B5563', fontWeight: '700' }}>{done}/{total} Pedidos</span>
-                                                    <span style={{ color: isInTransit ? '#0891B2' : '#10B981', fontWeight: '900' }}>{Math.round(progress)}%</span>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                                                    <span style={{ color: '#64748B', fontWeight: '700' }}>{done}/{route.route_stops.length} pedidos</span>
+                                                    <span style={{ color: '#0F172A', fontWeight: '900' }}>{Math.round(progress)}%</span>
                                                 </div>
                                             </div>
                                         );
@@ -434,155 +274,68 @@ export default function TransportControlTower() {
                                 </div>
                             </div>
 
-                            {/* Sticky Map Main */}
-                            <div style={{ 
-                                borderRadius: '24px', 
-                                overflow: 'hidden', 
-                                border: '1px solid #E2E8F0', 
-                                position: 'sticky', 
-                                top: '100px', 
-                                height: 'calc(100vh - 160px)',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                                transition: 'all 0.3s ease'
-                            }}>
-                                {apiKey ? (
-                                    <APIProvider apiKey={apiKey}>
-                                        <Map
-                                            defaultCenter={{ lat: 4.6300, lng: -74.1530 }}
-                                            defaultZoom={13}
-                                            mapId={MAP_ID}
-                                            style={{ width: '100%', height: '100%' }}
-                                        >
-                                            {/* Fixed Warehouse Marker: Corabastos Puerta 2 */}
-                                            <AdvancedMarker position={{ lat: 4.6300, lng: -74.1530 }} title="Bodega - Puerta 2 Corabastos">
+                            {/* Map Container */}
+                            <div style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
+                                    {apiKey ? (
+                                        <Map defaultCenter={{ lat: 4.6300, lng: -74.1530 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
+                                            <AdvancedMarker position={{ lat: 4.6300, lng: -74.1530 }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                    <div style={{ 
-                                                        backgroundColor: '#0F172A', 
-                                                        color: 'white', 
-                                                        padding: '4px 10px', 
-                                                        borderRadius: '12px', 
-                                                        fontSize: '0.7rem', 
-                                                        fontWeight: '800', 
-                                                        marginBottom: '4px',
-                                                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-                                                        border: '1px solid rgba(255,255,255,0.2)'
-                                                    }}>
-                                                        📦 BODEGA CORABASTOS
-                                                    </div>
-                                                    <Pin background={'#0F172A'} glyphColor={'white'} borderColor={'#000000'} scale={1.4} />
+                                                    <div style={{ backgroundColor: '#0F172A', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900', marginBottom: '4px' }}>🏠 BODEGA</div>
+                                                    <Pin background={'#0F172A'} glyphColor={'white'} scale={1.2} />
                                                 </div>
                                             </AdvancedMarker>
 
-                                            {activeRoutes.filter(r => r.status === 'in_transit' || r.status === 'loading').map((r, i) => {
-                                                const total = r.route_stops.length;
-                                                const doneStops = r.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed');
+                                            {activeRoutes.filter(r => r.status === 'in_transit').map((r, i) => {
                                                 const currentStop = r.route_stops.find(s => s.status === 'pending') || r.route_stops[r.route_stops.length - 1];
-                                                
-                                                // Real position based on next pending stop, otherwise fallback to mock
-                                                const realPos = currentStop?.order?.latitude && currentStop?.order?.longitude 
-                                                    ? { lat: currentStop.order.latitude, lng: currentStop.order.longitude }
-                                                    : null;
-
-                                                const progress = total > 0 ? (doneStops.length / total) : 0;
-                                                const mockPos = { 
-                                                    lat: 4.6097 + (i * 0.05) + (progress * 0.02), 
-                                                    lng: -74.0817 + (i * 0.02) + (progress * 0.05) 
-                                                };
-                                                
-                                                const vehiclePos = realPos || mockPos;
-
+                                                const pos = currentStop?.order?.latitude ? { lat: currentStop.order.latitude, lng: currentStop.order.longitude } : { lat: 4.6097 + (i * 0.01), lng: -74.0817 };
                                                 return (
-                                                    <AdvancedMarker key={r.id} position={vehiclePos}>
+                                                    <AdvancedMarker key={r.id} position={pos}>
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                            <div style={{ 
-                                                                backgroundColor: 'white', 
-                                                                color: '#0891B2', 
-                                                                padding: '4px 10px', 
-                                                                borderRadius: '12px', 
-                                                                fontSize: '0.75rem', 
-                                                                fontWeight: '900', 
-                                                                marginBottom: '4px', 
-                                                                border: '1px solid #E5E7EB',
-                                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                                                whiteSpace: 'nowrap'
-                                                            }}>
-                                                                {r.vehicle_plate} • {Math.round(progress * 100)}%
-                                                            </div>
-                                                            <Pin background={r.status === 'loading' ? '#F59E0B' : '#0891B2'} glyphColor={'white'} borderColor={'#0E7490'} scale={1.2} />
+                                                            <div style={{ backgroundColor: 'white', color: '#0EA5E9', padding: '4px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', marginBottom: '4px', border: '1px solid #E2E8F0' }}>{r.vehicle_plate}</div>
+                                                            <Pin background={'#0EA5E9'} glyphColor={'white'} scale={1.1} />
                                                         </div>
                                                     </AdvancedMarker>
                                                 );
                                             })}
                                         </Map>
-                                    </APIProvider>
-                                ) : (
-                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#F3F4F6' }}>
-                                        <div style={{ fontSize: '4rem' }}>🛰️</div>
-                                        <h3 style={{ color: '#111827' }}>Mapa no configurado</h3>
-                                        <p style={{ color: '#6B7280' }}>Inyecta la API Key para activar satélites.</p>
+                                    ) : (
+                                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#F1F5F9' }}>
+                                        <div style={{ fontSize: '3rem' }}>🛰️</div>
+                                        <div style={{ fontWeight: '800', color: '#64748B' }}>Google Maps no configurado</div>
                                     </div>
                                 )}
                             </div>
                         </div>
                     ) : activeTab === 'planner' ? (
-                        <div style={{ height: '100%', overflow: 'hidden' }}>
-                           <RoutePlanner />
-                        </div>
+                        <RoutePlanner />
                     ) : activeTab === 'fleet' ? (
                         <FleetManagement />
                     ) : activeTab === 'drivers_panel' ? (
                         <ConductorPanel />
                     ) : activeTab === 'kpis' ? (
-                        <div style={{ height: '100%', overflowY: 'auto' }}>
-                            <ControlTowerKPIs />
-                        </div>
+                        <ControlTowerKPIs />
                     ) : (
                         <MaintenanceManagement />
                     )}
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
     );
 }
 
-function StatBox({ label, value, color, icon, bg }: { label: string, value: number, color: string, icon: string, bg: string }) {
+function KPICard({ title, value, icon, color, subtitle }: any) {
     return (
-        <div style={{ 
-            padding: '0.8rem 1.5rem', 
-            textAlign: 'left', 
-            minWidth: '160px', 
-            borderRadius: '24px',
-            background: bg,
-            border: `1px solid ${color}30`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.2rem',
-            boxShadow: `0 10px 20px -10px ${color}40`,
-            position: 'relative',
-            overflow: 'hidden',
-            transition: 'transform 0.3s ease'
-        }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-5px)'}
-           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-            
-            {/* Subtle Inner Glow */}
-            <div style={{ 
-                position: 'absolute', top: '-20px', right: '-20px', width: '60px', height: '60px', 
-                backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: '50%', filter: 'blur(20px)'
-            }}></div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', position: 'relative', zIndex: 1 }}>
-                <span style={{ 
-                    fontSize: '1rem', 
-                    backgroundColor: 'rgba(255,255,255,0.5)', 
-                    width: '28px', height: '28px', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    borderRadius: '8px' 
-                }}>{icon}</span>
-                <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#1E293B', letterSpacing: '0.08rem', textTransform: 'uppercase', opacity: 0.7 }}>{label}</span>
+        <div style={{
+            backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0',
+            borderTop: `3px solid ${color}`, display: 'flex', alignItems: 'center', gap: '12px'
+        }}>
+            <div style={{ backgroundColor: `${color}10`, width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: color }}>
+                {icon}
             </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#0F172A', lineHeight: '1', letterSpacing: '-0.08rem', position: 'relative', zIndex: 1 }}>
-                {value}
+            <div>
+                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', lineHeight: 1, margin: '2px 0' }}>{value}</div>
+                <div style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '600' }}>{subtitle}</div>
             </div>
         </div>
     );

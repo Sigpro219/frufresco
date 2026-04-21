@@ -6,9 +6,14 @@ import Link from 'next/link';
 import OrderTracking from './OrderTracking';
 import { MapPin, Phone, Mail } from 'lucide-react';
 import { config } from '@/lib/config';
+import { useSearchParams } from 'next/navigation';
+import { translations, Locale } from '../lib/translations';
 
 export default function Footer() {
   const [appSettings, setAppSettings] = useState<{key: string, value: string}[] | null>(null);
+  const searchParams = useSearchParams();
+  const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+  const t = translations[locale];
 
   useEffect(() => {
     async function fetchSettings() {
@@ -20,6 +25,7 @@ export default function Footer() {
           'contact_email', 
           'contact_address', 
           'footer_description',
+          'footer_description_en',
           'app_logo_url',
           'app_name'
         ]);
@@ -37,7 +43,7 @@ export default function Footer() {
   const phone = getSetting('contact_phone', '+57 300 123 4567');
   const email = getSetting('contact_email', `contacto@${appName.toLowerCase().replace(/\s/g, '')}.com`);
   const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
-  const description = getSetting('footer_description', config.brand.footerDescription);
+  const description = (locale === 'en' ? getSetting('footer_description_en', '') : getSetting('footer_description', '')) || config.brand.footerDescription;
   const logoUrl = getSetting('app_logo_url', '');
 
   return (
@@ -91,11 +97,11 @@ export default function Footer() {
               marginBottom: '1.2rem', 
               color: 'white',
               letterSpacing: '-0.02em'
-            }}>Enlaces Rápidos</h4>
+            }}>{t.quickLinks}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <li><Link href="/" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Inicio</Link></li>
-              <li><Link href="/catalog" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Catálogo</Link></li>
-              <li><Link href="/b2b/register" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>Institucional</Link></li>
+              <li><Link href="/" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navHome}</Link></li>
+              <li><Link href="/catalog" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navCatalog}</Link></li>
+              <li><Link href="/b2b/register" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navInstitutional}</Link></li>
             </ul>
           </div>
 
@@ -108,7 +114,7 @@ export default function Footer() {
               marginBottom: '1.2rem', 
               color: 'white',
               letterSpacing: '-0.02em'
-            }}>Contacto</h4>
+            }}>{t.contact}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
                 <MapPin size={18} strokeWidth={1.5} color="var(--primary)" /> {address}
@@ -124,7 +130,7 @@ export default function Footer() {
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '2rem', textAlign: 'center', fontSize: '0.9rem', opacity: 0.5 }}>
-          © {new Date().getFullYear()} {appName}. Todos los derechos reservados.
+          © {new Date().getFullYear()} {appName}. {t.allRightsReserved}.
         </div>
       </div>
     </footer>

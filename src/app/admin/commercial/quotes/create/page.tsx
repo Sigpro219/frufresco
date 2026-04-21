@@ -21,6 +21,7 @@ export default function CreateQuotePage() {
     const [showClientResults, setShowClientResults] = useState(false);
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [nicknames, setNicknames] = useState<any[]>([]);
     const [conversions, setConversions] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [quoteNumber, setQuoteNumber] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export default function CreateQuotePage() {
         if (data) setRules(data || []);
     };
 
-    const handleClientChange = (clientId: string) => {
+    const handleClientChange = async (clientId: string) => {
         setSelectedClientId(clientId);
         const client = clients.find(c => c.id === clientId);
         if (client) {
@@ -89,9 +90,21 @@ export default function CreateQuotePage() {
             if (client.pricing_model_id) {
                 setSelectedModelId(client.pricing_model_id);
             }
+            // Cargar máscaras de productos (Nicknames) para este cliente
+            try {
+                const { data } = await supabase
+                    .from('product_nicknames')
+                    .select('*')
+                    .eq('customer_id', clientId);
+                if (data) setNicknames(data);
+            } catch (err) {
+                console.error('Error cargando nicknames:', err);
+                setNicknames([]);
+            }
         } else {
             setClientName('');
             setSelectedModelId('');
+            setNicknames([]);
         }
     };
 
@@ -229,10 +242,13 @@ export default function CreateQuotePage() {
         const finalPrice = basePrice * (1 + (variantAdjustment / 100));
         const ivaRate = product.iva_rate ?? 0;
 
+        const clientNickname = nicknames.find(n => n.product_id === product.id);
+        const displayName = clientNickname ? clientNickname.nickname : (variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name);
+
         setItems([...items, {
             product_id: product.id,
             variant_id: variant?.id || null,
-            name: variant ? `${product.name} (${Object.values(variant.options).join(' / ')})` : product.name,
+            name: displayName,
             sku: variant?.sku || product.sku,
             unit: product.unit_of_measure,
             cost: cost,
@@ -294,12 +310,14 @@ export default function CreateQuotePage() {
             const quoteItemsArr = items.map(item => ({
                 quote_id: quote.id,
                 product_id: item.product_id,
-                quantity_estimated: item.quantity,
-                base_cost: item.cost,
-                margin_applied: item.margin,
-                final_price: Math.ceil(item.price),
+                product_name: item.name,
+                quantity: item.quantity,
+                cost_basis: item.cost,
+                margin_percent: item.margin,
+                unit_price: Math.ceil(item.price),
                 iva_rate: item.iva_rate || 0,
-                iva_amount: (Math.ceil(item.price) * item.quantity) * ((item.iva_rate || 0) / 100)
+                iva_amount: (Math.ceil(item.price) * item.quantity) * ((item.iva_rate || 0) / 100),
+                total_price: Math.ceil(item.price) * item.quantity
             }));
 
             const { error: iError } = await supabase.from('quote_items').insert(quoteItemsArr);
