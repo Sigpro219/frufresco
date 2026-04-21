@@ -227,7 +227,7 @@ export default function AdminDashboard() {
                         <AdminCard title="Clientes" href="/admin/clients" icon="👥" color="white" textColor="#475569" desc="CRM Base" />
                         <AdminCard title="Ajustes" href="/admin/settings" icon="⚙️" color="white" textColor="#64748B" desc="Configuración" />
                         
-                        {profile?.role === 'admin' && (
+                        {profile?.role === 'sys_admin' && (
                             <Link href="/admin/command-center" style={{ gridColumn: 'span 2', textDecoration: 'none' }}>
                                 <div style={{ 
                                     backgroundColor: '#0F172A', 

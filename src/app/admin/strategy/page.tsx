@@ -4,7 +4,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
-import { Map, Marker, useMapsLibrary, MapMouseEvent } from '@vis.gl/react-google-maps';
+import { useAuth } from '@/lib/authContext';
+import GeofencingManager from '@/components/admin/GeofencingManager';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 type Tab = 'geofencing' | 'seo' | 'it';
 
@@ -108,6 +110,7 @@ function Polygon({ onPathChange, map, paths, ...options }: google.maps.PolygonOp
 
 export default function AdminStrategyPage() {
     const [activeTab, setActiveTab] = useState<Tab>('geofencing');
+    const { profile } = useAuth();
     const [settings, setSettings] = useState<AppSetting[]>([]);
     const [itRequests, setItRequests] = useState<ITRequest[]>([]);
     const [saving, setSaving] = useState(false);
@@ -127,15 +130,21 @@ export default function AdminStrategyPage() {
         fetchData();
     }, []);
 
-    const handleSaveGeofence = async (key: string, poly: Point[]) => {
+    const handleSaveGeofence = async (key: string, poly: string) => {
         setSaving(true);
         const { error } = await supabase
             .from('app_settings')
-            .upsert({ key, value: JSON.stringify(poly), updated_at: new Date().toISOString() });
+            .upsert({ key, value: poly, updated_at: new Date().toISOString() });
         
         if (!error) {
             (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ✓', 'success');
-            setSettings(prev => prev.map(s => s.key === key ? { ...s, value: JSON.stringify(poly) } : s));
+            setSettings(prev => {
+                const exists = prev.find(s => s.key === key);
+                if (exists) {
+                    return prev.map(s => s.key === key ? { ...s, value: poly } : s);
+                }
+                return [...prev, { key, value: poly }];
+            });
         } else {
             (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al guardar geocerca', 'error');
         }
@@ -195,7 +204,14 @@ export default function AdminStrategyPage() {
                 </header>
 
                 <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem', minHeight: '600px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                    {activeTab === 'geofencing' && <GeofencingView settings={settings} mapsKey={MAPS_KEY} onSave={handleSaveGeofence} saving={saving} />}
+                    {activeTab === 'geofencing' && (
+                        <GeofencingManager 
+                            settings={settings} 
+                            onSave={handleSaveGeofence} 
+                            saving={saving} 
+                            canEdit={profile?.role === 'sys_admin'}
+                        />
+                    )}
                     {activeTab === 'seo' && <SEOView settings={settings} />}
                     {activeTab === 'it' && <ITView requests={itRequests} onRequest={handleITRequest} />}
                 </div>
@@ -204,186 +220,6 @@ export default function AdminStrategyPage() {
     );
 }
 
-function GeofencingView({ settings, mapsKey, onSave, saving }: { settings: AppSetting[], mapsKey: string, onSave: (key: string, poly: Point[]) => void, saving: boolean }) {
-    const [editMode, setEditMode] = useState<'b2c' | 'b2b' | null>(null);
-    const [tempPoly, setTempPoly] = useState<Point[]>([]);
-    const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-    const [visibleB2C, setVisibleB2C] = useState(true);
-    const [visibleB2B, setVisibleB2B] = useState(true);
-
-    const b2cPolyString = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
-    const b2bPolyString = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
-    
-    const b2cPoly: Point[] = useMemo(() => b2cPolyString ? JSON.parse(b2cPolyString) : [], [b2cPolyString]);
-    const b2bPoly: Point[] = useMemo(() => b2bPolyString ? JSON.parse(b2bPolyString) : [], [b2bPolyString]);
-
-    const startEditing = (mode: 'b2c' | 'b2b') => {
-        setEditMode(mode);
-        setTempPoly(mode === 'b2c' ? b2cPoly : b2bPoly);
-        // Ensure the one we edit is visible
-        if (mode === 'b2c') setVisibleB2C(true);
-        if (mode === 'b2b') setVisibleB2B(true);
-    };
-
-    const handleMapClick = useCallback((e: MapMouseEvent) => {
-        if (!editMode) return;
-        const lat = e.detail?.latLng?.lat;
-        const lng = e.detail?.latLng?.lng;
-        if (lat && lng) {
-            setTempPoly(prev => [...prev, { lat, lng }]);
-        }
-    }, [editMode]);
-
-    const handlePathChange = useCallback((newPath: Point[]) => {
-        setTempPoly(newPath);
-    }, []);
-
-    const clearVertices = useCallback(() => setTempPoly([]), []);
-
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
-            <div style={{ height: '600px', borderRadius: '20px', overflow: 'hidden', border: '1px solid #E2E8F0', position: 'relative' }}>
-                <Map
-                    defaultCenter={{ lat: 4.67, lng: -74.06 }}
-                    defaultZoom={12}
-                    gestureHandling={'greedy'}
-                    disableDefaultUI={false}
-                    onClick={handleMapClick}
-                    onIdle={(e) => setMapInstance(e.map)}
-                >
-                        {/* Shaded Polygons */}
-                        {visibleB2C && (
-                            <Polygon 
-                                key="poly-b2c"
-                                paths={editMode === 'b2c' ? tempPoly : b2cPoly} 
-                                map={mapInstance} 
-                                fillColor="#EF4444" 
-                                fillOpacity={0.2} 
-                                strokeColor="#EF4444" 
-                                strokeWeight={2}
-                                editable={editMode === 'b2c'}
-                                draggable={editMode === 'b2c'}
-                                onPathChange={editMode === 'b2c' ? handlePathChange : undefined}
-                            />
-                        )}
-                        {visibleB2B && (
-                            <Polygon 
-                                key="poly-b2b"
-                                paths={editMode === 'b2b' ? tempPoly : b2bPoly} 
-                                map={mapInstance} 
-                                fillColor="#7C3AED" 
-                                fillOpacity={0.2} 
-                                strokeColor="#7C3AED" 
-                                strokeWeight={2}
-                                editable={editMode === 'b2b'}
-                                draggable={editMode === 'b2b'}
-                                onPathChange={editMode === 'b2b' ? handlePathChange : undefined}
-                            />
-                        )}
-
-                        {/* Temp Editing Visual (Only for first 2 points of a new poly) */}
-                        {editMode && tempPoly.length > 0 && tempPoly.length < 3 && (
-                            <Polygon 
-                                paths={tempPoly} 
-                                map={mapInstance} 
-                                fillColor="#0EA5E9" 
-                                fillOpacity={0.4} 
-                                strokeColor="#0EA5E9" 
-                                strokeWeight={3} 
-                            />
-                        )}
-
-                        {/* Fixed Markers for context (only when NOT editing) */}
-                        {!editMode && visibleB2C && b2cPoly.map((p, i) => (
-                            <Marker key={`b2c-${i}`} position={p} opacity={0.6} label={i === 0 ? 'Hogares' : undefined} />
-                        ))}
-                        {!editMode && visibleB2B && b2bPoly.map((p, j) => (
-                            <Marker key={`b2b-${j}`} position={p} opacity={0.6} label={j === 0 ? 'HORECA' : undefined} />
-                        ))}
-
-                        {/* Interactive Editing Markers (Only for very first points) */}
-                        {editMode && tempPoly.length < 3 && tempPoly.map((p, k) => (
-                            <Marker key={`temp-${k}`} position={p} icon={{ path: 'M 0,-1 1,0 0,1 -1,0 z', scale: 10, fillColor: '#0EA5E9', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' } as any} />
-                        ))}
-                    </Map>
-
-                {editMode && (
-                    <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 1, backgroundColor: 'rgba(255,255,255,0.9)', padding: '1rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)', width: '280px' }}>
-                        <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', fontWeight: '900' }}>Modo Edición: <span style={{ color: '#0EA5E9' }}>{editMode === 'b2c' ? 'HOGARES' : 'HORECA'}</span></p>
-                        <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: '#64748B' }}>Haz clic en el mapa para añadir vértices y cerrar el área.</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <button onClick={() => onSave(editMode === 'b2c' ? 'geofence_b2c_poly' : 'geofence_b2b_poly', tempPoly)} disabled={saving} style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#0EA5E9', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                {saving ? '...' : '💾 Guardar'}
-                            </button>
-                            <button onClick={clearVertices} style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#F1F5F9', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                🗑️ Limpiar
-                            </button>
-                            <button onClick={() => setEditMode(null)} style={{ gridColumn: 'span 2', padding: '0.7rem', borderRadius: '8px', backgroundColor: '#F1F5F9', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                Salir del Editor
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-            <div>
-                <h3 style={{ fontWeight: '900', color: '#0F172A', marginBottom: '1.5rem' }}>Control de Cobertura</h3>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ padding: '1.5rem', borderRadius: '16px', border: editMode === 'b2c' ? '2px solid #EF4444' : '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button 
-                                    onClick={() => setVisibleB2C(!visibleB2C)}
-                                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: 0 }}
-                                    title={visibleB2C ? 'Ocultar Capa' : 'Mostrar Capa'}
-                                >
-                                    {visibleB2C ? '👁️' : '👁️‍🗨️'}
-                                </button>
-                                <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0F172A' }}>🔴 Línea Hogar (B2C)</span>
-                            </div>
-                            <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: '800' }}>ACTIVA</span>
-                        </div>
-                        <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 1rem 0' }}>Zona: Chapinero, Usaquén & Colina.</p>
-                        <button onClick={() => startEditing('b2c')} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #EF4444', backgroundColor: 'white', color: '#EF4444', fontWeight: '900', cursor: 'pointer' }}>
-                            ✏️ Editar Polígono
-                        </button>
-                    </div>
-
-                    <div style={{ padding: '1.5rem', borderRadius: '16px', border: editMode === 'b2b' ? '2px solid #7C3AED' : '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button 
-                                    onClick={() => setVisibleB2B(!visibleB2B)}
-                                    style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: 0 }}
-                                    title={visibleB2B ? 'Ocultar Capa' : 'Mostrar Capa'}
-                                >
-                                    {visibleB2B ? '👁️' : '👁️‍🗨️'}
-                                </button>
-                                <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0F172A' }}>🟣 Institucional (B2B)</span>
-                            </div>
-                            <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: '800' }}>ACTIVA</span>
-                        </div>
-                        <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '0 0 1rem 0' }}>Zona: Bogotá, Girardot, Melgar & Anapoima.</p>
-                        <button onClick={() => startEditing('b2b')} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #7C3AED', backgroundColor: 'white', color: '#7C3AED', fontWeight: '900', cursor: 'pointer' }}>
-                            ✏️ Editar Polígono
-                        </button>
-                    </div>
-                </div>
-
-                <div style={{ marginTop: '2rem', padding: '1.5rem', backgroundColor: '#FFF7ED', borderRadius: '16px', border: '1px solid #FFEDD5' }}>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', fontWeight: '900', color: '#9A3412' }}>🧠 Auditoría de Cambio</h4>
-                    <p style={{ fontSize: '0.75rem', color: '#9A3412', margin: 0 }}>Cualquier cambio en los polígonos activará una re-indexación de SEO y validará automáticamente las rutas de despacho vigentes.</p>
-                </div>
-
-                {editMode && tempPoly.length >= 3 && (
-                    <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#F0FDF4', borderRadius: '12px', border: '1px solid #BBF7D0' }}>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>✅ Polígono Válido: {tempPoly.length} vértices detectados.</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
 
 function SEOView({ settings }: { settings: AppSetting[] }) {
     const b2cPolyStr = settings.find(s => s.key === 'geofence_b2c_poly')?.value;

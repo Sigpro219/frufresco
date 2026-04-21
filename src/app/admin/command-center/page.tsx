@@ -4,7 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapPin } from 'lucide-react';
+import GeofencingManager from '@/components/admin/GeofencingManager';
+import { APIProvider } from '@vis.gl/react-google-maps';
+
+interface Point {
+    lat: number;
+    lng: number;
+}
 
 const AVAILABLE_MODULES = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -71,7 +78,7 @@ export default function CommandCenter() {
     const [loading, setLoading] = useState(true);
     const [, setStatusMessage] = useState({ text: '', type: '' });
     const [isEditing, setIsEditing] = useState(false);
-    const [activeTab, setActiveTab] = useState<'governance' | 'helpdesk' | 'approvals' | 'fleet'>('governance');
+    const [activeTab, setActiveTab] = useState<'governance' | 'helpdesk' | 'approvals' | 'fleet' | 'geofencing'>('governance');
     
     // Help Desk state
     const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -169,7 +176,7 @@ export default function CommandCenter() {
     }, []);
 
     useEffect(() => {
-        if (!authLoading && profile?.role !== 'admin') {
+        if (!authLoading && profile?.role !== 'sys_admin') {
             router.push('/admin');
         }
         fetchSettings();
@@ -439,9 +446,10 @@ export default function CommandCenter() {
                         { id: 'governance', label: 'Gobernanza', icon: <Settings size={18}/> },
                         { id: 'helpdesk', label: 'Mesa de Ayuda', icon: <HelpCircle size={18}/> },
                         { id: 'approvals', label: 'Aprobaciones', icon: <ShieldCheck size={18}/> },
+                        { id: 'geofencing', label: 'Geocercas', icon: <MapPin size={18}/> },
                         { id: 'fleet', label: 'Flota SaaS', icon: <Activity size={18}/> }
                     ].map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id as 'governance' | 'helpdesk' | 'approvals' | 'fleet')} style={{ padding: '12px 24px', backgroundColor: 'transparent', color: activeTab === tab.id ? '#111827' : '#6B7280', border: 'none', borderBottom: activeTab === tab.id ? '3px solid #111827' : '3px solid transparent', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '-1px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{ padding: '12px 24px', backgroundColor: 'transparent', color: activeTab === tab.id ? '#111827' : '#6B7280', border: 'none', borderBottom: activeTab === tab.id ? '3px solid #111827' : '3px solid transparent', fontWeight: '800', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '-1px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
                             {tab.icon} {tab.label}
                         </button>
                     ))}
@@ -671,6 +679,23 @@ export default function CommandCenter() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'geofencing' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h2>📍 Control Maestro de Geocercas</h2>
+                                <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: 0 }}>Define los perímetros globales de operación B2B y B2C.</p>
+                            </div>
+                            <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', border: '1px solid #E5E7EB' }}>
+                                <GeofencingManager 
+                                    settings={settings} 
+                                    onSave={handleUpdateSetting} 
+                                    saving={loading} 
+                                    canEdit={true} 
+                                />
                             </div>
                         </div>
                     )}
