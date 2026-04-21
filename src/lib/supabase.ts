@@ -102,4 +102,6 @@ export interface Product {
     // Commercial / Multi-Catalog Fields
     web_unit?: string;
     web_conversion_factor?: number;
+    name_en?: string | null;
+    description_en?: string | null;
 }

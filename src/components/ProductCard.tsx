@@ -16,16 +16,22 @@ export default function ProductCard({ product }: { product: Product }) {
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
-    const [displayName, setDisplayName] = useState(product.display_name || product.name);
+    const [displayName, setDisplayName] = useState(
+        locale === 'en' && product.name_en ? product.name_en : (product.display_name || product.name)
+    );
 
     useEffect(() => {
-        // Al cargar, si ya tiene un display_name diferente al original, lo usamos
-        setDisplayName(product.display_name || product.name);
-    }, [product.display_name, product.name]);
+        // Al cargar, priorizamos la traducción de la BD si estamos en inglés
+        if (locale === 'en' && product.name_en) {
+            setDisplayName(product.name_en);
+        } else {
+            setDisplayName(product.display_name || product.name);
+        }
+    }, [product.display_name, product.name, product.name_en, locale]);
 
     useEffect(() => {
-        // Lazy Translation: Si estamos en Inglés y el nombre sigue siendo el original (sin caché)
-        if (locale === 'en' && displayName === product.name) {
+        // Lazy Translation: Si estamos en Inglés y NO hay traducción en BD ni en displayName
+        if (locale === 'en' && !product.name_en && displayName === product.name) {
              console.log(`🤖 Solicitando traducción para: ${product.name}...`);
              async function triggerLazyTranslate() {
                  try {
