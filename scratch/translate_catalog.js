@@ -28,7 +28,7 @@ async function translateCatalog() {
     }
 
     console.log(`Remaining products to translate: ${products.length}`);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
     for (let i = 0; i < products.length; i++) {
         const prod = products[i];

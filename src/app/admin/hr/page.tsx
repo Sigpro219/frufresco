@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { createClient } from '@supabase/supabase-js';
-import * as XLSX from 'xlsx';
 
 interface Profile {
     id: string;
     contact_name: string;
     email?: string;
     phone?: string;
+    contact_phone?: string;
     role: string;
     specialty?: string;
     is_active: boolean;
@@ -22,27 +22,28 @@ interface Role {
     value: string;
     label: string;
     color: string;
+    bgColor: string;
 }
 
 const ROLES: Role[] = [
-    { value: 'coord_admin', label: 'Coordinador Administrativo', color: '#1E40AF' },
-    { value: 'lider_cartera', label: 'Líder de Cartera', color: '#1E3A8A' },
-    { value: 'aux_contable', label: 'Auxiliar Contable', color: '#3B82F6' },
-    { value: 'lider_facturacion', label: 'Líder de Facturación', color: '#2563EB' },
-    { value: 'tesorero', label: 'Tesorero', color: '#1D4ED8' },
-    { value: 'rrhh', label: 'RR-HH', color: '#7C3AED' },
-    { value: 'aux_admin', label: 'Auxiliar Administrativo', color: '#9333EA' },
-    { value: 'coord_ops', label: 'Coordinador de Operaciones', color: '#059669' },
-    { value: 'lider_inventario', label: 'Líder de Inventario', color: '#10B981' },
-    { value: 'gestion_pedidos', label: 'Gestión de Pedidos', color: '#34D399' },
-    { value: 'lider_lista', label: 'Líder de Lista', color: '#4ADE80' },
-    { value: 'aux_bodega', label: 'Auxiliar de Bodega', color: '#6B7280' },
-    { value: 'servicios_generales', label: 'Servicios Generales', color: '#9CA3AF' },
-    { value: 'enfermero', label: 'Enfermero', color: '#EF4444' },
-    { value: 'conductor', label: 'Conductor', color: '#F59E0B' },
-    { value: 'aux_ruta', label: 'Auxiliar de Ruta', color: '#D97706' },
-    { value: 'servicio_cliente', label: 'Servicio al Cliente', color: '#DB2777' },
-    { value: 'comprador', label: 'Comprador', color: '#475569' }
+    { value: 'LIDER DE CARTERA', label: 'Líder de Cartera', color: '#1E3A8A', bgColor: '#DBEAFE' },
+    { value: 'AUX DE RUTA', label: 'Auxiliar de Ruta', color: '#B45309', bgColor: '#FEF3C7' },
+    { value: 'COORDINADOR ADMINISTRATIVO', label: 'Coordinador Administrativo', color: '#1E40AF', bgColor: '#DBEAFE' },
+    { value: 'LIDER DE LISTA', label: 'Líder de Lista', color: '#059669', bgColor: '#D1FAE5' },
+    { value: 'AUX CONTABLE', label: 'Auxiliar Contable', color: '#2563EB', bgColor: '#EFF6FF' },
+    { value: 'AUX DE BODEGA', label: 'Auxiliar de Bodega', color: '#4B5563', bgColor: '#F3F4F6' },
+    { value: 'LIDER DE FACTURACION', label: 'Líder de Facturación', color: '#2563EB', bgColor: '#DBEAFE' },
+    { value: 'SERVICIOS GENERALES', label: 'Servicios Generales', color: '#6B7280', bgColor: '#F3F4F6' },
+    { value: 'LIDER DE INVENTARIO', label: 'Líder de Inventario', color: '#10B981', bgColor: '#D1FAE5' },
+    { value: 'CONDUCTOR', label: 'Conductor / Piloto', color: '#D97706', bgColor: '#FEF3C7' },
+    { value: 'TESORERO', label: 'Tesorero', color: '#1D4ED8', bgColor: '#DBEAFE' },
+    { value: 'ENFERMERO', label: 'Enfermero', color: '#EF4444', bgColor: '#FEE2E2' },
+    { value: 'AUX ADMINISTRATIVO', label: 'Auxiliar Administrativo', color: '#9333EA', bgColor: '#F5F3FF' },
+    { value: 'COMPRADOR', label: 'Comprador Especialista', color: '#475569', bgColor: '#F1F5F9' },
+    { value: 'GESTION DE PEDIDOS', label: 'Gestión de Pedidos', color: '#34D399', bgColor: '#D1FAE5' },
+    { value: 'COORDINADOR DE OPERACIONES', label: 'Coordinador de Operaciones', color: '#059669', bgColor: '#D1FAE5' },
+    { value: 'SERVICIO AL CLIENTE', label: 'Servicio al Cliente', color: '#DB2777', bgColor: '#FCE7F3' },
+    { value: 'RR-HH', label: 'Talento Humano (RR-HH)', color: '#7C3AED', bgColor: '#F5F3FF' }
 ];
 
 const SPECIALTIES = [
@@ -70,6 +71,7 @@ export default function HRManagement() {
     const [sortBy, setSortBy] = useState<'name' | 'role' | 'specialty'>('name');
     const [editingUser, setEditingUser] = useState<Profile | null>(null);
     const [showAdd, setShowAdd] = useState(false);
+    const [viewMode, setViewMode] = useState<'gallery' | 'list'>('gallery');
     const [newUser, setNewUser] = useState<Partial<Profile>>({
         contact_name: '',
         email: '',
@@ -97,9 +99,8 @@ export default function HRManagement() {
         try {
             setLoading(true);
             const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .not('role', 'in', '("b2b_client","b2c_client")');
+                .from('collaborators')
+                .select('*');
 
             if (error) throw error;
             setUsers(data || []);
@@ -113,15 +114,11 @@ export default function HRManagement() {
     const updateProfile = async (userId: string, updates: Partial<Profile>) => {
         try {
             setSaving(true);
-            // Clean updates: avoid updating ID or immutable fields
             const { id, created_at, ...cleanedUpdates } = updates;
             
             const { error } = await supabase
-                .from('profiles')
-                .update({
-                    ...cleanedUpdates,
-                    role: 'admin' // Force technically valid role while structure finishes
-                })
+                .from('collaborators')
+                .update(cleanedUpdates)
                 .eq('id', userId);
 
             if (error) throw error;
@@ -140,10 +137,9 @@ export default function HRManagement() {
         try {
             setSaving(true);
             const { error } = await supabase
-                .from('profiles')
+                .from('collaborators')
                 .insert([{
                     ...newUser,
-                    role: 'admin', // Force technically valid role
                     id: crypto.randomUUID(),
                     is_active: true
                 }]);
@@ -162,252 +158,401 @@ export default function HRManagement() {
     const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
         try {
             const { error } = await supabase
-                .from('profiles')
+                .from('collaborators')
                 .update({ is_active: !currentStatus })
                 .eq('id', userId);
             if (error) throw error;
             await fetchData();
         } catch (err: any) {
             console.error(err.message);
+            alert('Error al cambiar estado.');
         }
     };
 
     const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-    const sortedUsers = [...users].filter(u => {
+    const filteredUsers = users.filter(u => {
         const query = searchTerm.trim().toLowerCase();
-        if (!query) {
-            return filterRole === 'all' || u.role === filterRole;
+        let matchesSearch = true;
+        
+        if (query) {
+            if (query.startsWith('#')) {
+                matchesSearch = (u.document_id || '').toLowerCase().includes(query.substring(1));
+            } else if (query.startsWith('@')) {
+                const metaQuery = normalize(query.substring(1));
+                const roleLabel = normalize(ROLES.find(r => r.value === u.role)?.label || '');
+                matchesSearch = roleLabel.includes(metaQuery) || normalize(u.specialty || '').includes(metaQuery);
+            } else {
+                const terms = query.split(',').map(t => normalize(t.trim())).filter(Boolean);
+                const haystack = normalize([u.contact_name || '', u.phone || '', u.contact_phone || '', u.email || '', u.role || ''].join(' '));
+                matchesSearch = terms.some(term => haystack.includes(term));
+            }
         }
 
-        if (query.startsWith('#')) {
-            const cedulaQuery = query.substring(1).trim();
-            return (u.document_id || '').toLowerCase().includes(cedulaQuery);
-        }
-
-        if (query.startsWith('@')) {
-            const metaQuery = normalize(query.substring(1).trim());
-            const roleInfo = ROLES.find(r => r.value === u.role);
-            const roleLabel = normalize(roleInfo?.label || '');
-            const specialty = normalize(u.specialty || '');
-            return roleLabel.includes(metaQuery) || specialty.includes(metaQuery);
-        }
-
-        const terms = searchTerm.split(',').map(t => normalize(t.trim())).filter(Boolean);
-        const haystack = normalize([u.contact_name || '', u.phone || '', u.email || ''].join(' '));
-        return terms.some(term => haystack.includes(term));
+        const matchesRole = filterRole === 'all' || u.role === filterRole;
+        return matchesSearch && matchesRole;
     }).sort((a, b) => {
         if (sortBy === 'name') return (a.contact_name || '').localeCompare(b.contact_name || '');
-        if (sortBy === 'role') return a.role.localeCompare(b.role);
+        if (sortBy === 'role') return (a.role || '').localeCompare(b.role || '');
         if (sortBy === 'specialty') return (a.specialty || '').localeCompare(b.specialty || '');
         return 0;
     });
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
             <Navbar />
             
             <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 <header style={{ 
                     marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', 
-                    alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem',
-                    maxHeight: scrolled ? '0' : '200px', opacity: scrolled ? 0 : 1,
-                    overflow: 'hidden', transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    pointerEvents: scrolled ? 'none' : 'auto'
+                    alignItems: 'center', flexWrap: 'wrap', gap: '1rem',
+                    transition: 'all 0.4s ease'
                 }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', letterSpacing: '-0.025em', marginBottom: '0.5rem' }}>
-                            Gestión de <span style={{ color: '#0891B2' }}>Talento</span>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.025em', margin: 0 }}>
+                            Gestión de <span style={{ color: '#0891B2' }}>Talento Humano</span>
                         </h1>
-                        <p style={{ color: '#6B7280', fontSize: '1.1rem' }}>Control total de perfiles, roles y accesos al ecosistema.</p>
+                        <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                            Administra colaboradores, roles y especialidad operativa.
+                        </p>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <button disabled style={{ padding: '0.5rem 1rem', borderRadius: '12px', backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.75rem', cursor: 'not-allowed' }}>
-                            📊 Excel Deshabilitado
-                        </button>
+                        <div style={{ display: 'flex', backgroundColor: 'white', padding: '0.4rem', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                            <button 
+                                onClick={() => setViewMode('gallery')}
+                                style={{ 
+                                    padding: '0.6rem 1rem', borderRadius: '12px', border: 'none', 
+                                    backgroundColor: viewMode === 'gallery' ? '#F1F5F9' : 'transparent',
+                                    color: viewMode === 'gallery' ? '#0F172A' : '#94A3B8',
+                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                            >🖼️ Galería</button>
+                            <button 
+                                onClick={() => setViewMode('list')}
+                                style={{ 
+                                    padding: '0.6rem 1rem', borderRadius: '12px', border: 'none', 
+                                    backgroundColor: viewMode === 'list' ? '#F1F5F9' : 'transparent',
+                                    color: viewMode === 'list' ? '#0F172A' : '#94A3B8',
+                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                            >📋 Lista</button>
+                        </div>
                         <button 
                             onClick={() => setShowAdd(true)}
-                            style={{ padding: '0.8rem 1.8rem', borderRadius: '16px', backgroundColor: '#0891B2', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)' }}
+                            style={{ 
+                                padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: '#0891B2', 
+                                color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', 
+                                boxShadow: '0 10px 20px -5px rgba(8, 145, 178, 0.4)',
+                                display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'transform 0.2s'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
                         >
-                            + Registrar Colaborador
+                            <span style={{ fontSize: '1.2rem' }}>+</span> Registrar Colaborador
                         </button>
                     </div>
                 </header>
 
                 <div style={{ 
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-                    gap: '1.5rem', marginBottom: '2.5rem',
-                    maxHeight: scrolled ? '0' : '300px', opacity: scrolled ? 0 : 1,
-                    overflow: 'hidden', transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    pointerEvents: scrolled ? 'none' : 'auto'
+                    backgroundColor: 'white', padding: '1rem 1.5rem', borderRadius: '24px', 
+                    border: '1px solid #E2E8F0', marginBottom: '2.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', 
+                    alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', position: 'sticky', top: '10px', zIndex: 100
                 }}>
-                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ color: '#6B7280', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase' }}>Total Funcionarios</div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#111827', marginTop: '0.5rem' }}>{users.length}</div>
-                    </div>
-                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ color: '#059669', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase' }}>Activos Hoy</div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#059669', marginTop: '0.5rem' }}>{users.filter(u => u.is_active).length}</div>
-                    </div>
-                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ color: '#F59E0B', fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase' }}>En Archivo</div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#F59E0B', marginTop: '0.5rem' }}>{users.filter(u => !u.is_active).length}</div>
-                    </div>
-                </div>
-
-                <div style={{ 
-                    backgroundColor: 'white', padding: '1rem 1.5rem', borderRadius: scrolled ? '0 0 24px 24px' : '24px', 
-                    border: '1px solid #E5E7EB', marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center',
-                    position: 'sticky', top: '0px', zIndex: 50, boxShadow: scrolled ? '0 10px 15px -3px rgba(0,0,0,0.1)' : 'none',
-                    transition: 'all 0.3s ease',
-                    marginTop: scrolled ? '-1rem' : '0'
-                }}>
-                    <div style={{ flex: 1, minWidth: '350px', position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#0891B2', fontWeight: '900' }}>{scrolled ? '📍' : '🔍'}</span>
+                    <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
                         <input 
-                            placeholder="Filtrar colaboradores..."
+                            placeholder="Buscar por nombre, teléfono, rol (@rol) o ID (#id)..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             style={{ 
-                                width: '100%', padding: '0.7rem 1rem 0.7rem 2.8rem', borderRadius: '14px', 
-                                border: '1.5px solid #F3F4F6', backgroundColor: '#F9FAFB', fontSize: '0.95rem',
-                                fontWeight: '600'
+                                width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '14px', 
+                                border: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC', fontSize: '0.95rem',
+                                fontWeight: '600', color: '#1E293B', outline: 'none'
                             }}
                         />
                     </div>
-                    {scrolled && (
-                        <button 
-                            onClick={() => setShowAdd(true)}
-                            style={{ padding: '0.6rem 1.2rem', borderRadius: '12px', backgroundColor: '#0891B2', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >+ Nuevo</button>
-                    )}
                     <select 
                         value={filterRole} 
                         onChange={e => setFilterRole(e.target.value)} 
-                        style={{ padding: '0.7rem 1rem', borderRadius: '14px', border: '1.5px solid #F3F4F6', fontWeight: '700', color: '#4B5563', backgroundColor: 'white' }}
+                        style={{ padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', fontWeight: '700', color: '#475569', backgroundColor: 'white', outline: 'none' }}
                     >
-                        <option value="all">Todos los Cargos</option>
+                        <option value="all">🎭 Todos los Roles</option>
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                    <select 
+                        value={sortBy} 
+                        onChange={e => setSortBy(e.target.value as any)} 
+                        style={{ padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', fontWeight: '700', color: '#475569', backgroundColor: 'white', outline: 'none' }}
+                    >
+                        <option value="name">🔤 Nombre</option>
+                        <option value="role">🛠️ Cargo</option>
+                        <option value="specialty">🏬 Especialidad</option>
                     </select>
                 </div>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '28px', border: '1px solid #E5E7EB', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #F3F4F6' }}>
-                            <tr>
-                                <th style={{ padding: '1.5rem', textAlign: 'left', color: '#6B7280', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Colaborador</th>
-                                <th style={{ padding: '1.5rem', textAlign: 'left', color: '#6B7280', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Rol Técnico</th>
-                                <th style={{ padding: '1.5rem', textAlign: 'left', color: '#6B7280', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Contacto</th>
-                                <th style={{ padding: '1.5rem', textAlign: 'right', color: '#6B7280', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedUsers.map(user => {
-                                const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#6B7280' };
-                                return (
-                                    <tr key={user.id} style={{ borderBottom: '1px solid #F3F4F6', opacity: user.is_active ? 1 : 0.6 }}>
-                                        <td style={{ padding: '1.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                <div style={{ width: '45px', height: '45px', borderRadius: '14px', backgroundColor: '#ECFEFF', color: '#0891B2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '1rem' }}>
-                                                    {user.contact_name?.charAt(0)}
+                {loading ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                        {[...Array(6)].map((_, i) => (
+                            <div key={i} style={{ height: '240px', backgroundColor: 'white', borderRadius: '24px', animation: 'pulse 1.5s infinite', border: '1px solid #E2E8F0' }}></div>
+                        ))}
+                    </div>
+                ) : viewMode === 'gallery' ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                        {filteredUsers.map(user => {
+                            const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#64748B', bgColor: '#F1F5F9' };
+                            return (
+                                <div key={user.id} style={{ 
+                                    backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E2E8F0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column',
+                                    opacity: user.is_active === false ? 0.6 : 1, transition: 'all 0.3s ease',
+                                    position: 'relative', overflow: 'hidden'
+                                }}>
+                                    {/* Status Badge Top Right */}
+                                    <div style={{
+                                        position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.4rem'
+                                    }}>
+                                        <span style={{ 
+                                            padding: '0.3rem 0.7rem', borderRadius: '10px', fontSize: '0.65rem', fontWeight: '900',
+                                            backgroundColor: user.is_active === false ? '#FEE2E2' : '#DCFCE7',
+                                            color: user.is_active === false ? '#B91C1C' : '#15803D'
+                                        }}>
+                                            {user.is_active === false ? 'ARCHIVADO' : '● ACTIVO'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                                        <div style={{ 
+                                            width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#EFF6FF', 
+                                            color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                            fontWeight: '900', fontSize: '1.4rem', flexShrink: 0, boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                                        }}>
+                                            {user.contact_name?.charAt(0)}
+                                        </div>
+                                        <div style={{ overflow: 'hidden' }}>
+                                            <h3 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {user.contact_name}
+                                            </h3>
+                                            <span style={{ 
+                                                display: 'inline-block', marginTop: '0.4rem', fontSize: '0.7rem', fontWeight: '800', 
+                                                color: roleInfo.color, backgroundColor: roleInfo.bgColor, padding: '0.3rem 0.7rem', borderRadius: '8px'
+                                            }}>
+                                                {roleInfo.label.toUpperCase()}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                            <span style={{ fontSize: '0.9rem' }}>📞</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
+                                                {user.phone || user.contact_phone || 'Sin teléfono'}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                            <span style={{ fontSize: '0.9rem' }}>📧</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '500', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {user.email || 'Sin correo registrado'}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                            <span style={{ fontSize: '0.9rem' }}>🏬</span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>
+                                                {user.specialty || 'Sede FruFresco'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.6rem' }}>
+                                        <button 
+                                            onClick={() => setEditingUser(user)}
+                                            style={{ 
+                                                flex: 1, padding: '0.7rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', 
+                                                backgroundColor: 'white', color: '#334155', fontWeight: '800', 
+                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem'
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
+                                        >✏️ Editar</button>
+                                        <button 
+                                            onClick={() => toggleUserStatus(user.id, user.is_active !== false)}
+                                            style={{ 
+                                                flex: 1, padding: '0.7rem', borderRadius: '14px', border: 'none', 
+                                                backgroundColor: user.is_active === false ? '#DCFCE7' : '#FEE2E2', 
+                                                color: user.is_active === false ? '#15803D' : '#B91C1C', 
+                                                fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem'
+                                            }}
+                                        >
+                                            {user.is_active === false ? '📂 Reactivar' : '🔒 Archivar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                <tr>
+                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Colaborador</th>
+                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Rol / Especialidad</th>
+                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Contacto</th>
+                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredUsers.map(user => {
+                                    const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#64748B', bgColor: '#F1F5F9' };
+                                    return (
+                                        <tr key={user.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: user.is_active === false ? 0.6 : 1 }}>
+                                            <td style={{ padding: '1.2rem 1.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#F1F5F9', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
+                                                        {user.contact_name?.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontWeight: '800', color: '#0F172A' }}>{user.contact_name}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>ID: {user.document_id || '---'}</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontWeight: '800', color: '#111827', fontSize: '1rem' }}>{user.contact_name}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#0891B2', fontWeight: '700', marginTop: '2px' }}>{user.document_id ? `CC ${user.document_id}` : 'Sin Cédula'}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '2px' }}>{user.specialty}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '1.5rem' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: 'white', backgroundColor: roleInfo.color, padding: '3px 8px', borderRadius: '6px', width: 'fit-content' }}>
+                                            </td>
+                                            <td style={{ padding: '1.2rem 1.5rem' }}>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: roleInfo.color, backgroundColor: roleInfo.bgColor, padding: '3px 8px', borderRadius: '6px' }}>
                                                     {roleInfo.label.toUpperCase()}
                                                 </span>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: user.is_active ? '#10B981' : '#F59E0B' }}></div>
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: user.is_active ? '#059669' : '#D97706' }}>
-                                                        {user.is_active ? 'ACTIVO' : 'ARCHIVADO'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '1.5rem' }}>
-                                            <div style={{ fontWeight: '700', color: '#374151', fontSize: '0.9rem' }}>{user.phone || '—'}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>{user.email || '—'}</div>
-                                        </td>
-                                        <td style={{ padding: '1.5rem', textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                                                <button onClick={() => setEditingUser(user)} style={{ padding: '0.5rem 1rem', borderRadius: '10px', border: '1.5px solid #F3F4F6', backgroundColor: 'white', fontWeight: '700', cursor: 'pointer' }}>Editar</button>
-                                                <button 
-                                                    onClick={() => toggleUserStatus(user.id, user.is_active)}
-                                                    style={{ padding: '0.5rem 1rem', borderRadius: '10px', border: 'none', backgroundColor: user.is_active ? '#FEF2F2' : '#DCFCE7', color: user.is_active ? '#EF4444' : '#166534', fontWeight: '800', cursor: 'pointer' }}
-                                                >
-                                                    {user.is_active ? 'Archivar' : 'Reactivar'}
+                                                <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '800', marginTop: '4px' }}>{user.specialty || 'GENERAL'}</div>
+                                            </td>
+                                            <td style={{ padding: '1.2rem 1.5rem' }}>
+                                                <div style={{ fontWeight: '700', color: '#334155', fontSize: '0.85rem' }}>{user.phone || user.contact_phone || '---'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{user.email || '---'}</div>
+                                            </td>
+                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
+                                                <button onClick={() => setEditingUser(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', fontSize: '1rem' }} title="Editar">✏️</button>
+                                                <button onClick={() => toggleUserStatus(user.id, user.is_active !== false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', fontSize: '1rem' }} title="Cambiar Estado">
+                                                    {user.is_active === false ? '📂' : '🔒'}
                                                 </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </main>
 
-            {/* MODALES */}
+            {/* MODAL EDITAR */}
             {editingUser && (
-                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', width: '100%', maxWidth: '500px' }}>
-                        <h2 style={{ marginBottom: '1.5rem', fontWeight: '900' }}>Editar Colaborador</h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <input 
-                                placeholder="Nombre" 
-                                value={editingUser.contact_name} 
-                                onChange={e => setEditingUser({...editingUser, contact_name: e.target.value})}
-                                style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }}
-                            />
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <input placeholder="Cédula" value={editingUser.document_id || ''} onChange={e => setEditingUser({...editingUser, document_id: e.target.value})} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }} />
-                                <input placeholder="Tlf" value={editingUser.phone || ''} onChange={e => setEditingUser({...editingUser, phone: e.target.value})} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }} />
+                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '32px', width: '100%', maxWidth: '550px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.5rem' }}>✏️ Perfil de <span style={{ color: '#0891B2' }}>Colaborador</span></h2>
+                            <button onClick={() => setEditingUser(null)} style={{ background: '#F1F5F9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Nombre Completo</label>
+                                <input 
+                                    value={editingUser.contact_name} 
+                                    onChange={e => setEditingUser({...editingUser, contact_name: e.target.value})}
+                                    style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
+                                />
                             </div>
-                            <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }}>
-                                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
-                            <div style={{ display:'flex', gap: '1rem', marginTop: '1rem' }}>
-                                <button onClick={() => setEditingUser(null)} style={{ flex:1, padding:'0.8rem', borderRadius:'12px', border: '1px solid #D1D5DB' }}>Cancelar</button>
-                                <button onClick={() => updateProfile(editingUser.id, editingUser)} style={{ flex:1, padding:'0.8rem', borderRadius:'12px', border: 'none', backgroundColor:'#0891B2', color:'white', fontWeight:'800' }}>Guardar</button>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Teléfono Móvil</label>
+                                    <input value={editingUser.phone || editingUser.contact_phone || ''} onChange={e => setEditingUser({...editingUser, phone: e.target.value, contact_phone: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Cédula / ID</label>
+                                    <input value={editingUser.document_id || ''} onChange={e => setEditingUser({...editingUser, document_id: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                </div>
                             </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Cargo en la Compañía</label>
+                                <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Especialidad / Departamento / Sede</label>
+                                <select value={editingUser.specialty || 'Sede Operativa'} onChange={e => setEditingUser({...editingUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+
+                            <button 
+                                onClick={() => updateProfile(editingUser.id, editingUser)} 
+                                style={{ 
+                                    marginTop: '1rem', padding:'1.1rem', borderRadius:'18px', border: 'none', 
+                                    backgroundColor:'#0891B2', color:'white', fontWeight:'900', cursor: 'pointer',
+                                    boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)', fontSize: '1rem'
+                                }}
+                            >
+                                {saving ? '⏳ Guardando...' : '💾 GUARDAR CAMBIOS'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* MODAL REGISTRO */}
             {showAdd && (
-                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', width: '100%', maxWidth: '500px' }}>
-                        <h2 style={{ marginBottom: '1.5rem', fontWeight: '900' }}>Nuevo Colaborador</h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '32px', width: '100%', maxWidth: '550px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.5rem' }}>✨ Nuevo <span style={{ color: '#0891B2' }}>Colaborador</span></h2>
+                            <button onClick={() => setShowAdd(false)} style={{ background: '#F1F5F9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                             <input 
                                 placeholder="Nombre completo" 
                                 value={newUser.contact_name} 
                                 onChange={e => setNewUser({...newUser, contact_name: e.target.value})}
-                                style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }}
+                                style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
                             />
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <input placeholder="Cédula" value={newUser.document_id || ''} onChange={e => setNewUser({...newUser, document_id: e.target.value})} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }} />
-                                <input placeholder="Tlf" value={newUser.phone || ''} onChange={e => setNewUser({...newUser, phone: e.target.value})} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <input placeholder="Cédula" value={newUser.document_id || ''} onChange={e => setNewUser({...newUser, document_id: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                <input placeholder="Teléfono" value={newUser.phone || ''} onChange={e => setNewUser({...newUser, phone: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
                             </div>
-                            <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #D1D5DB' }}>
-                                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
-                            <div style={{ display:'flex', gap: '1rem', marginTop: '1rem' }}>
-                                <button onClick={() => setShowAdd(false)} style={{ flex:1, padding:'0.8rem', borderRadius:'12px', border: '1px solid #D1D5DB' }}>Cancelar</button>
-                                <button onClick={registerUser} style={{ flex:1, padding:'0.8rem', borderRadius:'12px', border: 'none', backgroundColor:'#0891B2', color:'white', fontWeight:'800' }}>Registrar</button>
+                            <input placeholder="Correo electrónico" value={newUser.email || ''} onChange={e => setNewUser({...newUser, email: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                </select>
+                                <select value={newUser.specialty} onChange={e => setNewUser({...newUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
+
+                            <button 
+                                onClick={registerUser} 
+                                style={{ 
+                                    marginTop: '1rem', padding:'1.1rem', borderRadius:'18px', border: 'none', 
+                                    backgroundColor:'#0891B2', color:'white', fontWeight:'900', cursor: 'pointer',
+                                    boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)', fontSize: '1rem'
+                                }}
+                            >
+                                {saving ? '⏳ Registrando...' : '🚀 COMPLETAR REGISTRO'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% { background-color: #F8FAFC; }
+                    50% { background-color: #F1F5F9; }
+                }
+            `}</style>
         </div>
     );
 }
+

@@ -246,7 +246,6 @@ function GeofencingView({ settings, mapsKey, onSave, saving }: { settings: AppSe
                 <Map
                     defaultCenter={{ lat: 4.67, lng: -74.06 }}
                     defaultZoom={12}
-                    mapId="frufresco_strategy_map"
                     gestureHandling={'greedy'}
                     disableDefaultUI={false}
                     onClick={handleMapClick}

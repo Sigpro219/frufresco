@@ -40,72 +40,125 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const locale = (lang === 'en' ? 'en' : 'es') as Locale;
   const t = translations[locale];
 
-  // 1. Fetch Featured Products (Top 10) - Balaceado por categorías
-  const { data: allVisibleResponse } = await supabase
-    .from('products')
-    .select('*')
-    .eq('is_active', true)
-    .eq('show_on_web', true)
-    .order('image_url', { ascending: false, nullsFirst: false }) // Priorizar no nulos en DB
-    .limit(250); 
+  // 1. Parallel Data Fetching
+  const [
+    allVisibleResponse,
+    categoriesDataResponse,
+    appSettingsResponse,
+    sessionResponse
+  ] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .eq('show_on_web', true)
+      .order('image_url', { ascending: false, nullsFirst: false })
+      .limit(300),
+    supabase
+      .from('products')
+      .select('category')
+      .eq('is_active', true)
+      .eq('show_on_web', true)
+      .not('category', 'is', null),
+    supabase
+      .from('app_settings')
+      .select('key, value'),
+    supabase.auth.getSession()
+  ]);
 
-  const allVisible = allVisibleResponse || [];
+  const allVisible = allVisibleResponse.data || [];
+  const categoriesData = categoriesDataResponse.data || [];
+  const appSettings = appSettingsResponse.data || [];
+  const session = sessionResponse.data?.session;
+  const userId = session?.user?.id;
+
+  // 2. Fetch Dependent Data (Nicknames & Translation Cache)
+  const [nicknamesResponse, translationCacheResponse] = await Promise.all([
+    userId 
+      ? supabase.from('product_nicknames').select('product_id, custom_name').eq('profile_id', userId)
+      : Promise.resolve({ data: [] }),
+    locale === 'en'
+      ? supabase.from('product_translations_cache').select('source_text, translated_text').eq('lang', 'en')
+      : Promise.resolve({ data: [] })
+  ]);
+
+  const nicknameMap = (nicknamesResponse.data || []).reduce((acc, item) => ({
+    ...acc,
+    [item.product_id]: item.custom_name
+  }), {} as Record<string, string>);
+
+  const translationCache = (translationCacheResponse.data || []).reduce((acc, item) => ({
+    ...acc,
+    [item.source_text]: item.translated_text
+  }), {} as Record<string, string>);
+
+  // 3. Featured Products Logic (In-memory from allVisible)
   const featuredProducts: Product[] = [];
   const catCount: Record<string, number> = {};
+  const dailySeed = new Date().getDate();
   
-  // Priorizar visualmente los que tienen foto y luego REVOLVER (Shuffle)
-  // para que el catálogo se vea vivo
-      // Seed estable por día para evitar hydration mismatches y ser "puro" según React
-      const dailySeed = new Date().getDate();
-      
-      const sortedByImage = [...allVisible].sort((a, b) => {
-          const hasA = a.image_url && a.image_url.trim().length > 5;
-          const hasB = b.image_url && b.image_url.trim().length > 5;
-          if (hasA && !hasB) return -1;
-          if (!hasA && hasB) return 1;
-          
-          // Shuffle pseudo-aleatorio estable por día
-          const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
-          const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
-          return (scoreA % 100) - (scoreB % 100);
-      });
+  const sortedByImage = [...allVisible].sort((a, b) => {
+    const hasA = a.image_url && a.image_url.trim().length > 5;
+    const hasB = b.image_url && b.image_url.trim().length > 5;
+    if (hasA && !hasB) return -1;
+    if (!hasA && hasB) return 1;
+    const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
+    const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
+    return (scoreA % 100) - (scoreB % 100);
+  });
 
-  if (allVisible.length > 0) {
+  sortedByImage.forEach(p => {
+    if (!catCount[p.category]) catCount[p.category] = 0;
+    if (catCount[p.category] < 2 && featuredProducts.length < 10) {
+      featuredProducts.push(p);
+      catCount[p.category]++;
+    }
+  });
 
-      // Intentamos tomar 1-2 de cada categoría para Featured
-      sortedByImage.forEach(p => {
-          if (!catCount[p.category]) catCount[p.category] = 0;
-          if (catCount[p.category] < 2 && featuredProducts.length < 10) {
-              featuredProducts.push(p);
-              catCount[p.category]++;
-          }
-      });
-
-      // Si faltan para completar 10, llenamos con el resto priorizando fotos
-      if (featuredProducts.length < 10) {
-          sortedByImage.forEach(p => {
-              if (!featuredProducts.find(f => f.id === p.id) && featuredProducts.length < 10) {
-                  featuredProducts.push(p);
-              }
-          });
+  if (featuredProducts.length < 10) {
+    sortedByImage.forEach(p => {
+      if (!featuredProducts.find(f => f.id === p.id) && featuredProducts.length < 10) {
+        featuredProducts.push(p);
       }
+    });
   }
 
-  // 2. Fetch Unique Categories & Settings
-  const { data: categoriesData } = await supabase
-    .from('products')
-    .select('category')
-    .eq('is_active', true)
-    .eq('show_on_web', true)
-    .not('category', 'is', null);
+  // 4. Catalog Products Logic
+  let rawProducts: Product[] = [];
+  if (!q && (!category || category === 'Todos')) {
+    // Reuse already fetched visible products if no filter
+    rawProducts = allVisible;
+  } else {
+    // If filtering, we might need a specific query but let's try to filter in-memory first if it's small
+    // For now, keep the specific query if search exists to use DB indexing
+    let query = supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .eq('show_on_web', true);
 
-  const { data: appSettings } = await supabase
-      .from('app_settings')
-      .select('key, value');
+    if (q) {
+      const searchTerms = q.split(',').map(t => t.trim()).filter(t => t.length > 0);
+      if (searchTerms.length > 0) {
+        const conditions = searchTerms.flatMap(term => [
+          `name.ilike.%${term}%`,
+          `description.ilike.%${term}%`,
+          `keywords.ilike.%${term}%`,
+          `tags.cs.{${term}}`
+        ]);
+        query = query.or(conditions.join(','));
+      }
+    }
+    if (category && category !== 'Todos') {
+      query = query.eq('category', category);
+    }
+    const { data } = await query.order('image_url', { ascending: false, nullsFirst: false }).limit(250);
+    rawProducts = data || [];
+  }
 
   const getSetting = (key: string, defaultValue: string) => {
-      const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
-      return s ? s.value : defaultValue;
+    const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
+    return s ? s.value : defaultValue;
   };
 
   const isB2bEnabled = getSetting('enable_b2b_lead_capture', 'true') === 'true';
@@ -116,77 +169,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const featuredTitle = featuredTitleRaw || t.featuredTitle;
   const catalogTitleRaw = (locale === 'en' ? getSetting('home_catalog_title_en', '') : getSetting('home_catalog_title', ''));
   const catalogTitle = catalogTitleRaw || t.catalogTitle;
-  
+  const dynamicCategories: string[] = ['Todos', ...Array.from(new Set(categoriesData.map(c => c.category)))];
   const valueProps = t.valueProps;
 
-  const dynamicCategories: string[] = ['Todos', ...Array.from(new Set((categoriesData || []).map((c: { category: string }) => c.category)))];
-
-  // 3. Build Query
-  let query = supabase
-    .from('products')
-    .select('*')
-    .eq('is_active', true)
-    .eq('show_on_web', true);
-
-  if (q) {
-    const searchTerms = q.split(',')
-      .map(term => term.trim())
-      .filter(term => term.length > 0);
-    
-    if (searchTerms.length > 0) {
-      // Búsqueda inteligente: Nombre, Descripción o Keywords
-      const conditions = searchTerms.flatMap(term => [
-        `name.ilike.%${term}%`,
-        `description.ilike.%${term}%`,
-        `keywords.ilike.%${term}%`,
-        `tags.cs.{${term}}`
-      ]);
-      query = query.or(conditions.join(','));
-    }
-  }
-
-  if (category && category !== 'Todos') {
-    query = query.eq('category', category);
-  }
-
-  const { data: rawProducts, error } = await query
-    .order('image_url', { ascending: false, nullsFirst: false }) // Prioridad DB (fotos primero)
-    .limit(250); 
-
-  // 4. Fetch Nicknames if User is Logged In
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
-  let nicknameMap: Record<string, string> = {};
-
-  if (userId) {
-    const { data: nicknames } = await supabase
-      .from('product_nicknames')
-      .select('product_id, custom_name')
-      .eq('profile_id', userId);
-    
-    if (nicknames) {
-      nicknameMap = nicknames.reduce((acc, item) => ({
-        ...acc,
-        [item.product_id]: item.custom_name
-      }), {} as Record<string, string>);
-    }
-  }
-  
-  // 5. Intelligent Global Translation (AI Cache)
-  let translationCache: Record<string, string> = {};
-  if (locale === 'en') {
-      const { data: translations } = await supabase
-          .from('product_translations_cache')
-          .select('source_text, translated_text')
-          .eq('lang', 'en');
-      
-      if (translations) {
-          translationCache = translations.reduce((acc, item) => ({
-              ...acc,
-              [item.source_text]: item.translated_text
-          }), {} as Record<string, string>);
-      }
-  }
 
   const applyNicknames = (plist: Product[]) => plist.map(p => ({
     ...p,

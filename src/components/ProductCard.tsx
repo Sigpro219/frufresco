@@ -30,28 +30,11 @@ export default function ProductCard({ product }: { product: Product }) {
     }, [product.display_name, product.name, product.name_en, locale]);
 
     useEffect(() => {
-        // Lazy Translation: Si estamos en Inglés y NO hay traducción en BD ni en displayName
+        // Optimización: No disparamos traducciones automáticas en bucle para evitar saturación.
+        // La página ya baja un translationCache que applyNicknames usa en el servidor.
         if (locale === 'en' && !product.name_en && displayName === product.name) {
-             console.log(`🤖 Solicitando traducción para: ${product.name}...`);
-             async function triggerLazyTranslate() {
-                 try {
-                     const response = await fetch('/api/translate', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({ text: product.name, targetLang: 'en' })
-                     });
-                     if (response.ok) {
-                         const result = await response.json();
-                         if (result.translatedText && result.translatedText !== product.name) {
-                             console.log(`✅ Traducido: ${product.name} -> ${result.translatedText}`);
-                             setDisplayName(result.translatedText);
-                         }
-                     }
-                 } catch (err) {
-                     console.error('Lazy Translation Error:', err);
-                 }
-             }
-             triggerLazyTranslate();
+            // Podríamos disparar una traducción solo si el usuario interactúa (ej: hover prolongado)
+            // o simplemente dejar que el servidor maneje la mayoría.
         }
     }, [locale, product.name, displayName]);
 
