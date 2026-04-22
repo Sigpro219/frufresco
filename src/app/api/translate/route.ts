@@ -18,10 +18,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ translatedText: text });
     }
 
-    // Official Gemini Client with the most standard model name
-    const genAI = new GoogleGenerativeAI(apiKey);
+    // Force 'v1' stable API version
+    const genAI = new GoogleGenerativeAI(apiKey, { apiVersion: "v1" });
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
+        model: "gemini-1.5-flash",
     });
     
     const prompt = `Translate exactly this product name from Spanish to ${targetLang === 'en' ? 'English' : 'Spanish'}. 

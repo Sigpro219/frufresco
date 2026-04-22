@@ -28,6 +28,16 @@ interface ITRequest {
     created_at: string;
 }
 
+interface SEOStrategy {
+    id: string;
+    zone_key: string;
+    municipality_name: string;
+    keywords: string[];
+    meta_title: string;
+    meta_description: string;
+    last_generated_at: string;
+}
+
 // Custom Polygon component for vis.gl with interactive support
 function Polygon({ onPathChange, map, paths, ...options }: google.maps.PolygonOptions & { paths: Point[], onPathChange?: (newPath: Point[]) => void }) {
     const maps = useMapsLibrary('maps');
@@ -113,7 +123,9 @@ export default function AdminStrategyPage() {
     const { profile } = useAuth();
     const [settings, setSettings] = useState<AppSetting[]>([]);
     const [itRequests, setItRequests] = useState<ITRequest[]>([]);
+    const [seoStrategies, setSeoStrategies] = useState<SEOStrategy[]>([]);
     const [saving, setSaving] = useState(false);
+    const [generatingSEO, setGeneratingSEO] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -126,29 +138,52 @@ export default function AdminStrategyPage() {
                 .order('created_at', { ascending: false })
                 .limit(5);
             if (itData) setItRequests(itData as ITRequest[]);
+
+            const { data: seoData } = await supabase.from('seo_strategies').select('*');
+            if (seoData) setSeoStrategies(seoData as SEOStrategy[]);
         };
         fetchData();
     }, []);
 
     const handleSaveGeofence = async (key: string, poly: string) => {
         setSaving(true);
-        const { error } = await supabase
-            .from('app_settings')
-            .upsert({ key, value: poly, updated_at: new Date().toISOString() });
+        console.info(`💾 Intentando guardar geocerca [${key}]...`);
         
-        if (!error) {
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ✓', 'success');
-            setSettings(prev => {
-                const exists = prev.find(s => s.key === key);
-                if (exists) {
-                    return prev.map(s => s.key === key ? { ...s, value: poly } : s);
-                }
-                return [...prev, { key, value: poly }];
-            });
-        } else {
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al guardar geocerca', 'error');
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .upsert(
+                    { key, value: poly, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                );
+            
+            if (!error) {
+                console.info(`✅ Geocerca [${key}] guardada correctamente.`);
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ✓', 'success');
+                
+                // Pequeño delay artificial para que el usuario sienta la persistencia y la DB procese
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                setSettings(prev => {
+                    const exists = prev.find(s => s.key === key);
+                    if (exists) {
+                        return prev.map(s => s.key === key ? { ...s, value: poly } : s);
+                    }
+                    return [...prev, { key, value: poly, description: 'Configuración de Geocerca' }];
+                });
+                return true;
+            } else {
+                console.error(`❌ Error de Supabase al guardar [${key}]:`, error);
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al guardar geocerca', 'error');
+                return false;
+            }
+        } catch (err) {
+            console.error(`❌ Excepción al guardar [${key}]:`, err);
+            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error crítico al guardar', 'error');
+            return false;
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleITRequest = async (type: string) => {
@@ -164,6 +199,38 @@ export default function AdminStrategyPage() {
             // Refresh requests
             const { data } = await supabase.from('it_requests').select('*').order('created_at', { ascending: false }).limit(5);
             if (data) setItRequests(data as ITRequest[]);
+        }
+    };
+
+    const handleGenerateSEO = async (zone_key: string) => {
+        const polyStr = settings.find(s => s.key === zone_key)?.value;
+        if (!polyStr) return;
+
+        setGeneratingSEO(true);
+        try {
+            const res = await fetch('/api/seo/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zone_key, poly: JSON.parse(polyStr) })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Estrategia SEO para ${data.municipality} generada con IA ✓`, 'success');
+                // Refresh local state
+                setSeoStrategies(prev => {
+                    const exists = prev.find(s => s.zone_key === zone_key);
+                    if (exists) return prev.map(s => s.zone_key === zone_key ? data.strategy : s);
+                    return [...prev, data.strategy];
+                });
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (err: any) {
+            console.error('SEO Error:', err);
+            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al generar SEO con IA', 'error');
+        } finally {
+            setGeneratingSEO(false);
         }
     };
 
@@ -205,14 +272,23 @@ export default function AdminStrategyPage() {
 
                 <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem', minHeight: '600px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                     {activeTab === 'geofencing' && (
-                        <GeofencingManager 
+                        <APIProvider apiKey={MAPS_KEY}>
+                            <GeofencingManager 
+                                settings={settings} 
+                                onSave={handleSaveGeofence} 
+                                saving={saving} 
+                                canEdit={profile?.role === 'sys_admin'}
+                            />
+                        </APIProvider>
+                    )}
+                    {activeTab === 'seo' && (
+                        <SEOView 
                             settings={settings} 
-                            onSave={handleSaveGeofence} 
-                            saving={saving} 
-                            canEdit={profile?.role === 'sys_admin'}
+                            strategies={seoStrategies} 
+                            onGenerate={handleGenerateSEO}
+                            loading={generatingSEO}
                         />
                     )}
-                    {activeTab === 'seo' && <SEOView settings={settings} />}
                     {activeTab === 'it' && <ITView requests={itRequests} onRequest={handleITRequest} />}
                 </div>
             </div>
@@ -221,33 +297,36 @@ export default function AdminStrategyPage() {
 }
 
 
-function SEOView({ settings }: { settings: AppSetting[] }) {
+function SEOView({ settings, strategies, onGenerate, loading }: { 
+    settings: AppSetting[], 
+    strategies: SEOStrategy[],
+    onGenerate: (key: string) => void,
+    loading: boolean
+}) {
     const b2cPolyStr = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
     const b2bPolyStr = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
     
     const b2cCount = b2cPolyStr ? (JSON.parse(b2cPolyStr) as Point[]).length : 0;
     const b2bCount = b2bPolyStr ? (JSON.parse(b2bPolyStr) as Point[]).length : 0;
 
-    // Simulation of dynamic metrics based on polygon data
+    const b2cStrategy = strategies.find(s => s.zone_key === 'geofence_b2c_poly');
+    const b2bStrategy = strategies.find(s => s.zone_key === 'geofence_b2b_poly');
+
+    // Health Score: Real based on existence of active strategies
     const seoHealth = useMemo(() => {
-        if (b2cCount === 0 && b2bCount === 0) return 0;
-        // More vertices = better defined zone = better SEO targeting (+ simplified is better)
-        const score = Math.min(95, 60 + (b2cCount + b2bCount) * 0.5);
-        return Math.round(score);
-    }, [b2cCount, b2bCount]);
+        let score = 0;
+        if (b2cStrategy) score += 47;
+        if (b2bStrategy) score += 48;
+        return score;
+    }, [b2cStrategy, b2bStrategy]);
 
-    const topKeywords = useMemo(() => {
-        const base = 10;
-        return base + Math.floor((b2cCount + b2bCount) / 4);
-    }, [b2cCount, b2bCount]);
+    const activeKeywords = useMemo(() => {
+        return (b2cStrategy?.keywords?.length || 0) + (b2bStrategy?.keywords?.length || 0);
+    }, [b2cStrategy, b2bStrategy]);
 
-    const keywords = [
-        { kw: 'Frutas a domicilio Usaquén', zone: 'Hogares (B2C)', status: b2cCount > 3 ? 'Top 3' : 'Sin Cobertura ⚠️' },
-        { kw: 'Verduras frescas Colina Campestre', zone: 'Hogares (B2C)', status: b2cCount > 5 ? 'Top 5' : 'Pendiente' },
-        { kw: 'Proveedor HORECA Girardot', zone: 'Sector HORECA (B2B)', status: b2bCount > 4 ? 'Top 10' : 'Nuevo' },
-        { kw: 'Distribuidora alimentos Melgar', zone: 'Sector HORECA (B2B)', status: b2bCount > 8 ? 'Top 10' : 'Mejorando 📈' },
-        { kw: 'Venta mayorista Anapoima', zone: 'Sector HORECA (B2B)', status: b2bCount > 6 ? 'Calibrado' : 'Expansión' }
-    ];
+    const currentZoneNames = [b2cStrategy?.municipality_name, b2bStrategy?.municipality_name]
+        .filter(Boolean)
+        .join(' & ') || 'Sin Identificar';
 
     return (
         <div>
@@ -255,7 +334,7 @@ function SEOView({ settings }: { settings: AppSetting[] }) {
                 <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Panel de Auditoría SEO Dinámica</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.4rem 1rem', borderRadius: '100px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#16A34A' }}></span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#166534' }}>RE-CALCULADO CON GEOCERCAS ACTUALES</span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#166534' }}>SISTEMA ACTIVO</span>
                 </div>
             </div>
 
@@ -264,13 +343,13 @@ function SEOView({ settings }: { settings: AppSetting[] }) {
                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🛡️</div>
                     <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{seoHealth}%</div>
                     <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>Salud SEO Local</div>
-                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Basado en precisión de perímetros</p>
+                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Inyección de metadatos activa</p>
                 </div>
                 <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎯</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{topKeywords}</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{activeKeywords}</div>
                     <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>Keywords en Radar</div>
-                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Términos monitoreados en B2B/B2C</p>
+                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Términos generados por Gemini</p>
                 </div>
                 <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
@@ -282,27 +361,56 @@ function SEOView({ settings }: { settings: AppSetting[] }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
                 <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-                    <h3 style={{ fontWeight: '900', fontSize: '1.1rem', marginBottom: '1.2rem' }}>Estrategia de Palabras Clave por Zona</h3>
+                    <h3 style={{ fontWeight: '900', fontSize: '1.1rem', marginBottom: '1.2rem' }}>Estrategias Activas por Zona</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {keywords.map(k => (
-                            <div key={k.kw} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <span style={{ fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>{k.kw}</span>
-                                    <span style={{ fontSize: '0.7rem', color: '#64748B' }}>Zona: {k.zone}</span>
+                        {strategies.length === 0 ? (
+                            <p style={{ fontSize: '0.85rem', color: '#64748B', textAlign: 'center', padding: '2rem' }}>No hay estrategias generadas aún. Usa el Sugerente AI para empezar.</p>
+                        ) : (
+                            strategies.map(s => (
+                                <div key={s.id} style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                                        <div>
+                                            <span style={{ fontWeight: '900', fontSize: '1rem', display: 'block', color: '#0F172A' }}>{s.municipality_name}</span>
+                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>ZONA: {s.zone_key.includes('b2c') ? 'HOGARES' : 'INSTITUCIONAL'}</span>
+                                        </div>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#10B981', backgroundColor: '#DCFCE7', padding: '4px 8px', borderRadius: '6px' }}>ACTIVO</span>
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: '#334155', margin: '0 0 10px 0', fontStyle: 'italic' }}>"{s.meta_title}"</p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                        {s.keywords.map(kw => (
+                                            <span key={kw} style={{ fontSize: '0.65rem', backgroundColor: 'white', border: '1px solid #CBD5E1', padding: '2px 8px', borderRadius: '4px', color: '#475569' }}>{kw}</span>
+                                        ))}
+                                    </div>
                                 </div>
-                                <span style={{ color: k.status.includes('⚠️') ? '#EF4444' : '#10B981', fontSize: '0.75rem', fontWeight: '900', backgroundColor: 'white', padding: '0.3rem 0.6rem', borderRadius: '6px' }}>{k.status}</span>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </div>
                 <div style={{ padding: '2.5rem', borderRadius: '32px', backgroundColor: '#0F172A', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤖</div>
+                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{loading ? '⏳' : '🤖'}</div>
                     <h4 style={{ fontWeight: '900', fontSize: '1.3rem', marginBottom: '1rem' }}>AI Keyword Suggester</h4>
-                    <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.6' }}>Detectamos un incremento de búsquedas en <strong>Anapoima & Girardot</strong>. ¿Deseas inyectar metadatos <strong>HORECA/B2B</strong> para estas zonas?</p>
-                    <button style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', backgroundColor: '#7C3AED', color: 'white', border: 'none', fontWeight: '900', cursor: 'pointer', transition: 'transform 0.2s' }}>
-                        ⚡ Autorizar Inyección Local
-                    </button>
-                    <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '1.5rem' }}>* Al simplificar la geocerca, la inyección es más precisa para los brochure sites.</p>
+                    <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.6' }}>
+                        {currentZoneNames !== 'Sin Identificar' 
+                            ? `Detectamos presencia en ${currentZoneNames}. ¿Deseas actualizar los metadatos dinámicos?`
+                            : "Dibuja una geocerca primero para que la IA analice la zona geográfica."}
+                    </p>
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <button 
+                            onClick={() => onGenerate('geofence_b2c_poly')}
+                            disabled={loading || b2cCount === 0}
+                            style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', backgroundColor: '#7C3AED', color: 'white', border: 'none', fontWeight: '900', cursor: (loading || b2cCount === 0) ? 'not-allowed' : 'pointer', opacity: (loading || b2cCount === 0) ? 0.5 : 1 }}
+                        >
+                            {loading ? 'Generando...' : '⚡ Inyección B2C (Hogares)'}
+                        </button>
+                        <button 
+                            onClick={() => onGenerate('geofence_b2b_poly')}
+                            disabled={loading || b2bCount === 0}
+                            style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', backgroundColor: 'transparent', color: 'white', border: '2px solid #7C3AED', fontWeight: '900', cursor: (loading || b2bCount === 0) ? 'not-allowed' : 'pointer', opacity: (loading || b2bCount === 0) ? 0.5 : 1 }}
+                        >
+                            {loading ? 'Generando...' : '🏢 Inyección B2B (Empresas)'}
+                        </button>
+                    </div>
+                    <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '1.5rem' }}>* Los metadatos se generan usando Gemini 2.5 Flash analizando el contexto local.</p>
                 </div>
             </div>
         </div>

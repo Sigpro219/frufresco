@@ -31,6 +31,8 @@ const Polygon = forwardRef((props: PolygonProps, ref) => {
     const map = useMap();
     const maps = useMapsLibrary('maps');
     const polygonRef = useRef<google.maps.Polygon | null>(null);
+    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastPathRef = useRef<string>('');
 
     const polygon = useMemo(() => {
         if (!maps) return null;
@@ -41,13 +43,16 @@ const Polygon = forwardRef((props: PolygonProps, ref) => {
 
     useImperativeHandle(ref, () => polygon, [polygon]);
 
-    // Initial Path and external updates
+    // Update from props -> Google Maps
     useEffect(() => {
         if (!polygon || !paths) return;
-        // Solo actualizamos si el path es realmente diferente para evitar loops
-        const currentPath = polygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
-        if (JSON.stringify(currentPath) !== JSON.stringify(paths)) {
+        const pathJson = JSON.stringify(paths);
+        
+        // Only update if external path changed significantly
+        // or if not in editable mode (initial load)
+        if (pathJson !== lastPathRef.current) {
             polygon.setPath(paths);
+            lastPathRef.current = pathJson;
         }
     }, [polygon, paths]);
 
@@ -57,24 +62,44 @@ const Polygon = forwardRef((props: PolygonProps, ref) => {
         polygon.setOptions(options);
     }, [polygon, options]);
 
-    // Event Listeners for editing
+    // Sync from Google Maps -> React state
     useEffect(() => {
         if (!polygon || !onPathChange) return;
 
-        const getPath = () => {
-            return polygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
+        const syncPath = () => {
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            
+            syncTimeoutRef.current = setTimeout(() => {
+                const path = polygon.getPath();
+                if (!path) return;
+                const newPath = path.getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
+                const pathJson = JSON.stringify(newPath);
+                
+                if (pathJson !== lastPathRef.current) {
+                    lastPathRef.current = pathJson;
+                    onPathChange(newPath);
+                }
+            }, 150); // Debounce to allow smooth dragging
         };
 
+        const path = polygon.getPath();
         const listeners = [
-            polygon.getPath().addListener('set_at', () => onPathChange(getPath())),
-            polygon.getPath().addListener('insert_at', () => onPathChange(getPath())),
-            polygon.getPath().addListener('remove_at', () => onPathChange(getPath()))
+            path.addListener('set_at', syncPath),
+            path.addListener('insert_at', syncPath),
+            path.addListener('remove_at', syncPath),
+            // Support deleting vertices with right click
+            polygon.addListener('rightclick', (e: any) => {
+                if (e.vertex !== undefined && options.editable) {
+                    path.removeAt(e.vertex);
+                }
+            })
         ];
 
         return () => {
             listeners.forEach(l => google.maps.event.removeListener(l));
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
         };
-    }, [polygon, onPathChange]);
+    }, [polygon, onPathChange, options.editable]);
 
     useEffect(() => {
         if (!polygon || !map) return;
@@ -131,6 +156,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
             <div style={{ position: 'relative', height: '600px', borderRadius: '24px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
                 <Map
+                    style={{ width: '100%', height: '100%' }}
                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }}
                     defaultZoom={11}
                     gestureHandling={'greedy'}
@@ -172,8 +198,15 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', fontWeight: '900' }}>Modo Edición: <span style={{ color: '#0EA5E9' }}>{editMode === 'b2c' ? 'HOGARES' : 'HORECA'}</span></p>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: '#64748B' }}>Arrastra los puntos o haz clic en las líneas para ajustar la zona.</p>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <button onClick={() => { onSave(editMode === 'b2c' ? 'geofence_b2c_poly' : 'geofence_b2b_poly', JSON.stringify(tempPoly)); setEditMode(null); }} disabled={saving} style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#0EA5E9', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                {saving ? '...' : '💾 Guardar'}
+                            <button 
+                                onClick={async () => { 
+                                    const success = await onSave(editMode === 'b2c' ? 'geofence_b2c_poly' : 'geofence_b2b_poly', JSON.stringify(tempPoly)); 
+                                    if (success) setEditMode(null); 
+                                }} 
+                                disabled={saving} 
+                                style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#0EA5E9', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                            >
+                                {saving ? 'Guardando...' : '💾 Guardar'}
                             </button>
                             <button onClick={clearVertices} style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#F1F5F9', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
                                 🗑️ Limpiar

@@ -71,13 +71,13 @@ export default function HRManagement() {
     const [sortBy, setSortBy] = useState<'name' | 'role' | 'specialty'>('name');
     const [editingUser, setEditingUser] = useState<Profile | null>(null);
     const [showAdd, setShowAdd] = useState(false);
-    const [viewMode, setViewMode] = useState<'gallery' | 'list'>('gallery');
+    const [viewMode, setViewMode] = useState<'gallery' | 'list'>('list');
     const [newUser, setNewUser] = useState<Partial<Profile>>({
         contact_name: '',
         email: '',
         phone: '',
-        role: 'aux_bodega',
-        specialty: 'BODEGA',
+        role: '',
+        specialty: '',
         is_active: true
     });
     const [saving, setSaving] = useState(false);
@@ -134,6 +134,8 @@ export default function HRManagement() {
 
     const registerUser = async () => {
         if (!newUser.contact_name) return alert('El nombre es obligatorio');
+        if (!newUser.role) return alert('Debes seleccionar un cargo');
+        if (!newUser.specialty) return alert('Debes seleccionar una ubicación/sede');
         try {
             setSaving(true);
             const { error } = await supabase
@@ -146,7 +148,7 @@ export default function HRManagement() {
 
             if (error) throw error;
             setShowAdd(false);
-            setNewUser({ contact_name: '', email: '', phone: '', role: 'aux_bodega', specialty: 'BODEGA', is_active: true });
+            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true });
             await fetchData();
         } catch (err: any) {
             alert(`Error al registrar: ${err.message}`);
@@ -265,11 +267,21 @@ export default function HRManagement() {
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             style={{ 
-                                width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '14px', 
+                                width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.8rem', borderRadius: '14px', 
                                 border: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC', fontSize: '0.95rem',
                                 fontWeight: '600', color: '#1E293B', outline: 'none'
                             }}
                         />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                style={{ 
+                                    position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)',
+                                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem',
+                                    color: '#94A3B8', fontWeight: 'bold', padding: '0.2rem'
+                                }}
+                            >✕</button>
+                        )}
                     </div>
                     <select 
                         value={filterRole} 
@@ -278,15 +290,6 @@ export default function HRManagement() {
                     >
                         <option value="all">🎭 Todos los Roles</option>
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                    <select 
-                        value={sortBy} 
-                        onChange={e => setSortBy(e.target.value as any)} 
-                        style={{ padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', fontWeight: '700', color: '#475569', backgroundColor: 'white', outline: 'none' }}
-                    >
-                        <option value="name">🔤 Nombre</option>
-                        <option value="role">🛠️ Cargo</option>
-                        <option value="specialty">🏬 Especialidad</option>
                     </select>
                 </div>
 
@@ -300,87 +303,113 @@ export default function HRManagement() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
                         {filteredUsers.map(user => {
                             const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#64748B', bgColor: '#F1F5F9' };
+                            
+                            // Get two initials
+                            const names = (user.contact_name || '').split(' ').filter(Boolean);
+                            const initials = names.length > 1 
+                                ? (names[0][0] + names[1][0]).toUpperCase() 
+                                : (names[0]?.[0] || '?').toUpperCase();
+
                             return (
                                 <div key={user.id} style={{ 
-                                    backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E2E8F0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column',
-                                    opacity: user.is_active === false ? 0.6 : 1, transition: 'all 0.3s ease',
-                                    position: 'relative', overflow: 'hidden'
-                                }}>
-                                    {/* Status Badge Top Right */}
-                                    <div style={{
-                                        position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.4rem'
-                                    }}>
+                                    backgroundColor: 'white', borderRadius: '28px', padding: '1.8rem', border: '1px solid rgba(226, 232, 240, 0.8)',
+                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.03), 0 8px 10px -6px rgba(0,0,0,0.03)', 
+                                    display: 'flex', flexDirection: 'column',
+                                    opacity: user.is_active === false ? 0.6 : 1, transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    position: 'relative', overflow: 'hidden',
+                                    cursor: 'default'
+                                }}
+                                onMouseOver={e => {
+                                    e.currentTarget.style.transform = 'translateY(-5px)';
+                                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04)';
+                                }}
+                                onMouseOut={e => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.03), 0 8px 10px -6px rgba(0,0,0,0.03)';
+                                }}
+                                >
+                                    {/* Status Badge - Top Row */}
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                                         <span style={{ 
-                                            padding: '0.3rem 0.7rem', borderRadius: '10px', fontSize: '0.65rem', fontWeight: '900',
+                                            padding: '0.25rem 0.6rem', borderRadius: '8px', fontSize: '0.6rem', fontWeight: '900',
                                             backgroundColor: user.is_active === false ? '#FEE2E2' : '#DCFCE7',
-                                            color: user.is_active === false ? '#B91C1C' : '#15803D'
+                                            color: user.is_active === false ? '#B91C1C' : '#15803D',
+                                            letterSpacing: '0.05em'
                                         }}>
-                                            {user.is_active === false ? 'ARCHIVADO' : '● ACTIVO'}
+                                            {user.is_active === false ? 'ARCHIVADO' : 'ACTIVO'}
                                         </span>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                                    {/* Avatar & Name - Second Row */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
                                         <div style={{ 
-                                            width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#EFF6FF', 
-                                            color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                            fontWeight: '900', fontSize: '1.4rem', flexShrink: 0, boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                                            width: '48px', height: '48px', borderRadius: '14px', 
+                                            background: `linear-gradient(135deg, ${roleInfo.bgColor} 0%, #FFFFFF 100%)`, 
+                                            color: roleInfo.color, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                            fontWeight: '900', fontSize: '0.9rem', flexShrink: 0, 
+                                            border: `2px solid ${roleInfo.bgColor}`,
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                         }}>
-                                            {user.contact_name?.charAt(0)}
+                                            {initials}
                                         </div>
-                                        <div style={{ overflow: 'hidden' }}>
-                                            <h3 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ overflow: 'hidden', flex: 1 }}>
+                                            <h3 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.05rem', lineHeight: '1.2', letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
                                                 {user.contact_name}
                                             </h3>
-                                            <span style={{ 
-                                                display: 'inline-block', marginTop: '0.4rem', fontSize: '0.7rem', fontWeight: '800', 
-                                                color: roleInfo.color, backgroundColor: roleInfo.bgColor, padding: '0.3rem 0.7rem', borderRadius: '8px'
-                                            }}>
-                                                {roleInfo.label.toUpperCase()}
-                                            </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.3rem' }}>
+                                                <span style={{ 
+                                                    fontSize: '0.6rem', fontWeight: '900', 
+                                                    color: roleInfo.color, backgroundColor: roleInfo.bgColor, 
+                                                    padding: '0.15rem 0.5rem', borderRadius: '6px', textTransform: 'uppercase'
+                                                }}>
+                                                    {roleInfo.label}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.9rem' }}>📞</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>
-                                                {user.phone || user.contact_phone || 'Sin teléfono'}
+                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>📞</span>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>
+                                                {user.phone || user.contact_phone || '---'}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.9rem' }}>📧</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '500', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {user.email || 'Sin correo registrado'}
+                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>📧</span>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '500', color: '#64748B', wordBreak: 'break-all' }}>
+                                                {user.email || 'Sin correo'}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.9rem' }}>🏬</span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>
+                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>🏬</span>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0891B2', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                                                 {user.specialty || 'Sede FruFresco'}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.6rem' }}>
+                                    <div style={{ marginTop: '1.2rem', display: 'flex', gap: '0.6rem' }}>
                                         <button 
                                             onClick={() => setEditingUser(user)}
                                             style={{ 
-                                                flex: 1, padding: '0.7rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', 
+                                                flex: 1, padding: '0.6rem', borderRadius: '12px', border: '1.5px solid #E2E8F0', 
                                                 backgroundColor: 'white', color: '#334155', fontWeight: '800', 
-                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem'
+                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem'
                                             }}
-                                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
+                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
                                         >✏️ Editar</button>
                                         <button 
                                             onClick={() => toggleUserStatus(user.id, user.is_active !== false)}
                                             style={{ 
-                                                flex: 1, padding: '0.7rem', borderRadius: '14px', border: 'none', 
+                                                flex: 1, padding: '0.6rem', borderRadius: '12px', border: 'none', 
                                                 backgroundColor: user.is_active === false ? '#DCFCE7' : '#FEE2E2', 
                                                 color: user.is_active === false ? '#15803D' : '#B91C1C', 
-                                                fontWeight: '800', cursor: 'pointer', fontSize: '0.85rem'
+                                                fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem'
                                             }}
+                                            onMouseOver={e => e.currentTarget.style.filter = 'brightness(0.95)'}
+                                            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
                                         >
                                             {user.is_active === false ? '📂 Reactivar' : '🔒 Archivar'}
                                         </button>
@@ -524,9 +553,11 @@ export default function HRManagement() {
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    <option value="" disabled>Seleccionar Cargo...</option>
                                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                                 <select value={newUser.specialty} onChange={e => setNewUser({...newUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    <option value="" disabled>Seleccionar Ubicación...</option>
                                     {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>

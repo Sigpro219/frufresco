@@ -12,10 +12,33 @@ const outfit = Outfit({
   variable: '--font-outfit',
 });
 
-export const metadata = {
-  title: 'Logistics Pro | Gestión Integral de Suministros',
-  description: 'Abastecimiento de alimentos frescos para tu negocio.',
-};
+import { supabase } from '@/lib/supabase';
+
+export async function generateMetadata() {
+  try {
+    const { data: strategies } = await supabase
+      .from('seo_strategies')
+      .select('*')
+      .eq('is_active', true)
+      .order('last_generated_at', { ascending: false });
+
+    if (strategies && strategies.length > 0) {
+      const primary = strategies[0];
+      return {
+        title: primary.meta_title,
+        description: primary.meta_description,
+        keywords: primary.keywords.join(', '),
+      };
+    }
+  } catch (e) {
+    console.error('Metadata generation error:', e);
+  }
+
+  return {
+    title: 'FruFresco | Tu despensa gourmet del campo a la ciudad',
+    description: 'Abastecimiento de alimentos frescos para tu negocio y hogar.',
+  };
+}
 
 export default function RootLayout({
   children,

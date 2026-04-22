@@ -280,7 +280,7 @@ export default function Navbar() {
                     fontFamily: 'var(--font-outfit), sans-serif'
                 }}>
                     {/* B2C (Sin login) o Usuario Genérico */}
-                    {!user && (
+                    {mounted && !user && (
                         <>
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navHome}</Link>
                             <Link href="/#catalog" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navCatalog}</Link>
@@ -302,7 +302,7 @@ export default function Navbar() {
                     )}
 
                     {/* B2B Cliente */}
-                    {user && profile?.role === 'b2b_client' && (
+                    {mounted && user && profile?.role === 'b2b_client' && (
                         <>
                             <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
                             <Link href="/b2b/orders" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Mis Pedidos</Link>
@@ -311,7 +311,7 @@ export default function Navbar() {
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
-                    {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
+                    {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2.5} /> Inicio
@@ -501,7 +501,7 @@ export default function Navbar() {
                         >EN</button>
                     </div>
 
-                    {!loading && (
+                    {mounted && !loading && (
                         user ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <div style={{ 
