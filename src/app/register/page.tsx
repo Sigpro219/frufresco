@@ -147,17 +147,15 @@ export default function RegisterB2C() {
             }} />
             
             <div style={{ 
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'radial-gradient(circle at center, rgba(10, 26, 15, 0.7) 0%, rgba(10, 26, 15, 0.95) 100%)',
-                zIndex: 0
-            }} />
-
-                }}>
-                    <div style={{ 
+                position: 'relative', 
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '100vh',
+                padding: '4rem 1rem'
+            }}>
+                <div style={{ 
                         backgroundColor: 'rgba(255, 255, 255, 0.08)', 
                         backdropFilter: 'blur(20px)',
                         WebkitBackdropFilter: 'blur(20px)',
@@ -363,7 +361,6 @@ export default function RegisterB2C() {
                         </div>
                     </div>
                 </div>
-            </div>
             
             <style jsx global>{`
                 .login-input:focus {

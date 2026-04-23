@@ -25,6 +25,18 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
       justifyContent: 'center', 
       alignItems: 'center' 
     }}>
+      <style jsx>{`
+        .hero-btn-main:hover {
+          transform: scale(1.05) translateY(-5px) !important;
+          box-shadow: 0 25px 50px rgba(0,0,0,0.4) !important;
+          filter: brightness(1.1);
+        }
+        .hero-btn-secondary:hover {
+          background-color: rgba(255,255,255,0.2) !important;
+          transform: translateY(-3px) !important;
+          border-color: rgba(255,255,255,0.5) !important;
+        }
+      `}</style>
       {/* Main CTA: Catalog */}
       <button 
         onClick={scrollToCatalog}

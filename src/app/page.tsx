@@ -144,18 +144,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           <p style={{ fontSize: '1.35rem', maxWidth: '800px', margin: '0 auto 3rem', textShadow: '0 2px 4px rgba(0,0,0,0.3)', opacity: 0.95 }}>{heroDescription}</p>
           <HeroActions t={t} isB2bEnabled={isB2bEnabled} />
 
-          <style dangerouslySetInnerHTML={{ __html: `
-            .hero-btn-main:hover {
-                transform: scale(1.1) translateY(-5px);
-                box-shadow: 0 25px 50px rgba(0,0,0,0.4);
-                filter: brightness(1.1);
-            }
-            .hero-btn-secondary:hover {
-                background-color: rgba(255,255,255,0.2) !important;
-                transform: translateY(-3px);
-                border-color: rgba(255,255,255,0.5) !important;
-            }
-          `}} />
+
         </div>
       </section>
 
