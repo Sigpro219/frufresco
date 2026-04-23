@@ -97,7 +97,11 @@ export const translations = {
       'LA': 'Lácteos',
       'DE': 'Despensa',
       'CO': 'Congelados'
-    }
+    },
+    completeOrder: "Completa tu pedido",
+    relatedProducts: "También te podría interesar",
+    perUnit: "por",
+    footerDesc: "Tu despensa gourmet del campo a la ciudad."
   },
   en: {
     // Landing
@@ -190,6 +194,10 @@ export const translations = {
       'LA': 'Dairy',
       'DE': 'Pantry',
       'CO': 'Frozen'
-    }
+    },
+    completeOrder: "Complete your order",
+    relatedProducts: "You may also like",
+    perUnit: "per",
+    footerDesc: "Your gourmet pantry from the countryside to the city."
   }
 };

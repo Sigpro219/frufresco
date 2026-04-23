@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError } from '@/lib/errorUtils';
 import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
+import { Wand2, Sparkles, Loader2 } from 'lucide-react';
 
 interface CreateProductModalProps {
     onClose: () => void;
@@ -29,8 +30,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         iva_rate: 19,
         display_name: '',
         web_unit: 'Kg',
-        web_conversion_factor: 1.0
+        web_conversion_factor: 1.0,
+        name_en: '',
+        description_en: ''
     });
+
+    const [generatingAI, setGeneratingAI] = useState(false);
 
     const [options, setOptions] = useState<any[]>([]);
     const [variants, setVariants] = useState<any[]>([]);
@@ -76,29 +81,42 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         fetchMaster();
     }, []);
 
-    // Ayudante para generar descripción técnica con usos y beneficios de salud
-    const generateDescription = (name: string, category: string) => {
-        if (!name) return '';
-        const nameNorm = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        
-        let usage = "consumo diario";
-        let healthBenefit = "aliado para una dieta equilibrada y bienestar integral";
 
-        if (category === 'Frutas') {
-            usage = "ensaladas, postres y jugos frescos";
-            healthBenefit = "fuente natural de vitaminas, antioxidantes y fibra que fortalece el sistema inmunológico";
-        } else if (category === 'Verduras' || category === 'Hortalizas') {
-            usage = "preparaciones gourmet, guisos y ensaladas";
-            healthBenefit = "con alto contenido de minerales y clorofila que favorecen una digestión saludable";
-        } else if (category === 'Tubérculos') {
-            usage = "frituras, purés y bases de cocina";
-            healthBenefit = "excelente fuente de energía duradera y carbohidratos complejos";
-        } else if (category === 'Lácteos') {
-            usage = "consumo directo y repostería";
-            healthBenefit = "fuente de calcio y proteínas esenciales para el fortalecimiento óseo";
+    const handleGenerateAI = async () => {
+        if (!formData.name) {
+            alert('Por favor asigne un nombre al producto primero.');
+            return;
         }
+        setGeneratingAI(true);
+        try {
+            const response = await fetch('/api/products/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    name: formData.name, 
+                    category: formData.category,
+                    current_description: formData.description 
+                })
+            });
 
-        return `${nameNorm} de calidad premium seleccionada. Frescura garantizada desde el origen. Ideal para ${usage}. Este producto es una ${healthBenefit}.`;
+            if (response.ok) {
+                const data = await response.json();
+                setFormData(prev => ({
+                    ...prev,
+                    description: data.description_es,
+                    description_en: data.description_en,
+                    name_en: data.name_en
+                }));
+            } else {
+                const err = await response.json();
+                alert('Error IA: ' + (err.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('AI Generation error:', error);
+            alert('Error de conexión con el motor de IA');
+        } finally {
+            setGeneratingAI(false);
+        }
     };
 
     const handleNameBlur = () => {
@@ -109,18 +127,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             const suggestedSku = generateSKU(formData.category, formData.accounting_id);
             setFormData(prev => ({ ...prev, sku: suggestedSku }));
         }
-        // Sugerir descripción si está vacía
-        if (!formData.description) {
-            const suggestedDesc = generateDescription(formData.name, formData.category);
-            setFormData(prev => ({ ...prev, description: suggestedDesc }));
-        }
     };
 
     // Actualizador inteligente de SKU y descripción al cambiar Categoría, Unidad o ID
     const handleMetadataChange = (field: 'category' | 'unit_of_measure' | 'accounting_id', value: string) => {
         setFormData(prev => {
             const currentSuggestedSku = generateSKU(prev.category, prev.accounting_id);
-            const currentSuggestedDesc = generateDescription(prev.name, prev.category);
             
             const nextCategory = field === 'category' ? value : prev.category;
             const nextId = field === 'accounting_id' ? value : prev.accounting_id;
@@ -128,12 +140,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             const newSku = (prev.sku === currentSuggestedSku || !prev.sku) && nextId 
                 ? generateSKU(nextCategory, nextId) 
                 : prev.sku;
-                
-            const newDesc = (prev.description === currentSuggestedDesc || !prev.description)
-                ? generateDescription(prev.name, nextCategory)
-                : prev.description;
             
-            return { ...prev, [field]: value, sku: newSku, description: newDesc };
+            return { ...prev, [field]: value, sku: newSku };
         });
     };
 
@@ -256,7 +264,9 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     image_url: uploadedImageUrl,
                     options_config: options,
                     variants: variants,
-                    iva_rate: formData.iva_rate
+                    iva_rate: formData.iva_rate,
+                    name_en: formData.name_en,
+                    description_en: formData.description_en
                 }])
                 .select()
                 .single();
@@ -369,12 +379,41 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
                             <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Descripción Técnica (Autogenerada)</label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <label style={{ fontSize: '1rem', fontWeight: '700' }}>Descripción Técnica (ES/EN)</label>
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateAI}
+                                            disabled={generatingAI}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '4px 10px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: generatingAI ? '#F3F4F6' : '#EEF2FF',
+                                                color: '#4F46E5',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                cursor: generatingAI ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            {generatingAI ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                                            {generatingAI ? 'Generando...' : 'IA: Orgánico + Salud'}
+                                        </button>
+                                    </div>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        placeholder="Detalles sobre maduración, origen, empaque..."
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', minHeight: '100px', fontFamily: 'inherit', backgroundColor: '#FDFDFD' }}
+                                        placeholder="Descripción en español..."
+                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', minHeight: '100px', fontFamily: 'inherit', backgroundColor: '#FDFDFD', marginBottom: '1rem' }}
+                                    />
+                                    <textarea
+                                        value={formData.description_en}
+                                        onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
+                                        placeholder="Description in English (Auto-generated)..."
+                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', minHeight: '80px', fontFamily: 'inherit', backgroundColor: '#F9FAFB' }}
                                     />
                                 </div>
 

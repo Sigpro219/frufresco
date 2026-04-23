@@ -124,7 +124,21 @@ export default function Navbar() {
         }
     }, [appName, locale]);
 
+    // Persistent Language Logic
+    useEffect(() => {
+        const savedLang = localStorage.getItem('frufresco_lang');
+        const urlLang = searchParams.get('lang');
+        
+        // If there's a saved preference but no URL param, sync URL to preference
+        if (savedLang && !urlLang && savedLang === 'en') {
+            const params = new URLSearchParams(window.location.search);
+            params.set('lang', 'en');
+            router.replace(`${pathname}?${params.toString()}`);
+        }
+    }, [pathname, router, searchParams]);
+
     const changeLanguage = (newLang: string) => {
+        localStorage.setItem('frufresco_lang', newLang);
         const params = new URLSearchParams(searchParams.toString());
         if (newLang === 'es') params.delete('lang');
         else params.set('lang', newLang);
@@ -194,7 +208,7 @@ export default function Navbar() {
                 justifyContent: 'space-between'
             }}>
                 {/* LOGO */}
-                <Link href="/" style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
+                <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
@@ -282,8 +296,8 @@ export default function Navbar() {
                     {/* B2C (Sin login) o Usuario Genérico */}
                     {mounted && !user && (
                         <>
-                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navHome}</Link>
-                            <Link href="/#catalog" style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navCatalog}</Link>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navHome}</Link>
+                            <Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navCatalog}</Link>
                             {b2bEnabled && (
                                 <Link href="/b2b/register" style={{ 
                                     fontWeight: '800', 

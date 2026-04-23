@@ -8,6 +8,10 @@ import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
 import { LucideIcon, Building2, ShoppingCart, Timer, Sprout, Coins, Flame, Apple, Leaf, Carrot, Milk, Package, LayoutGrid } from 'lucide-react';
 import { CATEGORY_MAP, REVERSE_CATEGORY_MAP } from '../lib/constants';
 import { translations, Locale } from '../lib/translations';
+import { expandSearchQuery } from '@/lib/ai_search';
+import { Suspense } from 'react';
+import ProductGridContainer from '../components/ProductGridContainer';
+import ProductSkeleton from '../components/ProductSkeleton';
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
   'FR': Apple,
@@ -122,39 +126,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       }
     });
   }
+  const applyNicknames = (plist: Product[]) => plist.map(p => ({
+    ...p,
+    display_name: nicknameMap[p.id] || translationCache[p.name] || p.display_name || p.name
+  }));
 
-  // 4. Catalog Products Logic
-  let rawProducts: Product[] = [];
-  if (!q && (!category || category === 'Todos')) {
-    // Reuse already fetched visible products if no filter
-    rawProducts = allVisible;
-  } else {
-    // If filtering, we might need a specific query but let's try to filter in-memory first if it's small
-    // For now, keep the specific query if search exists to use DB indexing
-    let query = supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .eq('show_on_web', true);
-
-    if (q) {
-      const searchTerms = q.split(',').map(t => t.trim()).filter(t => t.length > 0);
-      if (searchTerms.length > 0) {
-        const conditions = searchTerms.flatMap(term => [
-          `name.ilike.%${term}%`,
-          `description.ilike.%${term}%`,
-          `keywords.ilike.%${term}%`,
-          `tags.cs.{${term}}`
-        ]);
-        query = query.or(conditions.join(','));
-      }
-    }
-    if (category && category !== 'Todos') {
-      query = query.eq('category', category);
-    }
-    const { data } = await query.order('image_url', { ascending: false, nullsFirst: false }).limit(250);
-    rawProducts = data || [];
-  }
+  const products = applyNicknames(allVisible);
+  const finalFeatured = applyNicknames(featuredProducts);
+  
+  // Helper to get translated category name
+  const getCategoryName = (cat: string) => {
+    if (cat === 'Todos') return t.allCategories;
+    const code = REVERSE_CATEGORY_MAP[cat] || cat.toUpperCase();
+    return (t.categories as any)[code] || cat;
+  };
 
   const getSetting = (key: string, defaultValue: string) => {
     const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
@@ -171,22 +156,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const catalogTitle = catalogTitleRaw || t.catalogTitle;
   const dynamicCategories: string[] = ['Todos', ...Array.from(new Set(categoriesData.map(c => c.category)))];
   const valueProps = t.valueProps;
-
-
-  const applyNicknames = (plist: Product[]) => plist.map(p => ({
-    ...p,
-    display_name: nicknameMap[p.id] || translationCache[p.name] || p.display_name || p.name
-  }));
-
-  const products = applyNicknames(rawProducts || []);
-  const finalFeatured = applyNicknames(featuredProducts);
-  
-  // Helper to get translated category name
-  const getCategoryName = (cat: string) => {
-    if (cat === 'Todos') return t.allCategories;
-    const code = REVERSE_CATEGORY_MAP[cat] || cat.toUpperCase();
-    return (t.categories as any)[code] || cat;
-  };
 
 
   return (
@@ -387,56 +356,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           </div>
         </div>
 
-        {products && products.length > 0 ? (
-          <div style={{ position: 'relative' }}>
-            <div 
-              id="catalog-scroll-area"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: '2rem',
-                maxHeight: '1000px', 
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                padding: '1.5rem',
-                borderRadius: 'var(--radius-lg)',
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'var(--primary) transparent',
-                scrollBehavior: 'smooth',
-                border: '1px solid rgba(0,0,0,0.03)',
-                backgroundColor: '#ffffff',
-                width: '100%'
-              }}
-              className="custom-scrollbar"
-            >
-              {products.map((product: Product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-            
-            {/* Shadow Effect at the bottom - subtle */}
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: '80px',
-              background: 'linear-gradient(to top, rgba(255,255,255,0.8), transparent)',
-              zIndex: 10,
-              pointerEvents: 'none',
-              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)'
-            }} />
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-            {error ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <span style={{ fontWeight: '800', color: '#ef4444' }}>Error cargando productos</span>
-                <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{(error as { message: string }).message || JSON.stringify(error)}</span>
-              </div>
-            ) : 'No encontramos productos con ese nombre.'}
-          </div>
-        )}
+        <Suspense key={`${q}-${category}-${locale}`} fallback={<ProductSkeleton />}>
+            <ProductGridContainer 
+                q={q} 
+                category={category} 
+                locale={locale} 
+                allVisible={products} 
+                finalFeatured={finalFeatured}
+            />
+        </Suspense>
+
         
         {/* CSS for custom scrollbar hidden globally */}
         <style dangerouslySetInnerHTML={{ __html: `

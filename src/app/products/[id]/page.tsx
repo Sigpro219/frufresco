@@ -4,11 +4,15 @@ import ProductDetailClient from '@/components/ProductDetailClient';
 import ProductCard from '@/components/ProductCard';
 import { notFound } from 'next/navigation';
 import { Apple } from 'lucide-react';
+import { translations, Locale } from '@/lib/translations';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+export default async function ProductPage(props: { params: Promise<{ id: string }>, searchParams: Promise<{ lang?: string }> }) {
+    const { id } = await props.params;
+    const { lang } = await props.searchParams;
+    const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
 
     // 1. Fetch Current Product
     const { data: product, error } = await supabase
@@ -67,7 +71,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                                 letterSpacing: '0.2rem', 
                                 fontSize: '0.85rem',
                                 textTransform: 'uppercase'
-                            }}>Completa tu pedido</span>
+                            }}>{t.completeOrder}</span>
                             <h2 style={{
                                 fontSize: '2.5rem',
                                 fontWeight: '900',
@@ -79,7 +83,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                                 justifyContent: 'center',
                                 gap: '15px'
                             }}>
-                                También te podría interesar
+                                {t.relatedProducts}
                                 <Apple className="text-primary" size={32} strokeWidth={2.5} />
                             </h2>
                         </div>

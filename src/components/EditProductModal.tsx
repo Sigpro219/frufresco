@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
+import { Wand2, Sparkles, Loader2 } from 'lucide-react';
 
 interface EditProductModalProps {
     product: Product;
@@ -20,6 +21,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
         iva_rate: product.iva_rate ?? 19,
         utility_deviation_pct: product.utility_deviation_pct ?? 0
     });
+    const hasChildren = allProducts.some(p => p.parent_id === product.id);
     const [parentSearch, setParentSearch] = useState('');
     const [showParentResults, setShowParentResults] = useState(false);
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -28,6 +30,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [variants, setVariants] = useState<any[]>(product.variants || []);
     const [variantUploading, setVariantUploading] = useState<string | null>(null);
     const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
+    const [generatingAI, setGeneratingAI] = useState(false);
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
@@ -130,8 +133,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     };
 
     const removeOption = (index: number) => {
-        setOptions(options.filter((_, i) => i !== index));
+        const newOptions = options.filter((_, i) => i !== index);
+        setOptions(newOptions);
+        // Si ya no quedan opciones, las variantes deben limpiarse automáticamente
+        if (newOptions.length === 0) {
+            setVariants([]);
+        }
     };
+
 
     const generateVariants = () => {
         if (options.length === 0) {
@@ -178,6 +187,43 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const updateVariantVisibility = (id: string, visible: boolean) => {
         setVariants(variants.map(v => v.id === id ? { ...v, show_on_web: visible } : v));
+    };
+
+    const handleGenerateAI = async () => {
+        if (!formData.name) {
+            alert('Por favor asigne un nombre al producto primero.');
+            return;
+        }
+        setGeneratingAI(true);
+        try {
+            const response = await fetch('/api/products/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    name: formData.name, 
+                    category: formData.category,
+                    current_description: formData.description 
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setFormData(prev => ({
+                    ...prev,
+                    description: data.description_es,
+                    description_en: data.description_en,
+                    name_en: data.name_en
+                }));
+            } else {
+                const err = await response.json();
+                alert('Error IA: ' + (err.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('AI Generation error:', error);
+            alert('Error de conexión con el motor de IA');
+        } finally {
+            setGeneratingAI(false);
+        }
     };
 
     const handleVariantImageUpload = async (variantId: string, file: File) => {
@@ -242,20 +288,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     iva_rate: formData.iva_rate,
                     display_name: formData.display_name,
                     web_unit: formData.web_unit,
-                    web_conversion_factor: formData.web_conversion_factor
+                    web_conversion_factor: formData.web_conversion_factor,
+                    name_en: formData.name_en,
+                    description_en: formData.description_en
                 })
                 .eq('id', product.id);
 
             if (error) throw error;
             
             // 2. Sincronizar tabla dedicada product_variants
-            if (variants && variants.length > 0) {
-                // Limpiar anteriores
-                await supabase
-                    .from('product_variants')
-                    .delete()
-                    .eq('product_id', product.id);
+            // Primero, siempre limpiamos las existentes para este producto para evitar duplicados o huérfanos
+            const { error: deleteError } = await supabase
+                .from('product_variants')
+                .delete()
+                .eq('product_id', product.id);
+            
+            if (deleteError) {
+                console.error('Error limpiando variantes anteriores:', deleteError);
+                throw deleteError;
+            }
 
+            if (variants && variants.length > 0 && options.length > 0) {
                 // Insertar nuevas
                 const formattedVariants = variants.map(v => ({
                     product_id: product.id,
@@ -270,14 +323,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     .from('product_variants')
                     .insert(formattedVariants);
 
-                if (variantError) throw variantError;
-            } else {
-                // Si no hay variantes, nos aseguramos de limpiar la tabla relacional
-                await supabase
-                    .from('product_variants')
-                    .delete()
-                    .eq('product_id', product.id);
+                if (variantError) {
+                    console.error('Error insertando nuevas variantes:', variantError);
+                    throw variantError;
+                }
             }
+
 
             console.info('✅ Producto y variantes actualizados correctamente');
             onSave();
@@ -425,7 +476,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Vincular a SKU Padre (Hijo de...)</label>
                         <input
                             type="text"
-                            placeholder="Buscar padre por nombre o SKU..."
+                            placeholder={hasChildren ? "Bloqueado: Este SKU ya es PADRE" : "Buscar padre por nombre o SKU..."}
                             value={parentSearch || (formData.parent_id ? (() => {
                                 const p = allProducts.find(i => i.id === formData.parent_id);
                                 return p ? `${p.sku} - ${p.name}` : '';
@@ -434,9 +485,25 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 setParentSearch(e.target.value);
                                 setShowParentResults(true);
                             }}
-                            onFocus={() => setShowParentResults(true)}
-                            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: 'bold', color: formData.parent_id ? '#1E40AF' : 'inherit' }}
+                            onFocus={() => !hasChildren && setShowParentResults(true)}
+                            disabled={hasChildren}
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.8rem', 
+                                borderRadius: '8px', 
+                                border: '1px solid #D1D5DB', 
+                                fontSize: '0.95rem', 
+                                fontWeight: 'bold', 
+                                color: formData.parent_id ? '#1E40AF' : 'inherit',
+                                backgroundColor: hasChildren ? '#F3F4F6' : 'white',
+                                cursor: hasChildren ? 'not-allowed' : 'text'
+                            }}
                         />
+                        {hasChildren && (
+                            <p style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '4px', fontWeight: 'bold' }}>
+                                ⚠️ Este SKU ya es PADRE de otros productos. No puede ser vinculado a otro nivel superior.
+                            </p>
+                        )}
                         {showParentResults && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '8px', marginTop: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
                                 <div 
@@ -557,12 +624,48 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Descripción Técnica</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#6B7280' }}>Descripción Técnica (ES/EN)</label>
+                            <button
+                                type="button"
+                                onClick={handleGenerateAI}
+                                disabled={generatingAI}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: generatingAI ? '#F3F4F6' : '#EEF2FF',
+                                    color: '#4F46E5',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: generatingAI ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {generatingAI ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Wand2 size={14} />
+                                )}
+                                {generatingAI ? 'Generando...' : 'Optimizar con IA'}
+                            </button>
+                        </div>
                         <textarea
                             value={formData.description || ''}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             rows={4}
-                            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.9rem', resize: 'none', fontFamily: 'inherit' }}
+                            placeholder="Descripción en español..."
+                            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.9rem', resize: 'none', fontFamily: 'inherit', marginBottom: '1rem' }}
+                        />
+                        <textarea
+                            value={formData.description_en || ''}
+                            onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
+                            rows={3}
+                            placeholder="Description in English (Auto-generated)..."
+                            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.85rem', resize: 'none', fontFamily: 'inherit', backgroundColor: '#F9FAFB' }}
                         />
                     </div>
 
@@ -714,8 +817,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <div style={{ backgroundColor: '#F9FAFB', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#374151' }}>🛠️ GESTIÓN TÉCNICA DE VARIANTES</h3>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#6B7280' }}>Define atributos (Madurez, Tamaño) para crear sub-SKUs automáticos.</p>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: '#374151' }}>🛠️ VARIANTES (CANAL HOGAR)</h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#6B7280' }}>
+                                        Exclusivo B2C. Define atributos (Madurez, Tamaño) para crear sub-SKUs comerciales.
+                                    </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button 

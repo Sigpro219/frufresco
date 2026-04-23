@@ -64,7 +64,7 @@ export default function ProductCard({ product }: { product: Product }) {
                 onMouseLeave={() => setIsHovered(false)}
             >
                 {/* IMAGE HEADER - Link specifically the image */}
-                <Link href={`/products/${product.id}`} style={{ display: 'block', position: 'relative', height: '220px', width: '100%', backgroundColor: '#f9fafb', overflow: 'hidden' }}>
+                <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ display: 'block', position: 'relative', height: '220px', width: '100%', backgroundColor: '#f9fafb', overflow: 'hidden' }}>
                     
                     {/* SKELETON LOADER (Shimmer) */}
                     {!imageLoaded && product.image_url && (
@@ -184,7 +184,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
                 {/* CONTENT */}
                 <div style={{ padding: '1.2rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                    <Link href={`/products/${product.id}`} style={{ textDecoration: 'none' }}>
+                    <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
                             fontSize: '1.2rem', 
@@ -220,7 +220,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
                     {/* ACTION BUTTONS */}
                     <div style={{ marginTop: '0.8rem' }}>
-                        <Link href={`/products/${product.id}`} style={{ textDecoration: 'none' }}>
+                        <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                             <div style={{
                                 width: '100%',
                                 height: '42px',

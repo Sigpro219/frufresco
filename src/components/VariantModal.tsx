@@ -79,8 +79,14 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
     };
 
     const removeOption = (index: number) => {
-        setOptions(options.filter((_, i) => i !== index));
+        const newOptions = options.filter((_, i) => i !== index);
+        setOptions(newOptions);
+        // Si ya no quedan opciones, las variantes deben limpiarse automáticamente
+        if (newOptions.length === 0) {
+            setVariants([]);
+        }
     };
+
 
     const generateVariants = () => {
         if (options.length === 0) return;

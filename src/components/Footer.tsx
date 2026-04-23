@@ -43,7 +43,7 @@ export default function Footer() {
   const phone = getSetting('contact_phone', '+57 300 123 4567');
   const email = getSetting('contact_email', `contacto@${appName.toLowerCase().replace(/\s/g, '')}.com`);
   const address = getSetting('contact_address', 'Corabastos Bodega 123, Bogotá');
-  const description = (locale === 'en' ? getSetting('footer_description_en', '') : getSetting('footer_description', '')) || config.brand.footerDescription;
+  const description = (locale === 'en' ? getSetting('footer_description_en', '') : getSetting('footer_description', '')) || t.footerDesc;
   const logoUrl = getSetting('app_logo_url', '');
 
   return (

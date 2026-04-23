@@ -12,6 +12,27 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const t = translations[locale];
     const [query, setQuery] = useState(searchParams.get('q') || '');
 
+    // 1. Detect page reload ONCE on mount
+    useEffect(() => {
+        const isReload = window.performance.getEntriesByType('navigation')
+            .map((nav) => (nav as any).type)
+            .includes('reload');
+
+        if (isReload) {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('q')) {
+                params.delete('q');
+                router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                setQuery('');
+            }
+        }
+    }, []); // Only on mount
+
+    // 2. Sync input with URL changes
+    useEffect(() => {
+        setQuery(searchParams.get('q') || '');
+    }, [searchParams]);
+
     // Debounce to avoid excessive router calls
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -25,7 +46,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 }
                 router.replace(`/?${params.toString()}#catalog`, { scroll: false });
             }
-        }, 400);
+        }, 600);
 
         return () => clearTimeout(timer);
     }, [query, router, searchParams]);

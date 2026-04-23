@@ -5,7 +5,8 @@ import { useCart } from '@/lib/cartContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingBag, Zap, Plus, Minus, ChevronRight, Apple } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { translations, Locale } from '@/lib/translations';
 
 interface Product {
     id: string;
@@ -17,6 +18,8 @@ interface Product {
     web_conversion_factor?: number;
     image_url: string;
     description: string;
+    description_en?: string | null;
+    name_en?: string | null;
     options?: any;
     options_config?: any[];
     variants?: any[];
@@ -27,6 +30,11 @@ interface Product {
 export default function ProductDetailClient({ product }: { product: Product }) {
     const { addItem } = useCart();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const lang = searchParams.get('lang') || 'es';
+    const isEn = lang === 'en';
+    const t = translations[lang as Locale] || translations.es;
+
     const [quantity, setQuantity] = useState(1);
 
     // Normalizar las opciones (viniendo de options o de options_config del Admin)
@@ -63,7 +71,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         const optionString = Object.entries(selections)
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
-        const baseName = product.display_name || product.name;
+        const baseName = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
         return optionString ? `${baseName} (${optionString})` : baseName;
     };
 
@@ -98,9 +106,13 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1rem' }}>
             {/* Breadcrumbs */}
             <nav style={{ marginBottom: '2.5rem', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Link href="/" style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>Inicio</Link> 
+                <Link href={`/${isEn ? '?lang=en' : ''}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>
+                    {isEn ? 'Home' : 'Inicio'}
+                </Link> 
                 <ChevronRight size={14} />
-                <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{product.display_name || product.name}</span>
+                <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
+                    {(isEn && product.name_en) ? product.name_en : (product.display_name || product.name)}
+                </span>
             </nav>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '4rem', alignItems: 'start' }}>
@@ -125,22 +137,22 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                 {/* Right: Product Info */}
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
-                        {product.display_name || product.name}
+                        {(isEn && product.name_en) ? product.name_en : (product.display_name || product.name)}
                     </h1>
 
                     <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '1.5rem' }}>
                         {currentPrice !== undefined ? (
                             `$${currentPrice.toLocaleString('es-CO')}`
                         ) : (
-                            <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>Precio a consultar</span>
+                            <span style={{ fontSize: '1.1rem', color: '#666', fontStyle: 'italic' }}>{t.unavailable}</span>
                         )}
                         <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: '400', marginLeft: '0.5rem' }}>
-                            por {product.web_unit || product.unit_of_measure || 'Un'}
+                            {t.perUnit} {product.web_unit || product.unit_of_measure || 'Un'}
                         </span>
                     </div>
 
                     <div style={{ marginBottom: '2rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                        {product.description || 'Producto fresco de alta calidad seleccionado especialmente para ti.'}
+                        {(isEn && product.description_en) ? product.description_en : (product.description || 'Producto fresco de alta calidad.')}
                     </div>
 
                     <hr style={{ border: 'none', borderTop: '1px solid var(--border)', marginBottom: '2rem' }} />
@@ -199,8 +211,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {/* Total Price & Availability */}
                     <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: isAvailable ? '#F3F4F6' : '#FEF2F2', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>⚠️ Combinación no disponible</span>}
-                            <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#4B5563' }}>Subtotal:</span>
+                            {!isAvailable && <span style={{ color: '#EF4444', fontWeight: '800', fontSize: '0.9rem', display: 'block' }}>⚠️ {t.notAvailableAlt}</span>}
+                            <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#4B5563' }}>{t.subtotal}:</span>
                         </div>
                         <span style={{ fontSize: '1.8rem', fontWeight: '800', color: isAvailable ? 'var(--primary-dark)' : '#9CA3AF' }}>
                             {currentPrice !== undefined ? (
@@ -234,7 +246,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             }}
                         >
                             <ShoppingBag size={20} strokeWidth={2.5} /> 
-                            {isAvailable ? 'Añadir al Carrito' : 'No disponible'}
+                            {isAvailable ? t.addToOrder : t.unavailable}
                         </button>
                         <button
                             onClick={handleBuyNow}
@@ -258,7 +270,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                             }}
                         >
                             <Zap size={20} strokeWidth={2.5} fill={isAvailable ? "currentColor" : "none"} /> 
-                            {isAvailable ? 'Comprar Ahora' : 'Agotado'}
+                            {isAvailable ? t.payNow : t.outOfStock}
                         </button>
                     </div>
                 </div>
