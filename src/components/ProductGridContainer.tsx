@@ -5,6 +5,7 @@ import { CATEGORY_MAP } from '../lib/constants';
 import { translations, Locale } from '../lib/translations';
 import Link from 'next/link';
 import FeaturedProductsCarousel from './FeaturedProductsCarousel';
+import ProductGridClient from './ProductGridClient';
 
 interface Props {
     q?: string;
@@ -152,30 +153,10 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                 </div>
             )}
             
-            {rawProducts.length > 0 ? (
-                <div 
-                    id="catalog-scroll-area"
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                        gap: '2rem',
-                        padding: '1.5rem',
-                        borderRadius: 'var(--radius-lg)',
-                        backgroundColor: '#ffffff'
-                    }}
-                    className="custom-scrollbar"
-                >
-                    {rawProducts.map((product: Product) => (
-                        <ProductCard key={product.id} product={product} />
-                    ))}
-                </div>
-            ) : (
-                <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-                    <p style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
-                        {t.noProducts || 'No encontramos productos con ese nombre.'}
-                    </p>
-                </div>
-            )}
+            <ProductGridClient 
+                products={rawProducts} 
+                noProductsText={t.noProducts || 'No encontramos productos con ese nombre.'} 
+            />
         </div>
     );
 }

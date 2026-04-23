@@ -101,10 +101,8 @@ export default function LoginPage() {
                 zIndex: 0
             }} />
 
-            <div style={{ position: 'relative', zIndex: 10 }}>
-                <Navbar />
-
-                <div className="mobile-padding-sm" style={{
+            <div className="login-card-container">
+                <div className="login-card" style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

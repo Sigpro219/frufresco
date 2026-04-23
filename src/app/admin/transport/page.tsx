@@ -179,7 +179,6 @@ export default function TransportControlTower() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
-            <Navbar />
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.25rem' }}>
                 

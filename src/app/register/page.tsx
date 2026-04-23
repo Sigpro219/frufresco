@@ -156,14 +156,6 @@ export default function RegisterB2C() {
                 zIndex: 0
             }} />
 
-            <div style={{ position: 'relative', zIndex: 10 }}>
-                <Navbar />
-                <div className="mobile-padding-sm" style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    padding: '4rem 1.5rem',
-                    minHeight: 'calc(100vh - 85px)'
                 }}>
                     <div style={{ 
                         backgroundColor: 'rgba(255, 255, 255, 0.08)', 

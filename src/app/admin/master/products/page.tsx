@@ -593,11 +593,10 @@ export default function MasterProductsPage() {
     }, [products]);
 
     return (
-        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
-            <Navbar />
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
             <Toast />
             
-            <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto', padding: '1.5rem 2rem', boxSizing: 'border-box' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -1617,6 +1616,6 @@ export default function MasterProductsPage() {
                     </div>
                 </div>
             )}
-        </div>
+        </main>
     );
 }

@@ -10,6 +10,7 @@ import { translations, Locale } from '../lib/translations';
 import { Suspense } from 'react';
 import ProductGridContainer from '../components/ProductGridContainer';
 import ProductSkeleton from '../components/ProductSkeleton';
+import HeroActions from '../components/HeroActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,7 +134,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
   return (
     <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
-      <Navbar />
 
       {/* HERO SECTION - Renders with appSettings */}
       <section className="hero-container" style={{ position: 'relative', height: '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', overflow: 'hidden', backgroundColor: '#1a4d2e' }}>
@@ -142,77 +142,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
         <div className="container" style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <h1 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '4.5rem', fontWeight: '900', marginBottom: '1.5rem', textShadow: '0 10px 30px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{heroTitle}</h1>
           <p style={{ fontSize: '1.35rem', maxWidth: '800px', margin: '0 auto 3rem', textShadow: '0 2px 4px rgba(0,0,0,0.3)', opacity: 0.95 }}>{heroDescription}</p>
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column',
-            gap: '2rem', 
-            justifyContent: 'center', 
-            alignItems: 'center' 
-          }}>
-            {/* Main CTA: Catalog */}
-            <Link href="#catalog" scroll={true}>
-              <button className="btn btn-primary hero-btn-main" style={{
-                fontSize: '1.4rem',
-                padding: '1.2rem 4rem',
-                fontWeight: '900',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.8rem',
-                backgroundColor: 'var(--primary)',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'white'
-              }}>
-                <LayoutGrid size={28} strokeWidth={2.5} /> {t.navCatalog || 'Nuestro Catálogo'}
-              </button>
-            </Link>
-
-            <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {isB2bEnabled && (
-                  <Link href="/b2b/register">
-                      <button className="btn-glass hero-btn-secondary" style={{
-                          fontSize: '1.1rem',
-                          padding: '1rem 2.5rem',
-                          fontWeight: '700',
-                          borderRadius: 'var(--radius-full)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.6rem',
-                          color: 'white',
-                          border: '1px solid rgba(255,255,255,0.3)',
-                          cursor: 'pointer',
-                          backgroundColor: 'rgba(255,255,255,0.1)',
-                          backdropFilter: 'blur(10px)',
-                          transition: 'all 0.3s ease'
-                      }}>
-                          <Building2 size={22} /> {t.btnInstitutional}
-                      </button>
-                  </Link>
-              )}
-              <Link href="/register">
-                  <button className="btn-glass hero-btn-secondary" style={{
-                      fontSize: '1.1rem',
-                      padding: '1rem 2.5rem',
-                      fontWeight: '700',
-                      borderRadius: 'var(--radius-full)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.6rem',
-                      color: 'white',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      cursor: 'pointer',
-                      backgroundColor: 'rgba(255,255,255,0.1)',
-                      backdropFilter: 'blur(10px)',
-                      transition: 'all 0.3s ease'
-                  }}>
-                      <ShoppingCart size={22} /> {t.btnHome}
-                  </button>
-              </Link>
-            </div>
-          </div>
+          <HeroActions t={t} isB2bEnabled={isB2bEnabled} />
 
           <style dangerouslySetInnerHTML={{ __html: `
             .hero-btn-main:hover {

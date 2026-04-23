@@ -137,7 +137,6 @@ export default function AdminStrategyPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             <Toast />
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
