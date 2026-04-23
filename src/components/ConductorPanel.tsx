@@ -10,6 +10,7 @@ interface Conductor {
     email: string;
     specialty: string;
     is_active: boolean;
+    is_temporary?: boolean;
     avatar_url?: string;
     fleet_vehicles?: {
         id: string;
@@ -61,9 +62,9 @@ export default function ConductorPanel() {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from('profiles')
-                .select('*, fleet_vehicles(id, plate)')
-                .or('role.eq.driver,specialty.ilike.%conductor%')
+                .from('collaborators')
+                .select('*')
+                .eq('role', 'CONDUCTOR')
                 .order('contact_name');
 
             if (error) throw error;
@@ -91,20 +92,31 @@ export default function ConductorPanel() {
 
             if (!isMounted.current) return;
 
+            const { data: allFleet } = await supabase
+                .from('fleet_vehicles')
+                .select('id, plate, driver_id');
+
             const updatedConductores = (data || []).map(c => {
+                const driverVehicles = (allFleet || []).filter(v => v.driver_id === c.id);
+                
                 const lastEvent = eventData?.find(e => 
                     (e.description && e.description.includes(c.contact_name)) || 
                     (e.description && e.description.includes(c.id))
                 );
                 
-                const plate = c.fleet_vehicles?.[0]?.plate;
+                const plate = driverVehicles?.[0]?.plate;
                 const vehicleEvent = eventData?.find(e => plate && e.description && e.description.includes(plate));
                 const finalEvent = vehicleEvent || lastEvent;
+
+                const baseConductor = {
+                    ...c,
+                    fleet_vehicles: driverVehicles
+                };
 
                 if (finalEvent) {
                     const typeMatch = finalEvent.event_type.replace('activity_', '');
                     return {
-                        ...c,
+                        ...baseConductor,
                         current_status: {
                             type: typeMatch,
                             description: finalEvent.description,
@@ -112,7 +124,7 @@ export default function ConductorPanel() {
                         }
                     };
                 }
-                return c;
+                return baseConductor;
             });
 
             if (isMounted.current) {
@@ -120,8 +132,8 @@ export default function ConductorPanel() {
                 setLastUpdated(new Date());
             }
 
-        } catch (err: unknown) {
-            console.error('Error fetching data for ConductorPanel:', err);
+        } catch (err: any) {
+            console.error('Error fetching data for ConductorPanel:', err.message || err);
         } finally {
             if (isMounted.current) setLoading(false);
         }
@@ -375,7 +387,17 @@ export default function ConductorPanel() {
                                         <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900', fontSize: '0.8rem' }}>
                                             {getInitials(c.contact_name)}
                                         </div>
-                                        <div style={{ fontWeight: '700', color: '#1F2937' }} className="driver-name">{c.contact_name}</div>
+                                        <div style={{ fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            {c.contact_name}
+                                            {c.is_temporary && (
+                                                <span style={{ 
+                                                    fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', 
+                                                    padding: '2px 6px', borderRadius: '4px', border: '1px solid #FECACA'
+                                                }}>
+                                                    TEMPORAL
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </td>
                                 <td style={{ padding: '1.2rem' }}>

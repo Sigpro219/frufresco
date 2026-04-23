@@ -13,6 +13,7 @@ interface Profile {
     role: string;
     specialty?: string;
     is_active: boolean;
+    is_temporary?: boolean;
     created_at?: string;
     document_id?: string;
     avatar_url?: string;
@@ -67,10 +68,12 @@ export default function HRManagement() {
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showSearchHelp, setShowSearchHelp] = useState(false);
     const [filterRole, setFilterRole] = useState('all');
     const [sortBy, setSortBy] = useState<'name' | 'role' | 'specialty'>('name');
     const [editingUser, setEditingUser] = useState<Profile | null>(null);
     const [showAdd, setShowAdd] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
     const [viewMode, setViewMode] = useState<'gallery' | 'list'>('list');
     const [newUser, setNewUser] = useState<Partial<Profile>>({
         contact_name: '',
@@ -148,7 +151,7 @@ export default function HRManagement() {
 
             if (error) throw error;
             setShowAdd(false);
-            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true });
+            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false });
             await fetchData();
         } catch (err: any) {
             alert(`Error al registrar: ${err.message}`);
@@ -183,22 +186,57 @@ export default function HRManagement() {
             } else if (query.startsWith('@')) {
                 const metaQuery = normalize(query.substring(1));
                 const roleLabel = normalize(ROLES.find(r => r.value === u.role)?.label || '');
-                matchesSearch = roleLabel.includes(metaQuery) || normalize(u.specialty || '').includes(metaQuery);
+                const isTempMatch = 'temporal'.includes(metaQuery) && u.is_temporary;
+                const isInactiveMatch = ('inactivo'.includes(metaQuery) || 'archivado'.includes(metaQuery)) && u.is_active === false;
+                matchesSearch = roleLabel.includes(metaQuery) || normalize(u.specialty || '').includes(metaQuery) || isTempMatch || isInactiveMatch;
             } else {
                 const terms = query.split(',').map(t => normalize(t.trim())).filter(Boolean);
-                const haystack = normalize([u.contact_name || '', u.phone || '', u.contact_phone || '', u.email || '', u.role || ''].join(' '));
+                const haystack = normalize([u.contact_name || '', u.document_id || '', u.phone || '', u.contact_phone || '', u.email || '', u.role || ''].join(' '));
                 matchesSearch = terms.some(term => haystack.includes(term));
             }
         }
 
         const matchesRole = filterRole === 'all' || u.role === filterRole;
-        return matchesSearch && matchesRole;
+        const matchesArchived = showArchived || u.is_active !== false;
+        return matchesSearch && matchesRole && matchesArchived;
     }).sort((a, b) => {
         if (sortBy === 'name') return (a.contact_name || '').localeCompare(b.contact_name || '');
         if (sortBy === 'role') return (a.role || '').localeCompare(b.role || '');
         if (sortBy === 'specialty') return (a.specialty || '').localeCompare(b.specialty || '');
         return 0;
     });
+
+    const dynamicSpecialties = Array.from(new Set(users.map(u => u.specialty).filter(Boolean)))
+        .sort((a, b) => (a || '').localeCompare(b || ''));
+
+    const getAvatarStyle = (name: string) => {
+        const parts = (name || '').split(' ').filter(Boolean);
+        let initials = '?';
+        
+        if (parts.length >= 3) {
+            // Caso: APELLIDO1 APELLIDO2 NOMBRE1... -> Usamos APELLIDO1 y NOMBRE1
+            initials = (parts[0][0] + parts[2][0]).toUpperCase();
+        } else if (parts.length === 2) {
+            // Caso: APELLIDO NOMBRE -> Usamos ambos
+            initials = (parts[0][0] + parts[1][0]).toUpperCase();
+        } else if (parts.length === 1) {
+            initials = parts[0][0].toUpperCase();
+        }
+
+        // Color based on name hash
+        let hash = 0;
+        const full = name || 'unknown';
+        for (let i = 0; i < full.length; i++) {
+            hash = full.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const h = Math.abs(hash) % 360;
+        return {
+            initials,
+            bg: `hsla(${h}, 70%, 94%, 1)`,
+            color: `hsla(${h}, 80%, 30%, 1)`,
+            border: `1.5px solid hsla(${h}, 80%, 40%, 0.3)`
+        };
+    };
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
@@ -254,24 +292,77 @@ export default function HRManagement() {
                         </button>
                     </div>
                 </header>
+                
+                {/* SUBTLE DASHBOARD */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                    {[
+                        { label: 'Total Equipo', value: users.length, icon: '👥', color: '#0F172A' },
+                        { label: 'Activos', value: users.filter(u => u.is_active !== false).length, icon: '✅', color: '#10B981' },
+                        { label: 'Temporales', value: users.filter(u => u.is_temporary).length, icon: '⏳', color: '#F59E0B' },
+                        { label: 'Conductores', value: users.filter(u => u.role === 'CONDUCTOR').length, icon: '🚛', color: '#0891B2' }
+                    ].map((stat, i) => (
+                        <div key={i} style={{ 
+                            backgroundColor: 'white', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0',
+                            display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
+                        }}>
+                            <div style={{ fontSize: '1.5rem', backgroundColor: '#F8FAFC', width: '45px', height: '45px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {stat.icon}
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: stat.color }}>{stat.value}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
 
                 <div style={{ 
                     backgroundColor: 'white', padding: '1rem 1.5rem', borderRadius: '24px', 
                     border: '1px solid #E2E8F0', marginBottom: '2.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', 
-                    alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', position: 'sticky', top: '10px', zIndex: 100
+                    alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', position: 'sticky', top: '10px', zIndex: 50
                 }}>
                     <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
                         <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
                         <input 
-                            placeholder="Buscar por nombre, teléfono, rol (@rol) o ID (#id)..."
+                            placeholder="Buscar por nombre, teléfono, rol (@rol), ID o @temporal..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
+                            onFocus={() => setShowSearchHelp(true)}
+                            onBlur={() => setTimeout(() => setShowSearchHelp(false), 200)}
                             style={{ 
                                 width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.8rem', borderRadius: '14px', 
                                 border: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC', fontSize: '0.95rem',
                                 fontWeight: '600', color: '#1E293B', outline: 'none'
                             }}
                         />
+                        {showSearchHelp && (
+                            <div style={{ 
+                                position: 'absolute', top: '110%', left: 0, right: 0, backgroundColor: 'white', 
+                                padding: '1.2rem', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                                zIndex: 100, border: '1px solid #E2E8F0', fontSize: '0.8rem'
+                            }}>
+                                <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>
+                                    <span style={{ fontSize: '1rem' }}>💡</span> Atajos de Búsqueda Avanzada
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@cargo</code> <span style={{fontSize: '0.7rem'}}>Filtra por rol</span>
+                                    </div>
+                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@sede</code> <span style={{fontSize: '0.7rem'}}>Filtra por sede</span>
+                                    </div>
+                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@temporal</code> <span style={{fontSize: '0.7rem'}}>Solo temporales</span>
+                                    </div>
+                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@inactivo</code> <span style={{fontSize: '0.7rem'}}>Solo archivados</span>
+                                    </div>
+                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>,</code> <span style={{fontSize: '0.7rem'}}>Busca varios ítems</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {searchTerm && (
                             <button 
                                 onClick={() => setSearchTerm('')}
@@ -291,6 +382,18 @@ export default function HRManagement() {
                         <option value="all">🎭 Todos los Roles</option>
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
+
+                    <button 
+                        onClick={() => setShowArchived(!showArchived)}
+                        style={{ 
+                            padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', 
+                            fontWeight: '800', color: showArchived ? '#B91C1C' : '#64748B', 
+                            backgroundColor: showArchived ? '#FEF2F2' : 'white', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s'
+                        }}
+                    >
+                        {showArchived ? '👁️ Ocultar Archivados' : '📁 Mostrar Archivados'}
+                    </button>
                 </div>
 
                 {loading ? (
@@ -303,12 +406,7 @@ export default function HRManagement() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
                         {filteredUsers.map(user => {
                             const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#64748B', bgColor: '#F1F5F9' };
-                            
-                            // Get two initials
-                            const names = (user.contact_name || '').split(' ').filter(Boolean);
-                            const initials = names.length > 1 
-                                ? (names[0][0] + names[1][0]).toUpperCase() 
-                                : (names[0]?.[0] || '?').toUpperCase();
+                            const avatar = getAvatarStyle(user.contact_name || '');
 
                             return (
                                 <div key={user.id} style={{ 
@@ -344,13 +442,13 @@ export default function HRManagement() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
                                         <div style={{ 
                                             width: '48px', height: '48px', borderRadius: '14px', 
-                                            background: `linear-gradient(135deg, ${roleInfo.bgColor} 0%, #FFFFFF 100%)`, 
-                                            color: roleInfo.color, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                            fontWeight: '900', fontSize: '0.9rem', flexShrink: 0, 
-                                            border: `2px solid ${roleInfo.bgColor}`,
+                                            backgroundColor: avatar.bg, 
+                                            color: avatar.color, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                            fontWeight: '900', fontSize: '1rem', flexShrink: 0, 
+                                            border: avatar.border,
                                             boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                         }}>
-                                            {initials}
+                                            {avatar.initials}
                                         </div>
                                         <div style={{ overflow: 'hidden', flex: 1 }}>
                                             <h3 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.05rem', lineHeight: '1.2', letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
@@ -368,8 +466,16 @@ export default function HRManagement() {
                                         </div>
                                     </div>
 
-                                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '16px' }}>
+                                            {user.is_temporary && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                    <span style={{ fontSize: '0.85rem' }}>⏳</span>
+                                                    <span style={{ fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
+                                                        PERSONAL TEMPORAL
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                                             <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>📞</span>
                                             <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>
                                                 {user.phone || user.contact_phone || '---'}
@@ -386,6 +492,14 @@ export default function HRManagement() {
                                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0891B2', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                                                 {user.specialty || 'Sede FruFresco'}
                                             </span>
+                                            {user.specialty?.includes('TEMPORAL') && (
+                                                <span style={{ 
+                                                    fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', 
+                                                    padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.5rem' 
+                                                }}>
+                                                    TEMPORAL
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -436,12 +550,27 @@ export default function HRManagement() {
                                         <tr key={user.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: user.is_active === false ? 0.6 : 1 }}>
                                             <td style={{ padding: '1.2rem 1.5rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#F1F5F9', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>
-                                                        {user.contact_name?.charAt(0)}
-                                                    </div>
+                                                    {(() => {
+                                                        const av = getAvatarStyle(user.contact_name || '');
+                                                        return (
+                                                            <div style={{ 
+                                                                width: '42px', height: '42px', borderRadius: '12px', 
+                                                                backgroundColor: av.bg, 
+                                                                color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                                                fontWeight: '900', fontSize: '0.85rem', border: av.border
+                                                            }}>
+                                                                {av.initials}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                     <div>
                                                         <div style={{ fontWeight: '800', color: '#0F172A' }}>{user.contact_name}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>ID: {user.document_id || '---'}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            ID: {user.document_id || '---'}
+                                                            {user.is_temporary && (
+                                                                <span style={{ fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 4px', borderRadius: '4px' }}>TEMP</span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -449,7 +578,12 @@ export default function HRManagement() {
                                                 <span style={{ fontSize: '0.7rem', fontWeight: '900', color: roleInfo.color, backgroundColor: roleInfo.bgColor, padding: '3px 8px', borderRadius: '6px' }}>
                                                     {roleInfo.label.toUpperCase()}
                                                 </span>
-                                                <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '800', marginTop: '4px' }}>{user.specialty || 'GENERAL'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    {user.specialty || 'GENERAL'}
+                                                    {user.specialty?.includes('TEMPORAL') && (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 4px', borderRadius: '4px' }}>TEMPORAL</span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td style={{ padding: '1.2rem 1.5rem' }}>
                                                 <div style={{ fontWeight: '700', color: '#334155', fontSize: '0.85rem' }}>{user.phone || user.contact_phone || '---'}</div>
@@ -501,6 +635,15 @@ export default function HRManagement() {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Correo Electrónico</label>
+                                <input 
+                                    value={editingUser.email || ''} 
+                                    onChange={e => setEditingUser({...editingUser, email: e.target.value})}
+                                    style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Cargo en la Compañía</label>
                                 <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
                                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -509,9 +652,21 @@ export default function HRManagement() {
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Especialidad / Departamento / Sede</label>
-                                <select value={editingUser.specialty || 'Sede Operativa'} onChange={e => setEditingUser({...editingUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
-                                    {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                                <select value={editingUser.specialty || ''} onChange={e => setEditingUser({...editingUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                    <option value="">Seleccionar Ubicación...</option>
+                                    {dynamicSpecialties.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1.5px solid #F1F5F9' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="edit_is_temporary"
+                                    checked={editingUser.is_temporary || false} 
+                                    onChange={e => setEditingUser({...editingUser, is_temporary: e.target.checked})}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#0891B2' }}
+                                />
+                                <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', cursor: 'pointer' }}>Personal Temporal</label>
                             </div>
 
                             <button 
@@ -543,12 +698,14 @@ export default function HRManagement() {
                                 placeholder="Nombre completo" 
                                 value={newUser.contact_name} 
                                 onChange={e => setNewUser({...newUser, contact_name: e.target.value})}
-                                style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }}
                             />
+                            
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <input placeholder="Cédula" value={newUser.document_id || ''} onChange={e => setNewUser({...newUser, document_id: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
                                 <input placeholder="Teléfono" value={newUser.phone || ''} onChange={e => setNewUser({...newUser, phone: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
                             </div>
+
                             <input placeholder="Correo electrónico" value={newUser.email || ''} onChange={e => setNewUser({...newUser, email: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -558,8 +715,19 @@ export default function HRManagement() {
                                 </select>
                                 <select value={newUser.specialty} onChange={e => setNewUser({...newUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
                                     <option value="" disabled>Seleccionar Ubicación...</option>
-                                    {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {dynamicSpecialties.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1.5px solid #F1F5F9' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="is_temporary"
+                                    checked={newUser.is_temporary || false} 
+                                    onChange={e => setNewUser({...newUser, is_temporary: e.target.checked})}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#0891B2' }}
+                                />
+                                <label htmlFor="is_temporary" style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', cursor: 'pointer' }}>Personal Temporal</label>
                             </div>
 
                             <button 

@@ -84,9 +84,9 @@ export default function FleetManagement() {
     const fetchDrivers = useCallback(async () => {
         try {
             const { data, error } = await supabase
-                .from('profiles')
+                .from('collaborators')
                 .select('id, contact_name')
-                .or('role.eq.driver,specialty.ilike.%conductor%')
+                .eq('role', 'CONDUCTOR')
                 .order('contact_name');
             
             if (!isMounted.current) return;
@@ -104,10 +104,9 @@ export default function FleetManagement() {
 
     const fetchVehicles = useCallback(async () => {
         try {
-            // 1. Fetch main vehicle info
             const { data: vehiclesData, error } = await supabase
                 .from('fleet_vehicles')
-                .select('*, driver:profiles(contact_name), maintenance_schedules(*)')
+                .select('*, maintenance_schedules(*)')
                 .order('plate', { ascending: true });
 
             if (!isMounted.current) return;
@@ -116,8 +115,19 @@ export default function FleetManagement() {
                 throw error;
             }
 
+            // Fetch drivers (collaborators) to map in memory
+            const { data: driversData } = await supabase
+                .from('collaborators')
+                .select('id, contact_name')
+                .eq('role', 'CONDUCTOR');
+
+            const mappedVehicles = (vehiclesData || []).map(v => ({
+                ...v,
+                driver: driversData?.find(d => d.id === v.driver_id) || null
+            }));
+
             // 2. Fetch active routes for these vehicles to calculate progress and dynamic avg
-            const plates = vehiclesData?.map((v: any) => v.plate) || [];
+            const plates = mappedVehicles?.map((v: any) => v.plate) || [];
             const { data: routesData } = await supabase
                 .from('routes')
                 .select('id, vehicle_plate, status, total_orders, start_time, theoretical_distance_km, route_stops(status)')
@@ -125,7 +135,7 @@ export default function FleetManagement() {
                 .order('start_time', { ascending: false });
 
             // 3. Enrich vehicles with route data and calculate dynamic avg_daily_km
-            const enrichedVehicles = vehiclesData?.map((v: any) => {
+            const enrichedVehicles = mappedVehicles?.map((v: any) => {
                 const vRoutes = (routesData as Route[])?.filter(r => r.vehicle_plate === v.plate) || [];
                 const activeRoute = vRoutes.find(r => r.status === 'in_transit' || r.status === 'loading');
                 

@@ -46,6 +46,22 @@ const createSafeClient = () => {
 export const supabase = createSafeClient();
 
 /**
+ * Server-only client with service_role privileges
+ */
+export const createAdminClient = () => {
+    const adminKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || '').split(' ')[0];
+    if (!isUrlValid || !adminKey) {
+        throw new Error('Supabase Admin Key is missing');
+    }
+    return createClient(supabaseUrl, adminKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false
+        }
+    });
+};
+
+/**
  * Quick helper to verify connectivity to Supabase services
  */
 export async function verifyConnectivity() {
@@ -105,3 +121,4 @@ export interface Product {
     name_en?: string | null;
     description_en?: string | null;
 }
+ 

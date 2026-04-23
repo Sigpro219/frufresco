@@ -22,8 +22,10 @@ interface Vehicle {
     capacity_kg: number;
     driver_id?: string;
     driver_name?: string;
+    driver_avatar?: string;
     driver?: {
         contact_name: string;
+        avatar_url?: string;
     } | null;
     max_crates_capacity: number;
 }
@@ -33,6 +35,8 @@ export default function RoutePlanner() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
     const [optimizing, setOptimizing] = useState(false);
+    const [debugInfo, setDebugInfo] = useState({ targetDate: '', count: 0, cutoff: false, driversFound: '' });
+
     const [showSettings, setShowSettings] = useState(false);
     const [params, setParams] = useState<Record<string, number>>({
         b2b_kg_min: 10,
@@ -67,13 +71,14 @@ export default function RoutePlanner() {
             const { data: settings } = await supabase.from('app_settings').select('value').eq('key', 'enable_cutoff_rules').single();
             const cutoffEnabled = settings?.value !== 'false';
 
+
             let query = supabase.from('orders').select('*').eq('status', 'approved');
 
+            const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+            const targetDate = now.toISOString().split('T')[0];
+
             if (cutoffEnabled) {
-                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-                const targetDate = now.toISOString().split('T')[0];
                 query = query.eq('delivery_date', targetDate);
-                console.log(`🔍 Route Planner filtered for operational date: ${targetDate}`);
             }
 
             const { data: orderData, error: oErr } = await query;
@@ -81,27 +86,68 @@ export default function RoutePlanner() {
             if (!isMounted.current) return;
             if (oErr) throw oErr;
 
-            // 3. Fetch Fleet
+            // 3. Fetch Fleet with Driver Join (Matching FleetManagement logic)
             const { data: fleetData, error: fErr } = await supabase
                 .from('fleet_vehicles')
-                .select('*, driver:profiles(contact_name)')
+                .select(`
+                    *,
+                    driver:collaborators!driver_id (
+                        id,
+                        contact_name
+                    )
+                `)
                 .eq('status', 'available');
 
             if (!isMounted.current) return;
             if (fErr) throw fErr;
 
-            // Update State
-            setOrders((orderData || []).map((o: any) => ({
-                ...o,
-                total_weight_kg: o.total_weight_kg || Math.floor(Math.random() * 200) + 50,
-                is_b2b: o.is_b2b !== undefined ? o.is_b2b : Math.random() > 0.4,
-                delivery_zone: o.delivery_zone || (['Chapinero', 'Usaquén', 'Suba', 'Teusaquillo', 'Kennedy'][Math.floor(Math.random() * 5)])
-            })));
+            if (isMounted.current) {
+                setDebugInfo({ 
+                    targetDate: cutoffEnabled ? targetDate : 'TODOS', 
+                    count: (orderData || []).length,
+                    cutoff: cutoffEnabled,
+                    driversFound: 'Sincronizado con FLOTA'
+                });
+            }
 
-            setVehicles((fleetData || []).map((v: any) => ({
+            const enhancedFleet = (fleetData || []).map(v => ({
                 ...v,
-                driver_name: v.driver?.contact_name
-            })));
+                driver_name: v.driver?.contact_name || 'Sin Asignar'
+            }));
+
+            // Update State
+            setVehicles(enhancedFleet);
+            
+            setOrders((orderData || []).map((o: any) => {
+                // Extract weight from admin_notes if missing in column
+                let finalWeight = o.total_weight_kg;
+                if (!finalWeight && o.admin_notes?.includes('[TEST-KG:')) {
+                    const match = o.admin_notes.match(/\[TEST-KG: ([\d.]+)\]/);
+                    if (match) finalWeight = parseFloat(match[1]);
+                }
+
+                // Extract name from shipping_address if customer_name is missing
+                let finalName = o.customer_name;
+                if (!finalName) {
+                    if (o.profile?.company_name) {
+                        finalName = o.profile.company_name;
+                    } else if (o.shipping_address?.includes(' - ')) {
+                        finalName = o.shipping_address.split(' - ')[0];
+                    } else {
+                        finalName = 'Cliente s/n';
+                    }
+                }
+
+                return {
+                    ...o,
+                    customer_name: finalName,
+                    total_weight_kg: finalWeight || Math.floor(Math.random() * 200) + 50,
+                    is_b2b: o.is_b2b !== undefined ? o.is_b2b : (o.type?.includes('b2b') || Math.random() > 0.4),
+                    delivery_zone: o.delivery_zone || (o.admin_notes?.match(/\[ZONA: ([^\]]+)\]/)?.[1] || ['Chapinero', 'Usaquén', 'Suba', 'Teusaquillo', 'Kennedy'][Math.floor(Math.random() * 5)])
+                };
+            }));
+
+
 
         } catch (err: any) {
             console.error('Error fetching planner data:', err.message || err.details || err);
@@ -155,6 +201,11 @@ export default function RoutePlanner() {
         } finally {
             setOptimizing(false);
         }
+    };
+
+    const getInitials = (name: string) => {
+        if (!name || name === 'Sin Asignar') return '👤';
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
     const handleConfirmRoutes = async () => {
@@ -278,9 +329,15 @@ export default function RoutePlanner() {
                 <div style={{ padding: '1.5rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#374151' }}>PEDIDOS PICKING</h3>
-                        <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.3rem 0.6rem', borderRadius: '8px', fontWeight: '800' }}>
-                            {orders.length} DISPONIBLES
-                        </span>
+                        <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.3rem 0.6rem', borderRadius: '8px', fontWeight: '800', display: 'block' }}>
+                                {orders.length} DISPONIBLES
+                            </span>
+                            <div style={{ fontSize: '0.55rem', color: 'red', fontWeight: 'bold', marginTop: '4px' }}>
+                                DB: {debugInfo.count} | DATE: {debugInfo.targetDate} | DRIVERS: {debugInfo.driversFound || 'NINGUNO'}
+                            </div>
+                        </div>
+
                     </div>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '1.2rem', paddingRight: '0.5rem' }}>
@@ -541,14 +598,30 @@ export default function RoutePlanner() {
                                         <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>🚛 {vehicle.plate}</div>
                                         <div style={{
                                             fontSize: '0.75rem',
-                                            color: vehicle.driver?.contact_name ? '#0891B2' : '#94A3B8',
-                                            fontWeight: '700',
-                                            marginTop: '0.4rem',
+                                            color: vehicle.driver_name !== 'Sin Asignar' ? '#0891B2' : '#94A3B8',
+                                            fontWeight: '800',
+                                            marginTop: '0.6rem',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '0.3rem'
+                                            gap: '0.6rem'
                                         }}>
-                                            👤 {vehicle.driver?.contact_name || 'Sin conductor asignado'}
+                                            <div style={{ 
+                                                width: '28px', 
+                                                height: '28px', 
+                                                borderRadius: '8px', 
+                                                background: vehicle.driver_name !== 'Sin Asignar' 
+                                                    ? 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)' 
+                                                    : '#F1F5F9', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center', 
+                                                color: vehicle.driver_name !== 'Sin Asignar' ? 'white' : '#94A3B8', 
+                                                fontWeight: '900', 
+                                                fontSize: '0.65rem' 
+                                            }}>
+                                                {getInitials(vehicle.driver_name || '')}
+                                            </div>
+                                            Conductor: {vehicle.driver_name}
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

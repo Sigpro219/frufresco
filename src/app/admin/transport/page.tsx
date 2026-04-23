@@ -31,6 +31,9 @@ interface ActiveRoute {
             customer_name: string;
         };
     }[];
+    driver?: {
+        contact_name: string;
+    };
 }
 
 const MAP_ID = 'bf725916f72f2fd';
@@ -49,6 +52,11 @@ export default function TransportControlTower() {
     const [appName, setAppName] = useState('Logistics Pro');
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
+    const getInitials = (name: string) => {
+        if (!name) return '👤';
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    };
 
     const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
         try {
@@ -83,10 +91,19 @@ export default function TransportControlTower() {
 
             if (!isMounted.current) return;
 
-            const formatted: ActiveRoute[] = routes?.map(r => ({
-                ...r,
-                route_stops: allStops.filter(s => s.route_id === r.id)
-            })) || [];
+            // Fetch collaborators separately to avoid relationship errors
+            const { data: driversData } = await supabase
+                .from('collaborators')
+                .select('id, contact_name');
+
+            const formatted: ActiveRoute[] = routes?.map(r => {
+                const driver = driversData?.find(d => d.id === r.driver_id);
+                return {
+                    ...r,
+                    route_stops: allStops.filter(s => s.route_id === r.id),
+                    driver: driver ? { contact_name: driver.contact_name } : undefined
+                };
+            }) || [];
 
             setActiveRoutes(formatted);
 
@@ -117,6 +134,11 @@ export default function TransportControlTower() {
                 });
             }
 
+            // Fetch ALL fleet vehicles to show on map even without routes
+            const { data: fleetData } = await supabase
+                .from('fleet_vehicles')
+                .select('*');
+
             const { data: nameData } = await supabase
                 .from('app_settings')
                 .select('value')
@@ -125,6 +147,15 @@ export default function TransportControlTower() {
             
             if (nameData?.value && isMounted.current) {
                 setAppName(nameData.value);
+            }
+
+            // Final state update with all data
+            if (isMounted.current) {
+                const enhancedRoutes = formatted.map(r => r); // already formatted
+                // Store fleet in a way we can use it on map
+                (window as any).__fleetData = fleetData || [];
+                (window as any).__driversData = driversData || [];
+                setActiveRoutes(enhancedRoutes);
             }
         } catch (err: any) {
             if (isAbortError(err)) return;
@@ -285,14 +316,48 @@ export default function TransportControlTower() {
                                                 </div>
                                             </AdvancedMarker>
 
-                                            {activeRoutes.filter(r => r.status === 'in_transit').map((r, i) => {
-                                                const currentStop = r.route_stops.find(s => s.status === 'pending') || r.route_stops[r.route_stops.length - 1];
-                                                const pos = currentStop?.order?.latitude ? { lat: currentStop.order.latitude, lng: currentStop.order.longitude } : { lat: 4.6097 + (i * 0.01), lng: -74.0817 };
+                                            {/* Show ALL fleet vehicles for testing/monitoring */}
+                                            {((window as any).__fleetData || []).map((v: any, i: number) => {
+                                                const driver = ((window as any).__driversData || []).find((d: any) => d.id === v.driver_id);
+                                                const initials = getInitials(driver?.contact_name || '');
+                                                
+                                                // If no position, spread them around the warehouse for visibility
+                                                const pos = v.last_latitude && v.last_longitude 
+                                                    ? { lat: v.last_latitude, lng: v.last_longitude }
+                                                    : { lat: 4.6300 + (Math.sin(i) * 0.01), lng: -74.1530 + (Math.cos(i) * 0.01) };
+
                                                 return (
-                                                    <AdvancedMarker key={r.id} position={pos}>
+                                                    <AdvancedMarker key={v.id} position={pos}>
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                            <div style={{ backgroundColor: 'white', color: '#0EA5E9', padding: '4px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', marginBottom: '4px', border: '1px solid #E2E8F0' }}>{r.vehicle_plate}</div>
-                                                            <Pin background={'#0EA5E9'} glyphColor={'white'} scale={1.1} />
+                                                            <div style={{ 
+                                                                width: '32px', 
+                                                                height: '32px', 
+                                                                borderRadius: '8px', 
+                                                                background: v.status === 'available' ? 'linear-gradient(135deg, #10B981 0%, #34D399 100%)' : 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)', 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                justifyContent: 'center', 
+                                                                color: 'white', 
+                                                                fontWeight: '900', 
+                                                                fontSize: '0.75rem',
+                                                                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                                                                border: '2px solid white'
+                                                            }}>
+                                                                {initials}
+                                                            </div>
+                                                            <div style={{ 
+                                                                backgroundColor: 'white', 
+                                                                color: '#1E293B', 
+                                                                padding: '1px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontSize: '0.5rem', 
+                                                                fontWeight: '900', 
+                                                                marginTop: '2px',
+                                                                border: '1px solid #E2E8F0',
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                {v.plate}
+                                                            </div>
                                                         </div>
                                                     </AdvancedMarker>
                                                 );

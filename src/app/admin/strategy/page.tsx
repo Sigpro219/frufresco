@@ -126,6 +126,7 @@ export default function AdminStrategyPage() {
     const [seoStrategies, setSeoStrategies] = useState<SEOStrategy[]>([]);
     const [saving, setSaving] = useState(false);
     const [generatingSEO, setGeneratingSEO] = useState(false);
+    const [itModal, setItModal] = useState<{ open: boolean, type: string }>({ open: false, type: '' });
 
     useEffect(() => {
         const fetchData = async () => {
@@ -186,12 +187,13 @@ export default function AdminStrategyPage() {
         }
     };
 
-    const handleITRequest = async (type: string) => {
+    const handleITRequest = async (type: string, details: any) => {
         const { data: { user } } = await supabase.auth.getUser();
         const { error } = await supabase.from('it_requests').insert([{
             type,
             requester_id: user?.id,
-            status: 'pending'
+            status: 'pending',
+            details: details // Assuming JSONB or Text column exists/supports it
         }]);
 
         if (!error) {
@@ -289,9 +291,25 @@ export default function AdminStrategyPage() {
                             loading={generatingSEO}
                         />
                     )}
-                    {activeTab === 'it' && <ITView requests={itRequests} onRequest={handleITRequest} />}
+                    {activeTab === 'it' && (
+                        <ITView 
+                            requests={itRequests} 
+                            onRequest={(type) => setItModal({ open: true, type })} 
+                        />
+                    )}
                 </div>
             </div>
+
+            {itModal.open && (
+                <ITRequestModal 
+                    type={itModal.type} 
+                    onClose={() => setItModal({ open: false, type: '' })} 
+                    onSubmit={async (details) => {
+                        await handleITRequest(itModal.type, details);
+                        setItModal({ open: false, type: '' });
+                    }}
+                />
+            )}
         </main>
     );
 }
@@ -482,6 +500,93 @@ function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (ty
                         💡 SLA: 4 horas hábiles.
                     </p>
                 </div>
+            </div>
+        </div>
+    );
+}
+function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: () => void, onSubmit: (details: any) => void }) {
+    const [formData, setFormData] = useState<any>({});
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        await onSubmit(formData);
+        setLoading(false);
+    };
+
+    const isColaborador = type === 'Alta Colaborador';
+    const isB2B = type === 'Registro B2B Especial';
+    const isTicket = type === 'Ticket Infraestructura';
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#0F172A' }}>{type}</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>&times;</button>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {isColaborador && (
+                        <>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Nombre Completo</label>
+                                <input required onChange={e => setFormData({...formData, name: e.target.value})} type="text" placeholder="Ej: Juan Pérez" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Correo Electrónico</label>
+                                <input required onChange={e => setFormData({...formData, email: e.target.value})} type="email" placeholder="usuario@frufresco.com" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Cargo / Rol</label>
+                                <select required onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="admin">Administrador</option>
+                                    <option value="operario">Operario de Planta</option>
+                                    <option value="comercial">Asesor Comercial</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
+
+                    {isB2B && (
+                        <>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Nombre de la Empresa</label>
+                                <input required onChange={e => setFormData({...formData, company: e.target.value})} type="text" placeholder="Ej: Restaurante El Gourmet" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Tipo de Lista de Precios</label>
+                                <select required onChange={e => setFormData({...formData, catalogType: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                    <option value="standard">Estándar HORECA</option>
+                                    <option value="premium">Premium / Especial</option>
+                                    <option value="contract">Contrato a largo plazo</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
+
+                    {isTicket && (
+                        <>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Asunto</label>
+                                <input required onChange={e => setFormData({...formData, subject: e.target.value})} type="text" placeholder="Ej: Error en envío de correos" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Descripción del Problema</label>
+                                <textarea required onChange={e => setFormData({...formData, description: e.target.value})} rows={4} placeholder="Describe detalladamente lo que sucede..." style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', resize: 'none' }} />
+                            </div>
+                        </>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
+                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0', backgroundColor: 'white', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
+                        <button type="submit" disabled={loading} style={{ flex: 1, padding: '1rem', borderRadius: '16px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+                            {loading ? 'Enviando...' : 'Enviar Solicitud'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );

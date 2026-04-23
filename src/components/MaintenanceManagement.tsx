@@ -100,9 +100,9 @@ export default function MaintenanceManagement() {
 
             // Also fetch drivers
             const { data: dData } = await supabase
-                .from('profiles')
+                .from('collaborators')
                 .select('id, contact_name')
-                .or('role.eq.driver,specialty.ilike.%conductor%')
+                .eq('role', 'CONDUCTOR')
                 .order('contact_name');
             setDrivers(dData || []);
 
@@ -136,14 +136,26 @@ export default function MaintenanceManagement() {
     const fetchHistory = useCallback(async () => {
         try {
             setLoadingHistory(true);
-            const { data, error } = await supabase
+            const { data: logs, error } = await supabase
                 .from('maintenance_history_logs')
-                .select('*, vehicle:fleet_vehicles(plate), driver:profiles(contact_name)')
+                .select('*, vehicle:fleet_vehicles(plate)')
                 .order('performed_date', { ascending: false })
                 .limit(50);
             
             if (error) throw error;
-            setHistory(data || []);
+
+            // Fetch drivers to map in memory
+            const { data: driversData } = await supabase
+                .from('collaborators')
+                .select('id, contact_name')
+                .eq('role', 'CONDUCTOR');
+
+            const enhancedHistory = (logs || []).map(log => ({
+                ...log,
+                driver: driversData?.find(d => d.id === log.performed_by_driver_id) || null
+            }));
+
+            setHistory(enhancedHistory || []);
         } catch (err: unknown) {
             const error = err as { message?: string };
             console.error('Error fetching history:', error.message || err);
