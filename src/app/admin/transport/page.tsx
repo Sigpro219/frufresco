@@ -58,6 +58,9 @@ export default function TransportControlTower() {
         return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
+    const [fleetData, setFleetData] = useState<any[]>([]);
+    const [driversData, setDriversData] = useState<any[]>([]);
+
     const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
         try {
             setLoading(true);
@@ -92,12 +95,12 @@ export default function TransportControlTower() {
             if (!isMounted.current) return;
 
             // Fetch collaborators separately to avoid relationship errors
-            const { data: driversData } = await supabase
+            const { data: dData } = await supabase
                 .from('collaborators')
                 .select('id, contact_name');
 
             const formatted: ActiveRoute[] = routes?.map(r => {
-                const driver = driversData?.find(d => d.id === r.driver_id);
+                const driver = dData?.find(d => d.id === r.driver_id);
                 return {
                     ...r,
                     route_stops: allStops.filter(s => s.route_id === r.id),
@@ -135,7 +138,7 @@ export default function TransportControlTower() {
             }
 
             // Fetch ALL fleet vehicles to show on map even without routes
-            const { data: fleetData } = await supabase
+            const { data: fData } = await supabase
                 .from('fleet_vehicles')
                 .select('*');
 
@@ -151,11 +154,9 @@ export default function TransportControlTower() {
 
             // Final state update with all data
             if (isMounted.current) {
-                const enhancedRoutes = formatted.map(r => r); // already formatted
-                // Store fleet in a way we can use it on map
-                (window as any).__fleetData = fleetData || [];
-                (window as any).__driversData = driversData || [];
-                setActiveRoutes(enhancedRoutes);
+                setFleetData(fData || []);
+                setDriversData(dData || []);
+                setActiveRoutes(formatted);
             }
         } catch (err: any) {
             if (isAbortError(err)) return;
@@ -317,8 +318,8 @@ export default function TransportControlTower() {
                                             </AdvancedMarker>
 
                                             {/* Show ALL fleet vehicles for testing/monitoring */}
-                                            {((window as any).__fleetData || []).map((v: any, i: number) => {
-                                                const driver = ((window as any).__driversData || []).find((d: any) => d.id === v.driver_id);
+                                            {fleetData.map((v: any, i: number) => {
+                                                const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
                                                 
                                                 // If no position, spread them around the warehouse for visibility
