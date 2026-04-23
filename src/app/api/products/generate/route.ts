@@ -14,7 +14,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Google AI API Key no configurada' }, { status: 500 });
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+
 
         const prompt = `
 Eres un experto en marketing gastronómico y nutrición para FruFresco, una tienda premium de frutas y verduras.

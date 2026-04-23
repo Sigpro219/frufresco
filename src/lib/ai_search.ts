@@ -13,7 +13,7 @@ export async function expandSearchQuery(query: string): Promise<{ terms: string[
     if (searchCache.has(trimmedQuery)) return searchCache.get(trimmedQuery)!;
 
     try {
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
         
         const prompt = `
 Analiza esta búsqueda de tienda: "${query}"
@@ -28,7 +28,7 @@ Ejemplo: paella -> arroz, pimenton, mariscos, cebolla, paella|DE
 `;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
 
         const response = await fetch(url, {
             method: 'POST',

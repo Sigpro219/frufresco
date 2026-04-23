@@ -1,7 +1,7 @@
 import { supabase, type Product } from '../lib/supabase';
 import ProductCard from './ProductCard';
 import { expandSearchQuery } from '@/lib/ai_search';
-import { CATEGORY_MAP, REVERSE_CATEGORY_MAP } from '../lib/constants';
+import { CATEGORY_MAP } from '../lib/constants';
 import { translations, Locale } from '../lib/translations';
 import Link from 'next/link';
 import FeaturedProductsCarousel from './FeaturedProductsCarousel';
@@ -10,20 +10,62 @@ interface Props {
     q?: string;
     category?: string;
     locale: Locale;
-    allVisible: Product[];
-    finalFeatured: Product[];
 }
 
-export default async function ProductGridContainer({ q, category, locale, allVisible, finalFeatured }: Props) {
+export default async function ProductGridContainer({ q, category, locale }: Props) {
     const t = translations[locale];
-    
-    // 1. Optimized Catalog Products Logic (Hybrid Search)
+
+    // 1. Data Fetching for the Grid
+    const [
+        allVisibleResponse,
+        sessionResponse,
+        translationCacheResponse
+    ] = await Promise.all([
+        supabase
+            .from('products')
+            .select('*')
+            .eq('is_active', true)
+            .eq('show_on_web', true)
+            .order('image_url', { ascending: false, nullsFirst: false })
+            .limit(300),
+        supabase.auth.getSession(),
+        locale === 'en'
+            ? supabase.from('product_translations_cache').select('source_text, translated_text').eq('lang', 'en')
+            : Promise.resolve({ data: [] })
+    ]);
+
+    const allVisible = allVisibleResponse.data || [];
+    const session = sessionResponse.data?.session;
+    const userId = session?.user?.id;
+
+    // Fetch nicknames if user is logged in
+    const { data: nicknamesData } = userId 
+        ? await supabase.from('product_nicknames').select('product_id, custom_name').eq('profile_id', userId)
+        : { data: [] };
+
+    const nicknameMap = (nicknamesData || []).reduce((acc, item) => ({
+        ...acc,
+        [item.product_id]: item.custom_name
+    }), {} as Record<string, string>);
+
+    const translationCache = (translationCacheResponse.data || []).reduce((acc, item) => ({
+        ...acc,
+        [item.source_text]: item.translated_text
+    }), {} as Record<string, string>);
+
+    const applyNicknames = (plist: Product[]) => plist.map(p => ({
+        ...p,
+        display_name: nicknameMap[p.id] || translationCache[p.name] || p.display_name || p.name
+    }));
+
+    const productsWithNicknames = applyNicknames(allVisible);
+
+    // 2. Search & Filter Logic
     let rawProducts: Product[] = [];
     let fallbackCategoryName = '';
     
-    // A. Fast In-Memory Filter (Instant)
     const normalizedQ = q ? q.toLowerCase().trim() : '';
-    const memoryFiltered = allVisible.filter(p => {
+    const memoryFiltered = productsWithNicknames.filter(p => {
         const matchesCategory = !category || category === 'Todos' || p.category === category;
         if (!matchesCategory) return false;
         if (!normalizedQ) return true;
@@ -32,12 +74,10 @@ export default async function ProductGridContainer({ q, category, locale, allVis
             p.name.toLowerCase().includes(normalizedQ) ||
             (p.display_name && p.display_name.toLowerCase().includes(normalizedQ)) ||
             (p.description && p.description.toLowerCase().includes(normalizedQ)) ||
-            (p.keywords && p.keywords.toLowerCase().includes(normalizedQ)) ||
-            (p.sku && p.sku.toLowerCase().includes(normalizedQ))
+            (p.keywords && p.keywords.toLowerCase().includes(normalizedQ))
         );
     });
 
-    // B. Extreme Parallel Search
     if (q && q.length > 2) {
         const aiResult = await Promise.race([
             expandSearchQuery(q),
@@ -53,9 +93,7 @@ export default async function ProductGridContainer({ q, category, locale, allVis
             `display_name.ilike.%${q}%`
         ];
         searchTerms.forEach(term => {
-            if (term !== q) {
-                orConditions.push(`name.ilike.%${term}%`, `description.ilike.%${term}%`);
-            }
+            if (term !== q) orConditions.push(`name.ilike.%${term}%`);
         });
 
         const { data: dbProducts } = await supabase
@@ -66,7 +104,7 @@ export default async function ProductGridContainer({ q, category, locale, allVis
             .or(orConditions.join(','))
             .limit(100);
 
-        const foundProducts = dbProducts || [];
+        const foundProducts = applyNicknames(dbProducts || []);
 
         if (foundProducts.length === 0 && suggestedCatCode) {
             const { data: catProducts } = await supabase
@@ -78,7 +116,7 @@ export default async function ProductGridContainer({ q, category, locale, allVis
                 .limit(40);
             
             if (catProducts && catProducts.length > 0) {
-                rawProducts = catProducts;
+                rawProducts = applyNicknames(catProducts);
                 fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
             }
         } else {
@@ -96,76 +134,48 @@ export default async function ProductGridContainer({ q, category, locale, allVis
         rawProducts = memoryFiltered;
     }
 
-    const products = rawProducts; // Note: simplified for this component
-
     return (
-        <>
-            {products && products.length > 0 ? (
-                <div style={{ position: 'relative' }}>
-                    {fallbackCategoryName && (
-                        <div style={{ 
-                            backgroundColor: 'var(--accent)', 
-                            color: 'var(--primary-dark)', 
-                            padding: '1.2rem', 
-                            borderRadius: '16px', 
-                            marginBottom: '2.5rem',
-                            textAlign: 'center',
-                            fontWeight: '800',
-                            border: '2px solid var(--primary)',
-                            boxShadow: '0 10px 25px rgba(26, 77, 46, 0.08)',
-                            fontSize: '1.1rem'
-                        }}>
-                            ✨ No encontramos resultados exactos para "{q}", pero aquí tienes nuestra sección de <strong>{fallbackCategoryName}</strong>
-                        </div>
-                    )}
-                    <div 
-                        id="catalog-scroll-area"
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                            gap: '2rem',
-                            maxHeight: '1000px', 
-                            overflowY: 'auto',
-                            overflowX: 'hidden',
-                            padding: '1.5rem',
-                            borderRadius: 'var(--radius-lg)',
-                            scrollbarWidth: 'thin',
-                            scrollbarColor: 'var(--primary) transparent',
-                            scrollBehavior: 'smooth',
-                            border: '1px solid rgba(0,0,0,0.03)',
-                            backgroundColor: '#ffffff',
-                            width: '100%'
-                        }}
-                        className="custom-scrollbar"
-                    >
-                        {products.map((product: Product) => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
-                    </div>
+        <div style={{ position: 'relative' }}>
+            {fallbackCategoryName && (
+                <div style={{ 
+                    backgroundColor: 'var(--accent)', 
+                    color: 'var(--primary-dark)', 
+                    padding: '1.2rem', 
+                    borderRadius: '16px', 
+                    marginBottom: '2.5rem',
+                    textAlign: 'center',
+                    fontWeight: '800',
+                    border: '2px solid var(--primary)',
+                    boxShadow: '0 10px 25px rgba(26, 77, 46, 0.08)'
+                }}>
+                    ✨ No encontramos resultados exactos para "{q}", pero aquí tienes nuestra sección de <strong>{fallbackCategoryName}</strong>
+                </div>
+            )}
+            
+            {rawProducts.length > 0 ? (
+                <div 
+                    id="catalog-scroll-area"
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                        gap: '2rem',
+                        padding: '1.5rem',
+                        borderRadius: 'var(--radius-lg)',
+                        backgroundColor: '#ffffff'
+                    }}
+                    className="custom-scrollbar"
+                >
+                    {rawProducts.map((product: Product) => (
+                        <ProductCard key={product.id} product={product} />
+                    ))}
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-                    <div style={{ marginBottom: '3rem' }}>
-                        <p style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                            {t.noProducts || 'No encontramos productos con ese nombre.'}
-                        </p>
-                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                            <Link href={`/?${new URLSearchParams({ lang: locale === 'en' ? 'en' : 'es' }).toString()}#catalog`} scroll={false}>
-                                <button className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', borderRadius: 'var(--radius-full)', fontWeight: '700' }}>
-                                    Ver todo el catálogo
-                                </button>
-                            </Link>
-                        </div>
-                    </div>
-                    
-                    <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '4rem' }}>
-                        <h3 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '1.8rem', fontWeight: '800', marginBottom: '2rem', color: 'var(--primary-dark)' }}>
-                            Explora nuestros productos destacados
-                        </h3>
-                        <FeaturedProductsCarousel products={finalFeatured || []} />
-                    </div>
+                    <p style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
+                        {t.noProducts || 'No encontramos productos con ese nombre.'}
+                    </p>
                 </div>
             )}
-        </>
+        </div>
     );
 }

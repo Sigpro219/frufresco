@@ -51,7 +51,7 @@ export const supabase = createSafeClient();
 export const createAdminClient = () => {
     const adminKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || '').split(' ')[0];
     if (!isUrlValid || !adminKey) {
-        throw new Error('Supabase Admin Key is missing');
+        throw new Error('Supabase Admin Key (SUPABASE_SERVICE_ROLE_KEY) is missing in Environment Variables');
     }
     return createClient(supabaseUrl, adminKey, {
         auth: {
@@ -67,6 +67,7 @@ export const createAdminClient = () => {
 export async function verifyConnectivity() {
     try {
         const start = Date.now();
+        
         const { data, error } = await supabase.from('app_settings').select('key').limit(1);
         const latency = Date.now() - start;
         

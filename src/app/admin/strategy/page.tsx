@@ -8,7 +8,8 @@ import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
 
-type Tab = 'geofencing' | 'seo' | 'it';
+type Tab = 'geofencing' | 'seo' | 'it' | 'hierarchy';
+
 
 interface Point {
     lat: number;
@@ -38,85 +39,6 @@ interface SEOStrategy {
     last_generated_at: string;
 }
 
-// Custom Polygon component for vis.gl with interactive support
-function Polygon({ onPathChange, map, paths, ...options }: google.maps.PolygonOptions & { paths: Point[], onPathChange?: (newPath: Point[]) => void }) {
-    const maps = useMapsLibrary('maps');
-    const polygon = useMemo(() => {
-        if (!maps) return null;
-        return new maps.Polygon();
-    }, [maps]);
-
-    // Track path to avoid unnecessary resets
-    const lastPathRef = useRef<string>('');
-    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    useEffect(() => {
-        if (!polygon) return;
-        
-        const path = polygon.getPath();
-        const currentPathLength = path ? path.getLength() : 0;
-        const incomingPathLength = paths.length;
-
-        // Force update if length changed (new point added/removed) 
-        // OR if not in editable mode (initial sync)
-        if (incomingPathLength !== currentPathLength || !options.editable) {
-            const pathJson = JSON.stringify(paths);
-            if (pathJson !== lastPathRef.current) {
-                polygon.setOptions({ ...options, paths });
-                lastPathRef.current = pathJson;
-            } else {
-                polygon.setOptions(options);
-            }
-        } else {
-            // DRAGGING/EDITING: Update style but NOT paths to prevent snap-back
-            polygon.setOptions(options);
-        }
-    }, [polygon, options, paths]);
-
-    useEffect(() => {
-        if (!polygon || !onPathChange) return;
-
-        const path = polygon.getPath();
-        if (!path) return;
-
-        const syncPath = () => {
-            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-            
-            syncTimeoutRef.current = setTimeout(() => {
-                const newPath = path.getArray().map(p => ({ lat: p.lat(), lng: p.lng() }));
-                const pathJson = JSON.stringify(newPath);
-                if (pathJson !== lastPathRef.current) {
-                    lastPathRef.current = pathJson;
-                    onPathChange(newPath);
-                }
-            }, 100); // Faster debounce for better feel
-        };
-
-        const listeners = [
-            path.addListener('set_at', syncPath),
-            path.addListener('insert_at', syncPath),
-            path.addListener('remove_at', syncPath),
-            polygon.addListener('rightclick', (e: google.maps.PolyMouseEvent) => {
-                if (e.vertex !== undefined) {
-                    path.removeAt(e.vertex);
-                }
-            })
-        ];
-
-        return () => {
-            listeners.forEach(l => google.maps.event.removeListener(l));
-            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        };
-    }, [polygon, onPathChange]); // Constant size dependency array
-
-    useEffect(() => {
-        if (!polygon) return;
-        polygon.setMap(map as google.maps.Map);
-        return () => polygon.setMap(null);
-    }, [polygon, map]);
-
-    return null;
-}
 
 export default function AdminStrategyPage() {
     const [activeTab, setActiveTab] = useState<Tab>('geofencing');
@@ -124,32 +46,39 @@ export default function AdminStrategyPage() {
     const [settings, setSettings] = useState<AppSetting[]>([]);
     const [itRequests, setItRequests] = useState<ITRequest[]>([]);
     const [seoStrategies, setSeoStrategies] = useState<SEOStrategy[]>([]);
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [generatingSEO, setGeneratingSEO] = useState(false);
     const [itModal, setItModal] = useState<{ open: boolean, type: string }>({ open: false, type: '' });
 
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [settingsRes, itRes, seoRes, productsRes] = await Promise.all([
+                supabase.from('app_settings').select('*'),
+                supabase.from('it_requests').select('*').order('created_at', { ascending: false }).limit(5),
+                supabase.from('seo_strategies').select('*'),
+                supabase.from('products').select('id, name, sku, parent_id, web_conversion_factor, web_unit')
+            ]);
+            
+            if (settingsRes.data) setSettings(settingsRes.data as AppSetting[]);
+            if (itRes.data) setItRequests(itRes.data as ITRequest[]);
+            if (seoRes.data) setSeoStrategies(seoRes.data as SEOStrategy[]);
+            if (productsRes.data) setProducts(productsRes.data);
+        } catch (err) {
+            console.error('Error fetching data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            const { data: settingsData } = await supabase.from('app_settings').select('*');
-            if (settingsData) setSettings(settingsData as AppSetting[]);
-
-            const { data: itData } = await supabase
-                .from('it_requests')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(5);
-            if (itData) setItRequests(itData as ITRequest[]);
-
-            const { data: seoData } = await supabase.from('seo_strategies').select('*');
-            if (seoData) setSeoStrategies(seoData as SEOStrategy[]);
-        };
         fetchData();
     }, []);
 
     const handleSaveGeofence = async (key: string, poly: string) => {
         setSaving(true);
-        console.info(`💾 Intentando guardar geocerca [${key}]...`);
-        
         try {
             const { error } = await supabase
                 .from('app_settings')
@@ -159,28 +88,10 @@ export default function AdminStrategyPage() {
                 );
             
             if (!error) {
-                console.info(`✅ Geocerca [${key}] guardada correctamente.`);
                 (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Geocerca guardada con éxito ✓', 'success');
-                
-                // Pequeño delay artificial para que el usuario sienta la persistencia y la DB procese
-                await new Promise(resolve => setTimeout(resolve, 800));
-
-                setSettings(prev => {
-                    const exists = prev.find(s => s.key === key);
-                    if (exists) {
-                        return prev.map(s => s.key === key ? { ...s, value: poly } : s);
-                    }
-                    return [...prev, { key, value: poly, description: 'Configuración de Geocerca' }];
-                });
+                await fetchData();
                 return true;
-            } else {
-                console.error(`❌ Error de Supabase al guardar [${key}]:`, error);
-                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al guardar geocerca', 'error');
-                return false;
             }
-        } catch (err) {
-            console.error(`❌ Excepción al guardar [${key}]:`, err);
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error crítico al guardar', 'error');
             return false;
         } finally {
             setSaving(false);
@@ -193,21 +104,18 @@ export default function AdminStrategyPage() {
             type,
             requester_id: user?.id,
             status: 'pending',
-            details: details // Assuming JSONB or Text column exists/supports it
+            details: details
         }]);
 
         if (!error) {
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Solicitud de ${type} enviada al CCM ✓`, 'success');
-            // Refresh requests
-            const { data } = await supabase.from('it_requests').select('*').order('created_at', { ascending: false }).limit(5);
-            if (data) setItRequests(data as ITRequest[]);
+            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Solicitud enviada ✓`, 'success');
+            await fetchData();
         }
     };
 
     const handleGenerateSEO = async (zone_key: string) => {
         const polyStr = settings.find(s => s.key === zone_key)?.value;
         if (!polyStr) return;
-
         setGeneratingSEO(true);
         try {
             const res = await fetch('/api/seo/generate', {
@@ -216,21 +124,10 @@ export default function AdminStrategyPage() {
                 body: JSON.stringify({ zone_key, poly: JSON.parse(polyStr) })
             });
             const data = await res.json();
-
             if (data.success) {
-                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Estrategia SEO para ${data.municipality} generada con IA ✓`, 'success');
-                // Refresh local state
-                setSeoStrategies(prev => {
-                    const exists = prev.find(s => s.zone_key === zone_key);
-                    if (exists) return prev.map(s => s.zone_key === zone_key ? data.strategy : s);
-                    return [...prev, data.strategy];
-                });
-            } else {
-                throw new Error(data.error);
+                (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.(`Estrategia SEO generada ✓`, 'success');
+                await fetchData();
             }
-        } catch (err: any) {
-            console.error('SEO Error:', err);
-            (window as Window & { showToast?: (m: string, s: 'success'|'error') => void }).showToast?.('Error al generar SEO con IA', 'error');
         } finally {
             setGeneratingSEO(false);
         }
@@ -242,15 +139,13 @@ export default function AdminStrategyPage() {
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
             <Navbar />
             <Toast />
-            
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Inteligencia & Estrategia</h1>
-                        <p style={{ color: '#64748B', marginTop: '0.5rem', fontSize: '1.1rem' }}>Gestión Maestra de Cobertura, Visibilidad y Seguridad.</p>
                     </div>
                     <div style={{ backgroundColor: '#F1F5F9', padding: '0.5rem', borderRadius: '12px', display: 'flex', gap: '4px' }}>
-                        {(['geofencing', 'seo', 'it'] as Tab[]).map(t => (
+                        {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => (
                             <button 
                                 key={t}
                                 onClick={() => setActiveTab(t)}
@@ -262,174 +157,141 @@ export default function AdminStrategyPage() {
                                     boxShadow: activeTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                                     color: activeTab === t ? '#0F172A' : '#64748B',
                                     fontWeight: '700',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
+                                    cursor: 'pointer'
                                 }}
                             >
-                                {t === 'geofencing' ? '📍 Geocercas' : t === 'seo' ? '🚀 SEO Local' : '🛡️ Gestión IT'}
+                                {t === 'geofencing' ? '📍 Geocercas' : t === 'seo' ? '🚀 SEO' : t === 'it' ? '🛡️ IT' : '🧬 Jerarquía'}
                             </button>
                         ))}
                     </div>
                 </header>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem', minHeight: '600px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem', minHeight: '600px' }}>
                     {activeTab === 'geofencing' && (
                         <APIProvider apiKey={MAPS_KEY}>
-                            <GeofencingManager 
-                                settings={settings} 
-                                onSave={handleSaveGeofence} 
-                                saving={saving} 
-                                canEdit={profile?.role === 'sys_admin'}
-                            />
+                            <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
                         </APIProvider>
                     )}
-                    {activeTab === 'seo' && (
-                        <SEOView 
-                            settings={settings} 
-                            strategies={seoStrategies} 
-                            onGenerate={handleGenerateSEO}
-                            loading={generatingSEO}
-                        />
-                    )}
-                    {activeTab === 'it' && (
-                        <ITView 
-                            requests={itRequests} 
-                            onRequest={(type) => setItModal({ open: true, type })} 
-                        />
-                    )}
+                    {activeTab === 'seo' && <SEOView strategies={seoStrategies} onGenerate={handleGenerateSEO} loading={generatingSEO} settings={settings} />}
+                    {activeTab === 'it' && <ITView requests={itRequests} onRequest={(type) => setItModal({ open: true, type })} />}
+                    {activeTab === 'hierarchy' && <HierarchyView products={products} onFix={fetchData} />}
                 </div>
             </div>
-
-            {itModal.open && (
-                <ITRequestModal 
-                    type={itModal.type} 
-                    onClose={() => setItModal({ open: false, type: '' })} 
-                    onSubmit={async (details) => {
-                        await handleITRequest(itModal.type, details);
-                        setItModal({ open: false, type: '' });
-                    }}
-                />
-            )}
+            {itModal.open && <ITRequestModal type={itModal.type} onClose={() => setItModal({ open: false, type: '' })} onSubmit={async (d) => { await handleITRequest(itModal.type, d); setItModal({ open: false, type: '' }); }} />}
         </main>
     );
 }
 
-
-function SEOView({ settings, strategies, onGenerate, loading }: { 
-    settings: AppSetting[], 
-    strategies: SEOStrategy[],
-    onGenerate: (key: string) => void,
-    loading: boolean
-}) {
-    const b2cPolyStr = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
-    const b2bPolyStr = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
-    
-    const b2cCount = b2cPolyStr ? (JSON.parse(b2cPolyStr) as Point[]).length : 0;
-    const b2bCount = b2bPolyStr ? (JSON.parse(b2bPolyStr) as Point[]).length : 0;
-
-    const b2cStrategy = strategies.find(s => s.zone_key === 'geofence_b2c_poly');
-    const b2bStrategy = strategies.find(s => s.zone_key === 'geofence_b2b_poly');
-
-    // Health Score: Real based on existence of active strategies
-    const seoHealth = useMemo(() => {
-        let score = 0;
-        if (b2cStrategy) score += 47;
-        if (b2bStrategy) score += 48;
-        return score;
-    }, [b2cStrategy, b2bStrategy]);
-
-    const activeKeywords = useMemo(() => {
-        return (b2cStrategy?.keywords?.length || 0) + (b2bStrategy?.keywords?.length || 0);
-    }, [b2cStrategy, b2bStrategy]);
-
-    const currentZoneNames = [b2cStrategy?.municipality_name, b2bStrategy?.municipality_name]
-        .filter(Boolean)
-        .join(' & ') || 'Sin Identificar';
+function HierarchyView({ products, onFix }: { products: any[], onFix: () => void }) {
+    const hijos = products.filter(p => p.parent_id);
+    const criticalIssues = hijos.filter(p => p.web_conversion_factor === 1);
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Panel de Auditoría SEO Dinámica</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.4rem 1rem', borderRadius: '100px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#16A34A' }}></span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#166534' }}>SISTEMA ACTIVO</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: 'white', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05rem' }}>TOTAL HIJOS</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2.5rem', fontWeight: '900', color: '#0F172A' }}>{hijos.length}</p>
+                </div>
+                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: criticalIssues.length > 0 ? '#FEF2F2' : 'white', border: criticalIssues.length > 0 ? '#FECACA 1px solid' : '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '900', color: criticalIssues.length > 0 ? '#DC2626' : '#64748B', letterSpacing: '0.05rem' }}>FACTORES CRÍTICOS (1.0)</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2.5rem', fontWeight: '900', color: criticalIssues.length > 0 ? '#DC2626' : '#0F172A' }}>{criticalIssues.length}</p>
+                </div>
+                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: 'white', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button 
+                        onClick={() => window.open('/admin/master/products', '_blank')}
+                        style={{ padding: '1rem 2rem', borderRadius: '12px', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', border: 'none', cursor: 'pointer' }}
+                    >
+                        Gestionar Maestros ↗
+                    </button>
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🛡️</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{seoHealth}%</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>Salud SEO Local</div>
-                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Inyección de metadatos activa</p>
+            {criticalIssues.length > 0 && (
+                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ margin: 0, fontWeight: '900' }}>⚠️ Alerta de Inventario: Factores de Conversión Genéricos</h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Estos productos restan 1:1 del padre, lo cual suele ser incorrecto para fraccionados.</p>
+                    </div>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: '16px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <thead style={{ backgroundColor: '#F8FAFC', position: 'sticky', top: 0 }}>
+                                <tr>
+                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>SKU</th>
+                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Nombre</th>
+                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Unidad Web</th>
+                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Factor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {criticalIssues.map(p => (
+                                    <tr key={p.id}>
+                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '800', color: '#2563EB' }}>{p.sku}</td>
+                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>{p.name}</td>
+                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>
+                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '700' }}>
+                                                {p.web_unit || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '900', color: '#DC2626' }}>{p.web_conversion_factor}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎯</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{activeKeywords}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>Keywords en Radar</div>
-                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Términos generados por Gemini</p>
-                </div>
-                <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>{(b2cCount + b2bCount)}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: '700' }}>Vértices Geográficos</div>
-                    <p style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '4px' }}>Complejidad de zona actual</p>
-                </div>
-            </div>
+            )}
+        </div>
+    );
+}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
-                <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-                    <h3 style={{ fontWeight: '900', fontSize: '1.1rem', marginBottom: '1.2rem' }}>Estrategias Activas por Zona</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {strategies.length === 0 ? (
-                            <p style={{ fontSize: '0.85rem', color: '#64748B', textAlign: 'center', padding: '2rem' }}>No hay estrategias generadas aún. Usa el Sugerente AI para empezar.</p>
-                        ) : (
-                            strategies.map(s => (
-                                <div key={s.id} style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                                        <div>
-                                            <span style={{ fontWeight: '900', fontSize: '1rem', display: 'block', color: '#0F172A' }}>{s.municipality_name}</span>
-                                            <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>ZONA: {s.zone_key.includes('b2c') ? 'HOGARES' : 'INSTITUCIONAL'}</span>
-                                        </div>
-                                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#10B981', backgroundColor: '#DCFCE7', padding: '4px 8px', borderRadius: '6px' }}>ACTIVO</span>
-                                    </div>
-                                    <p style={{ fontSize: '0.8rem', color: '#334155', margin: '0 0 10px 0', fontStyle: 'italic' }}>"{s.meta_title}"</p>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                        {s.keywords.map(kw => (
-                                            <span key={kw} style={{ fontSize: '0.65rem', backgroundColor: 'white', border: '1px solid #CBD5E1', padding: '2px 8px', borderRadius: '4px', color: '#475569' }}>{kw}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))
-                        )}
+function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SEOStrategy[], onGenerate: (key: string) => void, loading: boolean, settings: AppSetting[] }) {
+    const b2cPolyStr = settings.find(s => s.key === 'geofence_b2c_poly')?.value;
+    const b2bPolyStr = settings.find(s => s.key === 'geofence_b2b_poly')?.value;
+    const b2cCount = b2cPolyStr ? JSON.parse(b2cPolyStr).length : 0;
+    const b2bCount = b2bPolyStr ? JSON.parse(b2bPolyStr).length : 0;
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <h3 style={{ margin: 0, fontWeight: '900' }}>Estrategias SEO Activas</h3>
+                {strategies.length === 0 ? (
+                    <div style={{ padding: '3rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '20px', border: '1px dashed #CBD5E1' }}>
+                        <p style={{ color: '#64748B' }}>No hay estrategias generadas.</p>
                     </div>
-                </div>
-                <div style={{ padding: '2.5rem', borderRadius: '32px', backgroundColor: '#0F172A', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{loading ? '⏳' : '🤖'}</div>
-                    <h4 style={{ fontWeight: '900', fontSize: '1.3rem', marginBottom: '1rem' }}>AI Keyword Suggester</h4>
-                    <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.6' }}>
-                        {currentZoneNames !== 'Sin Identificar' 
-                            ? `Detectamos presencia en ${currentZoneNames}. ¿Deseas actualizar los metadatos dinámicos?`
-                            : "Dibuja una geocerca primero para que la IA analice la zona geográfica."}
-                    </p>
-                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <button 
-                            onClick={() => onGenerate('geofence_b2c_poly')}
-                            disabled={loading || b2cCount === 0}
-                            style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', backgroundColor: '#7C3AED', color: 'white', border: 'none', fontWeight: '900', cursor: (loading || b2cCount === 0) ? 'not-allowed' : 'pointer', opacity: (loading || b2cCount === 0) ? 0.5 : 1 }}
-                        >
-                            {loading ? 'Generando...' : '⚡ Inyección B2C (Hogares)'}
-                        </button>
-                        <button 
-                            onClick={() => onGenerate('geofence_b2b_poly')}
-                            disabled={loading || b2bCount === 0}
-                            style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', backgroundColor: 'transparent', color: 'white', border: '2px solid #7C3AED', fontWeight: '900', cursor: (loading || b2bCount === 0) ? 'not-allowed' : 'pointer', opacity: (loading || b2bCount === 0) ? 0.5 : 1 }}
-                        >
-                            {loading ? 'Generando...' : '🏢 Inyección B2B (Empresas)'}
-                        </button>
-                    </div>
-                    <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '1.5rem' }}>* Los metadatos se generan usando Gemini 2.5 Flash analizando el contexto local.</p>
-                </div>
+                ) : (
+                    strategies.map(s => (
+                        <div key={s.id} style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                <span style={{ fontWeight: '900', color: '#2563EB' }}>{s.municipality_name}</span>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#DCFCE7', color: '#166534', padding: '4px 8px', borderRadius: '6px' }}>ACTIVO</span>
+                            </div>
+                            <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', fontWeight: '700' }}>{s.meta_title}</p>
+                            <p style={{ margin: '0 0 15px 0', fontSize: '0.8rem', color: '#64748B' }}>{s.meta_description}</p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                {s.keywords.map(kw => <span key={kw} style={{ fontSize: '0.7rem', backgroundColor: 'white', border: '1px solid #E2E8F0', padding: '2px 8px', borderRadius: '6px' }}>{kw}</span>)}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+            <div style={{ backgroundColor: '#0F172A', color: 'white', borderRadius: '24px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <h4 style={{ margin: 0, fontWeight: '900', fontSize: '1.2rem' }}>Sugerente AI</h4>
+                <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.5' }}>Genera metadatos optimizados usando Gemini analizando el contexto geográfico de tus geocercas.</p>
+                <button 
+                    onClick={() => onGenerate('geofence_b2c_poly')} 
+                    disabled={loading || b2cCount === 0}
+                    style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#7C3AED', color: 'white', fontWeight: '800', border: 'none', cursor: 'pointer', opacity: (loading || b2cCount === 0) ? 0.6 : 1 }}
+                >
+                    {loading ? 'Generando...' : '⚡ Inyectar B2C'}
+                </button>
+                <button 
+                    onClick={() => onGenerate('geofence_b2b_poly')} 
+                    disabled={loading || b2bCount === 0}
+                    style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'transparent', color: 'white', fontWeight: '800', border: '2px solid #7C3AED', cursor: 'pointer', opacity: (loading || b2bCount === 0) ? 0.6 : 1 }}
+                >
+                    {loading ? 'Generando...' : '🏢 Inyectar B2B'}
+                </button>
             </div>
         </div>
     );
@@ -437,73 +299,42 @@ function SEOView({ settings, strategies, onGenerate, loading }: {
 
 function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (type: string) => void }) {
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 350px', gap: '2rem' }}>
-            <div>
-                <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
-                    <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>Gestión de Identidad & Accesos</h3>
-                    <p style={{ color: '#64748B' }}>Para garantizar la integridad de la plataforma, la creación de perfiles sensibles se gestiona bajo auditoría.</p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                        <div>
-                            <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A' }}>👥 Nuevo Colaborador (Admin/Operario)</div>
-                            <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '4px 0 0 0' }}>Asignación de roles, permisos y seguridad de acceso.</p>
-                        </div>
-                        <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '900', cursor: 'pointer', color: '#0F172A' }}>
-                            Solicitar Alta
-                        </button>
-                    </div>
-
-                    <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                        <div>
-                            <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A' }}>🏢 Cliente Institucional (B2B Especial)</div>
-                            <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '4px 0 0 0' }}>Carga masiva de catálogos personalizados o listas de precios.</p>
-                        </div>
-                        <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '900', cursor: 'pointer', color: '#0F172A' }}>
-                            Solicitar Registro
-                        </button>
-                    </div>
-
-                    <div style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                        <div>
-                            <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A' }}>📩 Infraestructura de Comunicaciones</div>
-                            <p style={{ fontSize: '0.8rem', color: '#64748B', margin: '4px 0 0 0' }}>Mantenimiento de plantillas de email y dominios.</p>
-                        </div>
-                        <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '900', cursor: 'pointer', color: '#0F172A' }}>
-                            Abrir Ticket
-                        </button>
-                    </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <h3 style={{ margin: 0, fontWeight: '900' }}>Auditoría de Solicitudes</h3>
+                <div style={{ border: '1px solid #E2E8F0', borderRadius: '20px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ backgroundColor: '#F8FAFC' }}>
+                            <tr>
+                                <th style={{ padding: '1rem', textAlign: 'left' }}>Tipo</th>
+                                <th style={{ padding: '1rem', textAlign: 'left' }}>Estado</th>
+                                <th style={{ padding: '1rem', textAlign: 'left' }}>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {requests.map(r => (
+                                <tr key={r.id}>
+                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '700' }}>{r.type}</td>
+                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: r.status === 'pending' ? '#FEF3C7' : '#DCFCE7', color: r.status === 'pending' ? '#92400E' : '#166534', padding: '4px 8px', borderRadius: '6px' }}>{r.status.toUpperCase()}</span>
+                                    </td>
+                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontSize: '0.8rem', color: '#64748B' }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-
-            <div>
-                <h4 style={{ fontWeight: '800', marginBottom: '1.2rem', color: '#475569', fontSize: '0.9rem', textTransform: 'uppercase' }}>Solicitudes Recientes</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {requests.length === 0 && <p style={{ fontSize: '0.8rem', color: '#94A3B8' }}>No hay solicitudes pendientes.</p>}
-                    {requests.map(req => (
-                        <div key={req.id} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0' }}>
-                            <div style={{ fontWeight: '700', fontSize: '0.85rem', marginBottom: '4px' }}>{req.type}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>{new Date(req.created_at).toLocaleDateString()}</span>
-                                <span style={{ fontSize: '0.65rem', fontWeight: '800', backgroundColor: req.status === 'pending' ? '#FEF3C7' : '#DCFCE7', color: req.status === 'pending' ? '#92400E' : '#166534', padding: '2px 6px', borderRadius: '4px' }}>
-                                    {req.status === 'pending' ? 'PENDIENTE' : 'COMPLETADO'}
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                
-                <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#EFF6FF', borderRadius: '12px', border: '1px solid #DBEAFE' }}>
-                     <p style={{ fontSize: '0.75rem', color: '#1E40AF', margin: 0, fontWeight: '600' }}>
-                        💡 SLA: 4 horas hábiles.
-                    </p>
-                </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ margin: 0, fontWeight: '900' }}>Acciones Disponibles</h4>
+                <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>👥 Nuevo Colaborador</button>
+                <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>🏢 Cliente B2B Especial</button>
+                <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>🔧 Soporte Técnico</button>
             </div>
         </div>
     );
 }
+
 function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: () => void, onSubmit: (details: any) => void }) {
     const [formData, setFormData] = useState<any>({});
     const [loading, setLoading] = useState(false);
