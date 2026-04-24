@@ -18,8 +18,8 @@ export async function POST(req: Request) {
         // Usamos el SDK oficial de Google para mayor estabilidad
         const genAI = new GoogleGenerativeAI(GEMINI_KEY);
         
-        // Usamos gemini-2.0-flash (estándar en 2026 para velocidad y precisión)
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        // Usamos gemini-3-flash-preview (el estándar de vanguardia en 2026)
+        const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
         const prompt = `
 Eres un experto en marketing gastronómico y nutrición para FruFresco, una tienda premium de frutas y verduras.

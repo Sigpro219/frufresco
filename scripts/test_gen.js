@@ -17,9 +17,9 @@ async function testGeneration() {
     const API_KEY = env.GOOGLE_GENERATIVE_AI_API_KEY;
     const genAI = new GoogleGenerativeAI(API_KEY);
     
-    console.log("--- PROBANDO GENERACIÓN CON GEMINI 2.0 FLASH ---");
+    console.log("--- PROBANDO GENERACIÓN CON GEMINI 3 FLASH ---");
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
         const result = await model.generateContent("Di hola");
         const response = await result.response;
         console.log("✅ ÉXITO FLASH:", response.text());
