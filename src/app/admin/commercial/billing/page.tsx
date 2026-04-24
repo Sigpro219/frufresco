@@ -115,10 +115,17 @@ export default function BillingDashboard() {
 
         } catch (err: any) {
             if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
-            console.error('Detailed Billing Error:', err);
-            // Si es un objeto de error de Supabase, tendrá estas propiedades
-            if (err.message) console.log('Error Message:', err.message);
-            if (err.code) console.log('Error Code:', err.code);
+            console.error('Detailed Billing Error:', {
+                message: err.message,
+                code: err.code,
+                details: err.details,
+                hint: err.hint,
+                stack: err.stack
+            });
+            // Alerta visual discreta si es error de base de datos
+            if (err.code === 'PGRST205') {
+                console.warn('⚠️ La base de datos de facturación no está configurada. Ejecuta el esquema SQL.');
+            }
         } finally {
 
             setLoading(false);
