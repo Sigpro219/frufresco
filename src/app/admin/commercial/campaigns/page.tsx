@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Navbar from '@/components/Navbar';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
     Plus, 
@@ -174,7 +172,6 @@ export default function CampaignsPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 {/* HEADER */}

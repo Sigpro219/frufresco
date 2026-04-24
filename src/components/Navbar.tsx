@@ -367,7 +367,7 @@ export default function Navbar() {
                                             border: '1px solid var(--border)',
                                             borderRadius: '8px',
                                             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                            minWidth: '200px',
+                                            minWidth: '280px',
                                             zIndex: 1000,
                                             padding: '8px 0'
                                         }}>
@@ -401,6 +401,11 @@ export default function Navbar() {
                                                         onClick={() => setOperationsOpen(false)}
                                                         style={dropdownLinkStyle('#6366F1')}>
                                                         💰 Facturación
+                                                    </Link>
+                                                    <Link href="/admin/procurement" 
+                                                        onClick={() => setOperationsOpen(false)}
+                                                        style={dropdownLinkStyle('#0EA5E9')}>
+                                                        🛒 Compras
                                                     </Link>
                                                     <Link href="/admin/commercial"
                                                         onClick={() => setOperationsOpen(false)}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useCart } from '../../lib/cartContext';
-import Navbar from '../../components/Navbar';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -355,7 +354,6 @@ export default function CheckoutPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
-            <Navbar />
 
             <div className="container mobile-stack" style={{ padding: '4rem 1rem', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '4rem' }}>
 

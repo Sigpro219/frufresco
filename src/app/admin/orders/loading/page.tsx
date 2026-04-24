@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 
 const getStatusLabel = (s: string) => {
@@ -589,7 +588,6 @@ export default function OrderLoadingPage() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F0F2F5' }}>
-            <Navbar />
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.2rem 2rem' }}>
                 <header style={{ marginBottom: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

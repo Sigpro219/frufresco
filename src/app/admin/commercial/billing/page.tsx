@@ -1,10 +1,8 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 
 interface BillingCut {
@@ -396,7 +394,6 @@ export default function BillingDashboard() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-            <Navbar />
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>

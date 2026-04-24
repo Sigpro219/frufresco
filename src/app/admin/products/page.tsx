@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, Product } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import VariantModal from '@/components/VariantModal';
@@ -522,7 +521,6 @@ export default function AdminProductsPage() {
     // Renderizado principal
     return (
         <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
-            <Navbar />
             <Toast />
 
 

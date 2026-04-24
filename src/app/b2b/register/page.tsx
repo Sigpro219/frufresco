@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 // import { config } from '../../../lib/config'; // DEPRECATED
 import { supabase } from '@/lib/supabase';
-import Navbar from '../../../components/Navbar';
 import LeadGenBotV2 from '../../../components/LeadGenBot';
 import { Rocket, Banknote, Leaf, CreditCard } from 'lucide-react';
 
@@ -59,7 +58,6 @@ export default function B2BRegister() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
-            <Navbar />
 
             {/* Main Split Screen Container */}
             <div style={{

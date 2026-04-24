@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase, verifyConnectivity } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { diagnoseStorageError } from '@/lib/errorUtils';
@@ -270,7 +269,6 @@ export default function AdminSettingsPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             <Toast />
             <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/dashboard" style={{

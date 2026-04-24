@@ -2,12 +2,10 @@
 
 import React from 'react';
 import Letterhead from '@/components/Letterhead';
-import Navbar from '@/components/Navbar';
 
 export default function TestLetterheadPage() {
     return (
         <div style={{ backgroundColor: '#f3f4f6', minHeight: '100vh', paddingBottom: '4rem' }}>
-            <Navbar />
             
             <div style={{ padding: '2rem', textAlign: 'center' }}>
                 <h2 style={{ color: '#374151', marginBottom: '1rem' }}>Papel Membretado Oficial</h2>

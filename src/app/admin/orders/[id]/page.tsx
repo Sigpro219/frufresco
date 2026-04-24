@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import Navbar from '@/components/Navbar';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
 
@@ -387,7 +385,6 @@ export default function OrderDetailPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
                     ← Volver al Listado

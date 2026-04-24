@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { User, Mail, Phone, Lock, Rocket, LayoutDashboard, CheckCircle2, ArrowRight } from 'lucide-react';
 
@@ -70,7 +69,6 @@ export default function RegisterB2C() {
                 }} />
                 
                 <div style={{ position: 'relative', zIndex: 10 }}>
-                    <Navbar />
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6rem 1rem' }}>
                         <div style={{ 
                             backgroundColor: 'rgba(255, 255, 255, 0.08)',

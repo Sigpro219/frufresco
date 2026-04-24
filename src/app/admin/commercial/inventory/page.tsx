@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
-import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
@@ -567,7 +567,6 @@ export default function InventoryAdminPage() {
 
     return (
         <main style={styles.main}>
-            <Navbar />
             <Toast />
 
             <div style={styles.container}>

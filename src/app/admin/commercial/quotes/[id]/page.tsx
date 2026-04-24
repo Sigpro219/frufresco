@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -182,7 +181,6 @@ export default function QuoteDetailPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/commercial/quotes" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>

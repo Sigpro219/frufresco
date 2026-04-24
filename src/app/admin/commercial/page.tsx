@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import ClientsModule from '@/components/ClientsModule';
@@ -192,7 +191,6 @@ export default function CommercialDashboard() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             
             {/* MAIN TABS */}
             <div style={{ backgroundColor: 'white', borderBottom: '1px solid #E2E8F0', padding: '0 2rem' }}>

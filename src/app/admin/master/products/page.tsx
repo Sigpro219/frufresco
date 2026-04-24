@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 // Force re-compilation to fix Turbopack module factory error
 import { supabase, Product } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
-import Toast from '@/components/Toast';
 import Link from 'next/link';
 import Image from 'next/image';
 import CreateProductModal from '@/components/CreateProductModal';

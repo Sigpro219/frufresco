@@ -1,5 +1,4 @@
 import { supabase, type Product } from '../lib/supabase';
-import Navbar from '../components/Navbar';
 import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
 import Image from 'next/image';

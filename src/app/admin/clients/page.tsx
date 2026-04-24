@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
+import ClientsModule from '@/components/ClientsModule';
 import Toast from '@/components/Toast';
 
 declare global {
@@ -309,7 +309,6 @@ export default function AdminClientsPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F0F2F5' }}>
-            <Navbar />
             <Toast />
 
             {/* MODAL DETALLES */}

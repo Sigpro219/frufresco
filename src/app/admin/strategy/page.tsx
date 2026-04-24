@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';

@@ -2,8 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function CreateOrderContent() {
@@ -378,7 +376,6 @@ function CreateOrderContent() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
-            <Navbar />
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>

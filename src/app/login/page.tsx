@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../lib/authContext';
-import Navbar from '../../components/Navbar';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key } from 'lucide-react';

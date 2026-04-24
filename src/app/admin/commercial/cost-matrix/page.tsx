@@ -2,9 +2,8 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight } from 'lucide-react';
+import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
@@ -80,8 +79,77 @@ export default function CostMatrixPage() {
     const [manualOverrides, setManualOverrides] = useState<Record<string, {manual_cost: number, expires_at: string}>>({});
     const [effectiveCosts, setEffectiveCosts] = useState<Record<string, number>>({});
     const [user, setUser] = useState<any>(null);
+    const [isAuthorizing, setIsAuthorizing] = useState(false);
+    const [batchProgress, setBatchProgress] = useState(0);
     const [savingId, setSavingId] = useState<string | null>(null);
     const isMounted = useRef(true);
+
+    const calculateSmartCost = (productId: string) => {
+        const history = purchaseHistory[productId] || [];
+        if (history.length === 0) return 0;
+        
+        const sortedHistory = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const latest = sortedHistory[0];
+        const product = products.find(p => p.id === productId);
+        
+        const ageInDays = differenceInDays(new Date(), new Date(latest.created_at));
+        const isPerishable = product?.capabilities?.includes('IS_PERISHABLE');
+        
+        let alpha = isPerishable ? 0.7 : 0.5;
+        
+        if (ageInDays > 7) {
+            const penalty = Math.min(0.3, (ageInDays - 7) * 0.05);
+            alpha = Math.max(0.1, alpha - penalty);
+        }
+
+        if (sortedHistory.length >= 2) {
+            const prev = sortedHistory[1];
+            const change = Math.abs((latest.normalized_price - prev.normalized_price) / prev.normalized_price);
+            if (change > 0.1) alpha = 0.8;
+        }
+
+        const harvestStatus = getHarvestStatus(productId);
+        if (harvestStatus === 'harvest') alpha = 0.9;
+
+        let smartCost = latest.normalized_price;
+        if (sortedHistory.length >= 2) {
+            const prevPrice = sortedHistory[1].normalized_price;
+            smartCost = (alpha * latest.normalized_price) + ((1 - alpha) * prevPrice);
+        }
+
+        return smartCost;
+    };
+
+    const handleAuthorizeAll = async () => {
+        if (!window.confirm('¿Desea autorizar todas las recomendaciones de IA para esta categoría?')) return;
+        
+        setIsAuthorizing(true);
+        setBatchProgress(0);
+        let count = 0;
+        const total = filteredProducts.length;
+
+        for (let i = 0; i < total; i++) {
+            const p = filteredProducts[i];
+            const smart = calculateSmartCost(p.id);
+            if (smart > 0) {
+                const { error } = await supabase
+                    .from('commercial_overrides')
+                    .upsert({ 
+                        product_id: p.id, 
+                        manual_cost: Math.round(smart),
+                        updated_by: 'AI-DELTA-AUTO',
+                        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                    });
+                if (!error) count++;
+            }
+            setBatchProgress(Math.round(((i + 1) / total) * 100));
+        }
+
+        setIsAuthorizing(false);
+        setBatchProgress(0);
+        alert(`¡Éxito! Se autorizaron ${count} precios inteligentes.`);
+        window.location.reload();
+    };
 
     const handleSaveManualCost = async (productId: string, cost: string) => {
         if (!cost || isNaN(Number(cost))) return;
@@ -94,12 +162,11 @@ export default function CostMatrixPage() {
                     product_id: productId, 
                     manual_cost: Number(cost),
                     updated_by: user?.email || 'Admin',
-                    expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days
+                    expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
                 });
 
             if (error) throw error;
             
-            // Update local state
             setManualOverrides(prev => ({
                 ...prev,
                 [productId]: { manual_cost: Number(cost), expires_at: new Date().toISOString() }
@@ -109,26 +176,16 @@ export default function CostMatrixPage() {
                 [productId]: Number(cost)
             }));
             
-            // Clear feedback after 1s
-            setTimeout(() => {
-                if (isMounted.current) setSavingId(null);
-            }, 1000);
+            setTimeout(() => { if (isMounted.current) setSavingId(null); }, 1000);
         } catch (err) {
-            console.error('Error saving manual cost:', err);
-            // Non-blocking logError instead of alert
             logError('Matrix SaveManualCost', err);
         }
     };
 
     const handleSort = (field: 'name' | 'smartCost' | 'trend') => {
         if (sortField === field) {
-            if (sortDir === 'asc') {
-                setSortDir('desc');
-            } else {
-                // Third click: reset to default (category grouping)
-                setSortField(null);
-                setSortDir('asc');
-            }
+            if (sortDir === 'asc') setSortDir('desc');
+            else { setSortField(null); setSortDir('asc'); }
         } else {
             setSortField(field);
             setSortDir('asc');
@@ -143,23 +200,15 @@ export default function CostMatrixPage() {
     useEffect(() => {
         isMounted.current = true;
         fetchData();
-        return () => {
-            isMounted.current = false;
-        };
+        return () => { isMounted.current = false; };
     }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 0. Verify Auth Session first to provide clear error
             const { data: { session } } = await supabase.auth.getSession();
             if (isMounted.current) setUser(session?.user || null);
             
-            if (!session) {
-                console.warn('⚠️ No active session found. Some features like saving might fail.');
-            }
-
-            // 1. Fetch products (Recursive to bypass 1000 limit)
             let allProducts: Product[] = [];
             let from = 0;
             const pageSize = 1000;
@@ -175,14 +224,8 @@ export default function CostMatrixPage() {
                     .order('name', { ascending: true })
                     .range(from, from + pageSize - 1);
 
-                if (pError) {
-                    console.error('❌ Error fetching products:', pError);
-                    throw new Error(`Error en tabla de productos: ${pError.message || JSON.stringify(pError)}`);
-                }
-                
-                if (!chunk || chunk.length < pageSize) {
-                    hasMore = false;
-                }
+                if (pError) throw pError;
+                if (!chunk || chunk.length < pageSize) hasMore = false;
                 if (chunk) allProducts = [...allProducts, ...chunk];
                 from += pageSize;
             }
@@ -190,98 +233,45 @@ export default function CostMatrixPage() {
             if (!isMounted.current) return;
             setProducts(allProducts);
 
-            const productsData = allProducts; 
-
-            // Extract unique categories
-            const cats = Array.from(new Set(productsData?.map((p: Product) => p.category) || [])).filter(Boolean) as string[];
+            const cats = Array.from(new Set(allProducts?.map((p: Product) => p.category) || [])).filter(Boolean) as string[];
             setCategories(['Todas', ...cats]);
 
-            // 2. Fetch conversions (Non-blocking)
             let convData: any[] = [];
-            try {
-                const { data, error: cError } = await supabase.from('product_conversions').select('*');
-                if (cError) logError('Matrix fetchData conversions', cError);
-                else convData = data || [];
-            } catch (ce) {
-                console.warn('Could not load conversions:', ce);
-            }
+            const { data: cData } = await supabase.from('product_conversions').select('*');
+            convData = cData || [];
 
-            if (!isMounted.current) return;
+            const { data: pChunk, error: iError } = await supabase
+                .from('purchases')
+                .select('product_id, unit_price, created_at, purchase_unit')
+                .order('created_at', { ascending: false })
+                .limit(5000);
+            if (iError) throw iError;
+            const purchasesData = pChunk || [];
 
-            // 3. Fetch last purchases
-            let allPurchases: Purchase[] = [];
-            try {
-                const { data: pChunk, error: iError } = await supabase
-                    .from('purchases')
-                    .select('product_id, unit_price, created_at, purchase_unit')
-                    .order('created_at', { ascending: false })
-                    .limit(5000); // 5k should be enough for last 8 per product
-
-                if (iError) throw iError;
-                allPurchases = pChunk as unknown as Purchase[] || [];
-            } catch (pe: any) {
-                console.error('❌ Error fetching purchases:', pe);
-            }
-
-            const purchasesData = allPurchases;
-
-            // 3.5 Fetch Manual Overrides
             let overMap: Record<string, any> = {};
-            try {
-                const { data: overData, error: overError } = await supabase
-                    .from('commercial_overrides')
-                    .select('product_id, manual_cost, expires_at');
-                
-                if (!overError && overData) {
-                    overData.forEach(o => {
-                        overMap[o.product_id] = { manual_cost: o.manual_cost, expires_at: o.expires_at };
-                    });
-                    setManualOverrides(overMap);
-                }
-            } catch (e) {
-                console.warn('Overrides fetch skipped');
+            const { data: overData } = await supabase.from('commercial_overrides').select('product_id, manual_cost, expires_at');
+            if (overData) {
+                overData.forEach(o => { overMap[o.product_id] = { manual_cost: o.manual_cost, expires_at: o.expires_at }; });
+                setManualOverrides(overMap);
             }
 
-            if (!isMounted.current) return;
-
-            // 4. Normalize and Group
             const historyMap: Record<string, Purchase[]> = {};
-            
             purchasesData.forEach((p: any) => {
                 if (!p.product_id) return;
                 if (!historyMap[p.product_id]) historyMap[p.product_id] = [];
-                
                 if (historyMap[p.product_id].length < 8) {
                     const product = allProducts.find((pd) => pd.id === p.product_id);
                     let normalizedPrice = Number(p.unit_price);
-
                     if (product && p.purchase_unit && p.purchase_unit !== product.unit_of_measure) {
-                        const conv = (convData || []).find((c: any) => 
-                            c.product_id === p.product_id && 
-                            c.from_unit === p.purchase_unit && 
-                            c.to_unit === product.unit_of_measure
-                        );
-                        if (conv && conv.conversion_factor) {
-                            normalizedPrice = normalizedPrice / conv.conversion_factor;
-                        }
+                        const conv = convData.find((c: any) => c.product_id === p.product_id && c.from_unit === p.purchase_unit && c.to_unit === product.unit_of_measure);
+                        if (conv?.conversion_factor) normalizedPrice = normalizedPrice / conv.conversion_factor;
                     }
-
-                    historyMap[p.product_id].push({
-                        ...p,
-                        normalized_price: normalizedPrice
-                    });
+                    historyMap[p.product_id].push({ ...p, normalized_price: normalizedPrice });
                 }
             });
-
-            // Reverse for chronological order
-            Object.keys(historyMap).forEach(pid => {
-                historyMap[pid].reverse();
-            });
-
-            console.log('✅ Matrix Ready: History for', Object.keys(historyMap).length, 'products');
+            Object.keys(historyMap).forEach(pid => { historyMap[pid].reverse(); });
             setPurchaseHistory(historyMap);
 
-            // 5. Pre-calculate effective costs for performance
             const costMap: Record<string, number> = {};
             allProducts.forEach(p => {
                 const history = historyMap[p.id] || [];
@@ -289,104 +279,42 @@ export default function CostMatrixPage() {
                 if (history.length > 0) {
                     const sortedH = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                     const latest = sortedH[0];
-                    let alpha = 0.5;
-                    if (p.capabilities?.includes('IS_PERISHABLE')) alpha = 0.7;
+                    let alpha = p.capabilities?.includes('IS_PERISHABLE') ? 0.7 : 0.5;
                     const age = differenceInDays(new Date(), new Date(latest.created_at));
                     if (age > 7) alpha = Math.max(0.1, alpha - Math.min(0.3, (age - 7) * 0.05));
-                    if (sortedH.length >= 2) {
-                        if (Math.abs((latest.normalized_price - sortedH[1].normalized_price) / sortedH[1].normalized_price) > 0.1) alpha = 0.8;
-                    }
+                    if (sortedH.length >= 2 && Math.abs((latest.normalized_price - sortedH[1].normalized_price) / sortedH[1].normalized_price) > 0.1) alpha = 0.8;
                     smart = sortedH.length >= 2 ? (alpha * latest.normalized_price) + ((1 - alpha) * sortedH[1].normalized_price) : latest.normalized_price;
                 }
-                const manual = overMap[p.id]?.manual_cost;
-                costMap[p.id] = smart > 0 ? smart : (manual || 0);
+                costMap[p.id] = smart > 0 ? smart : (overMap[p.id]?.manual_cost || 0);
             });
             setEffectiveCosts(costMap);
 
-        } catch (err: any) {
-            if (!isMounted.current) return;
-            // Enhanced logging for "empty" objects
-            const descriptiveError = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-            console.error('❌ Detailed Matrix Error:', descriptiveError, err);
+        } catch (err) {
             logError('Matrix fetchData', err);
         } finally {
             if (isMounted.current) setLoading(false);
         }
     };
 
-
-    /**
-     * CI-Delta Algorithm: Adaptive Exponential Smoothing
-     * Rules: 
-     * 1. Time-Decay: Alpha decreases as data ages (> 7 days)
-     * 2. Perishability: Higher sensitivity for IS_PERISHABLE products
-     * 3. Volatility: Jump to Reactive mode if price spike > 10%
-     */
-    const calculateSmartCost = (productId: string) => {
-        const history = purchaseHistory[productId] || [];
-        if (history.length === 0) return 0;
-        
-        const sortedHistory = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        const latest = sortedHistory[0];
-        const product = products.find(p => p.id === productId);
-        
-        const ageInDays = differenceInDays(new Date(), new Date(latest.created_at));
-        const isPerishable = product?.capabilities?.includes('IS_PERISHABLE');
-        
-        // Base Alpha logic
-        let alpha = 0.5;
-        if (isPerishable) alpha = 0.7; // More weight to the very latest pulse
-        
-        // Time-Decay penalty
-        if (ageInDays > 7) {
-            const penalty = Math.min(0.3, (ageInDays - 7) * 0.05); // Max penalty 0.3
-            alpha = Math.max(0.1, alpha - penalty);
-        }
-
-        // Volatility Spike Check
-        if (sortedHistory.length >= 2) {
-            const prev = sortedHistory[1];
-            const change = Math.abs((latest.normalized_price - prev.normalized_price) / prev.normalized_price);
-            if (change > 0.1) alpha = 0.8; // Trigger reactive mode
-        }
-
-        // Apply Smoothing: Ci = (Alpha * Pi) + ((1 - Alpha) * Ci-1)
-        // For simplicity in UI, we calculate based on the current window
-        let smartCost = latest.normalized_price;
-        if (sortedHistory.length >= 2) {
-            const prevPrice = sortedHistory[1].normalized_price;
-            smartCost = (alpha * latest.normalized_price) + ((1 - alpha) * prevPrice);
-        }
-
-        return smartCost;
-    };
-
     const getEffectiveCost = (productId: string) => {
         const smart = calculateSmartCost(productId);
-        if (smart > 0) return smart;
-        const manual = manualOverrides[productId]?.manual_cost;
-        return manual || 0;
+        return smart > 0 ? smart : (manualOverrides[productId]?.manual_cost || 0);
     };
 
     const getHarvestStatus = (productId: string) => {
         const history = purchaseHistory[productId] || [];
         if (history.length < 5) return 'stable';
-        
         const now = new Date();
         const currentMonth = now.getMonth();
-        
-        // Compare with same month last year (11-13 months back)
         const lastYearSameMonth = history.filter(p => {
             const d = new Date(p.created_at);
             return d.getMonth() === currentMonth && differenceInDays(now, d) > 300;
         });
-
         if (lastYearSameMonth.length > 0) {
-            const avgLastYear = lastYearSameMonth.reduce((a, b) => a + b.normalized_price, 0) / lastYearSameMonth.length;
-            const currentAvg = history.slice(0, 3).reduce((a, b) => a + b.normalized_price, 0) / 3;
-            
-            if (currentAvg < avgLastYear * 0.9) return 'harvest'; // Buying opportunity!
-            if (currentAvg > avgLastYear * 1.1) return 'risk'; // Prices rising compared to last year
+            const avgLY = lastYearSameMonth.reduce((a, b) => a + b.normalized_price, 0) / lastYearSameMonth.length;
+            const avgNow = history.slice(0, 3).reduce((a, b) => a + b.normalized_price, 0) / 3;
+            if (avgNow < avgLY * 0.9) return 'harvest';
+            if (avgNow > avgLY * 1.1) return 'risk';
         }
         return 'stable';
     };
@@ -579,7 +507,6 @@ export default function CostMatrixPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
-            <Navbar />
             <div style={{ width: '96%', margin: '0 auto', padding: '2.5rem 2rem' }}>
                 
                 <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '2rem', flexWrap: 'wrap' }}>
@@ -681,6 +608,31 @@ export default function CostMatrixPage() {
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
                             >
                                 <TrendingUp size={20} />
+                            </button>
+                            <button
+                                onClick={() => handleAuthorizeAll()}
+                                disabled={isAuthorizing}
+                                style={{ 
+                                    padding: '0 1.2rem', 
+                                    height: '45px',
+                                    borderRadius: '14px', 
+                                    border: '1px solid #0EA5E9', 
+                                    backgroundColor: isAuthorizing ? '#F1F5F9' : '#0F172A', 
+                                    color: 'white', 
+                                    fontWeight: '900', 
+                                    cursor: isAuthorizing ? 'not-allowed' : 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.6rem',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.2)'
+                                }}
+                                onMouseEnter={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#1E293B')}
+                                onMouseLeave={(e) => !isAuthorizing && (e.currentTarget.style.backgroundColor = '#0F172A')}
+                            >
+                                <Brain size={20} className={isAuthorizing ? 'animate-pulse' : ''} />
+                                {isAuthorizing ? `AUTORIZANDO ${batchProgress}%` : 'AUTORIZACIÓN INTELIGENTE'}
                             </button>
                             <button
                                 onClick={handleExport}
@@ -1017,56 +969,75 @@ export default function CostMatrixPage() {
                                                         borderLeft: '2px solid #E5E7EB', 
                                                         textAlign: 'center',
                                                         backgroundColor: manualOverrides[p.id] ? '#EFF6FF' : '#F0FDF4',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        minHeight: '70px',
                                                         position: 'relative'
                                                     }}>
-                                                        
-                                                        {smartCost > 0 ? (
-                                                            <div style={{ fontWeight: '900', color: manualOverrides[p.id] ? '#1E40AF' : '#166534', fontSize: '1.2rem' }}>
-                                                                ${Math.round(smartCost).toLocaleString()}
-                                                                {manualOverrides[p.id] && (
-                                                                    <span style={{ display: 'block', fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px', marginTop: '0.2rem' }}>
-                                                                        ✍️ Manual
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
-                                                                        <input 
-                                                                            type="number"
-                                                                            placeholder="Set cost"
-                                                                            onClick={(e) => e.stopPropagation()} 
-                                                                            onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
-                                                                            onKeyDown={(e) => {
-                                                                                if (e.key === 'Enter') {
-                                                                                    e.stopPropagation();
-                                                                                    handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
-                                                                                }
-                                                                            }}
-                                                                            style={{
-                                                                                width: '90px',
-                                                                                padding: '0.4rem',
-                                                                                borderRadius: '6px',
-                                                                                border: savingId === p.id ? '2px solid #10B981' : '2px solid #D1D5DB',
-                                                                                textAlign: 'center',
-                                                                                fontSize: '0.9rem',
-                                                                                fontWeight: '700',
-                                                                                color: '#1E40AF',
-                                                                                outline: 'none',
-                                                                                backgroundColor: savingId === p.id ? '#F0FDF4' : 'white',
-                                                                                position: 'relative',
-                                                                                zIndex: 20,
-                                                                                transition: 'all 0.3s ease'
-                                                                            }}
-                                                                        />
-                                                                        <span style={{ fontSize: '0.55rem', color: savingId === p.id ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                            {savingId === p.id ? '✓ Guardado' : 'Filtro Sin Costo'}
-                                                                        </span>
+                                                        {(() => {
+                                                            const smart = calculateSmartCost(p.id);
+                                                            const currentManual = manualOverrides[p.id]?.manual_cost;
+                                                            const isAligned = currentManual && Math.abs(currentManual - smart) < 1;
+                                                            
+                                                            if (smart > 0) {
+                                                                return (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                                                                        <div style={{ 
+                                                                            fontWeight: '900', 
+                                                                            color: isAligned ? '#10B981' : '#1E293B',
+                                                                            fontSize: '1.2rem',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '0.4rem'
+                                                                        }}>
+                                                                            ${Math.round(smart).toLocaleString()}
+                                                                            {isAligned && <CheckCircle2 size={16} color="#10B981" title="Precio Autorizado por IA" />}
+                                                                            {harvestStatus === 'harvest' && <Brain size={16} color="#0EA5E9" className="animate-pulse" title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL" />}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                            Sugerido IA
+                                                                        </div>
+                                                                        {currentManual && !isAligned && (
+                                                                            <div style={{ fontSize: '0.55rem', color: '#3B82F6', fontWeight: '900', textTransform: 'uppercase', backgroundColor: '#DBEAFE', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                                                                ✍️ Manual: ${Math.round(currentManual).toLocaleString()}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                        )}
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+                                                                    <input 
+                                                                        type="number"
+                                                                        placeholder="Set cost"
+                                                                        onClick={(e) => e.stopPropagation()} 
+                                                                        onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter') {
+                                                                                e.stopPropagation();
+                                                                                handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
+                                                                            }
+                                                                        }}
+                                                                        style={{
+                                                                            width: '90px',
+                                                                            padding: '0.4rem',
+                                                                            borderRadius: '6px',
+                                                                            border: savingId === p.id ? '2px solid #10B981' : '2px solid #D1D5DB',
+                                                                            textAlign: 'center',
+                                                                            fontSize: '0.9rem',
+                                                                            fontWeight: '700',
+                                                                            color: '#1E40AF',
+                                                                            outline: 'none',
+                                                                            backgroundColor: savingId === p.id ? '#F0FDF4' : 'white',
+                                                                            position: 'relative',
+                                                                            zIndex: 20,
+                                                                            transition: 'all 0.3s ease'
+                                                                        }}
+                                                                    />
+                                                                    <span style={{ fontSize: '0.55rem', color: savingId === p.id ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                        {savingId === p.id ? '✓ Guardado' : 'Sin Referencia'}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
 
                                                     {/* Trend Chart column - STICKY to the right */}

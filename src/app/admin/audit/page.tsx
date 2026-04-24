@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { ArrowLeft, Download, ShieldAlert, Search, Calendar, User } from 'lucide-react';
 
@@ -12,7 +11,6 @@ export default function AuditLogPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
-            <Navbar />
             
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 {/* Header Técnico */}

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
-import Navbar from '@/components/Navbar';
 import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';

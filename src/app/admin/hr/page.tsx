@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Navbar from '@/components/Navbar';
+import { User, Users, Briefcase, FileText, Calendar, Plus, Search, Filter, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 interface Profile {
@@ -239,10 +239,9 @@ export default function HRManagement() {
     };
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-            <Navbar />
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
             
-            <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+            <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 <header style={{ 
                     marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', 
                     alignItems: 'center', flexWrap: 'wrap', gap: '1rem',
@@ -602,7 +601,7 @@ export default function HRManagement() {
                         </table>
                     </div>
                 )}
-            </main>
+            </div>
 
             {/* MODAL EDITAR */}
             {editingUser && (
@@ -751,7 +750,7 @@ export default function HRManagement() {
                     50% { background-color: #F1F5F9; }
                 }
             `}</style>
-        </div>
+        </main>
     );
 }
 

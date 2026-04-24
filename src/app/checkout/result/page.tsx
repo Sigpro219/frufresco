@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
+import { useCart } from '@/lib/cartContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { Copy, Check } from 'lucide-react';
 
@@ -166,7 +166,6 @@ function ResultContent() {
 export default function CheckoutResultPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
-            <Navbar />
             <Suspense fallback={
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem' }}>
                     <p>Cargando resultado...</p>

@@ -1,8 +1,6 @@
 'use client';
 
 import { useAuth } from '@/lib/authContext';
-import Navbar from '@/components/Navbar';
-import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
@@ -109,7 +107,6 @@ export default function AdminDashboard() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
-            <Navbar />
 
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

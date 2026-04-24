@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
-import Navbar from '../../../components/Navbar';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3 } from 'lucide-react';
@@ -523,7 +522,6 @@ export default function B2BDashboard() {
     if (authLoading || loading) {
         return (
             <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
-                <Navbar />
                 <div className="container" style={{ padding: '4rem', textAlign: 'center' }}>
                     <p>Cargando tu pedido...</p>
                 </div>
@@ -533,7 +531,6 @@ export default function B2BDashboard() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
-            <Navbar />
 
             <div className="container" style={{ padding: '2rem 1rem', maxWidth: '800px' }}>
 

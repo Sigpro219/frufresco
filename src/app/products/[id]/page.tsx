@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import Navbar from '@/components/Navbar';
 import ProductDetailClient from '@/components/ProductDetailClient';
 import ProductCard from '@/components/ProductCard';
 import { notFound } from 'next/navigation';
@@ -57,7 +56,6 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#FFFFFF', paddingBottom: '5rem' }}>
-            <Navbar />
             <div className="container" style={{ paddingTop: '2rem' }}>
                 <ProductDetailClient product={product} />
 
