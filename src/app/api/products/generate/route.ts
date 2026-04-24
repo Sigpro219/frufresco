@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
@@ -14,8 +15,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Google AI API Key no configurada' }, { status: 500 });
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
-
+        // Usamos el SDK oficial de Google para mayor estabilidad
+        const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+        
+        // Usamos gemini-2.0-flash (estándar en 2026 para velocidad y precisión)
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `
 Eres un experto en marketing gastronómico y nutrición para FruFresco, una tienda premium de frutas y verduras.
@@ -42,32 +46,44 @@ REQUERIMIENTOS:
 No incluyas markdown, solo el JSON puro.
 `;
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error?.message || 'Error en la API de Gemini');
-        }
-
-        const result = await response.json();
-        const text = result.candidates[0].content.parts[0].text.trim().replace(/```json|```/g, '');
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text().trim().replace(/```json|```/g, '');
         
         try {
             const aiData = JSON.parse(text);
             return NextResponse.json(aiData);
         } catch (parseErr) {
             console.error('Error parsing AI JSON:', text);
-            return NextResponse.json({ error: 'Error al procesar la respuesta de la IA' }, { status: 500 });
+            // Si el JSON falla, devolvemos un fallback limpio
+            return NextResponse.json({ 
+                description_es: text.substring(0, 200),
+                description_en: "Translation pending...",
+                name_en: name
+            });
         }
 
     } catch (error: any) {
         console.error('❌ [Product AI Engine] Error:', error.message);
+        
+        // Si el error es específicamente de "model not found", intentamos un último recurso con gemini-pro
+        if (error.message.includes('not found') || error.message.includes('not supported')) {
+            try {
+                console.log('🔄 Reintentando con modelo alternativo (gemini-pro)...');
+                const genAI = new GoogleGenerativeAI(GEMINI_KEY as string);
+                const backupModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+                const result = await backupModel.generateContent("Traduce a ingles: " + name);
+                const response = await result.response;
+                return NextResponse.json({
+                    description_es: current_description || "Descripción generada",
+                    description_en: response.text(),
+                    name_en: response.text()
+                });
+            } catch (innerError) {
+                return NextResponse.json({ error: "El modelo de IA no está disponible en esta región o con esta llave." }, { status: 500 });
+            }
+        }
+
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

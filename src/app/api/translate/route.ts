@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
     const { text, targetLang } = await req.json();
-    console.log(`[API Translate] Starting: "${text}" to ${targetLang}`);
-
+    
     if (!text || !targetLang) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
@@ -14,15 +13,12 @@ export async function POST(req: Request) {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
     if (!apiKey) {
-      console.error('[API Translate] NO API KEY IN ENV');
       return NextResponse.json({ translatedText: text });
     }
 
-    // Force 'v1' stable API version
-    const genAI = new GoogleGenerativeAI(apiKey, { apiVersion: "v1" });
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-    });
+    // Usamos el SDK oficial para máxima estabilidad
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const prompt = `Translate exactly this product name from Spanish to ${targetLang === 'en' ? 'English' : 'Spanish'}. 
     Return ONLY the translated text. Do not add anything else.
@@ -31,8 +27,6 @@ export async function POST(req: Request) {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const translated = response.text().trim().replace(/["']/g, '');
-
-    console.log(`[API Translate] SUCCESS: "${text}" -> "${translated}"`);
 
     // Background cache update
     try {
@@ -48,6 +42,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ translatedText: translated });
   } catch (error: any) {
     console.error('[API Translate] ERROR:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    
+    // Fallback simple si la IA falla
+    return NextResponse.json({ translatedText: text });
   }
 }

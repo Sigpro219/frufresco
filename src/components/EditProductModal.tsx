@@ -517,7 +517,11 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                     ❌ Desvincular Padre
                                 </div>
                                 {allProducts
-                                    .filter(p => p.id !== product.id && (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || p.sku.toLowerCase().includes(parentSearch.toLowerCase())))
+                                    .filter(p => 
+                                        p.id !== product.id && 
+                                        p.parent_id !== product.id && // Evitar circularidad: Un hijo de este producto no puede ser su padre
+                                        (p.name.toLowerCase().includes(parentSearch.toLowerCase()) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
+                                    )
                                     .slice(0, 10)
                                     .map(p => (
                                         <div 
@@ -540,8 +544,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         )}
                     </div>
 
-                    {/* Lógica de Desviación de Utilidad (Solo si es Hijo) */}
-                    {formData.parent_id && (
+                    {/* Lógica de Desviación de Utilidad (Solo si es Hijo y NO es Padre de otros) */}
+                    {!hasChildren && formData.parent_id && (
                         <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
                                 <span>📊 CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
