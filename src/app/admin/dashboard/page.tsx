@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import Link from 'next/link';
 
 export default function AdminDashboard() {
     const { profile } = useAuth();
@@ -222,6 +223,7 @@ export default function AdminDashboard() {
                         <AdminCard title="Catálogo Web" href="/admin/products" icon="🛍️" color="white" textColor="#1E3A8A" desc="Precios B2C" />
                         <AdminCard title="Maestro SKU" href="/admin/master/products" icon="🏗️" color="white" textColor="#4F46E5" desc="Definición Técnica" />
                         <AdminCard title="Clientes" href="/admin/clients" icon="👥" color="white" textColor="#475569" desc="CRM Base" />
+                        <AdminCard title="Proveedores" href="/admin/procurement/providers" icon="🏬" color="white" textColor="#0891B2" desc="Maestro Compras" />
                         <AdminCard title="Ajustes" href="/admin/settings" icon="⚙️" color="white" textColor="#64748B" desc="Configuración" />
                         
                         {profile?.role === 'sys_admin' && (
