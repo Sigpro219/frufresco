@@ -112,6 +112,8 @@ export interface Product {
     procurement_method?: string | null;
     theoretical_shrinkage_pct?: number;
     allowed_waste_reasons?: string[];
+    inventory_group?: string | null;
+    purchase_sublist?: string | null;
     iva_rate?: number;
     tags?: string[];
     keywords?: string;

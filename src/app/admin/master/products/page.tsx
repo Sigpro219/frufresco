@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import CreateProductModal from '@/components/CreateProductModal';
 import EditProductModal from '@/components/EditProductModal';
+import Toast from '@/components/Toast';
 import * as XLSX from 'xlsx';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { 
@@ -1077,10 +1078,24 @@ export default function MasterProductsPage() {
                                             display: 'flex',
                                             flexDirection: 'column',
                                             gap: '4px',
-                                            minWidth: '150px'
+                                            minWidth: '180px'
                                         }}>
-                                            <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.7rem' }}>👤 {p.buying_team || 'Sin asignar'}</div>
-                                            <div style={{ fontWeight: '600', color: '#6B7280', borderTop: '1px solid #E5E7EB', paddingTop: '2px', fontSize: '0.7rem' }}>🛠️ {p.procurement_method || 'General'}</div>
+                                            <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                👤 {p.buying_team || 'Sin asignar'}
+                                            </div>
+                                            <div style={{ fontWeight: '600', color: '#6B7280', borderTop: '1px solid #E5E7EB', paddingTop: '4px', fontSize: '0.65rem' }}>
+                                                🛠️ {p.procurement_method || 'General'}
+                                            </div>
+                                            {p.inventory_group && (
+                                                <div style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: '700', lineHeight: '1.2' }}>
+                                                    📊 {p.inventory_group}
+                                                </div>
+                                            )}
+                                            {p.purchase_sublist && (
+                                                <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '700', lineHeight: '1.2' }}>
+                                                    📝 {p.purchase_sublist}
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td style={{ padding: '1rem', textAlign: 'center' }}>

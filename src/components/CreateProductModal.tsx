@@ -32,10 +32,16 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         web_unit: 'Kg',
         web_conversion_factor: 1.0,
         name_en: '',
-        description_en: ''
+        description_en: '',
+        buying_team: '',
+        procurement_method: 'Compras Generales',
+        inventory_group: '',
+        purchase_sublist: ''
     });
 
     const [generatingAI, setGeneratingAI] = useState(false);
+    const [inventoryGroups, setInventoryGroups] = useState<string[]>([]);
+    const [purchaseSublists, setPurchaseSublists] = useState<string[]>([]);
 
     const [options, setOptions] = useState<any[]>([]);
     const [variants, setVariants] = useState<any[]>([]);
@@ -79,6 +85,41 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
             }
         };
         fetchMaster();
+
+        // 2. Fetch Max accounting_id to suggest next one
+        const fetchNextId = async () => {
+            const { data, error } = await supabase
+                .from('products')
+                .select('accounting_id')
+                .order('accounting_id', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            
+            if (data && data.accounting_id) {
+                const nextId = (parseInt(data.accounting_id) + 1).toString();
+                setFormData(prev => {
+                    const suggestedSku = generateSKU(prev.category, nextId);
+                    return { ...prev, accounting_id: nextId, sku: suggestedSku };
+                });
+            }
+        };
+        fetchNextId();
+
+        // 3. Fetch unique logistics values
+        const fetchLogistics = async () => {
+            const { data } = await supabase.from('products').select('inventory_group, purchase_sublist');
+            if (data) {
+                const groups = new Set<string>();
+                const sublists = new Set<string>();
+                data.forEach(p => {
+                    if (p.inventory_group) groups.add(p.inventory_group);
+                    if (p.purchase_sublist) sublists.add(p.purchase_sublist);
+                });
+                setInventoryGroups(Array.from(groups).sort());
+                setPurchaseSublists(Array.from(sublists).sort());
+            }
+        };
+        fetchLogistics();
     }, []);
 
 
@@ -317,523 +358,350 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         }}>
             <div style={{
                 backgroundColor: 'white',
-                padding: '2.5rem',
-                borderRadius: '24px',
+                padding: '1.5rem 2rem',
+                borderRadius: '20px',
                 width: '100%',
-                maxWidth: '950px',
-                maxHeight: '90vh',
+                maxWidth: '1100px',
+                maxHeight: '95vh',
                 overflowY: 'auto',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
+                boxShadow: '0 25px 60px rgba(0,0,0,0.4)',
+                border: '1px solid #E5E7EB'
             }}>
-                <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', borderBottom: '1px solid #eee', paddingBottom: '1.5rem' }}>
-                    <h2 style={{ fontSize: '2.4rem', fontWeight: '900', color: '#111827' }}>✨ Nuevo SKU</h2>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2.5rem', cursor: 'pointer', color: '#6B7280' }}>✕</button>
+                <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #f3f4f6', paddingBottom: '0.8rem' }}>
+                    <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>✨ Nuevo SKU Maestro</h2>
+                    <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '1.8rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>✕</button>
                 </header>
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem' }}>
-
                         {/* COLUMNA IZQUIERDA: INFO GENERAL E IMAGEN */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--primary)', borderBottom: '2px solid #FEE2E2', paddingBottom: '0.5rem' }}>1. Información General</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '4px solid var(--primary)', paddingLeft: '10px', marginBottom: '0.5rem' }}>1. Datos del Producto</h3>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Nombre</label>
-                                <input
-                                    required
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    onBlur={handleNameBlur}
-                                    placeholder="Nombre completo del producto"
-                                    style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.1rem' }}
-                                />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.8rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Nombre del Producto</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        onBlur={handleNameBlur}
+                                        placeholder="Ej: Manzana Gala Selección"
+                                        style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
+                                    />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>ID</label>
+                                        <input
+                                            required
+                                            type="number"
+                                            value={formData.accounting_id}
+                                            onChange={(e) => handleMetadataChange('accounting_id', e.target.value)}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '800', textAlign: 'center', backgroundColor: '#F9FAFB' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>IVA %</label>
+                                        <select
+                                            value={formData.iva_rate}
+                                            onChange={(e) => setFormData({ ...formData, iva_rate: parseInt(e.target.value) })}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #10B981', fontSize: '0.95rem', fontWeight: '800', color: '#065F46', backgroundColor: '#ECFDF5' }}
+                                        >
+                                            <option value={19}>19</option>
+                                            <option value={5}>5</option>
+                                            <option value={0}>0</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Categoría</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Categoría</label>
                                     <select
                                         value={formData.category}
                                         onChange={(e) => handleMetadataChange('category', e.target.value)}
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.1rem', backgroundColor: '#F9FAFB', cursor: 'pointer' }}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '600' }}
                                     >
-                                        {categories.map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        ))}
+                                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Presentación Base</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Unidad Base</label>
                                     <select
                                         value={formData.unit_of_measure}
                                         onChange={(e) => handleMetadataChange('unit_of_measure', e.target.value)}
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.1rem', backgroundColor: '#F9FAFB', cursor: 'pointer' }}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '600' }}
                                     >
-                                        {baseUnits.map(unit => (
-                                            <option key={unit} value={unit}>{unit}</option>
-                                        ))}
+                                        {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Peso Log. (kg)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.weight_kg}
+                                        onChange={(e) => setFormData({ ...formData, weight_kg: parseFloat(e.target.value) || 0 })}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '700' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.8rem', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#3B82F6', marginBottom: '4px' }}>SKU Código Sugerido</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={formData.sku}
+                                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #2563EB', fontSize: '1rem', fontWeight: '900', color: '#1E40AF', backgroundColor: '#EFF6FF' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Inventario Mínimo</label>
+                                    <input 
+                                        type="number"
+                                        value={formData.min_inventory_level}
+                                        onChange={(e) => setFormData({ ...formData, min_inventory_level: parseInt(e.target.value) || 0 })}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '800', color: '#B91C1C' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', borderTop: '1px dashed #E5E7EB', paddingTop: '0.8rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Comprador (Equipo)</label>
+                                    <select
+                                        value={formData.buying_team}
+                                        onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
+                                        <option value="EQUIPO A FRUTAS">EQUIPO A FRUTAS</option>
+                                        <option value="EQUIPO A VEGETALES">EQUIPO A VEGETALES</option>
+                                        <option value="LOGISTICA - PAPAS">LOGISTICA - PAPAS</option>
+                                        <option value="REFRIGERADOS">REFRIGERADOS</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
+                                    <select
+                                        value={formData.procurement_method}
+                                        onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                    >
+                                        <option value="Compras Generales">Compras Generales</option>
+                                        <option value="Contratación Directa">Contratación Directa</option>
+                                        <option value="Importación">Importación</option>
+                                        <option value="Local">Local</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                 <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <label style={{ fontSize: '1rem', fontWeight: '700' }}>Descripción Técnica (ES/EN)</label>
-                                        <button
-                                            type="button"
-                                            onClick={handleGenerateAI}
-                                            disabled={generatingAI}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                padding: '4px 10px',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                backgroundColor: generatingAI ? '#F3F4F6' : '#EEF2FF',
-                                                color: '#4F46E5',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '800',
-                                                cursor: generatingAI ? 'not-allowed' : 'pointer'
-                                            }}
-                                        >
-                                            {generatingAI ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                                            {generatingAI ? 'Generando...' : 'IA: Orgánico + Salud'}
-                                        </button>
-                                    </div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
+                                    <input
+                                        type="text"
+                                        list="inventory-groups"
+                                        value={formData.inventory_group}
+                                        onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                    />
+                                    <datalist id="inventory-groups">
+                                        {inventoryGroups.map(g => <option key={g} value={g} />)}
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
+                                    <input
+                                        type="text"
+                                        list="purchase-sublists"
+                                        value={formData.purchase_sublist}
+                                        onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                    />
+                                    <datalist id="purchase-sublists">
+                                        {purchaseSublists.map(s => <option key={s} value={s} />)}
+                                    </datalist>
+                                </div>
+                            </div>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px solid #f3f4f6', paddingTop: '1rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6B7280' }}>Descripción ES/EN + IA</label>
+                                    <button
+                                        type="button"
+                                        onClick={handleGenerateAI}
+                                        disabled={generatingAI}
+                                        style={{ padding: '3px 8px', borderRadius: '6px', border: 'none', backgroundColor: '#EEF2FF', color: '#4F46E5', fontSize: '0.65rem', fontWeight: '800', cursor: 'pointer' }}
+                                    >
+                                        {generatingAI ? '...' : '✨ IA'}
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        placeholder="Descripción en español..."
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', minHeight: '100px', fontFamily: 'inherit', backgroundColor: '#FDFDFD', marginBottom: '1rem' }}
+                                        placeholder="Español..."
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', minHeight: '60px' }}
                                     />
                                     <textarea
                                         value={formData.description_en}
                                         onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
-                                        placeholder="Description in English (Auto-generated)..."
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', minHeight: '80px', fontFamily: 'inherit', backgroundColor: '#F9FAFB' }}
+                                        placeholder="English..."
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontSize: '0.8rem', minHeight: '60px', backgroundColor: '#F9FAFB' }}
                                     />
-                                </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '80px 1.2fr 80px', gap: '1rem', alignItems: 'end' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '700', marginBottom: '8px' }}>ID</label>
-                                            <input
-                                                required
-                                                type="number"
-                                                value={formData.accounting_id}
-                                                onChange={(e) => handleMetadataChange('accounting_id', e.target.value)}
-                                                placeholder="123"
-                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.1rem', fontWeight: '700' }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>SKU Código</label>
-                                            <input
-                                                required
-                                                type="text"
-                                                value={formData.sku}
-                                                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                                                placeholder="CC-00123"
-                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #2563EB', fontSize: '1.2rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF' }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '700', marginBottom: '8px' }}>IVA %</label>
-                                            <select
-                                                value={formData.iva_rate}
-                                                onChange={(e) => setFormData({ ...formData, iva_rate: parseInt(e.target.value) })}
-                                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #10B981', fontSize: '1.1rem', fontWeight: '900', color: '#065F46', backgroundColor: '#ECFDF5', cursor: 'pointer' }}
-                                            >
-                                                <option value={19}>19</option>
-                                                <option value={5}>5</option>
-                                                <option value={0}>0</option>
-                                                <option value={22}>22</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', alignItems: 'end' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Peso Logístico (kg)</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={formData.weight_kg}
-                                            onChange={(e) => setFormData({ ...formData, weight_kg: parseFloat(e.target.value) || 0 })}
-                                            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1.3rem', fontWeight: '800' }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div style={{ 
-                                    backgroundColor: '#F9FAFB', 
-                                    padding: '1.2rem', 
-                                    borderRadius: '16px', 
-                                    border: '1px solid #E5E7EB',
-                                    marginTop: '0.5rem'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                                        <input 
-                                            type="checkbox" 
-                                            id="minPolicy"
-                                            checked={formData.min_inventory_level > 0}
-                                            onChange={(e) => setFormData({ ...formData, min_inventory_level: e.target.checked ? 10 : 0 })}
-                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                        />
-                                        <label htmlFor="minPolicy" style={{ fontSize: '1rem', fontWeight: '800', color: '#374151', cursor: 'pointer' }}>
-                                            ¿Habilitar Política de Inventario Mínimo?
-                                        </label>
-                                    </div>
-                                    
-                                    {formData.min_inventory_level >= 0 && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: formData.min_inventory_level > 0 ? 1 : 0.5 }}>
-                                            <div style={{ flex: 1 }}>
-                                                <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '4px' }}>Nivel crítico de stock para alertas:</p>
-                                                <input 
-                                                    type="number"
-                                                    disabled={formData.min_inventory_level === 0}
-                                                    value={formData.min_inventory_level}
-                                                    onChange={(e) => setFormData({ ...formData, min_inventory_level: parseInt(e.target.value) || 0 })}
-                                                    style={{ 
-                                                        width: '100%', 
-                                                        padding: '0.8rem', 
-                                                        borderRadius: '8px', 
-                                                        border: '1px solid #D1D5DB', 
-                                                        fontSize: '1.2rem', 
-                                                        fontWeight: '900',
-                                                        color: '#B91C1C'
-                                                    }}
-                                                />
-                                            </div>
-                                            <div style={{ fontSize: '1.5rem' }}>📉</div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div style={{ 
-                                    backgroundColor: '#EFF6FF', 
-                                    padding: '1.2rem', 
-                                    borderRadius: '16px', 
-                                    border: '1px solid #BFDBFE',
-                                    marginTop: '1rem'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                        <input 
-                                            type="checkbox" 
-                                            id="showOnWeb"
-                                            checked={formData.show_on_web}
-                                            onChange={(e) => setFormData({ ...formData, show_on_web: e.target.checked })}
-                                            style={{ width: '22px', height: '22px', cursor: 'pointer' }}
-                                        />
-                                        <label htmlFor="showOnWeb" style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E40AF', cursor: 'pointer' }}>
-                                            🌐 Disponible para Página Web (Público)
-                                        </label>
-                                    </div>
-                                    <p style={{ fontSize: '0.85rem', color: '#3B82F6', marginTop: '6px', marginLeft: '30px' }}>
-                                        Si se apaga, el producto solo será visible en el panel administrativo.
-                                    </p>
-                                </div>
-
-                                {/* SECCIÓN COMERCIAL / VIDAS PARALELAS */}
-                                <div style={{ 
-                                    padding: '1.5rem', 
-                                    backgroundColor: '#FFF7ED', 
-                                    borderRadius: '20px', 
-                                    border: '1px solid #FFEDD5', 
-                                    display: 'flex', 
-                                    flexDirection: 'column', 
-                                    gap: '1.2rem',
-                                    marginTop: '1.5rem'
-                                }}>
-                                    <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#9A3412', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        🏷️ Configuración Comercial (Web)
-                                    </h3>
-                                    <p style={{ fontSize: '0.8rem', color: '#7C2D12', margin: 0 }}>
-                                        Personaliza cómo se ve este producto en la página web.
-                                    </p>
-
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Nombre Público (Web)</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Ej: Manzana Roja Importada"
-                                            value={formData.display_name}
-                                            onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700' }}
-                                        />
-                                    </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Unidad Comercial (Web)</label>
-                                            <select
-                                                value={formData.web_unit}
-                                                onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
-                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', backgroundColor: 'white', cursor: 'pointer' }}
-                                            >
-                                                <option value="">Seleccionar unidad...</option>
-                                                {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>¿Cuántos Kg es 1 {formData.web_unit || 'unidad'}?</label>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <input
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    placeholder="0,00"
-                                                    value={conversionFactorInput}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (/^[0-9,.]*$/.test(val)) {
-                                                            setConversionFactorInput(val);
-                                                            const normalized = val.replace(',', '.');
-                                                            if (!isNaN(parseFloat(normalized))) {
-                                                                setFormData({ ...formData, web_conversion_factor: parseFloat(normalized) });
-                                                            }
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        const normalized = conversionFactorInput.replace(',', '.');
-                                                        const parsed = parseFloat(normalized);
-                                                        if (isNaN(parsed)) {
-                                                            setConversionFactorInput('1,0');
-                                                            setFormData({ ...formData, web_conversion_factor: 1.0 });
-                                                        } else {
-                                                            setConversionFactorInput(parsed.toString().replace('.', ','));
-                                                        }
-                                                    }}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #FFD8A8', fontSize: '1rem', fontWeight: '700', textAlign: 'center' }}
-                                                />
-                                                <span style={{ fontSize: '0.7rem', color: '#9A3412', fontWeight: '700', width: '80px' }}>KG equivalentes</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
-                                        💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
-                                    </div>
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '1rem' }}>
-                                <label style={{ display: 'block', fontSize: '1rem', fontWeight: '700', marginBottom: '12px' }}>Foto del Producto</label>
-                                <div style={{
-                                    border: '2px dashed #D1D5DB',
-                                    borderRadius: '16px',
-                                    padding: '1.5rem',
-                                    textAlign: 'center',
-                                    position: 'relative',
-                                    backgroundColor: '#F9FAFB',
-                                    minHeight: '200px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}>
-                                    {previewUrl ? (
-                                        <Image 
-                                            src={previewUrl} 
-                                            alt="Preview" 
-                                            width={500} 
-                                            height={180} 
-                                            style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '12px', marginBottom: '1rem' }} 
-                                            sizes="(max-width: 500px) 100vw, 500px"
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                <div style={{ backgroundColor: '#FFF7ED', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FFEDD5' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                        <input type="checkbox" checked={formData.show_on_web} onChange={(e) => setFormData({ ...formData, show_on_web: e.target.checked })} style={{ width: '16px', height: '16px' }} />
+                                        <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#9A3412' }}>Configuración Web B2C (Público)</label>
+                                    </div>
+                                    <p style={{ fontSize: '0.7rem', color: '#C2410C', marginBottom: '10px', lineHeight: 1.3 }}>
+                                        Si está activo, el producto se publicará en la tienda. Define el nombre público, la unidad de venta (ej. Atado) y su peso en kg (ej. 0.25) para descargar correctamente el inventario logístico.
+                                    </p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre Público (Web)"
+                                            value={formData.display_name}
+                                            onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #FFD8A8', fontSize: '0.85rem' }}
                                         />
-                                    ) : (
-                                        <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📸</div>
-                                    )}
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFileChange}
-                                        style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            opacity: 0,
-                                            cursor: 'pointer'
-                                        }}
-                                    />
-                                    <p style={{ fontWeight: '600', color: '#4B5563' }}>{imageFile ? 'Cambiar imagen' : 'Haga clic o arrastre imagen de la tienda'}</p>
-                                    <p style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>JPG, PNG o WebP (Max 5MB)</p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                            <select
+                                                value={formData.web_unit}
+                                                onChange={(e) => setFormData({ ...formData, web_unit: e.target.value })}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #FFD8A8', fontSize: '0.8rem', fontWeight: '700' }}
+                                            >
+                                                <option value="">Unidad Web...</option>
+                                                {baseUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                            </select>
+                                            <input
+                                                type="text"
+                                                placeholder="Factor (kg)"
+                                                value={conversionFactorInput}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (/^[0-9,.]*$/.test(val)) {
+                                                        setConversionFactorInput(val);
+                                                        const normalized = val.replace(',', '.');
+                                                        if (!isNaN(parseFloat(normalized))) {
+                                                            setFormData({ ...formData, web_conversion_factor: parseFloat(normalized) });
+                                                        }
+                                                    }
+                                                }}
+                                                style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #FFD8A8', fontSize: '0.8rem', fontWeight: '700', textAlign: 'center' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: '0.5rem', position: 'relative' }}>
+                                    <div style={{ border: '2px dashed #D1D5DB', borderRadius: '12px', padding: '0.5rem', textAlign: 'center', backgroundColor: '#F9FAFB', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {previewUrl ? (
+                                            <Image src={previewUrl} alt="" width={80} height={80} style={{ height: '70px', width: 'auto', borderRadius: '8px' }} />
+                                        ) : (
+                                            <span style={{ fontSize: '1.5rem' }}>📸</span>
+                                        )}
+                                        <input type="file" accept="image/*" onChange={handleFileChange} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* COLUMNA DERECHA: VARIANTES */}
-                        <div style={{ borderLeft: '1px solid #eee', paddingLeft: '3rem' }}>
-                            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>2. Configurar Variantes (Opcional)</h3>
+                        <div style={{ borderLeft: '1px solid #f3f4f6', paddingLeft: '2rem' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '4px solid #111827', paddingLeft: '10px', marginBottom: '1rem' }}>2. Configurar Variantes</h3>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                 {options.map((opt, idx) => (
-                                    <div key={idx} style={{ padding: '1.2rem', backgroundColor: '#F3F4F6', borderRadius: '12px', position: 'relative' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeOption(idx)}
-                                            style={{ position: 'absolute', right: '10px', top: '10px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '800', cursor: 'pointer' }}
-                                        >✕</button>
-
-                                        {/* TIPO DE VARIACIÓN - DROPDOWN MAESTRO */}
-                                        <div style={{ marginBottom: '1rem' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: '6px' }}>
-                                                TIPO DE VARIACIÓN
-                                            </label>
+                                    <div key={idx} style={{ padding: '0.8rem', backgroundColor: '#F3F4F6', borderRadius: '10px', position: 'relative' }}>
+                                        <button type="button" onClick={() => removeOption(idx)} style={{ position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', color: '#EF4444', fontWeight: '900', cursor: 'pointer' }}>✕</button>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.5rem' }}>
                                             <select
                                                 value={masterAttributes.some(a => a.name === opt.name) ? opt.name : (opt.name ? 'Personalizado' : '')}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    if (val === 'Personalizado') {
-                                                        updateOption(idx, '', '');
-                                                    } else if (val === '') {
-                                                        updateOption(idx, '', '');
-                                                    } else {
+                                                    if (val === 'Personalizado') updateOption(idx, '', '');
+                                                    else {
                                                         const master = masterAttributes.find(a => a.name === val);
                                                         updateOption(idx, val, master?.values.join(', ') || '');
                                                     }
                                                 }}
-                                                style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', color: '#1F2937', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%236B7280%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.8rem center', backgroundSize: '1.2em' }}
+                                                style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid #D1D5DB', fontSize: '0.75rem', fontWeight: '700' }}
                                             >
-                                                <option value="">-- Seleccionar --</option>
+                                                <option value="">-- Variable --</option>
                                                 {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
-                                                <option value="Personalizado">➕ Otra (Personalizada)...</option>
+                                                <option value="Personalizado">+ Otra...</option>
                                             </select>
-
-                                            {(opt.name !== '' && !masterAttributes.some(a => a.name === opt.name)) && (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre: ej. Calibre, Color..."
-                                                    value={opt.name}
-                                                    onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '2px solid #3B82F6', fontWeight: '800', marginTop: '10px', outline: 'none' }}
-                                                    autoFocus
-                                                />
-                                            )}
-                                        </div>
-
-                                        {/* VALORES - LISTA DE CHEQUEO O MANUAL */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', marginBottom: '6px' }}>
-                                                VALORES POSIBLES
-                                            </label>
-                                            
-                                            {masterAttributes.some(a => a.name === opt.name) ? (
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #D1D5DB' }}>
-                                                    {masterAttributes.find(a => a.name === opt.name)?.values.map(val => (
-                                                        <label 
-                                                            key={val} 
-                                                            style={{ 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                gap: '8px', 
-                                                                fontSize: '0.9rem', 
-                                                                cursor: 'pointer', 
-                                                                padding: '6px 12px', 
-                                                                backgroundColor: opt.values.includes(val) ? '#EFF6FF' : '#F9FAFB', 
-                                                                borderRadius: '8px', 
-                                                                transition: 'all 0.2s',
-                                                                border: `1.5px solid ${opt.values.includes(val) ? '#3B82F6' : '#F3F4F6'}`,
-                                                                color: opt.values.includes(val) ? '#1E40AF' : '#4B5563',
-                                                                fontWeight: opt.values.includes(val) ? '800' : '500'
-                                                            }}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={opt.values.includes(val)}
-                                                                onChange={(e) => {
-                                                                    const newValues = e.target.checked
-                                                                        ? [...opt.values, val]
-                                                                        : opt.values.filter((v: string) => v !== val);
-                                                                    updateOption(idx, opt.name, newValues.join(', '));
-                                                                }}
-                                                                style={{ width: '16px', height: '16px', accentColor: '#3B82F6' }}
-                                                            />
-                                                            {val}
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Verde, Pintón, Maduro"
-                                                    value={opt.values.join(', ')}
-                                                    onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
-                                                />
-                                            )}
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                {opt.values.slice(0, 4).map(v => <span key={v} style={{ fontSize: '0.65rem', padding: '2px 6px', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #E5E7EB' }}>{v}</span>)}
+                                                {opt.values.length > 4 && <span style={{ fontSize: '0.65rem', color: '#6B7280' }}>+{opt.values.length - 4}</span>}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
 
                                 {options.length < 3 && (
-                                    <button
-                                        type="button"
-                                        onClick={addOption}
-                                        style={{ padding: '0.8rem', borderRadius: '8px', border: '2px dashed #D1D5DB', color: '#6B7280', fontWeight: '700', background: 'none', cursor: 'pointer' }}
-                                    >
-                                        + Añadir Variable de Producto
-                                    </button>
+                                    <button type="button" onClick={addOption} style={{ padding: '0.5rem', borderRadius: '8px', border: '1px dashed #D1D5DB', color: '#6B7280', fontSize: '0.75rem', fontWeight: '700', background: 'none', cursor: 'pointer' }}>+ Añadir Variable</button>
                                 )}
 
                                 {options.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={generateVariants}
-                                        style={{ padding: '1rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', marginTop: '1rem' }}
-                                    >
-                                        🔄 Generar Combinaciones
-                                    </button>
+                                    <button type="button" onClick={generateVariants} style={{ padding: '0.6rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '0.8rem' }}>🔄 Combinar</button>
                                 )}
 
                                 {variants.length > 0 && (
-                                    <div style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
-                                        <p style={{ fontWeight: '700', marginBottom: '1rem', color: '#059669' }}>✅ {variants.length} Combinaciones generadas</p>
-                                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                                                <thead style={{ backgroundColor: '#F9FAFB', position: 'sticky', top: 0 }}>
-                                                    <tr>
-                                                        <th style={{ padding: '8px', textAlign: 'left' }}>Variante</th>
-                                                        <th style={{ padding: '8px', textAlign: 'left' }}>SKU Sugerido</th>
+                                    <div style={{ marginTop: '0.5rem', maxHeight: '180px', overflowY: 'auto', border: '1px solid #f3f4f6', borderRadius: '8px' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                                            <thead style={{ backgroundColor: '#F9FAFB', position: 'sticky', top: 0 }}>
+                                                <tr>
+                                                    <th style={{ padding: '4px 8px', textAlign: 'left' }}>Variante</th>
+                                                    <th style={{ padding: '4px 8px', textAlign: 'left' }}>SKU</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {variants.map((v, i) => (
+                                                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                        <td style={{ padding: '4px 8px' }}>{Object.values(v.options).join('/')}</td>
+                                                        <td style={{ padding: '4px 8px', fontWeight: '800', color: '#2563EB' }}>{v.sku}</td>
                                                     </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {variants.map((v, i) => (
-                                                        <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                                                            <td style={{ padding: '8px' }}>{Object.values(v.options).join(' / ')}</td>
-                                                            <td style={{ padding: '8px', fontWeight: '800', color: '#2563EB' }}>
-                                                                {v.sku}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    <footer style={{ marginTop: '4rem', display: 'flex', justifyContent: 'flex-end', gap: '2rem', borderTop: '1px solid #eee', paddingTop: '2.5rem' }}>
-                        <button type="button" onClick={onClose} style={{ padding: '1.2rem 3rem', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: '1.2rem', fontWeight: '600' }}>Descartar</button>
+                    <footer style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #f3f4f6', paddingTop: '1rem' }}>
+                        <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.5rem', background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600' }}>Cancelar</button>
                         <button
                             type="submit"
                             disabled={loading || uploading}
                             style={{
-                                padding: '1.2rem 5rem',
+                                padding: '0.6rem 2.5rem',
                                 backgroundColor: 'var(--primary)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '14px',
+                                borderRadius: '10px',
                                 fontWeight: '900',
                                 cursor: 'pointer',
-                                fontSize: '1.4rem',
-                                boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)',
-                                transition: 'all 0.3s transform'
+                                fontSize: '1rem',
+                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
                             }}
                         >
-                            {loading || uploading ? '📦 Procesando...' : '🚀 Finalizar y Crear SKU'}
+                            {loading || uploading ? '...' : '🚀 Crear SKU Maestro'}
                         </button>
                     </footer>
                 </form>

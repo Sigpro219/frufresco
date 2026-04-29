@@ -282,6 +282,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     parent_id: formData.parent_id,
                     buying_team: formData.buying_team,
                     procurement_method: formData.procurement_method,
+                    inventory_group: formData.inventory_group,
+                    purchase_sublist: formData.purchase_sublist,
                     utility_deviation_pct: formData.utility_deviation_pct || 0,
                     options_config: options,
                     variants: variants,
@@ -469,6 +471,45 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 <option value="">Seleccionar método...</option>
                                 {procurementMethods.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                             </select>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
+                            <input
+                                type="text"
+                                list="inventory-groups-edit"
+                                value={formData.inventory_group || ''}
+                                onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                            />
+                            <datalist id="inventory-groups-edit">
+                                <option value="INVENTARIO DE FRUTAS Y OTROS" />
+                                <option value="INVENTARIO DE HORTALIZAS" />
+                                <option value="INVENTARIO DE VERDURAS" />
+                                <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" />
+                                <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" />
+                            </datalist>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
+                            <input
+                                type="text"
+                                list="purchase-sublists-edit"
+                                value={formData.purchase_sublist || ''}
+                                onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                            />
+                            <datalist id="purchase-sublists-edit">
+                                <option value="FRUTA SELECCIONADA" />
+                                <option value="HORTALIZA SELECCIONADA" />
+                                <option value="DESPENSA" />
+                                <option value="TUBERCULOS - PAPA" />
+                                <option value="VERDURAS" />
+                                <option value="PLATANOS" />
+                                <option value="TOMATE" />
+                            </datalist>
                         </div>
                     </div>
 
