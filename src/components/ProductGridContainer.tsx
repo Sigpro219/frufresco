@@ -56,7 +56,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
 
     const applyNicknames = (plist: Product[]) => plist.map(p => ({
         ...p,
-        display_name: nicknameMap[p.id] || translationCache[p.name] || p.display_name || p.name
+        display_name: nicknameMap[p.id] || p.name_en || translationCache[p.name] || p.display_name || p.name
     }));
 
     const productsWithNicknames = applyNicknames(allVisible);

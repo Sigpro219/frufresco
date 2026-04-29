@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, Suspense, useEffect } from 'react';
-import { Search, X, Info } from 'lucide-react';
+import { Search, X, ChevronRight } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { translations, Locale } from '../lib/translations';
 
 function SearchBarContent({ placeholder }: { placeholder?: string }) {
@@ -11,6 +12,8 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
     const [query, setQuery] = useState(searchParams.get('q') || '');
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
 
     // 1. Detect page reload ONCE on mount
     useEffect(() => {
@@ -33,9 +36,38 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
         setQuery(searchParams.get('q') || '');
     }, [searchParams]);
 
+    // 3. Predictive Search Logic
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            if (query.trim().length < 2) {
+                setSuggestions([]);
+                setShowDropdown(false);
+                return;
+            }
+
+            const { data } = await supabase
+                .from('products')
+                .select('id, name, category, base_price, image_url, display_name, web_conversion_factor')
+                .eq('is_active', true)
+                .eq('show_on_web', true)
+                .ilike('name', `%${query}%`)
+                .order('image_url', { ascending: false, nullsFirst: false })
+                .limit(6);
+
+            if (data) {
+                setSuggestions(data);
+                setShowDropdown(true);
+            }
+        };
+
+        const timer = setTimeout(fetchSuggestions, 300);
+        return () => clearTimeout(timer);
+    }, [query]);
+
     // Handle manual search
     const handleSearch = () => {
         const currentQ = searchParams.get('q') || '';
+        setShowDropdown(false);
         if (query !== currentQ) {
             const params = new URLSearchParams(searchParams.toString());
             if (query) {
@@ -64,7 +96,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     onChange={(e) => setQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '1.2rem 8.5rem 1.2rem 3.8rem', // Increased right padding for new buttons
+                        padding: '1.2rem 4.5rem 1.2rem 3.8rem', // Reduced right padding further
                         borderRadius: 'var(--radius-full)',
                         border: '2px solid var(--border)',
                         background: 'white',
@@ -140,79 +172,102 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         style={{
                             background: 'var(--primary)',
                             border: 'none',
-                            borderRadius: 'var(--radius-full)',
-                            padding: '0.6rem 1rem',
+                            borderRadius: '50%',
+                            width: '45px',
+                            height: '45px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'white',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
-                            boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)',
-                            fontWeight: '800'
+                            boxShadow: '0 4px 12px rgba(26, 77, 46, 0.2)',
+                            flexShrink: 0
                         }}
                     >
-                        Buscar
+                        <Search size={20} strokeWidth={3} />
                     </button>
                 </div>
 
+                </div>
+
+                {/* --- PREDICTIVE SEARCH DROPDOWN --- */}
+                {showDropdown && suggestions.length > 0 && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '20px',
+                        right: '20px',
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        marginTop: '10px',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+                        zIndex: 1000,
+                        overflow: 'hidden',
+                        border: '1px solid rgba(0,0,0,0.05)',
+                        animation: 'fadeInScale 0.2s ease-out'
+                    }}>
+                        {/* Section 1: Product Previews */}
+                        <div style={{ padding: '10px' }}>
+                            {suggestions.map(p => (
+                                <div 
+                                    key={`prod-${p.id}`}
+                                    onClick={() => {
+                                        setShowDropdown(false);
+                                        router.push(`/products/${p.id}`);
+                                    }}
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '15px', 
+                                        padding: '12px', 
+                                        borderRadius: '12px',
+                                        cursor: 'pointer',
+                                        transition: 'background 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#f3f4f6', flexShrink: 0 }}>
+                                        <img src={p.image_url || '/placeholder.png'} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.95rem' }}>{p.display_name || p.name}</div>
+                                        <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem' }}>
+                                            ${(Math.ceil(((p.base_price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} color="#d1d5db" />
+                                </div>
+                            ))}
+                        </div>
+                        
+                        <div 
+                            onClick={handleSearch}
+                            style={{ 
+                                padding: '15px', 
+                                textAlign: 'center', 
+                                backgroundColor: '#f9fafb', 
+                                color: '#6b7280', 
+                                fontSize: '0.85rem', 
+                                fontWeight: '700', 
+                                cursor: 'pointer' 
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        >
+                            Ver todos los resultados para "{query}"
+                        </div>
+                    </div>
+                )}
+                
                 <style dangerouslySetInnerHTML={{ __html: `
-                    .search-tooltip {
-                        position: absolute;
-                        bottom: calc(100% + 12px);
-                        right: -10px;
-                        background-color: #1F2937;
-                        color: white;
-                        padding: 8px 14px;
-                        border-radius: 8px;
-                        font-size: 0.8rem;
-                        font-weight: 500;
-                        white-space: nowrap;
-                        opacity: 0;
-                        visibility: hidden;
-                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-                        pointer-events: none;
-                        z-index: 50;
-                        transform: translateY(4px);
-                    }
-                    .search-tooltip::after {
-                        content: '';
-                        position: absolute;
-                        top: 100%;
-                        right: 16px;
-                        border-width: 6px;
-                        border-style: solid;
-                        border-color: #1F2937 transparent transparent transparent;
-                    }
-                    .info-icon-container:hover .search-tooltip {
-                        opacity: 1;
-                        visibility: visible;
-                        transform: translateY(0);
+                    @keyframes fadeInScale {
+                        from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+                        to { opacity: 1; transform: translateY(0) scale(1); }
                     }
                 `}} />
-
-                <div className="info-icon-container" style={{
-                    position: 'absolute',
-                    right: query ? '135px' : '105px', // Adjust depending on query presence
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#9CA3AF',
-                    cursor: 'help',
-                    padding: '8px',
-                    transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#4B5563'}
-                onMouseLeave={(e) => e.currentTarget.style.color = '#9CA3AF'}
-                >
-                    <Info size={20} strokeWidth={2.5} />
-                    <div className="search-tooltip">
-                        {t.searchTip}
-                    </div>
-                </div>
             </div>
-        </div>
     );
 }
 

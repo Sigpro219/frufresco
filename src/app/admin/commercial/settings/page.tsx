@@ -304,24 +304,34 @@ export default function PricingSettingsPage() {
             // 1. Obtener todos los productos activos
             const { data: allProducts, error: pError } = await supabase
                 .from('products')
-                .select('id, name, iva_rate, category');
+                .select('id, name, iva_rate, category, parent_id, utility_deviation_pct');
             
             if (pError) throw pError;
 
-            // 2. Obtener últimas compras para cada uno
-            // Nota: Podríamos usar una vista o RPC para esto de forma más eficiente, 
-            // pero para esta escala lo haremos con lógica de cliente robusta.
-            const { data: lastPurchases, error: purError } = await supabase
-                .from('purchases')
-                .select('product_id, unit_price')
-                .order('created_at', { ascending: false });
+            // 2. Obtener últimas compras y Overrides (Costo Inteligente Autorizado)
+            const [purchasesRes, overridesRes] = await Promise.all([
+                supabase
+                    .from('purchases')
+                    .select('product_id, unit_price, created_at')
+                    .order('created_at', { ascending: false }),
+                supabase
+                    .from('commercial_overrides')
+                    .select('product_id, manual_cost, expires_at')
+            ]);
 
-            if (purError) throw purError;
+            if (purchasesRes.error) throw purchasesRes.error;
 
-            // Mapear el último costo por ID
-            const costMap: Record<string, number> = {};
-            lastPurchases.forEach(p => {
-                if (!costMap[p.product_id]) costMap[p.product_id] = p.unit_price;
+            const historyMap: Record<string, { price: number, date: Date }[]> = {};
+            purchasesRes.data?.forEach(p => {
+                if (!historyMap[p.product_id]) historyMap[p.product_id] = [];
+                if (historyMap[p.product_id].length < 1) { // Solo necesitamos el último para fallback
+                    historyMap[p.product_id].push({ price: p.unit_price, date: new Date(p.created_at) });
+                }
+            });
+
+            const overridesMap: Record<string, number> = {};
+            overridesRes.data?.forEach(o => {
+                overridesMap[o.product_id] = o.manual_cost;
             });
 
             // 3. Obtener reglas de excepción del modelo B2C
@@ -337,17 +347,39 @@ export default function PricingSettingsPage() {
 
             // 4. Calcular y Preparar Updates
             const updates = allProducts.map(prod => {
-                const cost = costMap[prod.id];
-                if (!cost || cost === 0) return null;
+                // PRIORIDAD: 
+                // 1. Costo Manual Autorizado (Override) -> Ya viene suavizado por la Matriz Delta
+                // 2. Última Compra (Fallback)
+                const overrideCost = overridesMap[prod.id];
+                const history = historyMap[prod.id] || (prod.parent_id ? historyMap[prod.parent_id] : []);
+                
+                let baseCost = overrideCost || (history[0]?.price || 0);
+                if (baseCost === 0) return null;
+
+                const lastDate = history[0]?.date || new Date();
+                const now = new Date();
+                const daysOld = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                // --- FASE 1: FACTOR DE FRESCURA (TIME-DECAY) ---
+                // Si el dato es viejo (>7 días), protegemos el margen añadiendo 5% diario
+                if (daysOld > 7) {
+                    const extraDays = daysOld - 7;
+                    baseCost = baseCost * Math.pow(1.05, extraDays);
+                }
 
                 const baseMargin = selectedModel.base_margin_percent;
                 const adjustment = rulesMap[prod.id] || 0;
-                const finalMargin = (baseMargin + adjustment) / 100;
+                const utilityDeviation = prod.utility_deviation_pct || 0;
+                
+                const finalMargin = (baseMargin + adjustment + utilityDeviation) / 100;
                 
                 // Lógica de Precio: (Costo * (1 + Margen)) * (1 + IVA)
-                const priceBeforeTax = cost * (1 + finalMargin);
+                const priceBeforeTax = baseCost * (1 + finalMargin);
                 const ivaRate = (prod.iva_rate || 0) / 100;
-                const finalPrice = Math.round(priceBeforeTax * (1 + ivaRate));
+                const priceWithTax = priceBeforeTax * (1 + ivaRate);
+
+                // --- FASE 2: REDONDEO COMERCIAL (Múltiplo de 50) ---
+                const finalPrice = Math.ceil(priceWithTax / 50) * 50;
 
                 return {
                     id: prod.id,
@@ -362,14 +394,17 @@ export default function PricingSettingsPage() {
 
             console.log(`📊 Procesando ${updates.length} actualizaciones de precio...`);
 
-            // 5. Ejecutar actualizaciones (por lotes de 50 para seguridad)
-            for (let i = 0; i < updates.length; i += 50) {
-                const batch = updates.slice(i, i + 50);
-                const { error: upError } = await supabase
-                    .from('products')
-                    .upsert(batch);
-                
-                if (upError) throw upError;
+            // 5. Ejecutar actualizaciones (usamos update individual en paralelo para evitar errores de restricción NOT NULL en upsert)
+            for (let i = 0; i < updates.length; i += 15) {
+                const batch = updates.slice(i, i + 15);
+                await Promise.all(batch.map(async (up) => {
+                    const { error: upError } = await supabase
+                        .from('products')
+                        .update({ base_price: up.base_price })
+                        .eq('id', up.id);
+                    
+                    if (upError) throw upError;
+                }));
             }
 
             alert(`✅ ¡Éxito! Se han actualizado ${updates.length} precios en el catálogo público conforme al modelo B2C.`);

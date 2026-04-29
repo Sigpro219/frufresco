@@ -204,7 +204,7 @@ export default function ProductCard({ product }: { product: Product }) {
                         {product.base_price > 0 ? (
                             <>
                                 <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                    ${((product.base_price || 0) * (product.web_conversion_factor || 1)).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                    ${(Math.ceil(((product.base_price || 0) * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                     {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
                                 </span>
                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '500' }}>
