@@ -96,9 +96,9 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
     });
 
     return (
-        <section style={{ padding: '5rem 0 2rem', backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+        <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
             <div className="container">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
                     <Flame size={32} strokeWidth={2.5} style={{ color: 'var(--primary)' }} />
                     <h2 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.4rem', fontWeight: '900', color: 'var(--primary-dark)', margin: 0 }}>
                         {t.featuredTitle.replace('🔥', '').trim()}
@@ -147,20 +147,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
         </div>
       </section>
 
-      {/* VALUE PROPOSITION - Static Content */}
-      <section style={{ padding: '4rem 0', backgroundColor: '#F9FAFB' }}>
-        <div className="container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '3rem', textAlign: 'center' }}>
-          {t.valueProps.map((prop: any, i: number) => (
-            <div key={i} style={{ padding: '1rem' }}>
-              <div style={{ marginBottom: '1.5rem', color: 'var(--primary)', backgroundColor: 'var(--accent)', width: '80px', height: '80px', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                {i === 0 ? <Timer size={40} /> : i === 1 ? <Sprout size={40} /> : <Coins size={40} />}
-              </div>
-              <h3 style={{ fontSize: '1.6rem', fontWeight: '800', marginBottom: '1rem' }}>{prop.title}</h3>
-              <p style={{ color: 'var(--text-muted)', lineHeight: '1.7' }}>{prop.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* FEATURED SECTION - Streamed */}
       <Suspense fallback={<div style={{ height: '400px' }}><ProductSkeleton /></div>}>
@@ -168,8 +154,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
       </Suspense>
       
       {/* CATALOG SECTION */}
-      <section id="catalog" className="container" style={{ padding: '4rem 1rem', scrollMarginTop: '80px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+      <section id="catalog" className="container" style={{ padding: '1.8rem 1rem 1rem', scrollMarginTop: '80px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <h2 className="section-title" style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '2.8rem', fontWeight: '900' }}>{catalogTitle}</h2>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
             <SearchBar placeholder={t.searchPlaceholder} />
@@ -187,6 +173,52 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 locale={locale} 
             />
         </Suspense>
+      </section>
+      {/* VALUE PROPOSITION - Static Information */}
+      <section style={{ padding: '3rem 0', backgroundColor: '#F8FAFC', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+        <div className="container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+          {t.valueProps.map((prop: any, i: number) => (
+            <div key={i} style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              textAlign: 'center',
+              padding: '1rem'
+            }}>
+              <div style={{ 
+                marginBottom: '1rem', 
+                color: 'var(--primary)', 
+                backgroundColor: 'var(--accent, #DCFCE7)', 
+                width: '60px', 
+                height: '60px', 
+                borderRadius: '16px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center'
+              }}>
+                {i === 0 ? <Timer size={30} strokeWidth={2.5} /> : i === 1 ? <Sprout size={30} strokeWidth={2.5} /> : <Coins size={30} strokeWidth={2.5} />}
+              </div>
+              <h3 style={{ 
+                fontFamily: 'var(--font-outfit), sans-serif',
+                fontSize: '1.3rem', 
+                fontWeight: '800', 
+                marginBottom: '0.5rem',
+                color: '#0F172A',
+                letterSpacing: '-0.02em'
+              }}>
+                {prop.title}
+              </h3>
+              <p style={{ 
+                color: '#64748B', 
+                lineHeight: '1.5',
+                fontSize: '0.95rem',
+                margin: 0
+              }}>
+                {prop.desc}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
     </main>
   );

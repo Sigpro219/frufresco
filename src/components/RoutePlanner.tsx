@@ -13,6 +13,9 @@ interface Order {
     is_b2b?: boolean;
     latitude?: number;
     longitude?: number;
+    address?: string;
+    crates?: number;
+    novedad?: string;
 }
 
 interface Vehicle {
@@ -42,7 +45,7 @@ export default function RoutePlanner() {
         b2b_kg_min: 10,
         b2c_kg_min: 5,
         base_setup_time: 5,
-        avg_kg_per_crate: 12.24
+        avg_kg_per_crate: 17
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
     const isMounted = useRef(true);
@@ -72,19 +75,17 @@ export default function RoutePlanner() {
             const cutoffEnabled = settings?.value !== 'false';
 
 
-            let query = supabase.from('orders').select('*').eq('status', 'approved');
-
             const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
             const targetDate = now.toISOString().split('T')[0];
 
+            let apiUrl = '/api/transport/orders';
             if (cutoffEnabled) {
-                query = query.eq('delivery_date', targetDate);
+                apiUrl += `?date=${targetDate}`;
             }
 
-            const { data: orderData, error: oErr } = await query;
-
-            if (!isMounted.current) return;
-            if (oErr) throw oErr;
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error('Failed to fetch orders');
+            const orderData = await response.json();
 
             // 3. Fetch Fleet with Driver Join (Matching FleetManagement logic)
             const { data: fleetData, error: fErr } = await supabase
@@ -126,21 +127,40 @@ export default function RoutePlanner() {
                     if (match) finalWeight = parseFloat(match[1]);
                 }
 
-                // Extract name from shipping_address if customer_name is missing
+                // Extract name and address from shipping_address
                 let finalName = o.customer_name;
+                let address = o.shipping_address || 'Sin dirección';
                 if (!finalName) {
                     if (o.profile?.company_name) {
                         finalName = o.profile.company_name;
-                    } else if (o.shipping_address?.includes(' - ')) {
-                        finalName = o.shipping_address.split(' - ')[0];
+                    } else if (address.includes(' - ')) {
+                        const parts = address.split(' - ');
+                        finalName = parts[0];
+                        address = parts[1] || address;
                     } else {
                         finalName = 'Cliente s/n';
                     }
+                } else if (address.includes(' - ')) {
+                    address = address.split(' - ')[1] || address;
+                }
+
+                // Extract crates and novedad
+                let crates = Math.ceil((finalWeight || 10) / 17); // default assumption
+                let novedad = '';
+                if (o.admin_notes) {
+                    const matchCrates = o.admin_notes.match(/\[CRATES:\s*([\d]+)\]/);
+                    if (matchCrates) crates = parseInt(matchCrates[1]);
+
+                    const matchNov = o.admin_notes.match(/\[NOVEDAD:\s*(.*?)\s*\]/);
+                    if (matchNov) novedad = matchNov[1];
                 }
 
                 return {
                     ...o,
                     customer_name: finalName,
+                    address: address,
+                    crates: crates,
+                    novedad: novedad,
                     total_weight_kg: finalWeight || Math.floor(Math.random() * 200) + 50,
                     is_b2b: o.is_b2b !== undefined ? o.is_b2b : (o.type?.includes('b2b') || Math.random() > 0.4),
                     delivery_zone: o.delivery_zone || (o.admin_notes?.match(/\[ZONA: ([^\]]+)\]/)?.[1] || ['Chapinero', 'Usaquén', 'Suba', 'Teusaquillo', 'Kennedy'][Math.floor(Math.random() * 5)])
@@ -315,170 +335,176 @@ export default function RoutePlanner() {
     if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: '2rem' }}>Iniciando motores...</div>;
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '450px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '650px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
             {/* Orders Sidebar */}
             <div style={{ 
                 backgroundColor: 'white', 
-                borderRadius: '24px', 
+                borderRadius: '16px', 
                 border: '1px solid #E5E7EB', 
                 display: 'flex', 
                 flexDirection: 'column', 
                 overflow: 'hidden',
                 minHeight: 0
             }}>
-                <div style={{ padding: '1.5rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
+                <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#374151' }}>PEDIDOS PICKING</h3>
-                        <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.3rem 0.6rem', borderRadius: '8px', fontWeight: '800', display: 'block' }}>
-                                {orders.length} DISPONIBLES
-                            </span>
-                            <div style={{ fontSize: '0.55rem', color: 'red', fontWeight: 'bold', marginTop: '4px' }}>
-                                DB: {debugInfo.count} | DATE: {debugInfo.targetDate} | DRIVERS: {debugInfo.driversFound || 'NINGUNO'}
+                        <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>PEDIDOS PICKING</h3>
+                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ fontSize: '0.5rem', color: '#EF4444', fontWeight: 'bold', lineHeight: '1.2', textAlign: 'right' }}>
+                                DB: {debugInfo.count} • DRIVERS: {debugInfo.driversFound || 'N/A'}<br/>
+                                DATE: {debugInfo.targetDate}
                             </div>
+                            <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800' }}>
+                                {orders.length} DISP
+                            </span>
                         </div>
 
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.2rem', paddingRight: '0.5rem' }}>
-                    {orders.map(order => {
-                        const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
-                        return (
-                            <div 
-                                key={order.id} 
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, order.id)}
-                                style={{ 
-                                    padding: '1.2rem', 
-                                    borderRadius: '20px', 
-                                    border: isAssigned ? '1px solid #99F6E4' : '1px solid #E5E7EB', 
-                                    marginBottom: '1.2rem',
-                                    backgroundColor: isAssigned ? '#F0FDFA' : 'white',
-                                    transition: 'all 0.2s',
-                                    boxShadow: isAssigned ? 'none' : '0 4px 10px rgba(0,0,0,0.03)',
-                                    cursor: 'grab'
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: order.is_b2b ? '#0369A1' : '#6D28D9', backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', padding: '0.3rem 0.6rem', borderRadius: '8px', letterSpacing: '0.05rem' }}>
-                                        {order.is_b2b ? 'B2B (Institucional)' : 'B2C (Consumidor)'}
-                                    </span>
-                                    <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', backgroundColor: '#F3F4F6', padding: '0.3rem 0.6rem', borderRadius: '8px' }}>
-                                        ID-{order.id.slice(0, 6)}
-                                    </span>
-                                </div>
-                                
-                                <div style={{ fontWeight: '900', fontSize: '1.05rem', color: '#111827', marginBottom: '1rem', lineHeight: '1.2' }}>{order.customer_name}</div>
-                                
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '1rem' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: isAssigned ? '#CCFBF1' : '#F8FAFC', padding: '0.6rem', borderRadius: '12px', border: isAssigned ? '1px solid #99F6E4' : '1px solid #E2E8F0' }}>
-                                        <span style={{ fontSize: '0.6rem', color: isAssigned ? '#0D9488' : '#64748B', fontWeight: '900', marginBottom: '0.2rem' }}>ZONA DE ENTREGA</span>
-                                        <span style={{ fontSize: '0.75rem', color: '#1E293B', fontWeight: '800' }}>📍 {order.delivery_zone || 'Por asignar'}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: isAssigned ? '#CCFBF1' : '#F8FAFC', padding: '0.6rem', borderRadius: '12px', border: isAssigned ? '1px solid #99F6E4' : '1px solid #E2E8F0' }}>
-                                        <span style={{ fontSize: '0.6rem', color: isAssigned ? '#0D9488' : '#64748B', fontWeight: '900', marginBottom: '0.2rem' }}>PESO TOTAL</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#1E293B', fontWeight: '800' }}>📦 {order.total_weight_kg} kg</span>
-                                            <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: '700', backgroundColor: '#F1F5F9', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
-                                                🧺 {Math.ceil(order.total_weight_kg / params.avg_kg_per_crate)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: isAssigned ? 'rgba(255, 255, 255, 0.5)' : '#FEF3C7', padding: '0.5rem 0.8rem', borderRadius: '12px', border: isAssigned ? 'none' : '1px solid #FDE68A' }}>
-                                        <span style={{ fontSize: '0.7rem', color: isAssigned ? '#0F766E' : '#B45309', fontWeight: '900' }}>🕒 Franja:</span>
-                                        <span style={{ fontSize: '0.7rem', color: isAssigned ? '#115E59' : '#92400E', fontWeight: '800' }}>{order.delivery_slot || 'Abierta'}</span>
-                                    </div>
-                                    {isAssigned && (
-                                        <div style={{ backgroundColor: '#10B981', color: 'white', fontSize: '0.65rem', fontWeight: '900', letterSpacing: '0.05rem', padding: '0.4rem 0.8rem', borderRadius: '12px', boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)' }}>
-                                            ASIGNADO
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
+                        <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F3F4F6', color: '#6B7280', fontWeight: '800', textAlign: 'left', zIndex: 10 }}>
+                            <tr>
+                                <th style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #E5E7EB', width: '20px' }}>TIPO</th>
+                                <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB' }}>CLIENTE</th>
+                                <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB' }}>UBICACIÓN</th>
+                                <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right' }}>CANT.</th>
+                                <th style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>RESTRICCIONES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {orders.map(order => {
+                                const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
+                                return (
+                                    <tr 
+                                        key={order.id} 
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, order.id)}
+                                        style={{ 
+                                            backgroundColor: isAssigned ? '#F0FDFA' : 'white',
+                                            borderBottom: '1px solid #F3F4F6',
+                                            transition: 'all 0.2s',
+                                            cursor: 'grab',
+                                            opacity: isAssigned ? 0.6 : 1
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#CCFBF1' : '#F9FAFB'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#F0FDFA' : 'white'}
+                                    >
+                                        <td style={{ padding: '0.6rem 1rem' }}>
+                                            <div style={{ 
+                                                width: '24px', height: '24px', borderRadius: '6px', 
+                                                backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', 
+                                                color: order.is_b2b ? '#0369A1' : '#6D28D9', 
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontWeight: '900', fontSize: '0.6rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#DDD6FE'}` 
+                                            }}>
+                                                {order.is_b2b ? 'B2B' : 'B2C'}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 0.5rem', maxWidth: '140px' }}>
+                                            <div style={{ fontWeight: '900', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {order.customer_name}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 0.5rem', maxWidth: '140px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '3px' }}>
+                                                <span style={{ backgroundColor: '#F1F5F9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800', fontSize: '0.55rem' }}>
+                                                    {order.delivery_zone || 'Central'}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.6rem', color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {order.address}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
+                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{order.total_weight_kg} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
+                                            <div style={{ fontSize: '0.6rem', color: '#0D9488', fontWeight: '800', marginTop: '2px' }}>🧺 {order.crates} und</div>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'left', maxWidth: '150px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: order.novedad ? '4px' : '0' }}>
+                                                <div style={{ fontSize: '0.6rem', color: '#92400E', fontWeight: '800', backgroundColor: '#FEF3C7', padding: '0.15rem 0.4rem', borderRadius: '4px', display: 'inline-block' }}>
+                                                    🕒 {order.delivery_slot || 'Abierta'}
+                                                </div>
+                                            </div>
+                                            {order.novedad && (
+                                                <div style={{ fontSize: '0.55rem', color: '#BE123C', backgroundColor: '#FFF1F2', padding: '0.2rem 0.4rem', borderRadius: '4px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', border: '1px solid #FECDD3' }}>
+                                                    ⚠️ {order.novedad}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
             {/* Planning Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', position: 'relative', minHeight: 0 }}>
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    backgroundColor: '#F0FDFA', 
-                    padding: '1.5rem', 
-                    borderRadius: '24px', 
-                    border: '1px solid #CCFBF1' 
-                }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                            <div style={{ fontWeight: '900', color: '#0D9488', fontSize: '1.1rem' }}>✨ Google Magic Optimizer</div>
-                            <button 
-                                onClick={() => setShowSettings(true)}
-                                style={{ 
-                                    backgroundColor: 'white', 
-                                    border: '1px solid #CCFBF1', 
-                                    borderRadius: '8px', 
-                                    padding: '0.3rem 0.6rem', 
-                                    fontSize: '0.7rem', 
-                                    color: '#0D9488', 
-                                    fontWeight: '800', 
-                                    cursor: 'pointer' 
-                                }}
-                            >
-                                ⚙️ Parámetros
-                            </button>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: '#0D9488', marginTop: '0.2rem' }}>
-                            {params.b2b_kg_min} kg/min (B2B) • {params.b2c_kg_min} kg/min (B2C)
-                        </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', position: 'relative', minHeight: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>FLOTA Y RUTAS</h3>
+                        <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800' }}>
+                            {Object.values(assignments).reduce((acc, curr) => acc + curr.length, 0)} ASIGNADOS
+                        </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <button 
+                            onClick={() => setShowSettings(true)}
+                            title="Ajustar Parámetros"
+                            style={{ 
+                                backgroundColor: 'transparent', 
+                                border: '1px solid #E5E7EB', 
+                                borderRadius: '6px', 
+                                padding: '0.25rem 0.4rem', 
+                                fontSize: '0.7rem', 
+                                color: '#6B7280', 
+                                fontWeight: '700', 
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}
+                        >
+                            ⚙️
+                        </button>
+                        <button 
+                            onClick={handleAutoOptimize}
+                            disabled={optimizing}
+                            style={{ 
+                                padding: '0.25rem 0.6rem', 
+                                borderRadius: '6px', 
+                                backgroundColor: optimizing ? '#94A3B8' : '#F3F4F6', 
+                                color: optimizing ? 'white' : '#4B5563', 
+                                border: '1px solid #E5E7EB', 
+                                fontWeight: '800', 
+                                cursor: 'pointer', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.3rem',
+                                fontSize: '0.7rem'
+                            }}
+                        >
+                            ✨ {optimizing ? 'Optimizando...' : 'Auto-Asignar'}
+                        </button>
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button 
                                 onClick={handleConfirmRoutes}
                                 disabled={loading}
                                 style={{ 
-                                    padding: '1rem 1.5rem', 
-                                    borderRadius: '16px', 
+                                    padding: '0.25rem 0.6rem', 
+                                    borderRadius: '6px', 
                                     backgroundColor: '#10B981', 
                                     color: 'white', 
                                     border: 'none', 
-                                    fontWeight: '900', 
+                                    fontWeight: '800', 
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.2)',
-                                    transition: 'all 0.2s'
+                                    fontSize: '0.7rem'
                                 }}
                             >
-                                ✅ Confirmar y Despachar
+                                ✅ Confirmar
                             </button>
                         )}
-                        <button 
-                            onClick={handleAutoOptimize}
-                            disabled={optimizing}
-                            style={{ 
-                                padding: '1rem 2rem', 
-                                borderRadius: '16px', 
-                                backgroundColor: optimizing ? '#94A3B8' : '#0891B2', 
-                                color: 'white', 
-                                border: 'none', 
-                                fontWeight: '900', 
-                                cursor: 'pointer', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '0.7rem',
-                                fontSize: '0.9rem',
-                                boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.2)',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {optimizing ? 'Simulando Motores...' : '🚀 Ejecutar Optimización'}
-                        </button>
                     </div>
                 </div>
 
@@ -537,17 +563,17 @@ export default function RoutePlanner() {
                                 </div>
                                 <input 
                                     type="range" 
-                                    min="8" 
-                                    max="18" 
+                                    min="10" 
+                                    max="25" 
                                     step="0.01"
                                     value={params.avg_kg_per_crate} 
                                     onChange={(e) => updateParameter('avg_kg_per_crate', parseFloat(e.target.value))}
                                     style={{ width: '100%', accentColor: '#0891B2', cursor: 'grab' }}
                                 />
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.3rem', fontSize: '0.55rem', color: '#94A3B8', fontWeight: '700' }}>
-                                    <span>8 kg</span>
-                                    <span>12.24 kg (Estándar)</span>
-                                    <span>18 kg</span>
+                                    <span>10 kg</span>
+                                    <span>17 kg (Estándar)</span>
+                                    <span>25 kg</span>
                                 </div>
                             </div>
                         </div>
@@ -559,8 +585,8 @@ export default function RoutePlanner() {
 
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
-                    gap: '1.5rem', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                    gap: '1.2rem', 
                     flex: 1, 
                     overflowY: 'auto',
                     paddingRight: '0.5rem',
@@ -586,14 +612,14 @@ export default function RoutePlanner() {
                                 onDrop={(e) => handleDrop(e, vehicle.id)}
                                 style={{ 
                                     backgroundColor: 'white', 
-                                    borderRadius: '24px', 
+                                    borderRadius: '20px', 
                                     border: isOverloaded ? '2px solid #EF4444' : '1px solid #E5E7EB', 
-                                    padding: '1.5rem',
+                                    padding: '1rem',
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
                                     transition: 'border 0.3s'
                                 }}
                             >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.2rem', alignItems: 'flex-start' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>🚛 {vehicle.plate}</div>
                                         <div style={{

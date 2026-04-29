@@ -1,0 +1,2477 @@
+{
+  "model": {
+    "shipments": [
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.61695928769131,
+              "longitude": -74.17902218540885
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "1"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "Zona",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.632255200139641,
+              "longitude": -74.1404688375414
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "126"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "ANTONIO NARIÑO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.664487020857501,
+              "longitude": -74.18491891507801
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "290"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "BARRIOS UNIDOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.626566671189319,
+              "longitude": -74.14843509693686
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "63"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "BARRIOS UNIDOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.591806737009396,
+              "longitude": -74.2011380514185
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "180"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CALLE 93 - CALLE 100",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.620210526997866,
+              "longitude": -74.13299446610876
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "20"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CALLE 93 - CALLE 100",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.641227217758137,
+              "longitude": -74.11721213205487
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "17"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CALLE 93 - CALLE 100",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.61109829466494,
+              "longitude": -74.14089380737639
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "127"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CANDELARIA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.663683503016758,
+              "longitude": -74.16932341002381
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "6"
+          },
+          "crates": {
+            "amount": "253"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 336
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.612732842293458,
+              "longitude": -74.10628080717511
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "213"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.659566007102058,
+              "longitude": -74.19483056164758
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "151"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6401962837048405,
+              "longitude": -74.15380585539758
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "30"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.640642808526483,
+              "longitude": -74.19528136590337
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "29"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.605537416786542,
+              "longitude": -74.1679575109086
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "17"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.588187652198934,
+              "longitude": -74.11690173951335
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "10"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CENTRO - SALITRE PLAZA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.630108877236876,
+              "longitude": -74.15032389622516
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "324"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.629144965192172,
+              "longitude": -74.15308694507104
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "27"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.582227926614563,
+              "longitude": -74.12957237343763
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "16"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.643067330384739,
+              "longitude": -74.19674713848599
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "7"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.585664858219634,
+              "longitude": -74.10645893010303
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "6"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.666613585246739,
+              "longitude": -74.15065284449749
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "91"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO - CALLE 82",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6551486373993285,
+              "longitude": -74.13139592764267
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "28"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CHAPINERO - CALLE 82",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.630247370803343,
+              "longitude": -74.16229109603849
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "65"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CLL 80 - HAYUELOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.609777904073065,
+              "longitude": -74.11931898944233
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "12"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CLL 80 - HAYUELOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.653881973658189,
+              "longitude": -74.18624650218824
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "10"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CLL 80 - HAYUELOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.621580569636913,
+              "longitude": -74.15603965543166
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "7"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "CLL 80 - HAYUELOS",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.650605500346187,
+              "longitude": -74.186045710271
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "175"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "ENGATIVA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.621234087485697,
+              "longitude": -74.10784127172039
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "8"
+          },
+          "crates": {
+            "amount": "134"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 348
+        },
+        "displayName": "ENGATIVA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6376305632298696,
+              "longitude": -74.11923609408338
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "755"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "FONTIBON",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.617299622344253,
+              "longitude": -74.13915107338859
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "142"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "FONTIBON",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.677345924621271,
+              "longitude": -74.20001866666414
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "13"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "FONTIBON",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.584828118662613,
+              "longitude": -74.15379416464073
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "8"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "KENNEDY",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6406705000004065,
+              "longitude": -74.16739739775333
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "113"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "MOSQUERA (C/MARCA)",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.582829441767912,
+              "longitude": -74.19587563198452
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "317"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "NORTE CLL 160",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.628852591592601,
+              "longitude": -74.1875315899372
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "90"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "NORTE CLL 160",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.616427653198278,
+              "longitude": -74.13417199191267
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "61"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "NORTE CLL 160",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.657387930985179,
+              "longitude": -74.15550258372541
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "12"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "NORTE CLL 160",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.622083773958306,
+              "longitude": -74.1573678950994
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "245"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "PUENTE ARANDA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6617630148604245,
+              "longitude": -74.19384945083925
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "170"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "PUENTE ARANDA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.659820883759359,
+              "longitude": -74.15788077808502
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "104"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "PUENTE ARANDA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.655620323338245,
+              "longitude": -74.16680053839018
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "65"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SANTA FE",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.590501414904024,
+              "longitude": -74.1979562634049
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "201"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6160661660494045,
+              "longitude": -74.11284227999856
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "136"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.679084487892434,
+              "longitude": -74.15683249012127
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "107"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.663785144886769,
+              "longitude": -74.10375609244576
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "84"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.662177173821156,
+              "longitude": -74.15884357542583
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "68"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6262576488612766,
+              "longitude": -74.18887360217775
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "57"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.62610594679932,
+              "longitude": -74.14073417709005
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "48"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.637775705797928,
+              "longitude": -74.17348490908667
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "30"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6245525487138135,
+              "longitude": -74.17287792902543
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "17"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6133761741582395,
+              "longitude": -74.11747079467585
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "17"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "SUBA",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.622371641285337,
+              "longitude": -74.16138447976753
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "320"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.631398045075929,
+              "longitude": -74.12888480316894
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "8"
+          },
+          "crates": {
+            "amount": "248"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 348
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.588250608072395,
+              "longitude": -74.16613332362269
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "227"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.671605492028856,
+              "longitude": -74.1775901827732
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "76"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.6723372898215345,
+              "longitude": -74.15154504843981
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "11"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.622814219102936,
+              "longitude": -74.12281276108914
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "32"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.627598217102609,
+              "longitude": -74.10727410297257
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "20"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "TEUSAQUILLO",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.608958544459074,
+              "longitude": -74.2015511334334
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "133"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "UNICENTRO - USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.613448315980665,
+              "longitude": -74.16868874112507
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "54"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "UNICENTRO - USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.648243750033925,
+              "longitude": -74.14421877629793
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "73"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.587993330653786,
+              "longitude": -74.13481806595392
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "34"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.677009423498356,
+              "longitude": -74.15930151959819
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "7"
+          },
+          "crates": {
+            "amount": "34"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 342
+        },
+        "displayName": "USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      },
+      {
+        "pickupArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.63,
+              "longitude": -74.153
+            }
+          }
+        ],
+        "deliveryArrivalConfigurations": [
+          {
+            "arrivalLocation": {
+              "latitude": 4.593102218045381,
+              "longitude": -74.1926369453345
+            }
+          }
+        ],
+        "loadDemands": {
+          "weight": {
+            "amount": "10"
+          },
+          "crates": {
+            "amount": "15"
+          }
+        },
+        "deliveryServiceDuration": {
+          "seconds": 360
+        },
+        "displayName": "USAQUEN",
+        "deliveryTimeWindows": [
+          {
+            "startTime": "2026-04-22T06:00:00Z",
+            "endTime": "2026-04-22T18:00:00Z"
+          }
+        ]
+      }
+    ],
+    "vehicles": [
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "5000"
+          },
+          "crates": {
+            "maxLoad": "483"
+          }
+        },
+        "displayName": "NHP287",
+        "label": "NHP287"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "2300"
+          },
+          "crates": {
+            "maxLoad": "214"
+          }
+        },
+        "displayName": "WNM153",
+        "label": "WNM153"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "2300"
+          },
+          "crates": {
+            "maxLoad": "214"
+          }
+        },
+        "displayName": "WFH273",
+        "label": "WFH273"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "2300"
+          },
+          "crates": {
+            "maxLoad": "214"
+          }
+        },
+        "displayName": "WLS083",
+        "label": "WLS083"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "3000"
+          },
+          "crates": {
+            "maxLoad": "250"
+          }
+        },
+        "displayName": "WFW369",
+        "label": "WFW369"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "2370"
+          },
+          "crates": {
+            "maxLoad": "240"
+          }
+        },
+        "displayName": "PMW071",
+        "label": "PMW071"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "2000"
+          },
+          "crates": {
+            "maxLoad": "130"
+          }
+        },
+        "displayName": "GNN321",
+        "label": "GNN321"
+      },
+      {
+        "startLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "endLocation": {
+          "latitude": 4.63,
+          "longitude": -74.153
+        },
+        "loadLimits": {
+          "weight": {
+            "maxLoad": "1620"
+          },
+          "crates": {
+            "maxLoad": "90"
+          }
+        },
+        "displayName": "WCW333",
+        "label": "WCW333"
+      }
+    ],
+    "globalConstraints": {
+      "trafficToken": "TRAFFIC_AWARE"
+    }
+  },
+  "searchMode": "CONSUME_ALL_AVAILABLE_TIME",
+  "considerRoadTraffic": true
+}

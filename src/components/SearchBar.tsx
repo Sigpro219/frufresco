@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, Suspense, useEffect } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Info } from 'lucide-react';
 import { translations, Locale } from '../lib/translations';
 
 function SearchBarContent({ placeholder }: { placeholder?: string }) {
@@ -127,17 +127,63 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         <X size={18} strokeWidth={2.5} />
                     </button>
                 )}
+
+                <style dangerouslySetInnerHTML={{ __html: `
+                    .search-tooltip {
+                        position: absolute;
+                        bottom: calc(100% + 12px);
+                        right: -10px;
+                        background-color: #1F2937;
+                        color: white;
+                        padding: 8px 14px;
+                        border-radius: 8px;
+                        font-size: 0.8rem;
+                        font-weight: 500;
+                        white-space: nowrap;
+                        opacity: 0;
+                        visibility: hidden;
+                        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+                        pointer-events: none;
+                        z-index: 50;
+                        transform: translateY(4px);
+                    }
+                    .search-tooltip::after {
+                        content: '';
+                        position: absolute;
+                        top: 100%;
+                        right: 16px;
+                        border-width: 6px;
+                        border-style: solid;
+                        border-color: #1F2937 transparent transparent transparent;
+                    }
+                    .info-icon-container:hover .search-tooltip {
+                        opacity: 1;
+                        visibility: visible;
+                        transform: translateY(0);
+                    }
+                `}} />
+
+                <div className="info-icon-container" style={{
+                    position: 'absolute',
+                    right: query ? '60px' : '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#9CA3AF',
+                    cursor: 'help',
+                    padding: '8px',
+                    transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#4B5563'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#9CA3AF'}
+                >
+                    <Info size={20} strokeWidth={2.5} />
+                    <div className="search-tooltip">
+                        {t.searchTip}
+                    </div>
+                </div>
             </div>
-            
-            <p style={{ 
-                textAlign: 'center', 
-                fontSize: '0.85rem', 
-                color: 'var(--text-muted)', 
-                marginTop: '0.75rem',
-                opacity: 0.8
-            }}>
-                {t.searchTip}
-            </p>
         </div>
     );
 }

@@ -31,6 +31,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [variantUploading, setVariantUploading] = useState<string | null>(null);
     const [conversionFactorInput, setConversionFactorInput] = useState(product.web_conversion_factor?.toString().replace('.', ',') || '1,0');
     const [generatingAI, setGeneratingAI] = useState(false);
+    const [tagInput, setTagInput] = useState('');
 
     const categories = [
         { id: 'FR', name: 'Frutas' },
@@ -292,7 +293,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     web_unit: formData.web_unit,
                     web_conversion_factor: formData.web_conversion_factor,
                     name_en: formData.name_en,
-                    description_en: formData.description_en
+                    description_en: formData.description_en,
+                    tags: formData.tags
                 })
                 .eq('id', product.id);
 
@@ -848,6 +850,75 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         </div>
                         <div style={{ fontSize: '0.75rem', color: '#9A3412', fontStyle: 'italic', backgroundColor: '#FFEDD5', padding: '8px', borderRadius: '8px' }}>
                             💡 <strong>Lógica:</strong> Si vendes por <strong>Atado de 100g</strong>, el factor es <strong>0.1</strong>. Si vendes por <strong>Libra</strong>, el factor es <strong>0.5</strong>.
+                        </div>
+                        
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#9A3412', marginBottom: '4px' }}>Etiquetas (Tags) - Búsqueda Web</label>
+                            <div style={{ 
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                gap: '8px', 
+                                padding: '0.5rem', 
+                                border: '1px solid #FFD8A8', 
+                                borderRadius: '10px', 
+                                backgroundColor: 'white',
+                                minHeight: '45px',
+                                alignItems: 'center'
+                            }}>
+                                {(formData.tags || []).map((tag, idx) => (
+                                    <div key={idx} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#FFF7ED',
+                                        color: '#C2410C',
+                                        padding: '4px 10px',
+                                        borderRadius: '20px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '700',
+                                        border: '1px solid #FED7AA'
+                                    }}>
+                                        {tag}
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, tags: (formData.tags || []).filter((_, i) => i !== idx) })}
+                                            style={{ background: 'none', border: 'none', color: '#EA580C', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+                                <input
+                                    type="text"
+                                    placeholder={(!formData.tags || formData.tags.length === 0) ? "Ej: organico, oferta, temporada..." : "Agregar tag..."}
+                                    value={tagInput}
+                                    onChange={(e) => setTagInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ',') {
+                                            e.preventDefault();
+                                            const newTag = tagInput.trim().toLowerCase();
+                                            if (newTag && !(formData.tags || []).includes(newTag)) {
+                                                setFormData({ ...formData, tags: [...(formData.tags || []), newTag] });
+                                                setTagInput('');
+                                            }
+                                        } else if (e.key === 'Backspace' && tagInput === '' && (formData.tags || []).length > 0) {
+                                            // Optional: remove last tag on backspace
+                                            setFormData({ ...formData, tags: (formData.tags || []).slice(0, -1) });
+                                        }
+                                    }}
+                                    style={{ 
+                                        flex: 1, 
+                                        minWidth: '120px', 
+                                        border: 'none', 
+                                        outline: 'none', 
+                                        fontSize: '0.9rem', 
+                                        backgroundColor: 'transparent',
+                                        color: '#9A3412',
+                                        fontWeight: '600'
+                                    }}
+                                />
+                            </div>
+                            <p style={{ fontSize: '0.7rem', color: '#7C2D12', marginTop: '4px' }}>Presiona <strong>Enter</strong> o <strong>Coma (,)</strong> para añadir la etiqueta.</p>
                         </div>
                     </div>
 

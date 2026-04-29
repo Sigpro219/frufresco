@@ -183,11 +183,11 @@ export default function ProductCard({ product }: { product: Product }) {
                 </Link>
 
                 {/* CONTENT */}
-                <div style={{ padding: '1.2rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.2rem', 
+                            fontSize: '1.15rem', 
                             fontWeight: '800', 
                             color: 'var(--text-main)',
                             lineHeight: '1.2',
@@ -219,38 +219,38 @@ export default function ProductCard({ product }: { product: Product }) {
                     </div>
 
                     {/* ACTION BUTTONS */}
-                    <div style={{ marginTop: '0.8rem' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '0.6rem' }}>
                         <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                             <div style={{
                                 width: '100%',
-                                height: '42px',
-                                backgroundColor: 'rgba(26, 77, 46, 0.04)',
-                                color: 'var(--primary-dark)',
-                                border: '1px solid rgba(26, 77, 46, 0.1)',
-                                borderRadius: 'var(--radius-md)',
+                                height: '34px',
+                                backgroundColor: 'transparent',
+                                color: 'var(--primary)',
+                                border: '1.5px solid var(--primary)',
+                                borderRadius: '8px',
                                 fontWeight: '700',
-                                fontSize: '0.85rem',
+                                fontSize: '0.8rem',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '8px',
-                                transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                                gap: '6px',
+                                transition: 'all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
                             }}
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = 'var(--primary)';
                                 e.currentTarget.style.color = 'white';
                                 e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 6px 15px rgba(26, 77, 46, 0.15)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(26, 77, 46, 0.15)';
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.04)';
-                                e.currentTarget.style.color = 'var(--primary-dark)';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = 'var(--primary)';
                                 e.currentTarget.style.transform = 'translateY(0)';
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
                             >
-                                {t.viewProduct} <Info size={16} strokeWidth={2} />
+                                {t.viewProduct} <Info size={14} strokeWidth={2.5} />
                             </div>
                         </Link>
                     </div>
