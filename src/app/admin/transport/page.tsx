@@ -179,10 +179,10 @@ export default function TransportControlTower() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
             
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.25rem' }}>
+            <div style={{ maxWidth: '100%', margin: '0 auto', padding: '1rem 2rem' }}>
                 
                 {/* Slim Premium Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', padding: '0 0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.8rem', padding: '0 0.5rem' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0EA5E9', boxShadow: '0 0 10px #0EA5E9' }}></div>
@@ -204,14 +204,14 @@ export default function TransportControlTower() {
                 {/* Integrated Control Bar */}
                 <div style={{ 
                     backgroundColor: 'white', 
-                    padding: '0.75rem 1rem', 
+                    padding: '0.4rem 1rem', 
                     borderRadius: '20px', 
                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)', 
                     border: '1px solid #E2E8F0',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '1.5rem'
+                    marginBottom: '0.8rem'
                 }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                         {[
@@ -226,7 +226,7 @@ export default function TransportControlTower() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '14px', border: 'none',
+                                    display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '14px', border: 'none',
                                     backgroundColor: activeTab === tab.id ? '#0F172A' : 'transparent',
                                     color: activeTab === tab.id ? 'white' : '#64748B',
                                     fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
@@ -242,7 +242,7 @@ export default function TransportControlTower() {
                         onClick={() => fetchTransportData()}
                         disabled={loading}
                         style={{ 
-                            padding: '10px 20px', borderRadius: '14px', border: '1px solid #E2E8F0', backgroundColor: 'white',
+                            padding: '6px 16px', borderRadius: '14px', border: '1px solid #E2E8F0', backgroundColor: 'white',
                             color: '#0F172A', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
                         }}
                     >
@@ -251,7 +251,7 @@ export default function TransportControlTower() {
                 </div>
 
                 {/* Main Content Area */}
-                <div style={{ position: 'relative', minHeight: 'calc(100vh - 280px)' }}>
+                <div style={{ position: 'relative', height: 'calc(100vh - 110px)' }}>
                     {activeTab === 'map' ? (
                         <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 280px)' }}>
                             {/* Route Feed */}
