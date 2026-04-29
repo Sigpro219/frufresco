@@ -74,7 +74,7 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                     type="number"
                     value={val}
                     onChange={(e) => setVal(e.target.value)}
-                    placeholder="Set cost"
+                    placeholder="$$$"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && val) {
@@ -83,7 +83,7 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         }
                     }}
                     style={{
-                        width: '80px',
+                        width: '75px',
                         padding: '0.4rem',
                         borderRadius: '6px',
                         border: savingId === productId ? '2px solid #10B981' : '2px solid #D1D5DB',
@@ -102,23 +102,27 @@ function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
                         if (val) onSave(productId, val);
                     }}
                     disabled={!val}
+                    title="Aprobar Costo"
                     style={{
-                        padding: '0.4rem 0.6rem',
+                        padding: '0.4rem',
+                        width: '32px',
+                        height: '32px',
                         backgroundColor: val ? '#2563EB' : '#E2E8F0',
                         color: val ? 'white' : '#94A3B8',
                         border: 'none',
                         borderRadius: '6px',
                         cursor: val ? 'pointer' : 'not-allowed',
-                        fontWeight: '800',
-                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         transition: 'all 0.2s'
                     }}
                 >
-                    Aprobar
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </button>
             </div>
-            <span style={{ fontSize: '0.55rem', color: savingId === productId ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
-                {savingId === productId ? '✓ Guardado BD' : 'Sin Referencia'}
+            <span style={{ fontSize: '0.55rem', color: savingId === productId ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', textAlign: 'center' }}>
+                {savingId === productId ? '✓ Guardado' : 'Sin Referencia'}
             </span>
         </div>
     );
@@ -404,8 +408,19 @@ export default function CostMatrixPage() {
         const isNeutral = last === first || Math.abs(trendPercent) < 0.1;
 
         return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', backgroundColor: '#F8FAFC', padding: '0.5rem 1rem', borderRadius: '14px' }}>
-                <svg width={width} height={height} style={{ overflow: 'visible' }}>
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                justifyContent: 'center', 
+                backgroundColor: '#F8FAFC', 
+                padding: '0.4rem 0.5rem', 
+                borderRadius: '10px',
+                width: '100%',
+                boxSizing: 'border-box',
+                overflow: 'hidden'
+            }}>
+                <svg width={60} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible', flexShrink: 1 }}>
                     <path
                         d={pathData}
                         fill="none"
@@ -419,7 +434,7 @@ export default function CostMatrixPage() {
                     ))}
                 </svg>
                 <div style={{ 
-                    fontSize: '0.85rem', 
+                    fontSize: '0.75rem', 
                     fontWeight: '900', 
                     color: isUp ? '#EF4444' : isNeutral ? '#64748B' : '#10B981',
                     display: 'flex',
@@ -860,11 +875,66 @@ export default function CostMatrixPage() {
                         overflow: 'hidden',
                         border: '1px solid #E5E7EB'
                     }}>
+                        <style dangerouslySetInnerHTML={{__html: `
+                            .matrix-table th, .matrix-table td {
+                                transition: all 0.3s ease;
+                                box-sizing: border-box !important;
+                            }
+                            
+                            /* Reglas estrictas para evitar que Tendencia y Costo se solapen NUNCA */
+                            .col-tendencia { 
+                                width: 160px !important; 
+                                min-width: 160px !important; 
+                                max-width: 160px !important; 
+                                right: 0 !important; 
+                            }
+                            .col-costo { 
+                                width: 160px !important; 
+                                min-width: 160px !important; 
+                                max-width: 160px !important; 
+                                right: 160px !important; 
+                            }
+
+                            @media (max-width: 1440px) {
+                                .matrix-table th, .matrix-table td {
+                                    padding: 0.6rem 0.3rem !important;
+                                }
+                                .col-producto { min-width: 180px !important; font-size: 0.9rem; }
+                                .col-compra, .col-compra-old { min-width: 70px !important; font-size: 0.8rem; }
+                                
+                                /* Ajuste estricto de anclaje para portátiles grandes */
+                                .col-costo { width: 145px !important; min-width: 145px !important; max-width: 145px !important; right: 135px !important; }
+                                .col-tendencia { width: 135px !important; min-width: 135px !important; max-width: 135px !important; right: 0 !important; }
+                                
+                                /* Achicar elementos internos para que quepan */
+                                .col-costo input { width: 65px !important; padding: 0.3rem !important; font-size: 0.8rem !important; }
+                                .col-costo button { width: 28px !important; height: 28px !important; padding: 0.2rem !important; }
+                            }
+                            
+                            @media (max-width: 1200px) {
+                                .col-producto { min-width: 150px !important; font-size: 0.8rem !important; }
+                                .col-compra, .col-compra-old { min-width: 60px !important; font-size: 0.7rem !important; }
+                                
+                                /* Ajuste estricto de anclaje para portátiles estándar */
+                                .col-costo { width: 130px !important; min-width: 130px !important; max-width: 130px !important; right: 120px !important; }
+                                .col-tendencia { width: 120px !important; min-width: 120px !important; max-width: 120px !important; right: 0 !important; }
+                                .col-costo input { width: 55px !important; }
+                            }
+
+                            @media (max-width: 768px) {
+                                /* En móviles: ocultar compras antiguas para dejar siempre visible Costo y Compra 1 */
+                                .col-compra-old { display: none !important; }
+                                .col-producto { position: static !important; box-shadow: none !important; z-index: auto !important; }
+                                .col-costo { position: static !important; box-shadow: none !important; width: auto !important; max-width: none !important; }
+                                .col-tendencia { position: static !important; box-shadow: none !important; width: auto !important; max-width: none !important; }
+                            }
+                        `}} />
                         <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <table className="matrix-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
                                     <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
                                         <th 
+                                            className="col-producto"
                                             onClick={() => handleSort('name')}
                                             style={{ 
                                                 padding: '1.2rem 1.5rem', 
@@ -884,22 +954,28 @@ export default function CostMatrixPage() {
                                         </th>
                                         {/* Column Headers for 8 purchases */}
                                         {[...Array(8)].map((_, i) => (
-                                            <th key={i} style={{ padding: '0.8rem', minWidth: '95px', borderLeft: '1px solid #F3F4F6', textAlign: 'center' }}>
-                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#6B7280', textTransform: 'uppercase' }}>COMPRA {i + 1}</div>
+                                            <th key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.8rem', minWidth: '95px', borderLeft: '1px solid #F3F4F6', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#6B7280', textTransform: 'uppercase' }}>{i === 0 ? 'ÚLTIMA' : `COMPRA ${i + 1}`}</div>
                                             </th>
                                         ))}
 
                                         <th 
+                                            className="col-costo"
                                             onClick={() => handleSort('smartCost')}
                                             style={{ 
                                                 padding: '1.2rem', 
-                                                minWidth: '130px', 
+                                                minWidth: '160px', 
+                                                width: '160px',
                                                 borderLeft: '2px solid #E5E7EB',
                                                 backgroundColor: '#F0FDF4',
                                                 textAlign: 'center',
                                                 verticalAlign: 'middle',
                                                 cursor: 'pointer',
-                                                userSelect: 'none'
+                                                userSelect: 'none',
+                                                position: 'sticky',
+                                                right: '160px',
+                                                zIndex: 6,
+                                                boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
@@ -908,15 +984,17 @@ export default function CostMatrixPage() {
                                         </th>
 
                                         <th 
+                                            className="col-tendencia"
                                             onClick={() => handleSort('trend')}
                                             style={{ 
                                                 padding: '1.2rem', 
                                                 minWidth: '160px', 
+                                                width: '160px',
                                                 borderLeft: '2px solid #E5E7EB',
                                                 position: 'sticky',
                                                 right: 0,
                                                 backgroundColor: '#F9FAFB',
-                                                zIndex: 10,
+                                                zIndex: 6,
                                                 boxShadow: '-2px 0 5px rgba(0,0,0,0.02)',
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
@@ -951,7 +1029,7 @@ export default function CostMatrixPage() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                 >
-                                                    <td style={{ 
+                                                    <td className="col-producto" style={{ 
                                                         padding: '1rem 1.5rem', 
                                                         position: 'sticky', 
                                                         left: 0, 
@@ -993,7 +1071,7 @@ export default function CostMatrixPage() {
                                                             const isBestPrice = purchase && purchase.normalized_price === minPrice && prices.length > 1;
 
                                                             return (
-                                                                <td key={i} style={{ padding: '0.6rem', borderLeft: '1px solid #F9FAFB', textAlign: 'center', position: 'relative' }}>
+                                                                <td key={i} className={i > 0 ? "col-compra-old" : "col-compra"} style={{ padding: '0.6rem', borderLeft: '1px solid #F9FAFB', textAlign: 'center', position: 'relative' }}>
                                                                     {purchase ? (
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                                                                             <div style={{ 
@@ -1024,12 +1102,17 @@ export default function CostMatrixPage() {
                                                     })()}
 
                                                     {/* Smart Average Cost Column */}
-                                                    <td style={{ 
+                                                    <td className="col-costo" style={{ 
                                                         padding: '1rem', 
+                                                        minWidth: '160px',
+                                                        width: '160px',
                                                         borderLeft: '2px solid #E5E7EB', 
                                                         textAlign: 'center',
                                                         backgroundColor: manualOverrides[p.id] ? '#EFF6FF' : '#F0FDF4',
-                                                        position: 'relative'
+                                                        position: 'sticky',
+                                                        right: '160px',
+                                                        zIndex: 5,
+                                                        boxShadow: '-2px 0 5px rgba(0,0,0,0.02)'
                                                     }}>
                                                         {(() => {
                                                             const smart = calculateSmartCost(p.id);
@@ -1075,8 +1158,10 @@ export default function CostMatrixPage() {
                                                     </td>
 
                                                     {/* Trend Chart column - STICKY to the right */}
-                                                    <td style={{ 
+                                                    <td className="col-tendencia" style={{ 
                                                         padding: '1rem', 
+                                                        minWidth: '160px',
+                                                        width: '160px',
                                                         borderLeft: '2px solid #E5E7EB',
                                                         position: 'sticky',
                                                         right: 0,
