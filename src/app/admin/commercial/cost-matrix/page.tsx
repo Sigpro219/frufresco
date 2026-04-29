@@ -64,6 +64,66 @@ function StatCard({ label, value, subValue, trend, color, bg = 'white', icon }: 
     );
 }
 
+function ManualCostInput({ productId, onSave, savingId, currentManual }: any) {
+    const [val, setVal] = useState(currentManual ? String(currentManual) : '');
+    
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                <input 
+                    type="number"
+                    value={val}
+                    onChange={(e) => setVal(e.target.value)}
+                    placeholder="Set cost"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && val) {
+                            e.stopPropagation();
+                            onSave(productId, val);
+                        }
+                    }}
+                    style={{
+                        width: '80px',
+                        padding: '0.4rem',
+                        borderRadius: '6px',
+                        border: savingId === productId ? '2px solid #10B981' : '2px solid #D1D5DB',
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        fontWeight: '700',
+                        color: '#1E40AF',
+                        outline: 'none',
+                        backgroundColor: savingId === productId ? '#F0FDF4' : 'white',
+                        transition: 'all 0.3s ease'
+                    }}
+                />
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (val) onSave(productId, val);
+                    }}
+                    disabled={!val}
+                    style={{
+                        padding: '0.4rem 0.6rem',
+                        backgroundColor: val ? '#2563EB' : '#E2E8F0',
+                        color: val ? 'white' : '#94A3B8',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: val ? 'pointer' : 'not-allowed',
+                        fontWeight: '800',
+                        fontSize: '0.75rem',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    Aprobar
+                </button>
+            </div>
+            <span style={{ fontSize: '0.55rem', color: savingId === productId ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
+                {savingId === productId ? '✓ Guardado BD' : 'Sin Referencia'}
+            </span>
+        </div>
+    );
+}
+
 export default function CostMatrixPage() {
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
@@ -1004,38 +1064,12 @@ export default function CostMatrixPage() {
                                                             }
 
                                                             return (
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
-                                                                    <input 
-                                                                        type="number"
-                                                                        placeholder="Set cost"
-                                                                        onClick={(e) => e.stopPropagation()} 
-                                                                        onBlur={(e) => handleSaveManualCost(p.id, e.target.value)}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') {
-                                                                                e.stopPropagation();
-                                                                                handleSaveManualCost(p.id, (e.target as HTMLInputElement).value);
-                                                                            }
-                                                                        }}
-                                                                        style={{
-                                                                            width: '90px',
-                                                                            padding: '0.4rem',
-                                                                            borderRadius: '6px',
-                                                                            border: savingId === p.id ? '2px solid #10B981' : '2px solid #D1D5DB',
-                                                                            textAlign: 'center',
-                                                                            fontSize: '0.9rem',
-                                                                            fontWeight: '700',
-                                                                            color: '#1E40AF',
-                                                                            outline: 'none',
-                                                                            backgroundColor: savingId === p.id ? '#F0FDF4' : 'white',
-                                                                            position: 'relative',
-                                                                            zIndex: 20,
-                                                                            transition: 'all 0.3s ease'
-                                                                        }}
-                                                                    />
-                                                                    <span style={{ fontSize: '0.55rem', color: savingId === p.id ? '#10B981' : '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                        {savingId === p.id ? '✓ Guardado' : 'Sin Referencia'}
-                                                                    </span>
-                                                                </div>
+                                                                <ManualCostInput 
+                                                                    productId={p.id}
+                                                                    currentManual={currentManual}
+                                                                    savingId={savingId}
+                                                                    onSave={handleSaveManualCost}
+                                                                />
                                                             );
                                                         })()}
                                                     </td>
