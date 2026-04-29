@@ -374,14 +374,14 @@ export default function CommercialDashboard() {
                     <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: '#1E293B', fontSize: '1.25rem' }}>Módulos de Gestión</h3>
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                        gap: '2rem'
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '1.2rem'
                     }}>
                         {modules.map((mod) => (
                             <Link href={mod.href} key={mod.title} style={{ textDecoration: 'none' }}>
                                 <div style={{
                                     backgroundColor: 'white',
-                                    padding: '1.2rem',
+                                    padding: '1rem',
                                     borderRadius: '16px',
                                     height: '100%',
                                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -389,7 +389,7 @@ export default function CommercialDashboard() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: '0.6rem',
+                                    gap: '0.4rem',
                                     border: '1px solid #F1F5F9'
                                 }}
                                     onMouseEnter={(e) => {
