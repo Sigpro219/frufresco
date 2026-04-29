@@ -23,7 +23,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
     useEffect(() => {
         let animationFrameId: number;
         let lastTime = performance.now();
-        const speed = 0.06; // Pixeles por milisegundo (ajustable para velocidad)
+        const speed = 0.048; // Pixeles por milisegundo (ajustado -20%)
 
         // Sincronizar en caso de scroll manual previo
         if (scrollRef.current && exactScrollRef.current === 0) {
