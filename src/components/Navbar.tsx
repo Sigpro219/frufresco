@@ -15,7 +15,7 @@ import { Globe } from 'lucide-react';
  import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function Navbar() {
-    const { totalItems } = useCart();
+    const { totalItems, totalPrice } = useCart();
     const { user, profile, signOut, loading } = useAuth();
     const pathname = usePathname();
     // Cart only visible on shopping-context pages (not admin or ops)
@@ -461,22 +461,33 @@ export default function Navbar() {
 
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {isShoppingContext && (
-                    <Link href="/checkout">
-                        <button className="btn" style={{ 
-                            border: '1px solid var(--border)', 
-                            backgroundColor: 'white',
-                            borderRadius: 'var(--radius-full)',
-                            padding: '0.6rem 1.2rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                            cursor: 'pointer'
-                        }}>
-                            <ShoppingCart size={20} color="var(--primary)" strokeWidth={2.5} /> 
-                            <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
-                        </button>
-                    </Link>
+                    <div className="cart-container" style={{ position: 'relative' }}>
+                        <Link href="/checkout">
+                            <button className="btn" style={{ 
+                                border: '1px solid var(--border)', 
+                                backgroundColor: 'white',
+                                borderRadius: 'var(--radius-full)',
+                                padding: '0.6rem 1.2rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}>
+                                <ShoppingCart size={20} color="var(--primary)" strokeWidth={2.5} /> 
+                                <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
+                            </button>
+                        </Link>
+                        {totalItems > 0 && (
+                            <div className="cart-tooltip">
+                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Total Estimado</div>
+                                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                    ${totalPrice.toLocaleString()}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     )}
 
                     {/* Language Toggle */}
@@ -579,6 +590,40 @@ export default function Navbar() {
                 </div>
             </div>
             <style jsx global>{`
+                .cart-container:hover .cart-tooltip {
+                    opacity: 1;
+                    transform: translateY(0);
+                    pointer-events: auto;
+                }
+                .cart-tooltip {
+                    position: absolute;
+                    top: calc(100% + 14px);
+                    right: 0;
+                    background: white;
+                    border: 1px solid rgba(0,0,0,0.06);
+                    border-radius: 16px;
+                    padding: 1rem 1.2rem;
+                    box-shadow: 0 20px 40px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05);
+                    opacity: 0;
+                    transform: translateY(10px);
+                    pointer-events: none;
+                    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    min-width: 150px;
+                    text-align: right;
+                    z-index: 110;
+                }
+                .cart-tooltip::after {
+                    content: '';
+                    position: absolute;
+                    top: -6px;
+                    right: 28px;
+                    width: 12px;
+                    height: 12px;
+                    background: white;
+                    border-left: 1px solid rgba(0,0,0,0.06);
+                    border-top: 1px solid rgba(0,0,0,0.06);
+                    transform: rotate(45deg);
+                }
                 @keyframes skeleton-loading {
                     0% { background-position: 200% 0; }
                     100% { background-position: -200% 0; }

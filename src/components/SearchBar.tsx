@@ -33,23 +33,19 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
         setQuery(searchParams.get('q') || '');
     }, [searchParams]);
 
-    // Debounce to avoid excessive router calls
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const currentQ = searchParams.get('q') || '';
-            if (query !== currentQ) {
-                const params = new URLSearchParams(searchParams.toString());
-                if (query) {
-                    params.set('q', query);
-                } else {
-                    params.delete('q');
-                }
-                router.replace(`/?${params.toString()}#catalog`, { scroll: false });
+    // Handle manual search
+    const handleSearch = () => {
+        const currentQ = searchParams.get('q') || '';
+        if (query !== currentQ) {
+            const params = new URLSearchParams(searchParams.toString());
+            if (query) {
+                params.set('q', query);
+            } else {
+                params.delete('q');
             }
-        }, 600);
-
-        return () => clearTimeout(timer);
-    }, [query, router, searchParams]);
+            router.replace(`/?${params.toString()}#catalog`, { scroll: false });
+        }
+    };
 
     const clearSearch = () => {
         setQuery('');
@@ -68,7 +64,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     onChange={(e) => setQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '1.2rem 3.5rem 1.2rem 3.8rem',
+                        padding: '1.2rem 8.5rem 1.2rem 3.8rem', // Increased right padding for new buttons
                         borderRadius: 'var(--radius-full)',
                         border: '2px solid var(--border)',
                         background: 'white',
@@ -78,6 +74,12 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
                         outline: 'none',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSearch();
+                        }
                     }}
                     onFocus={(e) => {
                         e.currentTarget.style.borderColor = 'var(--primary)';
@@ -104,29 +106,55 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     <Search size={22} strokeWidth={2.5} />
                 </div>
 
-                {query && (
+                <div style={{
+                    position: 'absolute',
+                    right: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                }}>
+                    {query && (
+                        <button
+                            onClick={clearSearch}
+                            style={{
+                                background: '#f3f4f6',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '32px',
+                                height: '32px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#6b7280',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                padding: 0
+                            }}
+                        >
+                            <X size={18} strokeWidth={2.5} />
+                        </button>
+                    )}
+
                     <button
-                        onClick={clearSearch}
+                        onClick={handleSearch}
                         style={{
-                            position: 'absolute',
-                            right: '20px',
-                            background: '#f3f4f6',
+                            background: 'var(--primary)',
                             border: 'none',
-                            borderRadius: '50%',
-                            width: '32px',
-                            height: '32px',
+                            borderRadius: 'var(--radius-full)',
+                            padding: '0.6rem 1rem',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: '#6b7280',
+                            color: 'white',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
-                            padding: 0
+                            boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)',
+                            fontWeight: '800'
                         }}
                     >
-                        <X size={18} strokeWidth={2.5} />
+                        Buscar
                     </button>
-                )}
+                </div>
 
                 <style dangerouslySetInnerHTML={{ __html: `
                     .search-tooltip {
@@ -166,7 +194,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
 
                 <div className="info-icon-container" style={{
                     position: 'absolute',
-                    right: query ? '60px' : '22px',
+                    right: query ? '135px' : '105px', // Adjust depending on query presence
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

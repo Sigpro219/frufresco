@@ -65,17 +65,20 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     let rawProducts: Product[] = [];
     let fallbackCategoryName = '';
     
-    const normalizedQ = q ? q.toLowerCase().trim() : '';
+    // Split the query by comma to allow multiple independent searches at once
+    const searchQueries = q ? q.toLowerCase().split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
+    
     const memoryFiltered = productsWithNicknames.filter(p => {
         const matchesCategory = !category || category === 'Todos' || p.category === category;
         if (!matchesCategory) return false;
-        if (!normalizedQ) return true;
+        if (searchQueries.length === 0) return true;
         
-        return (
-            p.name.toLowerCase().includes(normalizedQ) ||
-            (p.display_name && p.display_name.toLowerCase().includes(normalizedQ)) ||
-            (p.description && p.description.toLowerCase().includes(normalizedQ)) ||
-            (p.keywords && p.keywords.toLowerCase().includes(normalizedQ))
+        // The product must match at least ONE of the comma-separated terms (OR logic)
+        return searchQueries.some(sq => 
+            p.name.toLowerCase().includes(sq) ||
+            (p.display_name && p.display_name.toLowerCase().includes(sq)) ||
+            (p.description && p.description.toLowerCase().includes(sq)) ||
+            (p.keywords && p.keywords.toLowerCase().includes(sq))
         );
     });
 
@@ -83,27 +86,41 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
         const aiResult = await Promise.race([
             expandSearchQuery(q),
             new Promise((_, reject) => setTimeout(() => reject(new Error('AI Timeout')), 1800))
-        ]).catch(() => ({ terms: [q], category: 'DE' })) as { terms: string[], category?: string };
+        ]).catch(() => ({ terms: searchQueries, category: 'DE' })) as { terms: string[], category?: string };
         
         const searchTerms = aiResult.terms.map(t => t.trim()).filter(t => t.length > 0);
         const suggestedCatCode = aiResult.category;
 
-        const orConditions = [
-            `name.ilike.%${q}%`,
-            `description.ilike.%${q}%`,
-            `display_name.ilike.%${q}%`
-        ];
-        searchTerms.forEach(term => {
-            if (term !== q) orConditions.push(`name.ilike.%${term}%`);
+        const orConditions: string[] = [];
+        
+        // Add all user-provided comma-separated terms
+        searchQueries.forEach(sq => {
+            orConditions.push(`name.ilike.%${sq}%`);
+            orConditions.push(`description.ilike.%${sq}%`);
+            orConditions.push(`display_name.ilike.%${sq}%`);
         });
 
-        const { data: dbProducts } = await supabase
+        // Process AI terms to ensure no commas sneak into the .or() query strings
+        // Comma inside an .or() value breaks the PostgREST parser unless wrapped in double quotes
+        searchTerms.forEach(term => {
+            // Split any term by comma just in case the AI returned a comma-separated string as a single array item
+            term.split(',').forEach(subTerm => {
+                const cleanTerm = subTerm.toLowerCase().trim();
+                if (cleanTerm && !searchQueries.includes(cleanTerm)) {
+                    orConditions.push(`name.ilike.%${cleanTerm}%`);
+                }
+            });
+        });
+
+        const { data: dbProducts, error: dbErr } = await supabase
             .from('products')
             .select('*')
             .eq('is_active', true)
             .eq('show_on_web', true)
             .or(orConditions.join(','))
             .limit(100);
+
+        console.log("DEBUG SEARCH:", { q, searchQueries, searchTerms, orConditionsLen: orConditions.length, dbErr: dbErr?.message, dbCount: dbProducts?.length });
 
         const foundProducts = applyNicknames(dbProducts || []);
 
