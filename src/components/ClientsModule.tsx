@@ -42,6 +42,17 @@ interface Profile {
     parent_id?: string;
     branch_id?: string;
     corporate_role?: string;
+    additional_billing_emails?: string;
+    rut_url?: string;
+    mercantile_registry_url?: string;
+    iva_responsible?: boolean;
+    is_gran_contribuyente?: boolean;
+    is_autorretenedor?: boolean;
+    is_regimen_simple?: boolean;
+    economic_activity_code?: string;
+    collection_responsible_name?: string;
+    collection_responsible_email?: string;
+    collection_responsible_phone?: string;
     created_at: string;
 }
 
@@ -2176,7 +2187,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         is_corporate_parent: editData?.is_corporate_parent || false,
         parent_id: editData?.parent_id || '',
         branch_id: editData?.branch_id || '',
-        corporate_role: editData?.corporate_role || ''
+        corporate_role: editData?.corporate_role || '',
+        additional_billing_emails: (editData as any)?.additional_billing_emails || '',
+        rut_url: (editData as any)?.rut_url || '',
+        mercantile_registry_url: (editData as any)?.mercantile_registry_url || '',
+        iva_responsible: (editData as any)?.iva_responsible || false,
+        is_gran_contribuyente: (editData as any)?.is_gran_contribuyente || false,
+        is_autorretenedor: (editData as any)?.is_autorretenedor || false,
+        is_regimen_simple: (editData as any)?.is_regimen_simple || false,
+        economic_activity_code: (editData as any)?.economic_activity_code || '',
+        collection_responsible_name: (editData as any)?.collection_responsible_name || '',
+        collection_responsible_email: (editData as any)?.collection_responsible_email || '',
+        collection_responsible_phone: (editData as any)?.collection_responsible_phone || ''
     });
     const [saving, setSaving] = useState(false);
 
@@ -2285,66 +2307,62 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     }, [formData.latitude, formData.longitude, formData.geocoding_status]);
 
     const handleGeocode = async () => {
-        if (!formData.address || !window.google) {
+        if (!formData.address) {
             window.showToast?.('Ingresa una dirección primero', 'info');
             return;
         }
         
         setGeocoding(true);
         try {
-            const geocoder = new window.google.maps.Geocoder();
             const addressQuery = `${formData.address}, ${formData.municipality || 'Bogotá'}, Colombia`;
 
-            console.log('--- 🛰️ INICIANDO GEOCODING NATIVO ---');
+            console.log('--- 🛰️ INICIANDO GEOCODING VÍA PROXY ---');
             console.log('Query:', addressQuery);
 
-            geocoder.geocode({ address: addressQuery }, (results, status) => {
-                console.log('Status de Geocoding:', status);
+            const response = await fetch(`/api/geocode?address=${encodeURIComponent(addressQuery)}`);
+            const data = await response.json();
+
+            console.log('Resultado Proxy:', data.status);
+            
+            if (data.status === 'OK' && data.results && data.results[0]) {
+                const { lat, lng } = data.results[0].geometry.location;
                 
-                if (status === 'OK' && results && results[0]) {
-                    const { lat, lng } = results[0].geometry.location;
-                    const latVal = lat();
-                    const lngVal = lng();
-                    
-                    console.log('✅ Coordenadas encontradas:', latVal, lngVal);
-                    
+                console.log('✅ Coordenadas encontradas:', lat, lng);
+                
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: lat.toFixed(7),
+                    longitude: lng.toFixed(7),
+                    geocoding_status: 'verified'
+                }));
+                
+                window.showToast?.('¡Ubicación detectada con éxito!', 'success');
+            } else if (data.status === 'ZERO_RESULTS') {
+                // Fallback simplificado
+                const simplerAddress = `${formData.address.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
+                const r2 = await fetch(`/api/geocode?address=${encodeURIComponent(simplerAddress)}`);
+                const d2 = await r2.json();
+
+                if (d2.status === 'OK' && d2.results && d2.results[0]) {
+                    const { lat, lng } = d2.results[0].geometry.location;
                     setFormData(prev => ({
                         ...prev,
-                        latitude: latVal.toFixed(7),
-                        longitude: lngVal.toFixed(7),
+                        latitude: lat.toFixed(7),
+                        longitude: lng.toFixed(7),
                         geocoding_status: 'verified'
                     }));
-                    
-                    window.showToast?.('¡Ubicación detectada con éxito!', 'success');
-                } else if (status === 'ZERO_RESULTS') {
-                    // Fallback simplificado si el exacto falla
-                    const simplerQuery = `${formData.address.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
-                    geocoder.geocode({ address: simplerQuery }, (r2, s2) => {
-                        if (s2 === 'OK' && r2 && r2[0]) {
-                            const { lat, lng } = r2[0].geometry.location;
-                            setFormData(prev => ({
-                                ...prev,
-                                latitude: lat().toFixed(7),
-                                longitude: lng().toFixed(7),
-                                geocoding_status: 'verified'
-                            }));
-                            window.showToast?.('Ubicación aproximada detectada', 'info');
-                        } else {
-                            window.showToast?.('No se encontró la dirección. Prueba escribiéndola en el buscador del mapa.', 'warning');
-                        }
-                    });
-                } else if (status === 'REQUEST_DENIED') {
-                    console.error('❌ Google Geocoding API no está activa en tu consola.');
-                    window.showToast?.('Error: Debes habilitar la "Geocoding API" en Google Cloud Console para usar esta función.', 'error');
+                    window.showToast?.('Ubicación aproximada detectada', 'info');
                 } else {
-                    console.error('Error Geocoder status:', status);
-                    window.showToast?.(`Error de Google: ${status}`, 'error');
+                    window.showToast?.('No se encontró la dirección.', 'warning');
                 }
-                setGeocoding(false);
-            });
+            } else {
+                console.error('Error Proxy status:', data.status, data.error_message);
+                window.showToast?.(`Error de Google: ${data.status}`, 'error');
+            }
         } catch (err) {
-            console.error('❌ Error crítico en Geocoding:', err);
+            console.error('❌ Error crítico en Geocoding Proxy:', err);
             window.showToast?.('Error al conectar con el servicio de mapas', 'error');
+        } finally {
             setGeocoding(false);
         }
     };
@@ -2595,13 +2613,67 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
-                                    <FormField label="Email Facturación" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} required={formData.is_corporate_parent} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                        <FormField label="Email Facturación" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} required={formData.is_corporate_parent} />
+                                        {!formData.is_corporate_parent && (
+                                            <FormField label="Email Facturación Adicional" value={formData.additional_billing_emails} onChange={(v: string) => setFormData({...formData, additional_billing_emails: v})} />
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </section>
                     </div>
 
-                    {/* SECCIÓN GEOGRÁFICA Y LOGÍSTICA MEJORADA - SOLO PARA SUCURSALES */}
+                    {/* SECCIÓN EXCLUSIVA MATRIZ: FISCAL Y CARTERA */}
+                    {formData.is_corporate_parent && (
+                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', backgroundColor: '#F0F9FF', padding: '2rem', borderRadius: '32px', border: '1px solid #BAE6FD' }}>
+                            <section>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>⚖️ RESPONSABILIDAD FISCAL</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input type="checkbox" checked={formData.iva_responsible} onChange={e => setFormData({...formData, iva_responsible: e.target.checked})} style={{ width: '20px', height: '20px' }} />
+                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Resp. IVA</label>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input type="checkbox" checked={formData.is_gran_contribuyente} onChange={e => setFormData({...formData, is_gran_contribuyente: e.target.checked})} style={{ width: '20px', height: '20px' }} />
+                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Gran Contribuyente</label>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input type="checkbox" checked={formData.is_autorretenedor} onChange={e => setFormData({...formData, is_autorretenedor: e.target.checked})} style={{ width: '20px', height: '20px' }} />
+                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Autorretenedor</label>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input type="checkbox" checked={formData.is_regimen_simple} onChange={e => setFormData({...formData, is_regimen_simple: e.target.checked})} style={{ width: '20px', height: '20px' }} />
+                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Reg. Simple</label>
+                                    </div>
+                                    <FormField label="Cód. Actividad (4 dígs)" value={formData.economic_activity_code} onChange={v => setFormData({...formData, economic_activity_code: v.slice(0,4)})} />
+                                </div>
+                                
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem', marginTop: '2rem' }}>📁 DOCUMENTACIÓN LEGAL (PDF/IMG)</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <DocumentUploadField 
+                                        label="RUT" 
+                                        url={formData.rut_url} 
+                                        onUpload={(url) => setFormData({...formData, rut_url: url})} 
+                                    />
+                                    <DocumentUploadField 
+                                        label="Registro Mercantil" 
+                                        url={formData.mercantile_registry_url} 
+                                        onUpload={(url) => setFormData({...formData, mercantile_registry_url: url})} 
+                                    />
+                                </div>
+                            </section>
+
+                            <section>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>💰 RESPONSABLE DE CARTERA</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                    <FormField label="Nombre Completo" value={formData.collection_responsible_name} onChange={v => setFormData({...formData, collection_responsible_name: v})} />
+                                    <FormField label="Email Cartera" value={formData.collection_responsible_email} onChange={v => setFormData({...formData, collection_responsible_email: v})} />
+                                    <FormField label="Teléfono Directo" value={formData.collection_responsible_phone} onChange={v => setFormData({...formData, collection_responsible_phone: v})} />
+                                </div>
+                            </section>
+                        </div>
+                    )}
                     {!formData.is_corporate_parent && (
                      <section style={{ gridColumn: '1 / -1' }}>
                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
@@ -3036,3 +3108,94 @@ function FormField({ label, value, onChange, type = 'text', required = false, st
         </div>
     );
 }
+
+function DocumentUploadField({ label, url, onUpload }: { label: string, url: string | undefined, onUpload: (url: string) => void }) {
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `documents/${Date.now()}_${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('client-documents')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('client-documents')
+                .getPublicUrl(filePath);
+            
+            onUpload(publicUrl);
+            window.showToast?.(`Archivo ${label} subido correctamente`, 'success');
+        } catch (err: any) {
+            console.error('Error uploading document:', err);
+            window.showToast?.(`Error al subir ${label}: ${err.message}`, 'error');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563' }}>{label}</label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    style={{ 
+                        flex: 1,
+                        padding: '0.6rem', 
+                        borderRadius: '10px', 
+                        border: '2px dashed #CBD5E1', 
+                        backgroundColor: '#F8FAFC', 
+                        color: '#64748B',
+                        fontWeight: '700',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {uploading ? '⌛ Subiendo...' : url ? '🔄 Cambiar Archivo' : '📤 Cargar PDF/IMG'}
+                </button>
+                {url && (
+                    <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                            backgroundColor: '#0EA5E9', 
+                            color: 'white', 
+                            width: '35px', 
+                            height: '35px', 
+                            borderRadius: '8px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            textDecoration: 'none'
+                        }}
+                        title="Ver documento"
+                    >
+                        👁️
+                    </a>
+                )}
+            </div>
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept=".pdf,image/*" 
+                style={{ display: 'none' }} 
+            />
+        </div>
+    );
+}
+

@@ -55,6 +55,14 @@ Para asegurar la consistencia entre el código y las bases de datos de los disti
 - **Principio de Doble Validación**: Antes de dar por terminada una tarea en Tenant 1, se debe verificar que el esquema de base de datos coincida con las expectativas del código.
 - **Manejo de Errores**: El código debe utilizar las utilidades de diagnóstico (`diagnoseDatabaseError`) para alertar al administrador si una operación falló por falta de permisos en el Tenant.
 
+## 6. Estándar de Geocodificación (Proxy Server-Side)
+
+Para evitar errores de autorización en el navegador (Google Geocoding API "Not Authorized") y asegurar la compatibilidad total entre entornos (Dev/Prod):
+
+- **Prohibido el Geocoding Directo**: No se debe utilizar `window.google.maps.Geocoder` directamente en el frontend.
+- **Uso Obligatorio de Proxy**: Todas las solicitudes de geocodificación (búsqueda por dirección o coordenadas) deben pasar por la ruta interna `/api/geocode`.
+- **Arquitectura**: Este enfoque (Server-Side Proxy) permite saltar restricciones de Referer/IP del navegador y garantiza que la API Key funcione siempre que sea válida a nivel de servidor, eliminando la dependencia de la caché de autorización del cliente.
+
 ---
 
-_Documento actualizado al 18 de Marzo, 2026._
+_Documento actualizado al 5 de Mayo, 2026._

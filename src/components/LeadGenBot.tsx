@@ -204,9 +204,11 @@ export default function LeadGenBotV2() {
     
     const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
         try {
-            const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${MAPS_KEY}`);
+            console.log('--- 🛰️ REVERSE GEOCODING VÍA PROXY ---');
+            const response = await fetch(`/api/geocode?latlng=${lat},${lng}`);
             const data = await response.json();
-            if (data.status === 'OK' && data.results.length > 0) {
+            
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
                 // Find municipality/city in address components
                 const components = data.results[0].address_components;
                 const city = components.find((c: any) => 
@@ -216,7 +218,7 @@ export default function LeadGenBotV2() {
                 return city ? city.long_name : 'Desconocido';
             }
         } catch (error) {
-            console.error('Error in reverse geocoding:', error);
+            console.error('Error in reverse geocoding proxy:', error);
         }
         return 'Desconocido';
     };

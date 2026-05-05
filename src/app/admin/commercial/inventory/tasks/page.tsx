@@ -168,8 +168,8 @@ export default function KanbanTasksPage() {
                     console.error('Error parsing roles:', e);
                 }
             }
-        } catch (err) {
-            console.error('Error fetching Kanban data:', err);
+        } catch (err: any) {
+            console.error('❌ Error fetching Kanban data:', err?.message || 'Unknown error', err);
         } finally {
             setLoading(false);
         }
