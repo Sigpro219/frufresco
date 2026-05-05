@@ -119,53 +119,16 @@ export default function RoutePlanner() {
             // Update State
             setVehicles(enhancedFleet);
             
-            setOrders((orderData || []).map((o: any) => {
-                // Extract weight from admin_notes if missing in column
-                let finalWeight = o.total_weight_kg;
-                if (!finalWeight && o.admin_notes?.includes('[TEST-KG:')) {
-                    const match = o.admin_notes.match(/\[TEST-KG: ([\d.]+)\]/);
-                    if (match) finalWeight = parseFloat(match[1]);
-                }
-
-                // Extract name and address from shipping_address
-                let finalName = o.customer_name;
-                let address = o.shipping_address || 'Sin dirección';
-                if (!finalName) {
-                    if (o.profile?.company_name) {
-                        finalName = o.profile.company_name;
-                    } else if (address.includes(' - ')) {
-                        const parts = address.split(' - ');
-                        finalName = parts[0];
-                        address = parts[1] || address;
-                    } else {
-                        finalName = 'Cliente s/n';
-                    }
-                } else if (address.includes(' - ')) {
-                    address = address.split(' - ')[1] || address;
-                }
-
-                // Extract crates and novedad
-                let crates = Math.ceil((finalWeight || 10) / 17); // default assumption
-                let novedad = '';
-                if (o.admin_notes) {
-                    const matchCrates = o.admin_notes.match(/\[CRATES:\s*([\d]+)\]/);
-                    if (matchCrates) crates = parseInt(matchCrates[1]);
-
-                    const matchNov = o.admin_notes.match(/\[NOVEDAD:\s*(.*?)\s*\]/);
-                    if (matchNov) novedad = matchNov[1];
-                }
-
-                return {
-                    ...o,
-                    customer_name: finalName,
-                    address: address,
-                    crates: crates,
-                    novedad: novedad,
-                    total_weight_kg: finalWeight || Math.floor(Math.random() * 200) + 50,
-                    is_b2b: o.is_b2b !== undefined ? o.is_b2b : (o.type?.includes('b2b') || Math.random() > 0.4),
-                    delivery_zone: o.delivery_zone || (o.admin_notes?.match(/\[ZONA: ([^\]]+)\]/)?.[1] || ['Chapinero', 'Usaquén', 'Suba', 'Teusaquillo', 'Kennedy'][Math.floor(Math.random() * 5)])
-                };
-            }));
+            setOrders((orderData || []).map((o: any) => ({
+                ...o,
+                customer_name: o.customer_name || 'Sin Nombre',
+                address: o.shipping_address || 'Sin Dirección',
+                crates: o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / 17) : 0),
+                novedad: '', // Clear novelty extraction as requested (100% DB sync)
+                total_weight_kg: o.total_weight_kg || 0,
+                is_b2b: !!o.is_b2b || (o.type?.includes('b2b') ?? false),
+                delivery_zone: o.delivery_zone || ''
+            })));
 
 
 
@@ -426,7 +389,7 @@ export default function RoutePlanner() {
                                                     🕒 {order.delivery_slot || 'Abierta'}
                                                 </div>
                                             </div>
-                                            {order.novedad && (
+                                            {order.novedad && order.novedad !== order.delivery_slot && (
                                                 <div style={{ fontSize: '0.55rem', color: '#BE123C', backgroundColor: '#FFF1F2', padding: '0.2rem 0.4rem', borderRadius: '4px', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', border: '1px solid #FECDD3' }}>
                                                     ⚠️ {order.novedad}
                                                 </div>

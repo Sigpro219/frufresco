@@ -253,7 +253,7 @@ export default function TransportControlTower() {
                 {/* Main Content Area */}
                 <div style={{ position: 'relative', height: 'calc(100vh - 110px)' }}>
                     {activeTab === 'map' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 280px)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', height: 'calc(100vh - 200px)' }}>
                             {/* Route Feed */}
                             <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '1.25rem', overflowY: 'auto' }}>
                                 <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

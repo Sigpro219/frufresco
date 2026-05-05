@@ -154,6 +154,8 @@ export default function CostMatrixPage() {
             const { data: prods, error: prodErr } = await supabase
                 .from('products')
                 .select('*')
+                .eq('show_on_web', true)
+                .eq('is_active', true)
                 .order('category', { ascending: true })
                 .order('name', { ascending: true })
                 .limit(5000);

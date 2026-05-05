@@ -38,6 +38,10 @@ interface Profile {
     total_orders?: number;
     total_spent?: number;
     last_order?: string;
+    is_corporate_parent?: boolean;
+    parent_id?: string;
+    branch_id?: string;
+    corporate_role?: string;
     created_at: string;
 }
 
@@ -88,6 +92,7 @@ export default function ClientsModule() {
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
     const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
     const [nicknameClientId, setNicknameClientId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
     useEffect(() => {
         fetchData();
@@ -346,51 +351,139 @@ export default function ClientsModule() {
                         <p style={{ color: '#4A5568', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
                     </div>
                     {activeTab !== 'dashboard' && (
-                        <div style={{ position: 'relative', width: '400px' }}>
-                            <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem', color: '#A0AEC0' }}>🔍</span>
-                            <input 
-                                placeholder={`Buscar en ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    padding: '1rem 3.2rem 1rem 3.2rem', 
-                                    borderRadius: '18px', 
-                                    border: '1px solid #E2E8F0', 
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                                    fontSize: '1rem',
-                                    outline: 'none'
-                                }}
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '1rem',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: '#E2E8F0',
-                                        border: 'none',
-                                        color: '#64748B',
-                                        width: '24px',
-                                        height: '24px',
-                                        borderRadius: '50%',
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                            {/* BOTÓN DE CREACIÓN SEGÚN TAB */}
+                            {activeTab === 'b2b' && (
+                                <button 
+                                    onClick={() => handleCreateClient('b2b_client')}
+                                    style={{ 
+                                        backgroundColor: '#0891B2', 
+                                        color: 'white', 
+                                        padding: '0.8rem 1.2rem', 
+                                        borderRadius: '14px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 'bold',
-                                        transition: 'background 0.2s',
+                                        gap: '8px',
+                                        whiteSpace: 'nowrap',
+                                        height: '52px'
                                     }}
-                                    onMouseOver={(e) => (e.currentTarget.style.background = '#CBD5E1')}
-                                    onMouseOut={(e) => (e.currentTarget.style.background = '#E2E8F0')}
-                                    title="Limpiar búsqueda"
                                 >
-                                    ✕
+                                    <span>➕</span> Nuevo Institucional
                                 </button>
                             )}
+                            {activeTab === 'b2c' && (
+                                <button 
+                                    onClick={() => handleCreateClient('b2c_client')}
+                                    style={{ 
+                                        backgroundColor: '#10B981', 
+                                        color: 'white', 
+                                        padding: '0.8rem 1.2rem', 
+                                        borderRadius: '14px', 
+                                        border: 'none', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        whiteSpace: 'nowrap',
+                                        height: '52px'
+                                    }}
+                                >
+                                    <span>👤</span> Nuevo B2C
+                                </button>
+                            )}
+
+                            {/* TOGGLE VISTA */}
+                            <div style={{ 
+                                display: 'flex', 
+                                backgroundColor: '#E2E8F0', 
+                                padding: '4px', 
+                                borderRadius: '14px', 
+                                height: '52px',
+                                alignItems: 'center'
+                            }}>
+                                <button 
+                                    onClick={() => setViewMode('list')}
+                                    style={{
+                                        padding: '0.6rem 1rem',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
+                                        boxShadow: viewMode === 'list' ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '1.2rem'
+                                    }}
+                                    title="Vista de Lista"
+                                >
+                                    📋
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('grid')}
+                                    style={{
+                                        padding: '0.6rem 1rem',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
+                                        boxShadow: viewMode === 'grid' ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '1.2rem'
+                                    }}
+                                    title="Vista de Tarjetas"
+                                >
+                                    🔲
+                                </button>
+                            </div>
+
+                            {/* BUSCADOR */}
+                            <div style={{ position: 'relative', width: '350px' }}>
+                                <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem', color: '#A0AEC0' }}>🔍</span>
+                                <input 
+                                    placeholder={`Buscar ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '1rem 3.2rem 1rem 3.2rem', 
+                                        borderRadius: '14px', 
+                                        border: '1px solid #E2E8F0', 
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                                        fontSize: '1rem',
+                                        outline: 'none',
+                                        height: '52px'
+                                    }}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        onClick={() => setSearchTerm('')}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '1rem',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: '#E2E8F0',
+                                            border: 'none',
+                                            color: '#64748B',
+                                            width: '24px',
+                                            height: '24px',
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 'bold'
+                                        }}
+                                        title="Limpiar búsqueda"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </header>
@@ -530,114 +623,140 @@ export default function ClientsModule() {
 
                         {/* B2B VIEW */}
                         {activeTab === 'b2b' && (
-                            <>
-                                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <button 
-                                        onClick={() => handleCreateClient('b2b_client')}
-                                        style={{ 
-                                            backgroundColor: '#0891B2', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.5rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                    >
-                                        <span>➕</span> Nuevo Cliente Institucional
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
-                                        <ClientCard 
-                                            key={client.id} 
-                                            type="b2b" 
-                                            data={client} 
-                                            pricingModels={pricingModels} 
-                                            onUpdatePricingModel={handleUpdatePricingModel}
-                                            onViewDetails={() => handleViewDetails(client)}
-                                            onEdit={() => handleEditClient(client)}
-                                            agreementStatus={getAgreementStatus(client.id)}
-                                        />
-                                    ))}
-                                </div>
-                            </>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                {viewMode === 'grid' ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
+                                        {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
+                                            <ClientCard 
+                                                key={client.id} 
+                                                type="b2b" 
+                                                data={client} 
+                                                pricingModels={pricingModels} 
+                                                onUpdatePricingModel={handleUpdatePricingModel}
+                                                onViewDetails={() => handleViewDetails(client)}
+                                                onEdit={() => handleEditClient(client)}
+                                                agreementStatus={getAgreementStatus(client.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>IDENTIFICACIÓN / CLIENTE</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>COMERCIAL</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).map(client => (
+                                                    <ClientListRow 
+                                                        key={client.id} 
+                                                        client={client} 
+                                                        pricingModels={pricingModels}
+                                                        onViewDetails={() => handleViewDetails(client)}
+                                                        onEdit={() => handleEditClient(client)}
+                                                        agreementStatus={getAgreementStatus(client.id)}
+                                                    />
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {/* B2C VIEW */}
                         {activeTab === 'b2c' && (
-                            <>
-                                <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <button 
-                                        onClick={() => handleCreateClient('b2c_client')}
-                                        style={{ 
-                                            backgroundColor: '#10B981', 
-                                            color: 'white', 
-                                            padding: '0.8rem 1.5rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                    >
-                                        <span>👤</span> Nuevo Cliente Consumidor
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map((client, idx) => (
-                                        <ClientCard 
-                                            key={client.id || idx} 
-                                            type="b2c" 
-                                            data={client} 
-                                            onViewDetails={() => handleViewDetails(client)}
-                                            onEdit={() => handleEditClient(client)}
-                                        />
-                                    ))}
-                                    {clientsB2C.length === 0 && <EmptyState text="No hay consumidores registrados aún." />}
-                                </div>
-                            </>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                {viewMode === 'grid' ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
+                                        {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map((client, idx) => (
+                                            <ClientCard 
+                                                key={client.id || idx} 
+                                                type="b2c" 
+                                                data={client} 
+                                                onViewDetails={() => handleViewDetails(client)}
+                                                onEdit={() => handleEditClient(client)}
+                                            />
+                                        ))}
+                                        {clientsB2C.length === 0 && <EmptyState text="No hay consumidores registrados aún." />}
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CLIENTE / IDENTIFICACIÓN</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>DIRECCIÓN</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).map(client => (
+                                                    <ClientListRow 
+                                                        key={client.id} 
+                                                        client={client} 
+                                                        onViewDetails={() => handleViewDetails(client)}
+                                                        onEdit={() => handleEditClient(client)}
+                                                    />
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {/* LEADS VIEW */}
                         {activeTab === 'leads' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
-                                {/* DEBUG: Schema Inspector */}
-                                {leads.length > 0 && (
-                                    <div style={{ backgroundColor: '#F1F5F9', padding: '1.5rem', borderRadius: '20px', border: '1px solid #CBD5E1', marginBottom: '1rem' }}>
-                                        <p style={{ fontWeight: '800', margin: '0 0 0.8rem 0', color: '#1E293B', fontSize: '0.8rem' }}>📂 DEBUG: ESTRUCTURA DEL ÚLTIMO LEAD (DB LIVE)</p>
-                                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '0.7rem', color: '#475569', backgroundColor: 'white', padding: '1rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                            {JSON.stringify({
-                                                supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-                                                columns: Object.keys(leads[0]),
-                                                sample_gps: { lat: leads[0].latitude, lng: leads[0].longitude },
-                                                sample_notes: leads[0].notes,
-                                                id: leads[0].id
-                                            }, null, 2)}
-                                        </pre>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                {viewMode === 'grid' ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
+                                        {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
+                                            <ClientCard 
+                                                key={lead.id} 
+                                                type="lead" 
+                                                data={lead} 
+                                                onUpdateStatus={handleUpdateLeadStatus} 
+                                                onViewDetails={() => handleViewDetails(lead as unknown as Profile)}
+                                                onRegisterContact={() => handleUpdateLeadContact(lead.id)}
+                                                onScheduleTask={(date) => handleScheduleLeadTask(lead.id, date)}
+                                            />
+                                        ))}
+                                        {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
+                                    </div>
+                                ) : (
+                                    <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ÚLTIMO CONTACTO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PRÓXIMA TAREA</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
+                                                    <ClientListRow 
+                                                        key={lead.id} 
+                                                        client={lead as any} 
+                                                        onViewDetails={() => handleViewDetails(lead as any)}
+                                                        onRegisterContact={() => handleUpdateLeadContact(lead.id)}
+                                                    />
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>
-                                    {filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).map(lead => (
-                                    <ClientCard 
-                                        key={lead.id} 
-                                        type="lead" 
-                                        data={lead} 
-                                        onUpdateStatus={handleUpdateLeadStatus} 
-                                        onViewDetails={() => handleViewDetails(lead as unknown as Profile)}
-                                        onRegisterContact={() => handleUpdateLeadContact(lead.id)}
-                                        onScheduleTask={(date) => handleScheduleLeadTask(lead.id, date)}
-                                    />
-                                ))}
-                                    {leads.length === 0 && <EmptyState text="Aún no tienes prospectos registrados." />}
-                                </div>
                             </div>
                         )}
                     </>
@@ -1243,15 +1362,41 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         </span>
                     </div>
                 )}
+
+                {/* CORPORATE BADGE */}
+                {isB2B && (profileData?.is_corporate_parent || profileData?.parent_id) && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: profileData.is_corporate_parent ? '#F0F9FF' : '#FFF7ED',
+                        padding: '4px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid',
+                        borderColor: profileData.is_corporate_parent ? '#BAE6FD' : '#FFEDD5',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                    }}>
+                        <span style={{ fontSize: '0.8rem' }}>{profileData.is_corporate_parent ? '🏰' : '📍'}</span>
+                        <span style={{ 
+                            fontSize: '0.6rem', 
+                            fontWeight: '900', 
+                            color: profileData.is_corporate_parent ? '#0369A1' : '#C2410C',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02rem'
+                        }}>
+                            {profileData.is_corporate_parent ? 'Casa Matriz' : 'Sucursal'}
+                        </span>
+                    </div>
+                )}
             </div>
 
-            {/* Header */}
-            <div>
-                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px' }}>
+            {/* Header Info */}
+            <div style={{ marginTop: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px', lineHeight: '1.3' }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
-                {isB2B && profileData?.razon_social && <p style={{ margin: '0.2rem 0', fontSize: '0.85rem', color: '#718096', fontStyle: 'italic' }}>{profileData.razon_social}</p>}
-                {(isB2B || isLead) && <p style={{ margin: '0.5rem 0', fontSize: '0.9rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
+                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: '#718096', fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
+                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
             </div>
 
             {/* Content Fields */}
@@ -1516,11 +1661,115 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     );
 }
 
+function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreementStatus, onRegisterContact }: { 
+    client: Profile, 
+    pricingModels?: PricingModel[], 
+    onViewDetails: () => void, 
+    onEdit?: () => void, 
+    agreementStatus?: 'active' | 'warning' | 'none',
+    onRegisterContact?: () => void
+}) {
+    const isB2B = client.role === 'b2b_client';
+    const isLead = (client as any).status !== undefined;
+    const selectedModel = isB2B ? pricingModels?.find(m => m.id === client.pricing_model_id) : null;
+
+    const handleWhatsApp = () => {
+        if (!client.phone) return alert('No hay teléfono');
+        const cleanPhone = client.phone.replace(/\D/g, '');
+        window.open(`https://wa.me/57${cleanPhone}`, '_blank');
+    };
+
+    return (
+        <tr 
+            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s', cursor: 'pointer' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            onClick={onViewDetails}
+        >
+            <td style={{ padding: '1rem 1.2rem' }}>
+                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
+                <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 4px', borderRadius: '3px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
+                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 4px', borderRadius: '3px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
+                </div>
+            </td>
+            <td style={{ padding: '1rem 1.2rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
+                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>📞 {client.phone}</div>
+            </td>
+            <td style={{ padding: '1rem 1.2rem' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{client.city} / {client.municipality}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{client.address}</div>
+            </td>
+            <td style={{ padding: '1rem 1.2rem' }}>
+                {isB2B ? (
+                    <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>{selectedModel?.name || 'Varios'}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios</div>
+                    </div>
+                ) : isLead ? (
+                    <span style={{ 
+                        fontSize: '0.7rem', 
+                        padding: '4px 8px', 
+                        borderRadius: '6px', 
+                        fontWeight: '900', 
+                        textTransform: 'uppercase',
+                        backgroundColor: (client as any).status === 'new' ? '#EEF2FF' : '#FFFBEB',
+                        color: (client as any).status === 'new' ? '#4F46E5' : '#D97706'
+                    }}>
+                        {(client as any).status}
+                    </span>
+                ) : (
+                    <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Consumidor</span>
+                )}
+            </td>
+            <td style={{ padding: '1rem 1.2rem' }}>
+                {agreementStatus && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <div style={{ 
+                            width: '8px', height: '8px', borderRadius: '50%', 
+                            backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
+                        }} />
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
+                    </div>
+                )}
+                {(client.latitude && client.longitude) ? (
+                    <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🛰️ GPS OK</div>
+                ) : (
+                    <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                )}
+            </td>
+            <td style={{ padding: '1rem 1.2rem' }}>
+                <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button 
+                        onClick={onEdit} 
+                        style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        title="Editar"
+                    >✏️</button>
+                    <button 
+                        onClick={handleWhatsApp} 
+                        style={{ background: '#DCFCE7', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        title="WhatsApp"
+                    >💬</button>
+                    {onRegisterContact && (
+                        <button 
+                            onClick={onRegisterContact} 
+                            style={{ background: '#F3E8FF', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            title="Registrar Contacto"
+                        >📞</button>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
+
 function InfoRow({ icon, label, value }: { icon: string, label: string, value: string | number | undefined | null }) {
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-            <div style={{ fontSize: '0.85rem' }}>
+            <span style={{ fontSize: '1rem' }}>{icon}</span>
+            <div style={{ fontSize: '0.78rem' }}>
                 <span style={{ color: '#718096', fontWeight: '600' }}>{label}: </span>
                 <span style={{ color: '#1A202C', fontWeight: '800' }}>{value || 'N/A'}</span>
             </div>
@@ -1719,6 +1968,25 @@ function ClientDetailsModal({
                                             value={isB2C ? 'Tarifario Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : '---')} 
                                             color="#0891B2"
                                         />
+                                        {isB2B && (client.is_corporate_parent || client.parent_id) && (
+                                            <div style={{ marginTop: '0.5rem', padding: '1.25rem', backgroundColor: client.is_corporate_parent ? '#F0F9FF' : '#FFF7ED', borderRadius: '20px', border: `1px solid ${client.is_corporate_parent ? '#BAE6FD' : '#FFEDD5'}` }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', color: client.is_corporate_parent ? '#0369A1' : '#C2410C', marginBottom: '8px' }}>
+                                                    {client.is_corporate_parent ? '🏛️ PERFIL: CASA MATRIZ' : '📍 PERFIL: SUCURSAL'}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <ModalRow label={client.is_corporate_parent ? "ID Corporativo" : "ID de Sucursal"} value={client.branch_id} />
+                                                    {client.corporate_role && <ModalRow label="Cargo / Rol" value={client.corporate_role} />}
+                                                    {client.parent_id && (
+                                                        <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed rgba(0,0,0,0.05)' }}>
+                                                            <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase' }}>Vinculado a:</span>
+                                                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B' }}>
+                                                                {potentialParents.find(p => p.id === client.parent_id)?.company_name || 'Cargando parent...'}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                         )}
                                         {isB2B && (
                                             <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD' }}>
                                                 <button 
@@ -1890,6 +2158,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         phone: editData?.phone || '',
         email: editData?.email || '',
         address: editData?.address || '',
+        address_complement: (editData as any)?.address_complement || '',
         city: editData?.city || 'Bogotá',
         municipality: editData?.municipality || 'Bogotá',
         department: editData?.department || 'Cundinamarca',
@@ -1903,7 +2172,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         geocoding_status: editData?.geocoding_status || 'manual',
         needs_crates: editData?.needs_crates || false,
         document_type: editData?.document_type || 'invoice',
-        remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true
+        remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
+        is_corporate_parent: editData?.is_corporate_parent || false,
+        parent_id: editData?.parent_id || '',
+        branch_id: editData?.branch_id || '',
+        corporate_role: editData?.corporate_role || ''
     });
     const [saving, setSaving] = useState(false);
 
@@ -1911,6 +2184,43 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<google.maps.Map | null>(null);
     const markerInstance = useRef<google.maps.Marker | null>(null);
+    const [potentialParents, setPotentialParents] = useState<Profile[]>([]);
+    const [parentSearch, setParentSearch] = useState('');
+    const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchParents = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, company_name, nit, razon_social, email, pricing_model_id, document_type, phone')
+                .eq('role', 'b2b_client')
+                .eq('is_corporate_parent', true);
+            if (data) setPotentialParents(data);
+        };
+        if (!isB2C) fetchParents();
+    }, [isB2C]);
+
+    const handleParentSelection = async (parentId: string) => {
+        if (!parentId) {
+            setFormData(prev => ({ ...prev, parent_id: '', nit: '', razon_social: '' }));
+            return;
+        }
+
+        const parent = potentialParents.find(p => p.id === parentId);
+        if (parent) {
+            // Auto-fill shared fields from parent (Inheritance with potential override)
+            setFormData(prev => ({
+                ...prev,
+                parent_id: parentId,
+                nit: parent.nit || prev.nit,
+                razon_social: parent.razon_social || prev.razon_social,
+                email: parent.email || prev.email,
+                pricing_model_id: parent.pricing_model_id || prev.pricing_model_id,
+                document_type: parent.document_type || prev.document_type,
+                is_corporate_parent: false
+            }));
+        }
+    };
 
     // Initialización / Actualización del Mapa Interactivo
     useEffect(() => {
@@ -1975,36 +2285,66 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     }, [formData.latitude, formData.longitude, formData.geocoding_status]);
 
     const handleGeocode = async () => {
-        if (!formData.address) {
+        if (!formData.address || !window.google) {
             window.showToast?.('Ingresa una dirección primero', 'info');
             return;
         }
         
         setGeocoding(true);
         try {
-            // Refinamos la búsqueda restringiendo a Colombia y usando el municipio
+            const geocoder = new window.google.maps.Geocoder();
             const addressQuery = `${formData.address}, ${formData.municipality || 'Bogotá'}, Colombia`;
-            const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-            
-            const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressQuery)}&key=${apiKey}`);
-            const data = await response.json();
-            
-            if (data.status === 'OK' && data.results[0]) {
-                const { lat, lng } = data.results[0].geometry.location;
-                setFormData({
-                    ...formData,
-                    latitude: lat.toFixed(7),
-                    longitude: lng.toFixed(7),
-                    geocoding_status: 'verified'
-                });
-                window.showToast?.('Ubicación detectada', 'success');
-            } else {
-                window.showToast?.('No encontramos el punto exacto. Prueba ajustando el mapa manualmente.', 'info');
-            }
+
+            console.log('--- 🛰️ INICIANDO GEOCODING NATIVO ---');
+            console.log('Query:', addressQuery);
+
+            geocoder.geocode({ address: addressQuery }, (results, status) => {
+                console.log('Status de Geocoding:', status);
+                
+                if (status === 'OK' && results && results[0]) {
+                    const { lat, lng } = results[0].geometry.location;
+                    const latVal = lat();
+                    const lngVal = lng();
+                    
+                    console.log('✅ Coordenadas encontradas:', latVal, lngVal);
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: latVal.toFixed(7),
+                        longitude: lngVal.toFixed(7),
+                        geocoding_status: 'verified'
+                    }));
+                    
+                    window.showToast?.('¡Ubicación detectada con éxito!', 'success');
+                } else if (status === 'ZERO_RESULTS') {
+                    // Fallback simplificado si el exacto falla
+                    const simplerQuery = `${formData.address.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
+                    geocoder.geocode({ address: simplerQuery }, (r2, s2) => {
+                        if (s2 === 'OK' && r2 && r2[0]) {
+                            const { lat, lng } = r2[0].geometry.location;
+                            setFormData(prev => ({
+                                ...prev,
+                                latitude: lat().toFixed(7),
+                                longitude: lng().toFixed(7),
+                                geocoding_status: 'verified'
+                            }));
+                            window.showToast?.('Ubicación aproximada detectada', 'info');
+                        } else {
+                            window.showToast?.('No se encontró la dirección. Prueba escribiéndola en el buscador del mapa.', 'warning');
+                        }
+                    });
+                } else if (status === 'REQUEST_DENIED') {
+                    console.error('❌ Google Geocoding API no está activa en tu consola.');
+                    window.showToast?.('Error: Debes habilitar la "Geocoding API" en Google Cloud Console para usar esta función.', 'error');
+                } else {
+                    console.error('Error Geocoder status:', status);
+                    window.showToast?.(`Error de Google: ${status}`, 'error');
+                }
+                setGeocoding(false);
+            });
         } catch (err) {
-            console.error('Geocoding error:', err);
-            window.showToast?.('Error al conectar con Google Maps', 'error');
-        } finally {
+            console.error('❌ Error crítico en Geocoding:', err);
+            window.showToast?.('Error al conectar con el servicio de mapas', 'error');
             setGeocoding(false);
         }
     };
@@ -2013,8 +2353,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         e.preventDefault();
         setSaving(true);
         try {
-            // Revertimos a una extracción controlada pero completa
-            const { credit_limit: _cl, payment_terms: _pt, geocoding_status: _gs, ...coreData } = formData;
+            // Restauramos la extracción completa para asegurar que la data se guarde cuando las columnas existan
+            const { 
+                credit_limit: _cl, 
+                payment_terms: _pt, 
+                geocoding_status: _gs, 
+                ...coreData 
+            } = formData;
             
             const payload: any = {
                 ...coreData,
@@ -2022,8 +2367,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
                 logistics_data: formData.logistics_data,
                 geocoding_status: formData.geocoding_status,
-                // Si el ID del modelo de precios es una cadena vacía, lo enviamos como null
-                pricing_model_id: formData.pricing_model_id === '' ? null : formData.pricing_model_id
+                address_complement: formData.address_complement,
+                // Sanitización estricta de UUIDs: Si están vacíos, deben ser null, nunca ""
+                pricing_model_id: !formData.pricing_model_id || formData.pricing_model_id === '' ? null : formData.pricing_model_id,
+                parent_id: !formData.parent_id || formData.parent_id === '' ? null : formData.parent_id
             };
 
             console.log('--- INTENTO DE GUARDADO (Payload Sanitized) ---');
@@ -2043,9 +2390,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 window.showToast?.('Base de datos actualizada', 'success');
             } else {
                 const targetRole = role;
+                // Generamos un ID único para el nuevo cliente si no existe (importante para perfiles manuales)
+                const newId = (payload as any).id || crypto.randomUUID();
+                
                 const { error, status, statusText } = await supabase
                     .from('profiles')
-                    .insert([{ ...payload, role: targetRole }]);
+                    .insert([{ ...payload, id: newId, role: targetRole }]);
                 
                 if (error) {
                     const fullError = JSON.stringify({ error, status, statusText }, null, 2);
@@ -2066,7 +2416,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '900px', maxHeight: '95vh', overflowY: 'auto', padding: '3rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '1100px', maxHeight: '95vh', overflowY: 'auto', padding: '3rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                         <h2 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: 0 }}>
@@ -2078,7 +2428,398 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 </header>
 
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                    {/* SECCIÓN MUESTRA EL ESPACIO PARA RESTRICCIONES SIEMPRE */}
+                    {/* SECCIÓN ESTRUCTURA CORPORATIVA (PADRE/HIJO) - MOVIDA AL INICIO */}
+                    {!isB2C && (
+                        <section style={{ gridColumn: '1 / -1', backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                                <span style={{ fontSize: '1.2rem' }}>🏢</span>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', margin: 0 }}>ESTRUCTURA CORPORATIVA</h4>
+                            </div>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '1.5rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Tipo de Entidad</label>
+                                    <select 
+                                        value={formData.is_corporate_parent ? 'parent' : 'branch'}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === 'parent') {
+                                                setFormData({ ...formData, is_corporate_parent: true, parent_id: '', branch_id: '' });
+                                            } else {
+                                                setFormData({ ...formData, is_corporate_parent: false });
+                                            }
+                                        }}
+                                        style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
+                                    >
+                                        <option value="parent">🏢 Casa Matriz (Sede Administrativa)</option>
+                                        <option value="branch">📍 Sucursal (Sede Operativa)</option>
+                                    </select>
+                                </div>
+
+                                {!formData.is_corporate_parent && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
+                                        <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Vincular a Casa Matriz</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input 
+                                                type="text"
+                                                placeholder="Buscar por Nombre, NIT o Teléfono..."
+                                                value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
+                                                onFocus={() => setIsParentDropdownOpen(true)}
+                                                onChange={(e) => {
+                                                    setParentSearch(e.target.value);
+                                                    if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
+                                                    setIsParentDropdownOpen(true);
+                                                }}
+                                                style={{ 
+                                                    height: '45px', 
+                                                    padding: '0 1rem', 
+                                                    borderRadius: '12px', 
+                                                    border: '2px solid #E2E8F0', 
+                                                    fontWeight: '700', 
+                                                    width: '100%',
+                                                    outline: 'none',
+                                                    backgroundColor: formData.parent_id ? '#F0F9FF' : 'white',
+                                                    borderColor: formData.parent_id ? '#3B82F6' : '#E2E8F0'
+                                                }}
+                                            />
+                                            {formData.parent_id && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData({ ...formData, parent_id: '' });
+                                                        setParentSearch('');
+                                                    }}
+                                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#64748B' }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {isParentDropdownOpen && !formData.parent_id && (
+                                            <div style={{ 
+                                                position: 'absolute', 
+                                                top: '100%', 
+                                                left: 0, 
+                                                right: 0, 
+                                                zIndex: 100, 
+                                                backgroundColor: 'white', 
+                                                borderRadius: '12px', 
+                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
+                                                border: '1px solid #E2E8F0',
+                                                marginTop: '4px',
+                                                maxHeight: '200px',
+                                                overflowY: 'auto'
+                                            }}>
+                                                {potentialParents
+                                                    .filter(p => {
+                                                        const search = parentSearch.toLowerCase();
+                                                        return p.company_name?.toLowerCase().includes(search) || 
+                                                               p.razon_social?.toLowerCase().includes(search) || 
+                                                               p.nit?.toLowerCase().includes(search) || 
+                                                               p.phone?.toLowerCase().includes(search);
+                                                    })
+                                                    .map(p => (
+                                                        <div 
+                                                            key={p.id}
+                                                            onClick={() => {
+                                                                handleParentSelection(p.id);
+                                                                setIsParentDropdownOpen(false);
+                                                                setParentSearch('');
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem 1rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #F1F5F9',
+                                                                transition: 'background 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                        >
+                                                            <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B' }}>{p.company_name}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748B' }}>NIT: {p.nit} • 📞 {p.phone || 'N/A'}</div>
+                                                        </div>
+                                                    ))
+                                                }
+                                                {potentialParents.length === 0 && <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.8rem', color: '#94A3B8' }}>No hay casas matrices registradas</div>}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+
+                                {!formData.is_corporate_parent && (
+                                    <FormField 
+                                        label="ID de Sucursal (Interno)" 
+                                        value={formData.branch_id} 
+                                        onChange={(v) => setFormData({...formData, branch_id: v})} 
+                                        required
+                                    />
+                                )}
+                            </div>
+                            
+                            {!formData.is_corporate_parent && formData.parent_id && (
+                                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>ℹ️</span>
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369A1', fontWeight: '600' }}>
+                                        Esta es una sede operativa. Los datos legales (NIT/Razón Social) se heredan automáticamente de la Casa Matriz.
+                                    </p>
+                                </div>
+                            )}
+                        </section>
+                    )}
+
+                    {/* SECCIÓN DATOS BÁSICOS Y CONTACTO */}
+                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
+                        <section>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
+                                {isB2C ? '👤 DATOS PERSONALES' : '🏢 DATOS DE LA EMPRESA'}
+                            </h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <FormField label={isB2C ? "Apodo / Nombre Visible" : "Nombre Comercial"} value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
+                                {!isB2C && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} readOnly={!!formData.parent_id} />
+                                        <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} readOnly={!!formData.parent_id} />
+                                    </div>
+                                )}
+                                {isB2C && (
+                                    <FormField label="Cédula / Documento (Opcional)" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
+                                )}
+                            </div>
+                        </section>
+
+                        <section>
+                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>📞 CONTACTO PRINCIPAL</h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
+                                    <FormField label="Email Facturación" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} required={formData.is_corporate_parent} />
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* SECCIÓN GEOGRÁFICA Y LOGÍSTICA MEJORADA - SOLO PARA SUCURSALES */}
+                    {!formData.is_corporate_parent && (
+                     <section style={{ gridColumn: '1 / -1' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
+                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>📍 LOCALIZACIÓN OPERATIVA</h4>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button 
+                                    type="button"
+                                    onClick={handleGeocode}
+                                    disabled={geocoding}
+                                    style={{ 
+                                        backgroundColor: '#3B82F6', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        padding: '0.5rem 1.2rem', 
+                                        borderRadius: '12px', 
+                                        fontSize: '0.8rem', 
+                                        fontWeight: '800', 
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
+                                </button>
+                            </div>
+                         </div>
+
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN PRINCIPAL (Calle/Cra/Num)</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.address} 
+                                            onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                            placeholder="Ej: AV CRA 68 # 90-88"
+                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', backgroundColor: '#F0F9FF' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>COMPLEMENTO (Local/Of/Torre)</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.address_complement} 
+                                            onChange={(e) => setFormData({...formData, address_complement: e.target.value})}
+                                            placeholder="Ej: Local 1-006"
+                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600' }}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <FormField label="Ciudad/Mnpio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} />
+                                    <FormField label="Departamento" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} />
+                                </div>
+                                
+                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', display: 'block', marginBottom: '1rem', letterSpacing: '0.5px' }}>GEOCERCAS (LAT/LNG)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <FormField label="LAT" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} />
+                                        <FormField label="LNG" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} />
+                                    </div>
+                                    <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px', color: formData.geocoding_status === 'verified' ? '#059669' : '#D97706', fontSize: '0.7rem', fontWeight: '800' }}>
+                                        {formData.geocoding_status === 'verified' ? '✅ COORDENADAS VERIFICADAS POR GOOGLE' : '⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)'}
+                                    </div>
+                                </div>
+
+                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', border: '1px solid #FEF3C7', fontSize: '0.7rem', color: '#92400E', fontWeight: '700' }}>
+                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
+                                </div>
+                            </div>
+
+                            <div style={{ 
+                                height: '400px', 
+                                width: '100%', 
+                                borderRadius: '24px', 
+                                overflow: 'hidden', 
+                                border: '4px solid white',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                                position: 'relative',
+                                background: '#E2E8F0'
+                            }}>
+                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
+                                {!formData.latitude && (
+                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', zIndex: 1, textAlign: 'center', padding: '2rem' }}>
+                                        <div>
+                                            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
+                                            <div style={{ fontWeight: '800', color: '#1E40AF' }}>Esperando dirección...</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Usa el pin inteligente o arrastra el mapa.</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                         </div>
+                     </section>
+                    )}
+
+
+                    {/* CONFIGURACIÓN COMERCIAL - ACCESIBLE PARA AMBOS */}
+                    <section style={{ gridColumn: '1 / -1' }}>
+                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>CONFIGURACIÓN COMERCIAL</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Modelo de Precios</label>
+                                <select 
+                                    value={formData.pricing_model_id} 
+                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})}
+                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
+                                >
+                                    <option value="">-- Seleccionar --</option>
+                                    {pricingModels
+                                        .filter((pm: PricingModel) => !pm.name.toUpperCase().includes('B2C'))
+                                        .sort((a: PricingModel, b: PricingModel) => {
+                                            const getPriority = (name: string) => {
+                                                if (name.includes('Grande')) return 1;
+                                                if (name.includes('Mediano')) return 2;
+                                                if (name.includes('Pequeño')) return 3;
+                                                return 4;
+                                            };
+                                            const getDays = (name: string) => {
+                                                const match = name.match(/(\d+)/);
+                                                return match ? parseInt(match[0]) : 999;
+                                            };
+                                            
+                                            const priorityA = getPriority(a.name);
+                                            const priorityB = getPriority(b.name);
+                                            
+                                            if (priorityA !== priorityB) return priorityA - priorityB;
+                                            return getDays(a.name) - getDays(b.name);
+                                        })
+                                        .map((pm: PricingModel) => (
+                                            <option key={pm.id} value={pm.id}>{pm.name} ({pm.base_margin_percent}%)</option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+
+                            {isEdit && setNicknameClientId && setIsNicknameModalOpen && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Máscaras de Productos</label>
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            setNicknameClientId((editData as Profile).id);
+                                            setIsNicknameModalOpen(true);
+                                        }}
+                                        style={{ 
+                                            height: '45px',
+                                            padding: '0 0.8rem', 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #10B981', 
+                                            backgroundColor: '#D1FAE5',
+                                            color: '#065F46',
+                                            fontWeight: '900',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                    >
+                                        🏷️ Gestionar Nicknames
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {!formData.is_corporate_parent && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>¿Requiere Canastillas?</label>
+                                <select 
+                                    value={formData.needs_crates ? 'yes' : 'no'} 
+                                    onChange={(e) => setFormData({...formData, needs_crates: e.target.value === 'yes'})}
+                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
+                                >
+                                    <option value="no">❌ No usa canastillas</option>
+                                    <option value="yes">🧺 Sí, requiere canastillas</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Documento de Venta</label>
+                                <select 
+                                    value={formData.document_type} 
+                                    onChange={(e) => setFormData({...formData, document_type: e.target.value})}
+                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
+                                >
+                                    <option value="invoice">📜 Factura Electrónica</option>
+                                    <option value="remission">📄 Remisión Comercial</option>
+                                </select>
+                            </div>
+
+                            {formData.document_type === 'remission' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>¿Mostrar Precios en Rem? </label>
+                                    <select 
+                                        value={formData.remission_with_prices ? 'yes' : 'no'} 
+                                        onChange={(e) => setFormData({...formData, remission_with_prices: e.target.value === 'yes'})}
+                                        style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
+                                    >
+                                        <option value="yes">💰 Mostrar Precios</option>
+                                        <option value="no">🚫 Ocultar Precios</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                        )}
+                    </section>
+                    
+
+                    {/* SECCIÓN MUESTRA EL ESPACIO PARA RESTRICCIONES SIEMPRE - SOLO PARA SUCURSALES */}
+                    {!formData.is_corporate_parent && (
                     <section style={{ gridColumn: '1 / -1', backgroundColor: '#FFFBEB', padding: '1.5rem', borderRadius: '24px', border: '1px solid #FEF3C7' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2249,212 +2990,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </div>
                         </div>
                     </section>
-
-                    {/* SECCIÓN DATOS BÁSICOS Y CONTACTO */}
-                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-                                {isB2C ? '👤 DATOS PERSONALES' : '🏢 DATOS DE LA EMPRESA'}
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <FormField label={isB2C ? "Apodo / Nombre Visible" : "Nombre Comercial"} value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
-                                {!isB2C && (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} />
-                                        <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
-                                    </div>
-                                )}
-                                {isB2C && (
-                                    <FormField label="Cédula / Documento (Opcional)" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
-                                )}
-                            </div>
-                        </section>
-
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>📞 CONTACTO PRINCIPAL</h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
-                                <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
-                            </div>
-                        </section>
-                    </div>
-
-                    {/* SECCIÓN GEOGRÁFICA Y LOGÍSTICA MEJORADA */}
-                     <section style={{ gridColumn: '1 / -1' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
-                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>📍 LOCALIZACIÓN OPERATIVA</h4>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
-                                    type="button"
-                                    onClick={handleGeocode}
-                                    disabled={geocoding}
-                                    style={{ 
-                                        backgroundColor: '#3B82F6', 
-                                        color: 'white', 
-                                        border: 'none', 
-                                        padding: '0.5rem 1.2rem', 
-                                        borderRadius: '12px', 
-                                        fontSize: '0.8rem', 
-                                        fontWeight: '800', 
-                                        cursor: 'pointer',
-                                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}
-                                >
-                                    {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
-                                </button>
-                            </div>
-                         </div>
-
-                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN DE ENTREGA</label>
-                                    <input 
-                                        type="text" 
-                                        value={formData.address} 
-                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
-                                        placeholder="Ej: Calle 72 # 10-03..."
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600' }}
-                                    />
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <FormField label="Ciudad/Mnpio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} />
-                                    <FormField label="Departamento" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} />
-                                </div>
-                                
-                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', display: 'block', marginBottom: '1rem', letterSpacing: '0.5px' }}>GEOCERCAS (LAT/LNG)</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <FormField label="LAT" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} />
-                                        <FormField label="LNG" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} />
-                                    </div>
-                                    <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px', color: formData.geocoding_status === 'verified' ? '#059669' : '#D97706', fontSize: '0.7rem', fontWeight: '800' }}>
-                                        {formData.geocoding_status === 'verified' ? '✅ COORDENADAS VERIFICADAS POR GOOGLE' : '⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)'}
-                                    </div>
-                                </div>
-
-                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', border: '1px solid #FEF3C7', fontSize: '0.7rem', color: '#92400E', fontWeight: '700' }}>
-                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
-                                </div>
-                            </div>
-
-                            <div style={{ 
-                                height: '400px', 
-                                width: '100%', 
-                                borderRadius: '24px', 
-                                overflow: 'hidden', 
-                                border: '4px solid white',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                                position: 'relative',
-                                background: '#E2E8F0'
-                            }}>
-                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
-                                {!formData.latitude && (
-                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', zIndex: 1, textAlign: 'center', padding: '2rem' }}>
-                                        <div>
-                                            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
-                                            <div style={{ fontWeight: '800', color: '#1E40AF' }}>Esperando dirección...</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Usa el pin inteligente o arrastra el mapa.</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                         </div>
-                     </section>
-
-                    {/* SECCIÓN COMERCIAL Y FINANCIERA */}
-                    <section style={{ gridColumn: '1 / -1' }}>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>CONFIGURACIÓN COMERCIAL</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Modelo de Precios</label>
-                                <select 
-                                    value={formData.pricing_model_id} 
-                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})}
-                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {pricingModels.map((pm: PricingModel) => (
-                                        <option key={pm.id} value={pm.id}>{pm.name} ({pm.base_margin_percent}%)</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {isEdit && setNicknameClientId && setIsNicknameModalOpen && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Máscaras de Productos</label>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            setNicknameClientId((editData as Profile).id);
-                                            setIsNicknameModalOpen(true);
-                                        }}
-                                        style={{ 
-                                            padding: '0.8rem', 
-                                            borderRadius: '12px', 
-                                            border: '1px solid #10B981', 
-                                            backgroundColor: '#D1FAE5',
-                                            color: '#065F46',
-                                            fontWeight: '900',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            justifyContent: 'center',
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                                    >
-                                        🏷️ Gestionar Nicknames
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>¿Requiere Canastillas?</label>
-                                <select 
-                                    value={formData.needs_crates ? 'yes' : 'no'} 
-                                    onChange={(e) => setFormData({...formData, needs_crates: e.target.value === 'yes'})}
-                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                >
-                                    <option value="no">❌ No usa canastillas</option>
-                                    <option value="yes">🧺 Sí, requiere canastillas</option>
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>Documento de Venta</label>
-                                <select 
-                                    value={formData.document_type} 
-                                    onChange={(e) => setFormData({...formData, document_type: e.target.value})}
-                                    style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                >
-                                    <option value="invoice">📜 Factura Electrónica</option>
-                                    <option value="remission">📄 Remisión Comercial</option>
-                                </select>
-                            </div>
-
-                            {formData.document_type === 'remission' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>¿Mostrar Precios en Rem? </label>
-                                    <select 
-                                        value={formData.remission_with_prices ? 'yes' : 'no'} 
-                                        onChange={(e) => setFormData({...formData, remission_with_prices: e.target.value === 'yes'})}
-                                        style={{ padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
-                                    >
-                                        <option value="yes">💰 Mostrar Precios</option>
-                                        <option value="no">🚫 Ocultar Precios</option>
-                                    </select>
-                                </div>
-                            )}
-                        </div>
-                    </section>
+                    )}
                     
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                         <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: '20px', border: 'none', background: '#F3F4F6', color: '#4B5563', fontWeight: '800', cursor: 'pointer' }}>Cerrar</button>
@@ -2472,11 +3008,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     );
 }
 
-function FormField({ label, value, onChange, type = 'text', required = false, step = undefined }: { label: string, value: string | number | undefined, onChange: (v: string) => void, type?: string, required?: boolean, step?: string }) {
+function FormField({ label, value, onChange, type = 'text', required = false, step = undefined, readOnly = false }: { label: string, value: string | number | undefined, onChange: (v: string) => void, type?: string, required?: boolean, step?: string, readOnly?: boolean }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151' }}>
-                {label} {required && <span style={{ color: '#EF4444' }}>*</span>}
+            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>
+                {label} {required && <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>}
             </label>
             <input 
                 type={type}
@@ -2484,7 +3020,18 @@ function FormField({ label, value, onChange, type = 'text', required = false, st
                 value={value || ''}
                 onChange={(e) => onChange(e.target.value)}
                 required={required}
-                style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', outline: 'none', fontWeight: '600' }}
+                readOnly={readOnly}
+                style={{ 
+                    width: '100%', 
+                    height: '45px',
+                    padding: '0 0.8rem', 
+                    borderRadius: '12px', 
+                    border: '1px solid #E5E7EB', 
+                    outline: 'none', 
+                    fontWeight: '600',
+                    backgroundColor: readOnly ? '#F3F4F6' : 'white',
+                    cursor: readOnly ? 'not-allowed' : 'text'
+                }}
             />
         </div>
     );

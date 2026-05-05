@@ -73,11 +73,19 @@ export default function CommercialDashboard() {
                 .slice(0, 10);
 
             // 3. Price Trends (purchases)
-            const { data: products } = await supabase.from('products').select('id, name, sku, base_price');
+            const { data: products } = await supabase
+                .from('products')
+                .select('id, name, sku, base_price')
+                .eq('show_on_web', true)
+                .eq('is_active', true)
+                .limit(2000);
+
             const { data: purchases } = await supabase
                 .from('purchases')
                 .select('product_id, unit_price, created_at')
-                .order('created_at', { ascending: false });
+                .gt('unit_price', 0)
+                .order('created_at', { ascending: false })
+                .limit(20000);
 
             const historyMap: Record<string, any[]> = {};
             purchases?.forEach((p: { product_id: string; unit_price: number; created_at: string }) => {
