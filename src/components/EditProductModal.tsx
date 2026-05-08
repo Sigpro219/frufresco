@@ -19,7 +19,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [formData, setFormData] = useState<Product>({ 
         ...product,
         iva_rate: product.iva_rate ?? 19,
-        utility_deviation_pct: product.utility_deviation_pct ?? 0
+        utility_deviation_pct: product.utility_deviation_pct ?? 0,
+        inherit_price: (product as any).inherit_price ?? false
     });
     const hasChildren = allProducts.some(p => p.parent_id === product.id);
     const [parentSearch, setParentSearch] = useState('');
@@ -294,7 +295,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     web_conversion_factor: formData.web_conversion_factor,
                     name_en: formData.name_en,
                     description_en: formData.description_en,
-                    tags: formData.tags
+                    tags: formData.tags,
+                    inherit_price: (formData as any).inherit_price ?? false
                 })
                 .eq('id', product.id);
 
@@ -457,10 +459,24 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             <select
                                 value={formData.buying_team || ''}
                                 onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                             >
                                 <option value="">Seleccionar equipo...</option>
-                                {buyingTeams.map(bt => <option key={bt} value={bt}>{bt}</option>)}
+                                <option value="AGUACATES">AGUACATES</option>
+                                <option value="ALISTAMIENTO ABARROTES">ALISTAMIENTO ABARROTES</option>
+                                <option value="ALISTAMIENTO BATAVIA">ALISTAMIENTO BATAVIA</option>
+                                <option value="ALISTAMIENTO EN SECO PAPAS">ALISTAMIENTO EN SECO PAPAS</option>
+                                <option value="ALISTAMIENTO EN SECO PLATANOS">ALISTAMIENTO EN SECO PLATANOS</option>
+                                <option value="ALISTAMIENTO EN SECO TOMATE">ALISTAMIENTO EN SECO TOMATE</option>
+                                <option value="ALISTAMIENTO FRUTOS SECOS">ALISTAMIENTO FRUTOS SECOS</option>
+                                <option value="ALISTAMIENTO PROCESADOS">ALISTAMIENTO PROCESADOS</option>
+                                <option value="EQUIPO A VEGETALES">EQUIPO A VEGETALES</option>
+                                <option value="EQUIPO B FRUTAS Y OTROS">EQUIPO B FRUTAS Y OTROS</option>
+                                <option value="FRESAS Y MORA">FRESAS Y MORA</option>
+                                <option value="FRUTA BAJA DEMANDA">FRUTA BAJA DEMANDA</option>
+                                <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
+                                <option value="LACTEOS Y REFRIGERADOS">LACTEOS Y REFRIGERADOS</option>
+                                <option value="LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO">LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO</option>
                             </select>
                         </div>
                         <div>
@@ -468,10 +484,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             <select
                                 value={formData.procurement_method || ''}
                                 onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                             >
                                 <option value="">Seleccionar método...</option>
-                                {procurementMethods.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                                <option value="Compras Generales">Compras Generales</option>
+                                <option value="Compras Menores">Compras Menores</option>
+                                <option value="Compras Noche">Compras Noche</option>
                             </select>
                         </div>
                     </div>
@@ -479,39 +497,35 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
-                            <input
-                                type="text"
-                                list="inventory-groups-edit"
+                            <select
                                 value={formData.inventory_group || ''}
                                 onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
-                            />
-                            <datalist id="inventory-groups-edit">
-                                <option value="INVENTARIO DE FRUTAS Y OTROS" />
-                                <option value="INVENTARIO DE HORTALIZAS" />
-                                <option value="INVENTARIO DE VERDURAS" />
-                                <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" />
-                                <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" />
-                            </datalist>
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                            >
+                                <option value="">Seleccionar grupo...</option>
+                                <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
+                                <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
+                                <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
+                                <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
+                            </select>
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
-                            <input
-                                type="text"
-                                list="purchase-sublists-edit"
+                            <select
                                 value={formData.purchase_sublist || ''}
                                 onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
-                            />
-                            <datalist id="purchase-sublists-edit">
-                                <option value="FRUTA SELECCIONADA" />
-                                <option value="HORTALIZA SELECCIONADA" />
-                                <option value="DESPENSA" />
-                                <option value="TUBERCULOS - PAPA" />
-                                <option value="VERDURAS" />
-                                <option value="PLATANOS" />
-                                <option value="TOMATE" />
-                            </datalist>
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                            >
+                                <option value="">Seleccionar sublista...</option>
+                                <option value="DESPENSA">DESPENSA</option>
+                                <option value="FRUTA SELECCIONADA">FRUTA SELECCIONADA</option>
+                                <option value="HORTALIZA SELECCIONADA">HORTALIZA SELECCIONADA</option>
+                                <option value="PLATANOS">PLATANOS</option>
+                                <option value="TOMATE">TOMATE</option>
+                                <option value="TUBERCULOS - PAPA">TUBERCULOS - PAPA</option>
+                                <option value="VERDURAS">VERDURAS</option>
+                            </select>
                         </div>
                     </div>
 
@@ -589,37 +603,75 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                     {/* Lógica de Desviación de Utilidad (Solo si es Hijo y NO es Padre de otros) */}
                     {!hasChildren && formData.parent_id && (
-                        <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
-                                <span>📊 CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
-                            </div>
-                            <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0 }}>
-                                Este producto hereda los costos del Padre. Define aquí la utilidad adicional por el proceso de empaque o volumen menor.
-                            </p>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#1E40AF', marginBottom: '4px' }}>Ajuste de Utilidad (%)</label>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <input 
-                                            type="number"
-                                            value={formData.utility_deviation_pct}
-                                            onChange={(e) => setFormData({ ...formData, utility_deviation_pct: parseFloat(e.target.value) || 0 })}
-                                            style={{ width: '80px', padding: '0.6rem', borderRadius: '8px', border: '2px solid #2563EB', fontWeight: '900', textAlign: 'center' }}
-                                        />
-                                        <span style={{ fontWeight: '800', color: '#2563EB' }}>% ADICIONAL</span>
-                                    </div>
+                        <div style={{ padding: '1.2rem', backgroundColor: '#EFF6FF', borderRadius: '16px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: '800', fontSize: '0.85rem' }}>
+                                    <span>📊 CONFIGURACIÓN DE HIJO (FRACCIONADO)</span>
                                 </div>
-                                {(() => {
-                                    const parent = allProducts.find(p => p.id === formData.parent_id);
-                                    return (
-                                        <div style={{ flex: 1, textAlign: 'right', fontSize: '0.75rem', color: '#1E40AF' }}>
-                                            Padre vinculado: <br />
-                                            <strong style={{ fontSize: '0.85rem' }}>{parent?.sku || 'Cargando...'}</strong>
-                                            {parent && <span style={{ display: 'block', opacity: 0.8, fontSize: '0.75rem', fontWeight: 'bold' }}>{parent.name}</span>}
-                                        </div>
-                                    );
-                                })()}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: '800', color: (formData as any).inherit_price ? '#2563EB' : '#6B7280' }}>
+                                        {(formData as any).inherit_price ? 'HEREDAR PRECIO' : 'PRECIO INDEPENDIENTE'}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, inherit_price: !(formData as any).inherit_price } as any)}
+                                        style={{
+                                            width: '40px',
+                                            height: '20px',
+                                            borderRadius: '10px',
+                                            backgroundColor: (formData as any).inherit_price ? '#2563EB' : '#D1D5DB',
+                                            border: 'none',
+                                            position: 'relative',
+                                            cursor: 'pointer',
+                                            transition: 'background-color 0.2s'
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '16px',
+                                            height: '16px',
+                                            borderRadius: '50%',
+                                            backgroundColor: 'white',
+                                            position: 'absolute',
+                                            top: '2px',
+                                            left: (formData as any).inherit_price ? '22px' : '2px',
+                                            transition: 'left 0.2s'
+                                        }} />
+                                    </button>
+                                </div>
                             </div>
+
+                            <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0 }}>
+                                {(formData as any).inherit_price 
+                                    ? "Este producto hereda los costos del Padre. Define aquí la utilidad adicional." 
+                                    : "Este producto tiene un precio independiente. No se verá afectado por cambios en el padre."}
+                            </p>
+
+                            {(formData as any).inherit_price && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '900', color: '#1E40AF', marginBottom: '4px' }}>Ajuste de Utilidad (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input 
+                                                type="number"
+                                                value={formData.utility_deviation_pct}
+                                                onChange={(e) => setFormData({ ...formData, utility_deviation_pct: parseFloat(e.target.value) || 0 })}
+                                                style={{ width: '80px', padding: '0.6rem', borderRadius: '8px', border: '2px solid #2563EB', fontWeight: '900', textAlign: 'center' }}
+                                            />
+                                            <span style={{ fontWeight: '800', color: '#2563EB' }}>% ADICIONAL</span>
+                                        </div>
+                                    </div>
+                                    {(() => {
+                                        const parent = allProducts.find(p => p.id === formData.parent_id);
+                                        return (
+                                            <div style={{ flex: 1, textAlign: 'right', fontSize: '0.75rem', color: '#1E40AF' }}>
+                                                Padre vinculado: <br />
+                                                <strong style={{ fontSize: '0.85rem' }}>{parent?.sku || 'Cargando...'}</strong>
+                                                {parent && <span style={{ display: 'block', opacity: 0.8, fontSize: '0.75rem', fontWeight: 'bold' }}>{parent.name}</span>}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -928,8 +980,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                         <div style={{ borderLeft: '1px solid #eee', paddingLeft: '3rem' }}>
                             <h3 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#111827', borderBottom: '2px solid #E5E7EB', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>🧬 Variantes del SKU</h3>
 
-                            {/* BLOQUE DE VARIANTES (Oculto si es Hijo) */}
-                    {!formData.parent_id ? (
+                            {/* BLOQUE DE VARIANTES */}
                         <div style={{ backgroundColor: '#F9FAFB', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5E7EB' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <div>
@@ -1183,16 +1234,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 )}
                             </div>
                         </div>
-                    ) : (
-                        <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F3F4F6', borderRadius: '20px', border: '1px dashed #D1D5DB' }}>
-                                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⛓️</div>
-                                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: '#4B5563' }}>Producto tipo Variación (Hijo)</h3>
-                                <p style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '4px' }}>
-                                    Como este SKU ya es una variación funcional del Padre, no puede tener sub-variantes propias.
-                                    Gestiona su precio dinámico en la sección superior.
-                                </p>
-                            </div>
-                        )}
                         </div> {/* Fin Columna Derecha */}
                     </div> {/* Fin Grid */}
 

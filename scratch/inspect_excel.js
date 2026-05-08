@@ -1,19 +1,26 @@
-
 const XLSX = require('xlsx');
 const path = require('path');
 
-const filePath = "C:\\Users\\German Higuera\\OneDrive\\Documentos\\Proyectos Delta CoreTech\\2026\\Inventario Fruver\\Datas maestras\\BD COLABORADORES MARZO 2026-INVESTMENTS CORTES SAS.xlsx";
+const filePath = 'C:\\Users\\German Higuera\\OneDrive\\Documentos\\Proyectos Delta CoreTech\\2026\\Inventario Fruver\\Datas maestras\\BD PRODUCTOS 8 DE MAYO-INVESTMENTS CORTES SAS V1.xlsx';
 
 try {
     const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const datasheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(datasheet);
-    
-    console.log('--- ENCABEZADOS Y PRIMERA FILA ---');
-    console.log(Object.keys(data[0]));
-    console.log(data[0]);
-    console.log(`\nTotal de colaboradores encontrados: ${data.length}`);
+    workbook.SheetNames.forEach(sn => {
+        console.log(`\n--- 📊 Sheet: ${sn} ---`);
+        const sheet = workbook.Sheets[sn];
+        const data = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        console.log(`Total Rows: ${data.length}`);
+        
+        if (data.length > 0) {
+            const columns = Object.keys(data[0]);
+            columns.forEach(col => {
+                const uniqueValues = [...new Set(data.map(r => r[col]))].filter(v => v !== '').slice(0, 10);
+                if (uniqueValues.length > 0) {
+                    console.log(`  Col [${col}]: ${uniqueValues.join(', ')}`);
+                }
+            });
+        }
+    });
 } catch (err) {
-    console.error('Error al leer el archivo:', err.message);
+    console.error("❌ Error reading Excel:", err.message);
 }

@@ -37,8 +37,14 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         procurement_method: 'Compras Generales',
         inventory_group: '',
         purchase_sublist: '',
-        tags: [] as string[]
+        tags: [] as string[],
+        parent_id: null as string | null,
+        utility_deviation_pct: 0,
+        inherit_price: false
     });
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [parentSearch, setParentSearch] = useState('');
+    const [showParentResults, setShowParentResults] = useState(false);
 
     const [generatingAI, setGeneratingAI] = useState(false);
     const [tagInput, setTagInput] = useState('');
@@ -88,9 +94,8 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         };
         fetchMaster();
 
-        // 2. Fetch Max accounting_id to suggest next one
         const fetchNextId = async () => {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('products')
                 .select('accounting_id')
                 .order('accounting_id', { ascending: false })
@@ -107,23 +112,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         };
         fetchNextId();
 
-        // 3. Fetch unique logistics values
-        const fetchLogistics = async () => {
-            const { data } = await supabase.from('products').select('inventory_group, purchase_sublist');
-            if (data) {
-                const groups = new Set<string>();
-                const sublists = new Set<string>();
-                data.forEach(p => {
-                    if (p.inventory_group) groups.add(p.inventory_group);
-                    if (p.purchase_sublist) sublists.add(p.purchase_sublist);
-                });
-                setInventoryGroups(Array.from(groups).sort());
-                setPurchaseSublists(Array.from(sublists).sort());
-            }
+        const fetchAllProducts = async () => {
+            const { data } = await supabase.from('products').select('*').order('sku');
+            if (data) setAllProducts(data);
         };
-        fetchLogistics();
+        fetchAllProducts();
     }, []);
-
 
     const handleGenerateAI = async () => {
         if (!formData.name) {
@@ -310,7 +304,10 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     iva_rate: formData.iva_rate,
                     name_en: formData.name_en,
                     description_en: formData.description_en,
-                    tags: formData.tags
+                    tags: formData.tags,
+                    parent_id: formData.parent_id,
+                    utility_deviation_pct: formData.utility_deviation_pct,
+                    inherit_price: formData.inherit_price
                 }])
                 .select()
                 .single();
@@ -481,14 +478,24 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     <select
                                         value={formData.buying_team}
                                         onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
-                                        <option value="">Seleccionar...</option>
-                                        <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
-                                        <option value="EQUIPO A FRUTAS">EQUIPO A FRUTAS</option>
+                                        <option value="">Seleccionar equipo...</option>
+                                        <option value="AGUACATES">AGUACATES</option>
+                                        <option value="ALISTAMIENTO ABARROTES">ALISTAMIENTO ABARROTES</option>
+                                        <option value="ALISTAMIENTO BATAVIA">ALISTAMIENTO BATAVIA</option>
+                                        <option value="ALISTAMIENTO EN SECO PAPAS">ALISTAMIENTO EN SECO PAPAS</option>
+                                        <option value="ALISTAMIENTO EN SECO PLATANOS">ALISTAMIENTO EN SECO PLATANOS</option>
+                                        <option value="ALISTAMIENTO EN SECO TOMATE">ALISTAMIENTO EN SECO TOMATE</option>
+                                        <option value="ALISTAMIENTO FRUTOS SECOS">ALISTAMIENTO FRUTOS SECOS</option>
+                                        <option value="ALISTAMIENTO PROCESADOS">ALISTAMIENTO PROCESADOS</option>
                                         <option value="EQUIPO A VEGETALES">EQUIPO A VEGETALES</option>
-                                        <option value="LOGISTICA - PAPAS">LOGISTICA - PAPAS</option>
-                                        <option value="REFRIGERADOS">REFRIGERADOS</option>
+                                        <option value="EQUIPO B FRUTAS Y OTROS">EQUIPO B FRUTAS Y OTROS</option>
+                                        <option value="FRESAS Y MORA">FRESAS Y MORA</option>
+                                        <option value="FRUTA BAJA DEMANDA">FRUTA BAJA DEMANDA</option>
+                                        <option value="HIERBAS Y HORTALIZAS">HIERBAS Y HORTALIZAS</option>
+                                        <option value="LACTEOS Y REFRIGERADOS">LACTEOS Y REFRIGERADOS</option>
+                                        <option value="LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO">LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO</option>
                                     </select>
                                 </div>
                                 <div>
@@ -496,44 +503,139 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     <select
                                         value={formData.procurement_method}
                                         onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
                                     >
+                                        <option value="">Seleccionar método...</option>
                                         <option value="Compras Generales">Compras Generales</option>
-                                        <option value="Contratación Directa">Contratación Directa</option>
-                                        <option value="Importación">Importación</option>
-                                        <option value="Local">Local</option>
+                                        <option value="Compras Menores">Compras Menores</option>
+                                        <option value="Compras Noche">Compras Noche</option>
                                     </select>
                                 </div>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
-                                    <input
-                                        type="text"
-                                        list="inventory-groups"
+                                    <select
                                         value={formData.inventory_group}
                                         onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
-                                    />
-                                    <datalist id="inventory-groups">
-                                        {inventoryGroups.map(g => <option key={g} value={g} />)}
-                                    </datalist>
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                                    >
+                                        <option value="">Seleccionar grupo...</option>
+                                        <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                        <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
+                                        <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
+                                        <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
+                                        <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
+                                    </select>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
-                                    <input
-                                        type="text"
-                                        list="purchase-sublists"
+                                    <select
                                         value={formData.purchase_sublist}
                                         onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.85rem' }}
-                                    />
-                                    <datalist id="purchase-sublists">
-                                        {purchaseSublists.map(s => <option key={s} value={s} />)}
-                                    </datalist>
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                                    >
+                                        <option value="">Seleccionar sublista...</option>
+                                        <option value="DESPENSA">DESPENSA</option>
+                                        <option value="FRUTA SELECCIONADA">FRUTA SELECCIONADA</option>
+                                        <option value="HORTALIZA SELECCIONADA">HORTALIZA SELECCIONADA</option>
+                                        <option value="PLATANOS">PLATANOS</option>
+                                        <option value="TOMATE">TOMATE</option>
+                                        <option value="TUBERCULOS - PAPA">TUBERCULOS - PAPA</option>
+                                        <option value="VERDURAS">VERDURAS</option>
+                                    </select>
                                 </div>
                             </div>
+
+                            {/* VINCULACIÓN A PADRE (NUEVO) */}
+                            <div style={{ position: 'relative' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Vincular a SKU Padre (Opcional)</label>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar padre por nombre o SKU..."
+                                    value={parentSearch || (formData.parent_id ? (() => {
+                                        const p = allProducts.find(i => i.id === formData.parent_id);
+                                        return p ? `${p.sku} - ${p.name}` : '';
+                                    })() : '')}
+                                    onChange={(e) => {
+                                        setParentSearch(e.target.value);
+                                        setShowParentResults(true);
+                                    }}
+                                    onFocus={() => setShowParentResults(true)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: 'bold', color: formData.parent_id ? '#2563EB' : 'inherit' }}
+                                />
+                                {showParentResults && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #D1D5DB', borderRadius: '10px', marginTop: '4px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
+                                        <div 
+                                            onClick={() => {
+                                                setFormData({ ...formData, parent_id: null });
+                                                setParentSearch('');
+                                                setShowParentResults(false);
+                                            }}
+                                            style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer', color: '#EF4444', fontWeight: '800', fontSize: '0.8rem' }}
+                                        >
+                                            ❌ Ninguno (Producto Independiente)
+                                        </div>
+                                        {allProducts
+                                            .filter(p => p.name.toLowerCase().includes(parentSearch.toLowerCase()) || p.sku.toLowerCase().includes(parentSearch.toLowerCase()))
+                                            .slice(0, 10)
+                                            .map(p => (
+                                                <div 
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        setFormData({ ...formData, parent_id: p.id });
+                                                        setParentSearch(p.sku);
+                                                        setShowParentResults(false);
+                                                    }}
+                                                    style={{ padding: '0.6rem', borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                                                >
+                                                    <div style={{ fontWeight: '800', color: '#2563EB', fontSize: '0.85rem' }}>{p.sku}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>{p.name}</div>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* CONFIGURACIÓN FRACCIONADO (NUEVO) */}
+                            {formData.parent_id && (
+                                <div style={{ padding: '1rem', backgroundColor: '#EFF6FF', borderRadius: '14px', border: '1px solid #BFDBFE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1E40AF', fontWeight: '800', fontSize: '0.75rem' }}>
+                                            <span>📊 HIJO FRACCIONADO</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: formData.inherit_price ? '#2563EB' : '#6B7280' }}>
+                                                {formData.inherit_price ? 'HEREDAR PRECIO' : 'PRECIO INDEPENDIENTE'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, inherit_price: !formData.inherit_price })}
+                                                style={{ width: '36px', height: '18px', borderRadius: '9px', backgroundColor: formData.inherit_price ? '#2563EB' : '#D1D5DB', border: 'none', position: 'relative', cursor: 'pointer', transition: '0.2s' }}
+                                            >
+                                                <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: 'white', position: 'absolute', top: '2px', left: formData.inherit_price ? '20px' : '2px', transition: '0.2s' }} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {formData.inherit_price && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '900', color: '#1E40AF', marginBottom: '2px' }}>Ajuste Utilidad %</label>
+                                                <input 
+                                                    type="number"
+                                                    value={formData.utility_deviation_pct}
+                                                    onChange={(e) => setFormData({ ...formData, utility_deviation_pct: parseFloat(e.target.value) || 0 })}
+                                                    style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid #2563EB', fontWeight: '900', textAlign: 'center' }}
+                                                />
+                                            </div>
+                                            <div style={{ flex: 1, textAlign: 'right', fontSize: '0.65rem', color: '#1E40AF' }}>
+                                                Heredará del padre <br />
+                                                <strong>{allProducts.find(p => p.id === formData.parent_id)?.sku}</strong>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px solid #f3f4f6', paddingTop: '1rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
