@@ -53,6 +53,7 @@ export default function MasterProductsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
+    const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const ITEMS_PER_PAGE = 50;
 
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -792,27 +793,34 @@ export default function MasterProductsPage() {
                         </div>
                         <input
                             type="text"
-                            placeholder="Buscar por SKU, Nombre o Categoría..."
+                            placeholder="Buscar por SKU, Nombre o Categoría... (Usa @ para filtros rápidos)"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{
                                 width: '100%',
                                 padding: '1.2rem 3.5rem 1.2rem 3.5rem',
-                                borderRadius: '12px',
-                                border: '1px solid #D1D5DB',
+                                borderRadius: '18px',
+                                border: '1px solid #E5E7EB',
                                 fontSize: '1.1rem',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                transition: 'all 0.2s'
+                                fontWeight: '500',
+                                outline: 'none',
+                                transition: 'all 0.3s',
+                                backgroundColor: 'white',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#3B82F6';
+                                e.target.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#E5E7EB';
+                                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)';
                             }}
                         />
                         {searchQuery && (
                             <button 
                                 onClick={() => setSearchQuery('')}
                                 style={{
-                                    position: 'absolute',
-                                    right: '1rem',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
                                     background: 'none',
                                     border: 'none',
                                     color: '#9CA3AF',
@@ -820,7 +828,11 @@ export default function MasterProductsPage() {
                                     padding: '4px',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
+                                    justifyContent: 'center',
+                                    position: 'absolute',
+                                    right: '1.2rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)'
                                 }}
                                 title="Limpiar búsqueda"
                             >
@@ -829,86 +841,74 @@ export default function MasterProductsPage() {
                         )}
                     </div>
 
-                    <div style={{ position: 'relative' }}>
-                        <div 
-                            onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
-                            style={{ 
-                                color: isInfoGuideOpen ? 'white' : '#2563EB', 
-                                cursor: 'pointer',
-                                backgroundColor: isInfoGuideOpen ? '#2563EB' : '#EFF6FF',
-                                padding: '1rem',
-                                borderRadius: '12px',
-                                border: '1px solid #BFDBFE',
-                                display: 'flex',
-                                alignItems: 'center',
-                                transition: 'all 0.2s',
-                                boxShadow: isInfoGuideOpen ? '0 0 0 3px rgba(37, 99, 235, 0.2)' : 'none',
-                                position: 'relative'
-                            }}
-                        >
-                            <Info size={24} />
-                            
-                            {/* Conteo de Resultados */}
-                            {(searchQuery.trim() !== '' || filteredProducts.length !== products.length) && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '-8px',
-                                    right: '-8px',
-                                    backgroundColor: '#2563EB',
-                                    color: 'white',
-                                    fontSize: '0.65rem',
-                                    fontWeight: '900',
-                                    padding: '2px 6px',
-                                    borderRadius: '10px',
-                                    boxShadow: '0 4px 6px rgba(37, 99, 235, 0.3)',
-                                    whiteSpace: 'nowrap',
-                                    border: '2px solid white',
-                                    zIndex: 10
-                                }}>
-                                    {filteredProducts.length}
-                                </div>
-                            )}
-                        </div>
-
-                        {isInfoGuideOpen && (
+                    {/* Botón Informativo Estándar (Hover) */}
+                    <div 
+                        onMouseEnter={() => setShowHelpTooltip(true)}
+                        onMouseLeave={() => setShowHelpTooltip(false)}
+                        style={{ 
+                            position: 'relative',
+                            width: '48px', 
+                            height: '48px', 
+                            borderRadius: '14px', 
+                            backgroundColor: '#EFF6FF', 
+                            color: '#2563EB', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            cursor: 'help',
+                            border: '1px solid #DBEAFE',
+                            fontSize: '1.2rem',
+                            fontWeight: '900',
+                            flexShrink: 0,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        i
+                        {showHelpTooltip && (
                             <div style={{
                                 position: 'absolute',
-                                right: 0,
-                                top: '120%',
+                                top: '58px',
+                                right: '0',
                                 width: '300px',
-                                backgroundColor: 'white',
+                                backgroundColor: '#1E293B',
+                                color: 'white',
+                                padding: '1.2rem',
                                 borderRadius: '16px',
-                                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                                border: '1px solid #E5E7EB',
-                                padding: '1.5rem',
-                                zIndex: 100,
+                                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                                zIndex: 1000,
+                                fontSize: '0.75rem',
+                                lineHeight: '1.5',
+                                pointerEvents: 'none',
                                 animation: 'fadeInDown 0.2s ease-out'
                             }}>
-                                <h4 style={{ margin: '0 0 1rem 0', color: '#111827', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    🚀 Power Search Guide
-                                </h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                                    🚀 COMANDOS MAESTROS (@)
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                     {[
-                                        { tag: '@19%', desc: 'IVA del 19% (Gral)' },
-                                        { tag: '@5%', desc: 'IVA reducido' },
-                                        { tag: '@0%', desc: 'Productos exentos' },
-                                        { tag: '@web', desc: 'Visibles en tienda' },
-                                        { tag: '@padre', desc: 'Principal' },
-                                        { tag: '@hijo', desc: 'Fraccionado' },
-                                        { tag: '@sindatos', desc: 'Faltan campos' },
-                                        { tag: '@on', desc: 'SKUs activos' },
-                                        { tag: '#ID', desc: 'ID EXACTO' },
-                                        { tag: '@fruta', desc: 'Por Categoría' }
+                                        { tag: '@web', desc: 'En Tienda' },
+                                        { tag: '@oculto', desc: 'No Web' },
+                                        { tag: '@sindatos', desc: 'Faltan datos' },
+                                        { tag: '@padre', desc: 'SKU Base' },
+                                        { tag: '@19', desc: 'IVA 19%' },
+                                        { tag: '@0', desc: 'Exentos' },
+                                        { tag: '@activo', desc: 'Habilitados' },
+                                        { tag: '@hijo', desc: 'Fraccionado' }
                                     ].map((item, i) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                                            <code style={{ backgroundColor: '#F3F4F6', padding: '2px 6px', borderRadius: '4px', color: '#2563EB', fontWeight: 'bold' }}>{item.tag}</code>
-                                            <span style={{ color: '#6B7280' }}>{item.desc}</span>
+                                        <div key={i}>
+                                            <b style={{ color: '#FCD34D' }}>{item.tag}</b>: {item.desc}
                                         </div>
                                     ))}
                                 </div>
-                                <div style={{ marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6', fontSize: '0.75rem', color: '#9CA3AF', fontStyle: 'italic' }}>
-                                    Puedes combinar términos: &quot;Papa @19% @web&quot;
+                                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
+                                    Tip: Puedes filtrar por Categoría escribiendo @ seguida del nombre.
                                 </div>
+                                <style>{`
+                                    @keyframes fadeInDown {
+                                        from { opacity: 0; transform: translateY(-10px); }
+                                        to { opacity: 1; transform: translateY(0); }
+                                    }
+                                `}</style>
                             </div>
                         )}
                     </div>

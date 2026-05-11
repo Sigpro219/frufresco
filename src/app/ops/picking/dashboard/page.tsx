@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { Monitor, LayoutGrid, Tv } from 'lucide-react';
 
 // Types
 type Product = {
@@ -30,6 +31,58 @@ const supabase = createClient();
 export default function PickingDashboard() {
     const router = useRouter();
     const isMounted = useRef(true);
+    const [density, setDensity] = useState<'standard' | 'high' | 'tv'>('standard');
+
+    // Persistence for density preference
+    useEffect(() => {
+        const saved = localStorage.getItem('picking_dashboard_density');
+        if (saved === 'high' || saved === 'tv' || saved === 'standard') {
+            setDensity(saved);
+        }
+    }, []);
+
+    const changeDensity = (val: 'standard' | 'high' | 'tv') => {
+        setDensity(val);
+        localStorage.setItem('picking_dashboard_density', val);
+    };
+
+    const DENSITY_CONFIG = {
+        standard: {
+            cellWidth: '40px',
+            cellHeight: '40px',
+            fontSize: '1rem',
+            laneFontSize: '1.3rem',
+            clientFontSize: '0.75rem',
+            productFontSize: '0.9rem',
+            headerHeight: '70px',
+            hideExternal: false,
+            clientHeaderHeight: '95px'
+        },
+        high: {
+            cellWidth: '32px',
+            cellHeight: '32px',
+            fontSize: '0.85rem',
+            laneFontSize: '1.1rem',
+            clientFontSize: '0.65rem',
+            productFontSize: '0.8rem',
+            headerHeight: '60px',
+            hideExternal: false,
+            clientHeaderHeight: '85px'
+        },
+        tv: {
+            cellWidth: '22px',
+            cellHeight: '22px',
+            fontSize: '0.7rem',
+            laneFontSize: '0.85rem',
+            clientFontSize: '0.55rem',
+            productFontSize: '0.75rem',
+            headerHeight: '45px',
+            hideExternal: true,
+            clientHeaderHeight: '75px'
+        }
+    };
+
+    const cfg = DENSITY_CONFIG[density];
 
     useEffect(() => {
         isMounted.current = true;
@@ -428,11 +481,30 @@ export default function PickingDashboard() {
     return (
         <main style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
+
+
             {/* TOP HEADER */}
-            <header style={{ height: '70px', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2rem', background: '#050505' }}>
+            <header style={{ 
+                height: cfg.headerHeight, 
+                borderBottom: '1px solid #333', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                padding: density === 'tv' ? '0 1rem' : '0 2rem', 
+                background: '#050505',
+                flexShrink: 0
+            }}>
                 <div
                     onClick={() => router.push('/ops')}
-                    style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#22C55E', fontWeight: '900', fontSize: '1.5rem', cursor: 'pointer' }}>
+                    style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: density === 'tv' ? '0.5rem' : '1rem', 
+                        color: '#22C55E', 
+                        fontWeight: '900', 
+                        fontSize: density === 'tv' ? '1rem' : '1.5rem', 
+                        cursor: 'pointer' 
+                    }}>
                     LOGISTICS PRO <span style={{ color: '#666' }}>|</span> <span style={{ color: '#fff' }}>PICKING</span>
                 </div>
 
@@ -503,7 +575,42 @@ export default function PickingDashboard() {
                             {!isConnected && <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: 'bold' }}>DESCONECTADO</span>}
                         </div>
 
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{currentTime}</div>
+                         <div style={{ fontSize: density === 'tv' ? '1.2rem' : '2rem', fontWeight: 'bold' }}>{currentTime}</div>
+
+                        {/* DENSITY SELECTOR */}
+                        <div style={{ 
+                            display: 'flex', 
+                            background: '#111', 
+                            padding: '3px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #333',
+                            marginLeft: '10px'
+                        }}>
+                            <button 
+                                onClick={() => changeDensity('standard')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'standard' ? '#22C55E' : 'transparent',
+                                    color: density === 'standard' ? '#000' : '#888',
+                                    transition: 'all 0.2s'
+                                }} title="Estándar"><Monitor size={14} strokeWidth={3} /></button>
+                            <button 
+                                onClick={() => changeDensity('high')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'high' ? '#22C55E' : 'transparent',
+                                    color: density === 'high' ? '#000' : '#888',
+                                    transition: 'all 0.2s'
+                                }} title="Alta Densidad"><LayoutGrid size={14} strokeWidth={3} /></button>
+                            <button 
+                                onClick={() => changeDensity('tv')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'tv' ? '#22C55E' : 'transparent',
+                                    color: density === 'tv' ? '#000' : '#888',
+                                    transition: 'all 0.2s'
+                                }} title="Modo TV / Aeropuerto"><Tv size={14} strokeWidth={3} /></button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -548,15 +655,15 @@ export default function PickingDashboard() {
                         {/* ROW 1: ZONES (Sticky Top) */}
                         <tr>
                             <th style={{
-                                position: 'sticky', top: 0, left: 0, zIndex: 40,
+                                position: 'sticky', top: cfg.headerHeight, left: 0, zIndex: 40,
                                 background: '#000', minWidth: '200px',
                                 borderBottom: '1px solid #333', borderRight: '1px solid #333',
-                                height: '40px'
+                                height: '44px'
                             }}></th>
 
                             {zoneHeaders.map((zone, i) => (
                                 <th key={i} colSpan={zone.count} style={{
-                                    position: 'sticky', top: 0, zIndex: 30,
+                                    position: 'sticky', top: cfg.headerHeight, zIndex: 30,
                                     background: '#0a0a0a',
                                     color: zone.percent === 100 ? '#22C55E' : zone.color,
                                     borderBottom: `4px solid ${zone.percent === 100 ? '#22C55E' : zone.color}`,
@@ -574,39 +681,40 @@ export default function PickingDashboard() {
                         {/* ROW 2: CLIENT NAMES (Vertical) */}
                         <tr>
                             <th style={{
-                                position: 'sticky', top: '44px', left: 0, zIndex: 40,
+                                position: 'sticky', top: `calc(${cfg.headerHeight} + 44px)`, left: 0, zIndex: 40,
                                 background: '#000',
                                 borderBottom: '1px solid #333', borderRight: '1px solid #333',
-                                color: '#888', textAlign: 'right', padding: '1rem'
+                                color: '#888', textAlign: 'right', padding: '1rem',
+                                fontSize: cfg.fontSize
                             }}>PRODUCTO</th>
 
                             {clients.map((client, index) => {
                                 const complete = isClientComplete(client.company_name);
                                 return (
                                     <th key={client.id} style={{
-                                        position: 'sticky', top: '44px', zIndex: 20,
+                                        position: 'sticky', top: `calc(${cfg.headerHeight} + 44px)`, zIndex: 20,
                                         background: complete ? '#064E3B' : (clientsWithAlerts.has(client.company_name) ? '#7F1D1D' : '#000'),
                                         borderBottom: '1px solid #333',
                                         borderRight: '1px solid #111',
-                                        height: '90px',
+                                        height: cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
-                                        minWidth: '40px',
-                                        maxWidth: '40px',
+                                        minWidth: cfg.cellWidth,
+                                        maxWidth: cfg.cellWidth,
                                         overflow: 'hidden',
                                         animation: clientsWithAlerts.has(client.company_name) ? 'pulseAlert 1.5s infinite' : 'none'
                                     }}>
                                         <div style={{
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            height: '90px', // Explicit height matching th
+                                            height: cfg.clientHeaderHeight, // Explicit height matching th
                                             alignItems: 'center',
                                             justifyContent: 'flex-start',
                                             overflow: 'hidden'
                                         }}>
                                             {/* Big Lane Number */}
                                             <div style={{
-                                                fontSize: '1.3rem', // Slightly smaller to fit
+                                                fontSize: cfg.laneFontSize,
                                                 fontWeight: '800',
                                                 color: complete ? '#4ADE80' : '#fff',
                                                 marginBottom: '2px', // Tighter spacing
@@ -626,7 +734,7 @@ export default function PickingDashboard() {
                                                 writingMode: 'vertical-rl',
                                                 transform: 'rotate(180deg)',
                                                 whiteSpace: 'nowrap',
-                                                fontSize: '0.75rem', 
+                                                fontSize: cfg.clientFontSize, 
                                                 fontWeight: '800',
                                                 letterSpacing: '0.5px',
                                                 color: complete ? '#86EFAC' : '#fff',
@@ -659,8 +767,8 @@ export default function PickingDashboard() {
                                     <tr>
                                         <td colSpan={clients.length + 1} style={{
                                             background: '#111', color: '#888',
-                                            fontWeight: 'bold', fontSize: '1.1rem', // Bigger font size
-                                            padding: '0.4rem 1rem', borderBottom: '1px solid #222',
+                                            fontWeight: 'bold', fontSize: cfg.fontSize,
+                                            padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid #222',
                                             position: 'sticky', left: 0 // Optional: Sticky category header? Maybe too much.
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
@@ -702,10 +810,10 @@ export default function PickingDashboard() {
                                                     position: 'sticky', left: 0, zIndex: 10,
                                                     background: productsWithAlerts.has(product.id) ? '#7F1D1D' : '#000',
                                                     borderRight: '1px solid #333', borderBottom: '1px solid #222',
-                                                    padding: '0.5rem 1rem',
+                                                    padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
                                                     color: productsWithAlerts.has(product.id) ? '#fff' : '#ddd', 
-                                                    fontSize: '0.9rem',
-                                                    minWidth: '200px', maxWidth: '300px',
+                                                    fontSize: cfg.productFontSize,
+                                                    minWidth: density === 'tv' ? '150px' : '200px', maxWidth: '300px',
                                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                     animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
                                                 }} title={product.name}>
@@ -754,7 +862,8 @@ export default function PickingDashboard() {
                                                                 background: bg, color: fg,
                                                                 borderBottom: '1px solid #000', borderRight: '1px solid #000',
                                                                 textAlign: 'center', fontWeight: 'bold',
-                                                                fontSize: '1rem',
+                                                                fontSize: cfg.fontSize,
+                                                                height: cfg.cellHeight,
                                                                 cursor: 'pointer', transition: 'all 0.1s',
                                                                 animation: cell.hasRejection ? 'pulseAlert 1s infinite' : (cell.hasWarning ? 'pulseWarning 1.5s infinite' : 'none'),
                                                                 boxShadow: (cell.hasRejection || cell.hasWarning) ? 'inset 0 0 15px rgba(0,0,0,0.5)' : 'none',
@@ -774,8 +883,8 @@ export default function PickingDashboard() {
                                                                 </div>
                                                             ) : isPartial ? (
                                                                 <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1' }}>
-                                                                    <span style={{ color: '#fff', fontSize: '1rem' }}>{cell.picked}</span>
-                                                                    <span style={{ fontSize: '0.7rem', opacity: 0.8, borderTop: '1px solid #555' }}>{cell.ordered}</span>
+                                                                    <span style={{ color: '#fff', fontSize: cfg.fontSize }}>{cell.picked}</span>
+                                                                    <span style={{ fontSize: `calc(${cfg.fontSize} * 0.7)`, opacity: 0.8, borderTop: '1px solid #555' }}>{cell.ordered}</span>
                                                                 </div>
                                                             ) : (
                                                                 cell.ordered
@@ -801,6 +910,10 @@ export default function PickingDashboard() {
             </div>
 
             <style jsx>{`
+                /* GLOBAL OVERRIDES */
+                :global(#ops-main-header) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
+                :global(#ops-main-footer) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
+
                 .animate-marquee {
                     animation: marquee 30s linear infinite;
                 }

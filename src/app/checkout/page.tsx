@@ -170,7 +170,7 @@ export default function CheckoutPage() {
                 const bogotaNow = new Date(utc + (3600000 * -5));
                 const currentHour = bogotaNow.getHours();
 
-                let daysToAdd = 1;
+                let daysToAdd = cutoffEnabled ? 1 : 0;
                 if (cutoffEnabled && currentHour >= DEFAULT_CUTOFF_HOUR) {
                     daysToAdd = 2;
                 }

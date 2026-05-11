@@ -16,7 +16,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <Providers>
             <Suspense fallback={null}>
                 {!isOpsOrAdmin && <GlobalBanner />}
-                <Navbar />
+                {!pathname?.startsWith('/ops') && <Navbar />}
                 {children}
                 {!isOpsOrAdmin && <Footer />}
             </Suspense>

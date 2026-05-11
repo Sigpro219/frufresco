@@ -38,7 +38,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             color: 'var(--ops-text)'
         }}>
             {/* Simple Top Bar */}
-            <header style={{
+            <header id="ops-main-header" style={{
                 backgroundColor: 'var(--ops-surface)',
                 padding: '0.75rem 1rem',
                 borderBottom: '1px solid var(--ops-border)',
@@ -68,7 +68,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                             onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
                         />
                     </div>
-                     <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'white' }}>
+                     <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'var(--ops-text)' }}>
                         {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
                     </span>
                 </div>
@@ -116,12 +116,12 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             </main>
 
             {/* Bottom Navigation for Mobile Speed */}
-            <nav style={{
+            <nav id="ops-main-footer" style={{
                 position: 'fixed',
                 bottom: 0,
                 left: 0,
                 right: 0,
-                backgroundColor: 'rgba(31, 41, 55, 0.8)',
+                backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
                 borderTop: '1px solid var(--ops-border)',

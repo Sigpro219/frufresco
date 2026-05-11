@@ -97,13 +97,13 @@ export default function ClientsModule() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedClient, setSelectedClient] = useState<Profile | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<Partial<Profile> | null>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+    const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
     const [nicknameClientId, setNicknameClientId] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+    const [isFormReadOnly, setIsFormReadOnly] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -279,17 +279,20 @@ export default function ClientsModule() {
     };
 
     const handleViewDetails = (client: Profile) => {
-        setSelectedClient(client);
-        setIsModalOpen(true);
+        setEditTarget(client);
+        setIsFormReadOnly(true);
+        setIsFormModalOpen(true);
     };
 
     const handleEditClient = (client: Profile) => {
         setEditTarget(client);
+        setIsFormReadOnly(false);
         setIsFormModalOpen(true);
     };
 
     const handleCreateClient = (role: 'b2b_client' | 'b2c_client' = 'b2b_client') => {
         setEditTarget({ role }); // Send role even if new
+        setIsFormReadOnly(false);
         setIsFormModalOpen(true);
     };
 
@@ -320,28 +323,7 @@ export default function ClientsModule() {
         <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
             <Toast />
 
-            {/* MODAL MÁSCARAS DE PRODUCTO */}
-            {isNicknameModalOpen && nicknameClientId && (
-                <ProductNicknameModal 
-                    customerId={nicknameClientId}
-                    customerName={clientsB2B.find(c => c.id === nicknameClientId)?.company_name || 'Cliente'}
-                    onClose={() => {
-                        setIsNicknameModalOpen(false);
-                        setNicknameClientId(null);
-                    }}
-                />
-            )}
 
-            {/* MODAL DETALLES */}
-            {isModalOpen && selectedClient && (
-                <ClientDetailsModal 
-                    client={selectedClient} 
-                    onClose={() => setIsModalOpen(false)} 
-                    pricingModels={pricingModels}
-                    setNicknameClientId={setNicknameClientId}
-                    setIsNicknameModalOpen={setIsNicknameModalOpen}
-                />
-            )}
 
             {/* MODAL FORMULARIO (NUEVO / EDITAR) */}
             {isFormModalOpen && (
@@ -352,189 +334,294 @@ export default function ClientsModule() {
                     editData={editTarget}
                     setNicknameClientId={setNicknameClientId}
                     setIsNicknameModalOpen={setIsNicknameModalOpen}
+                    isReadOnly={isFormReadOnly}
                 />
             )}
 
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2.5rem 1rem' }}>
-                <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '2rem' }}>
+            {/* MODAL EXCEPCIONES (NICKNAMES) */}
+            {isNicknameModalOpen && nicknameClientId && (
+                <ClientExceptionsModal 
+                    clientId={nicknameClientId}
+                    onClose={() => {
+                        setIsNicknameModalOpen(false);
+                        setNicknameClientId(null);
+                    }}
+                />
+            )}
+
+            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 1rem' }}>
+                <header style={{ 
+                    marginBottom: '1.5rem', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    flexWrap: 'wrap', 
+                    gap: '1rem',
+                    borderBottom: '1px solid #E2E8F0',
+                    paddingBottom: '1rem'
+                }}>
                     <div>
-                        <h1 style={{ fontSize: '2.8rem', fontWeight: '900', color: '#1A202C', margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: '#0891B2' }}>Clientes</span></h1>
-                        <p style={{ color: '#4A5568', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
+                        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1A202C', margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: '#0891B2' }}>Clientes</span></h1>
+                        <p style={{ color: '#4A5568', fontSize: '0.9rem', marginTop: '0.2rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
                     </div>
-                    {activeTab !== 'dashboard' && (
-                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            {/* BOTÓN DE CREACIÓN SEGÚN TAB */}
-                            {activeTab === 'b2b' && (
-                                <button 
-                                    onClick={() => handleCreateClient('b2b_client')}
-                                    style={{ 
-                                        backgroundColor: '#0891B2', 
-                                        color: 'white', 
-                                        padding: '0.8rem 1.2rem', 
-                                        borderRadius: '14px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        cursor: 'pointer',
-                                        boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        whiteSpace: 'nowrap',
-                                        height: '52px'
-                                    }}
-                                >
-                                    <span>➕</span> Nuevo Institucional
-                                </button>
-                            )}
-                            {activeTab === 'b2c' && (
-                                <button 
-                                    onClick={() => handleCreateClient('b2c_client')}
-                                    style={{ 
-                                        backgroundColor: '#10B981', 
-                                        color: 'white', 
-                                        padding: '0.8rem 1.2rem', 
-                                        borderRadius: '14px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        cursor: 'pointer',
-                                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        whiteSpace: 'nowrap',
-                                        height: '52px'
-                                    }}
-                                >
-                                    <span>👤</span> Nuevo B2C
-                                </button>
-                            )}
 
-                            {/* TOGGLE VISTA */}
-                            <div style={{ 
-                                display: 'flex', 
-                                backgroundColor: '#E2E8F0', 
-                                padding: '4px', 
-                                borderRadius: '14px', 
-                                height: '52px',
-                                alignItems: 'center'
-                            }}>
-                                <button 
-                                    onClick={() => setViewMode('list')}
-                                    style={{
-                                        padding: '0.6rem 1rem',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
-                                        boxShadow: viewMode === 'list' ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '1.2rem'
-                                    }}
-                                    title="Vista de Lista"
-                                >
-                                    📋
-                                </button>
-                                <button 
-                                    onClick={() => setViewMode('grid')}
-                                    style={{
-                                        padding: '0.6rem 1rem',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
-                                        boxShadow: viewMode === 'grid' ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '1.2rem'
-                                    }}
-                                    title="Vista de Tarjetas"
-                                >
-                                    🔲
-                                </button>
-                            </div>
-
-                            {/* BUSCADOR */}
-                            <div style={{ position: 'relative', width: '350px' }}>
-                                <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem', color: '#A0AEC0' }}>🔍</span>
-                                <input 
-                                    placeholder={`Buscar ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    style={{ 
-                                        width: '100%', 
-                                        padding: '1rem 3.2rem 1rem 3.2rem', 
-                                        borderRadius: '14px', 
-                                        border: '1px solid #E2E8F0', 
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                                        fontSize: '1rem',
-                                        outline: 'none',
-                                        height: '52px'
-                                    }}
-                                />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm('')}
-                                        style={{
-                                            position: 'absolute',
-                                            right: '1rem',
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            background: '#E2E8F0',
-                                            border: 'none',
-                                            color: '#64748B',
-                                            width: '24px',
-                                            height: '24px',
-                                            borderRadius: '50%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            cursor: 'pointer',
-                                            fontSize: '0.8rem',
-                                            fontWeight: 'bold'
-                                        }}
-                                        title="Limpiar búsqueda"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {/* TABS MOVIDAS ARRIBA */}
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '0.3rem', 
+                        backgroundColor: '#F1F5F9', 
+                        padding: '4px', 
+                        borderRadius: '16px', 
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                    }}>
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    background: activeTab === tab.id ? 'white' : 'transparent',
+                                    color: activeTab === tab.id ? '#0891B2' : '#64748B',
+                                    fontWeight: activeTab === tab.id ? '800' : '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.85rem',
+                                    boxShadow: activeTab === tab.id ? '0 4px 6px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                <span style={{ fontSize: '1rem' }}>{tab.icon}</span>
+                                {tab.label.split(' ')[1] || tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </header>
 
-                {/* TABS COMPONENT */}
-                <div style={{ 
-                    display: 'flex', 
-                    gap: '0.5rem', 
-                    marginBottom: '3rem', 
-                    backgroundColor: 'rgba(255,255,255,0.8)', 
-                    padding: '0.5rem', 
-                    borderRadius: '24px', 
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-                    width: 'fit-content',
-                    backdropFilter: 'blur(8px)'
-                }}>
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                            style={{
-                                padding: '0.8rem 1.8rem',
-                                border: 'none',
-                                borderRadius: '18px',
-                                background: activeTab === tab.id ? '#0891B2' : 'transparent',
-                                color: activeTab === tab.id ? 'white' : '#4A5568',
-                                fontWeight: activeTab === tab.id ? '800' : '600',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                boxShadow: activeTab === tab.id ? '0 8px 15px rgba(8, 145, 178, 0.3)' : 'none'
+                {/* SEGUNDA FILA: ACCIONES Y BUSCADOR (COMPACTA) */}
+                {activeTab !== 'dashboard' && (
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '0.8rem', 
+                        alignItems: 'center', 
+                        marginBottom: '1.2rem',
+                        backgroundColor: 'white',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '16px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
+                        border: '1px solid #F1F5F9'
+                    }}>
+                        {/* BOTÓN DE CREACIÓN */}
+                        {activeTab === 'b2b' && (
+                            <button 
+                                onClick={() => handleCreateClient('b2b_client')}
+                                style={{ 
+                                    backgroundColor: '#0891B2', 
+                                    color: 'white', 
+                                    padding: '0 1.2rem', 
+                                    borderRadius: '10px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    whiteSpace: 'nowrap',
+                                    height: '40px',
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                <span>➕</span> Nuevo Institucional
+                            </button>
+                        )}
+                        {activeTab === 'b2c' && (
+                            <button 
+                                onClick={() => handleCreateClient('b2c_client')}
+                                style={{ 
+                                    backgroundColor: '#10B981', 
+                                    color: 'white', 
+                                    padding: '0 1.2rem', 
+                                    borderRadius: '10px', 
+                                    border: 'none', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    whiteSpace: 'nowrap',
+                                    height: '40px',
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                <span>👤</span> Nuevo B2C
+                            </button>
+                        )}
+
+                        {/* TOGGLE VISTA */}
+                        <div style={{ 
+                            display: 'flex', 
+                            backgroundColor: '#F1F5F9', 
+                            padding: '3px', 
+                            borderRadius: '10px', 
+                            height: '40px',
+                            alignItems: 'center',
+                            border: '1px solid #E2E8F0'
+                        }}>
+                            <button 
+                                onClick={() => setViewMode('list')}
+                                style={{
+                                    padding: '0.3rem 0.6rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
+                                    boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                📋
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('grid')}
+                                style={{
+                                    padding: '0.3rem 0.6rem',
+                                    borderRadius: '7px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
+                                    boxShadow: viewMode === 'grid' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                🔲
+                            </button>
+                        </div>
+
+                        {/* BUSCADOR ESTÁNDAR FLEXIBLE (OCUPANDO TODO EL ESPACIO) */}
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <input 
+                                placeholder={`Buscar ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0 2.5rem 0 2.5rem', 
+                                    borderRadius: '10px', 
+                                    border: '1px solid #F1F5F9', 
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    height: '40px',
+                                    backgroundColor: '#F8FAFC',
+                                    transition: 'all 0.2s'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.backgroundColor = 'white';
+                                    e.target.style.borderColor = '#0891B2';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.backgroundColor = '#F8FAFC';
+                                    e.target.style.borderColor = '#E2E8F0';
+                                }}
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '0.8rem',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: '#E2E8F0',
+                                        border: 'none',
+                                        color: '#64748B',
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 'bold'
+                                    }}
+                                >✕</button>
+                            )}
+                        </div>
+
+                        {/* Botón Informativo (i) */}
+                        <div 
+                            onMouseEnter={() => setShowHelpTooltip(true)}
+                            onMouseLeave={() => setShowHelpTooltip(false)}
+                            style={{ 
+                                position: 'relative',
+                                width: '40px', 
+                                height: '40px', 
+                                borderRadius: '10px', 
+                                backgroundColor: '#EFF6FF', 
+                                color: '#2563EB', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                cursor: 'help',
+                                border: '1px solid #DBEAFE',
+                                fontSize: '1rem',
+                                fontWeight: '900',
+                                flexShrink: 0,
+                                transition: 'all 0.2s'
                             }}
                         >
-                            <span style={{ fontSize: '1.2rem' }}>{tab.icon}</span>
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                            i
+                            {showHelpTooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '48px',
+                                    right: '0',
+                                    width: '280px',
+                                    backgroundColor: '#1E293B',
+                                    color: 'white',
+                                    padding: '1.2rem',
+                                    borderRadius: '16px',
+                                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                                    zIndex: 1000,
+                                    fontSize: '0.75rem',
+                                    lineHeight: '1.5',
+                                    pointerEvents: 'none',
+                                    animation: 'fadeInDown 0.2s ease-out'
+                                }}>
+                                    <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                                        🚀 COMANDOS CRM (@)
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div>
+                                            <b style={{ color: '#FCD34D' }}>@bogota</b>: Por ciudad<br/>
+                                            <b style={{ color: '#FCD34D' }}>@nit</b>: Por NIT<br/>
+                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo
+                                        </div>
+                                        <div>
+                                            <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
+                                            <b style={{ color: '#FCD34D' }}>@vencido</b>: Expirado<br/>
+                                            <b style={{ color: '#FCD34D' }}>@branch</b>: Sucursales
+                                        </div>
+                                    </div>
+                                    <style>{`
+                                        @keyframes fadeInDown {
+                                            from { opacity: 0; transform: translateY(-10px); }
+                                            to { opacity: 1; transform: translateY(0); }
+                                        }
+                                    `}</style>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '10rem' }}>
@@ -777,283 +864,7 @@ export default function ClientsModule() {
     );
 }
 
-function ProductNicknameModal({ customerId, customerName, onClose }: { customerId: string, customerName: string, onClose: () => void }) {
-    const [nicknames, setNicknames] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searching, setSearching] = useState(false);
-    const [newNickname, setNewNickname] = useState('');
-    const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
 
-    const fetchNicknames = async () => {
-        setLoading(true);
-        try {
-            console.log('Fetching nicknames for customer:', customerId);
-            const { data, error } = await supabase
-                .from('product_nicknames')
-                .select('*')
-                .eq('customer_id', customerId);
-            
-            if (error) {
-                const errorMsg = `Error Supabase [${error.code}]: ${error.message}`;
-                console.error('Supabase error fetching nicknames:', error);
-                window.showToast?.(errorMsg, 'error');
-                throw error;
-            }
-            
-            if (data && data.length > 0) {
-                // Fetch product details separately if the join failed or to be safer
-                const productIds = data.map(n => n.product_id);
-                const { data: productsData } = await supabase
-                    .from('products')
-                    .select('id, name, sku')
-                    .in('id', productIds);
-                
-                const richNicknames = data.map(n => ({
-                    ...n,
-                    products: productsData?.find(p => p.id === n.product_id)
-                }));
-                setNicknames(richNicknames);
-            } else {
-                setNicknames([]);
-            }
-        } catch (err: any) {
-            console.error('Catch error fetching nicknames:', err);
-            // Mostrar mensaje legible si hay error de RLS o tabla
-            if (err.code === '42P01') {
-                window.showToast?.('Error: Tabla product_nicknames no encontrada en base de datos.', 'error');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchNicknames();
-    }, [customerId]);
-
-    // Búsqueda Inteligente con Debounce
-    useEffect(() => {
-        const timeoutId = setTimeout(async () => {
-            if (searchQuery.length < 1) { // Reducido a 1 para IDs cortos
-                setSearchResults([]);
-                return;
-            }
-
-            setSearching(true);
-            try {
-                const isHashSearch = searchQuery.startsWith('#');
-                const cleanQuery = isHashSearch ? searchQuery.slice(1) : searchQuery;
-                const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(cleanQuery);
-                const isNumeric = /^\d+$/.test(cleanQuery);
-                
-                let query = supabase
-                    .from('products')
-                    .select('id, name, sku, accounting_id');
-                
-                if (isHashSearch && isNumeric) {
-                    // MODO BÚSQUEDA DIRECTA: Si usa #, buscamos coincidencia exacta de ID
-                    query = query.eq('accounting_id', parseInt(cleanQuery));
-                } else if (isUUID) {
-                    query = query.eq('id', cleanQuery);
-                } else if (isNumeric) {
-                    // BÚSQUEDA INTELIGENTE NUMÉRICA (ID exacto o parcial en otros campos)
-                    query = query.or(`accounting_id.eq.${cleanQuery},sku.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
-                                 .order('accounting_id', { ascending: true });
-                } else if (cleanQuery.length >= 2) {
-                    // BÚSQUEDA POR TEXTO NORMAL
-                    query = query.or(`name.ilike.%${cleanQuery}%,sku.ilike.%${cleanQuery}%`);
-                } else {
-                    // Por debajo de 2 letras y sin hash, no buscamos nombres para evitar ruido
-                    setSearchResults([]);
-                    setSearching(false);
-                    return;
-                }
-
-                const { data, error } = await query.limit(15);
-                
-                if (data) setSearchResults(data);
-                if (error) throw error;
-            } catch (err) {
-                console.error('Search error:', err);
-            } finally {
-                setSearching(false);
-            }
-        }, 300); // Un poco más rápido para IDs
-
-        return () => clearTimeout(timeoutId);
-    }, [searchQuery]);
-
-    const handleAddNickname = async () => {
-        if (!selectedProduct || !newNickname) return;
-        try {
-            const { error } = await supabase
-                .from('product_nicknames')
-                .upsert({
-                    customer_id: customerId,
-                    product_id: selectedProduct.id,
-                    nickname: newNickname
-                }, { onConflict: 'customer_id,product_id' });
-            
-            if (error) throw error;
-            window.showToast?.('Máscara guardada con éxito', 'success');
-            setSelectedProduct(null);
-            setNewNickname('');
-            setSearchQuery('');
-            setSearchResults([]);
-            fetchNicknames();
-        } catch (err: any) {
-            console.error('Error saving nickname:', err);
-            const errorMsg = `Error al guardar: ${err.message || 'Error desconocido'}`;
-            window.showToast?.(errorMsg, 'error');
-        }
-    };
-
-    const handleDeleteNickname = async (id: string) => {
-        if (!window.confirm('¿Deseas eliminar esta máscara de producto?')) return;
-        try {
-            const { error } = await supabase
-                .from('product_nicknames')
-                .delete()
-                .eq('id', id);
-            if (error) throw error;
-            fetchNicknames();
-        } catch (err) {
-            console.error('Error deleting nickname:', err);
-        }
-    };
-
-    return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-                <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', background: '#F3F4F6', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-                
-                <div style={{ padding: '2.5rem' }}>
-                    <header style={{ marginBottom: '2rem' }}>
-                        <span style={{ color: '#F59E0B', fontWeight: '900', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1rem' }}>🎭 Gestión de Máscaras (Nicknames)</span>
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: '0.5rem 0' }}>{customerName}</h2>
-                        <p style={{ color: '#64748B', fontSize: '0.9rem' }}>Define excepciones de nombre de producto exclusivas para este cliente.</p>
-                    </header>
-
-                    {/* SEARCH SECTION */}
-                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginBottom: '2rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#1E293B', fontWeight: '800' }}>🔍 Buscar Producto Inteligente</h4>
-                            {searching && <span style={{ fontSize: '0.75rem', color: '#6366F1', fontWeight: '800', animation: 'pulse 1s infinite' }}>Buscando...</span>}
-                        </div>
-                        <div style={{ position: 'relative' }}>
-                            <input 
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Escribe Nombre, SKU o ID del producto..."
-                                style={{ 
-                                    width: '100%', 
-                                    padding: '1.1rem 1.4rem', 
-                                    borderRadius: '16px', 
-                                    border: '2px solid #E2E8F0', 
-                                    fontSize: '1rem',
-                                    fontWeight: '600',
-                                    outline: 'none',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 4px 6px rgba(0,0,0,0.02)'
-                                }}
-                                onFocus={(e) => (e.currentTarget.style.borderColor = '#6366F1')}
-                                onBlur={(e) => (e.currentTarget.style.borderColor = '#E2E8F0')}
-                            />
-                        </div>
-
-                        {searchResults.length > 0 && (
-                            <div style={{ marginTop: '1rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                                {searchResults.map(p => (
-                                    <div 
-                                        key={p.id} 
-                                        onClick={() => setSelectedProduct(p)}
-                                        style={{ 
-                                            padding: '1rem', 
-                                            borderBottom: '1px solid #F1F5F9', 
-                                            cursor: 'pointer', 
-                                            backgroundColor: selectedProduct?.id === p.id ? '#F0F9FF' : 'transparent',
-                                            transition: 'all 0.2s',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                        }}
-                                        onMouseEnter={(e) => !selectedProduct && (e.currentTarget.style.backgroundColor = '#F8FAFC')}
-                                        onMouseLeave={(e) => !selectedProduct && (e.currentTarget.style.backgroundColor = 'transparent')}
-                                    >
-                                        <div>
-                                            <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.9rem' }}>{p.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                                                SKU: <span style={{ fontWeight: '700' }}>{p.sku}</span>
-                                                <span style={{ margin: '0 8px', color: '#CBD5E1' }}>|</span>
-                                                ID: <span style={{ color: '#0891B2', fontWeight: '800' }}>{p.accounting_id}</span>
-                                            </div>
-                                        </div>
-                                        {selectedProduct?.id === p.id && <span style={{ fontSize: '1.2rem' }}>🎯</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {selectedProduct && (
-                            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '2px dashed #CBD5E1' }}>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '900', color: '#B45309', marginBottom: '8px' }}>Escribe el nuevo nombre (Máscara):</label>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <input 
-                                        type="text"
-                                        value={newNickname}
-                                        onChange={(e) => setNewNickname(e.target.value)}
-                                        placeholder={`Ej: ${selectedProduct.name} Especial`}
-                                        style={{ flex: 1, padding: '0.8rem 1.2rem', borderRadius: '12px', border: '2px solid #F59E0B', fontSize: '1rem', fontWeight: '700' }}
-                                    />
-                                    <button 
-                                        onClick={handleAddNickname}
-                                        style={{ padding: '0.8rem 1.5rem', backgroundColor: '#F59E0B', color: 'white', borderRadius: '12px', border: 'none', fontWeight: '950', cursor: 'pointer', boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)' }}
-                                    >
-                                        Vincular Máscara
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* LIST SECTION */}
-                    <div>
-                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#111827', fontWeight: '900' }}>🎭 Máscaras Activas</h4>
-                        {loading ? (
-                            <p style={{ color: '#64748B', fontStyle: 'italic' }}>Cargando excepciones...</p>
-                        ) : nicknames.length === 0 ? (
-                            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px dashed #E2E8F0' }}>
-                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.85rem' }}>No hay máscaras definidas para este cliente.</p>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {nicknames.map(n => (
-                                    <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                        <div>
-                                            <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase' }}>Nombre Técnico (Sistema)</div>
-                                            <div style={{ fontWeight: '700', color: '#64748B', fontSize: '0.85rem' }}>{n.products?.name} <span style={{ opacity: 0.5 }}>[{n.products?.sku}]</span></div>
-                                            <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#F59E0B', fontWeight: '800', textTransform: 'uppercase' }}>Máscara (Lo que ve el cliente)</div>
-                                            <div style={{ fontWeight: '950', color: '#D97706', fontSize: '1.05rem' }}>{n.nickname}</div>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleDeleteNickname(n.id)}
-                                            style={{ backgroundColor: '#FEE2E2', color: '#EF4444', border: 'none', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer', fontSize: '0.9rem' }}
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: string, color: string, textColor: string, subtitle: string }) {
     return (
@@ -1273,29 +1084,36 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
     };
 
     return (
-        <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '24px', 
-            padding: '2rem', 
-            boxShadow: '0 8px 30px rgba(0,0,0,0.04)',
-            border: '1px solid #F0F2F5',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem',
-            position: 'relative',
-            overflow: 'hidden'
-        }}>
-            {/* Tag / Status Area */}
-            <div style={{ 
-                position: 'absolute', 
-                top: '1.5rem', 
-                right: '1.5rem',
+        <div 
+            onClick={onViewDetails}
+            style={{ 
+                backgroundColor: 'white', 
+                borderRadius: '24px', 
+                padding: '2rem', 
+                boxShadow: '0 8px 30px rgba(0,0,0,0.04)',
+                border: '1px solid #F0F2F5',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: '0.6rem',
-                zIndex: 2
-            }}>
+                gap: '1.5rem',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+            }}
+        >
+            {/* Tag / Status Area */}
+            <div 
+                onClick={(e) => e.stopPropagation()}
+                style={{ 
+                    position: 'absolute', 
+                    top: '1.5rem', 
+                    right: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    gap: '0.6rem',
+                    zIndex: 2
+                }}
+            >
                 <div style={{ 
                     padding: '0.4rem 0.8rem',
                     borderRadius: '8px',
@@ -1623,7 +1441,10 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
             </div>
 
             {/* Actions */}
-            <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}>
+            <div 
+                onClick={(e) => e.stopPropagation()}
+                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}
+            >
                 {onViewDetails && (
                     <button 
                         onClick={onViewDetails}
@@ -1797,367 +1618,9 @@ function EmptyState({ text }: { text: string }) {
     );
 }
 
-function ClientDetailsModal({ 
-    client, 
-    onClose, 
-    pricingModels, 
-    setNicknameClientId, 
-    setIsNicknameModalOpen 
-}: { 
-    client: Profile, 
-    onClose: () => void, 
-    pricingModels: PricingModel[],
-    setNicknameClientId: (id: string | null) => void,
-    setIsNicknameModalOpen: (open: boolean) => void
-}) {
-    const selectedModel = pricingModels.find((m: PricingModel) => m.id === client.pricing_model_id);
-    const [agreements, setAgreements] = useState<any[]>([]);
-    const [loadingAgreements, setLoadingAgreements] = useState(true);
 
-    const isB2B = client.role === 'b2b_client';
-    const isB2C = client.role === 'b2c_client';
-    const isLead = (client as unknown as Lead).status !== undefined;
 
-    useEffect(() => {
-        const fetchAgreements = async () => {
-            if (!isB2B) {
-                setLoadingAgreements(false);
-                return;
-            }
-            setLoadingAgreements(true);
-            try {
-                const { data } = await supabase
-                    .from('quotes')
-                    .select('*, pricing_models!model_id(name)')
-                    .eq('client_id', client.id)
-                    .eq('status', 'agreement')
-                    .order('created_at', { ascending: false });
-                
-                if (data) setAgreements(data);
-            } catch (err) {
-                console.error('Error fetching client agreements:', err);
-            } finally {
-                setLoadingAgreements(false);
-            }
-        };
-        fetchAgreements();
-    }, [client.id, isB2B]);
-
-    const SectionHeader = ({ icon, title, color }: { icon: string, title: string, color: string }) => (
-        <h4 style={{ 
-            fontSize: '0.9rem', 
-            fontWeight: '900', 
-            color: color, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '10px',
-            marginBottom: '1.25rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05rem'
-        }}>
-            <span style={{ 
-                backgroundColor: `${color}10`, 
-                width: '32px', 
-                height: '32px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                borderRadius: '8px',
-                fontSize: '1.1rem'
-            }}>{icon}</span>
-            {title}
-        </h4>
-    );
-
-    const InfoCard = ({ children, style = {} }: { children: React.ReactNode, style?: any }) => (
-        <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '24px', 
-            padding: '1.75rem', 
-            border: '1px solid #F1F5F9',
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02)',
-            ...style 
-        }}>
-            {children}
-        </div>
-    );
-
-    return (
-        <div style={{ 
-            position: 'fixed', 
-            inset: 0, 
-            backgroundColor: 'rgba(15, 23, 42, 0.6)', 
-            backdropFilter: 'blur(12px)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            zIndex: 1000, 
-            padding: '1.5rem' 
-        }}>
-            <div style={{ 
-                backgroundColor: '#F8FAFC', 
-                borderRadius: '40px', 
-                width: '100%', 
-                maxWidth: '1000px', 
-                maxHeight: '92vh', 
-                overflowY: 'auto', 
-                position: 'relative', 
-                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)'
-            }}>
-                <button 
-                    onClick={onClose} 
-                    style={{ 
-                        position: 'absolute', 
-                        top: '2rem', 
-                        right: '2rem', 
-                        border: 'none', 
-                        background: 'white', 
-                        width: '44px', 
-                        height: '44px', 
-                        borderRadius: '50%', 
-                        cursor: 'pointer', 
-                        fontSize: '1.1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#64748B',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                        zIndex: 10
-                    }}
-                >
-                    ✕
-                </button>
-                
-                <div style={{ padding: '0' }}>
-                    {/* TOP IDENTITY BANNER */}
-                    <div style={{ 
-                        padding: '3.5rem 3.5rem 2.5rem 3.5rem', 
-                        background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)',
-                        color: 'white',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
-                            <span style={{ 
-                                padding: '0.4rem 1rem', 
-                                backgroundColor: isB2B ? '#0891B2' : (isLead ? '#8B5CF6' : '#10B981'), 
-                                borderRadius: '100px', 
-                                fontSize: '0.75rem', 
-                                fontWeight: '900', 
-                                textTransform: 'uppercase', 
-                                letterSpacing: '0.05rem',
-                                color: 'white'
-                            }}>
-                                {isB2C ? 'Consumidor Final' : (isLead ? 'Prospecto (Lead)' : 'Cliente Institucional')}
-                            </span>
-                            {client.is_active === false && (
-                                <span style={{ padding: '0.4rem 1rem', backgroundColor: '#EF4444', borderRadius: '100px', fontSize: '0.75rem', fontWeight: '900' }}>INACTIVO</span>
-                            )}
-                        </div>
-                        <h2 style={{ fontSize: '2.8rem', fontWeight: '900', color: 'white', margin: 0, letterSpacing: '-0.05rem' }}>
-                            {isB2C ? client.contact_name : (client.company_name || client.contact_name)}
-                        </h2>
-                        {(!isB2C && client.razon_social) && (
-                            <p style={{ color: '#94A3B8', fontSize: '1.2rem', marginTop: '0.5rem', fontWeight: '500' }}>{client.razon_social}</p>
-                        )}
-                    </div>
-
-                    <div style={{ padding: '2.5rem 3.5rem 3.5rem 3.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-                        
-                        {/* MAIN INFO GRID */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                            
-                            {/* BLOCK 1: IDENTIDAD Y COMERCIAL */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <SectionHeader icon="🏢" title="Identidad Comercial" color="#0891B2" />
-                                <InfoCard>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        <ModalRow label="NIT / Documento" value={client.nit} />
-                                        <ModalRow label="Modelo Asignado" value={isB2C ? 'B2C' : (selectedModel?.name || '---')} />
-                                        <ModalRow 
-                                            label="Margen de Operación" 
-                                            value={isB2C ? 'Tarifario Catálogo' : (selectedModel ? `${selectedModel.base_margin_percent}%` : '---')} 
-                                            color="#0891B2"
-                                        />
-                                        {isB2B && (client.is_corporate_parent || client.parent_id) && (
-                                            <div style={{ marginTop: '0.5rem', padding: '1.25rem', backgroundColor: client.is_corporate_parent ? '#F0F9FF' : '#FFF7ED', borderRadius: '20px', border: `1px solid ${client.is_corporate_parent ? '#BAE6FD' : '#FFEDD5'}` }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', color: client.is_corporate_parent ? '#0369A1' : '#C2410C', marginBottom: '8px' }}>
-                                                    {client.is_corporate_parent ? '🏛️ PERFIL: CASA MATRIZ' : '📍 PERFIL: SUCURSAL'}
-                                                </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <ModalRow label={client.is_corporate_parent ? "ID Corporativo" : "ID de Sucursal"} value={client.branch_id} />
-                                                    {client.corporate_role && <ModalRow label="Cargo / Rol" value={client.corporate_role} />}
-                                                    {client.parent_id && (
-                                                        <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed rgba(0,0,0,0.05)' }}>
-                                                            <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase' }}>Vinculado a:</span>
-                                                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B' }}>
-                                                                {potentialParents.find(p => p.id === client.parent_id)?.company_name || 'Cargando parent...'}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                         )}
-                                        {isB2B && (
-                                            <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD' }}>
-                                                <button 
-                                                    onClick={() => {
-                                                        setNicknameClientId(client.id);
-                                                        setIsNicknameModalOpen(true);
-                                                    }}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '900', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D97706'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F59E0B'}
-                                                >
-                                                    🎭 Máscaras de Producto
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </InfoCard>
-                            </div>
-
-                            {/* BLOCK 2: LOGÍSTICA Y UBICACIÓN */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <SectionHeader icon="📍" title="Logística y Entrega" color="#10B981" />
-                                <InfoCard>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        <ModalRow label="Dirección" value={client.address} />
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <ModalRow label="Ciudad" value={client.municipality || client.city} />
-                                            <ModalRow label="Depto" value={client.department} />
-                                        </div>
-                                        
-                                        {/* GPS STATUS */}
-                                        <div style={{ 
-                                            marginTop: '0.5rem', 
-                                            padding: '1.25rem', 
-                                            backgroundColor: (client.latitude && client.longitude) ? '#F0FDF4' : '#FEF2F2', 
-                                            borderRadius: '20px', 
-                                            border: `1px solid ${(client.latitude && client.longitude) ? '#BBF7D0' : '#FECACA'}`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '12px'
-                                        }}>
-                                            <div style={{ fontSize: '1.5rem' }}>{(client.latitude && client.longitude) ? '🛰️' : '🚫'}</div>
-                                            <div>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', color: (client.latitude && client.longitude) ? '#166534' : '#991B1B' }}>Coordenadas GPS</div>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: '800', color: (client.latitude && client.longitude) ? '#065F46' : '#DC2626' }}>
-                                                    {(client.latitude && client.longitude) ? `${client.latitude.toFixed(4)}, ${client.longitude.toFixed(4)}` : 'Sin Geo-referencia'}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {(isB2B || isB2C) && (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                                <div style={{ textAlign: 'center', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px' }}>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', marginBottom: '4px' }}>CANASTILLAS</div>
-                                                    <div style={{ fontWeight: '900', color: '#1E293B' }}>{client.needs_crates ? 'SÍ' : 'NO'}</div>
-                                                </div>
-                                                <div style={{ textAlign: 'center', padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px' }}>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', marginBottom: '4px' }}>DOC. PREF</div>
-                                                    <div style={{ fontWeight: '900', color: '#1E293B' }}>{client.document_type === 'remission' ? 'REMISION' : 'FACTURA'}</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </InfoCard>
-                            </div>
-
-                            {/* BLOCK 3: CONTACTO Y NOTAS */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <SectionHeader icon="📞" title="Canales de Contacto" color="#F59E0B" />
-                                <InfoCard>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        <ModalRow label="Responsable" value={client.contact_name} />
-                                        <ModalRow label="WhatsApp / Cel" value={client.phone} color="#059669" />
-                                        <ModalRow label="Email" value={client.email} />
-                                        
-                                        {client.delivery_restrictions && (
-                                            <div style={{ 
-                                                marginTop: '0.5rem', 
-                                                padding: '1rem', 
-                                                backgroundColor: '#FFFBEB', 
-                                                borderRadius: '16px', 
-                                                border: '1px solid #FEF3C7',
-                                                fontSize: '0.85rem'
-                                            }}>
-                                                <div style={{ fontWeight: '900', color: '#92400E', marginBottom: '4px', fontSize: '0.7rem', textTransform: 'uppercase' }}>Restricciones de Entrega</div>
-                                                <p style={{ margin: 0, color: '#B45309', fontWeight: '600', lineHeight: '1.4' }}>{client.delivery_restrictions}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </InfoCard>
-                            </div>
-                        </div>
-
-                        {/* BOTTOM AREA: AGREEMENTS OR LEAD PROGRESS */}
-                        {isB2B && agreements.length > 0 && (
-                            <div style={{ backgroundColor: '#F1F5F9', borderRadius: '32px', padding: '2rem' }}>
-                                <SectionHeader icon="🤝" title="Acuerdos Comerciales Activos" color="#334155" />
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
-                                    {agreements.map(agreement => (
-                                        <div key={agreement.id} style={{ backgroundColor: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0', position: 'relative' }}>
-                                            <span style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', padding: '0.2rem 0.5rem', backgroundColor: '#D1FAE5', color: '#065F46', borderRadius: '20px', fontSize: '0.6rem', fontWeight: '900' }}>VIGENTE</span>
-                                            <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem', marginBottom: '4px' }}>
-                                                {agreement.pricing_models?.name || 'Específico'}
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Quote: #{agreement.quote_number || '---'}</div>
-                                            <div style={{ marginTop: '0.75rem', padding: '0.5rem 0', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>Expira</span>
-                                                <span style={{ fontSize: '0.8rem', color: '#1E293B', fontWeight: '800' }}>{new Date(agreement.valid_until).toLocaleDateString()}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {isLead && (
-                            <div style={{ backgroundColor: '#EEF2FF', borderRadius: '32px', padding: '2rem' }}>
-                                <SectionHeader icon="🚀" title="Progreso del Prospecto" color="#4F46E5" />
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
-                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Tipo Negocio</div>
-                                        <div style={{ fontSize: '1rem', color: '#1E1B4B', fontWeight: '800' }}>{(client as unknown as Lead).business_type || '---'}</div>
-                                    </div>
-                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
-                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Contactos</div>
-                                        <div style={{ fontSize: '1.5rem', color: '#1E1B4B', fontWeight: '900' }}>{(client as unknown as Lead).contact_count || 0}</div>
-                                    </div>
-                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '16px' }}>
-                                        <div style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: '900', textTransform: 'uppercase' }}>Eficiencia</div>
-                                        <div style={{ fontSize: '1.2rem', color: '#1E1B4B', fontWeight: '900' }}>⚡ Alta</div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function ModalRow({ label, value, color }: { label: string, value?: string | number | null, color?: string }) {
-    return (
-        <div>
-            <span style={{ display: 'block', fontSize: '0.65rem', color: '#94A3B8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.02rem', marginBottom: '2px' }}>
-                {label}
-            </span>
-            <span style={{ 
-                fontSize: '0.95rem', 
-                color: color || '#1E293B', 
-                fontWeight: '700',
-                wordBreak: 'break-word'
-            }}>
-                {value || '---'}
-            </span>
-        </div>
-    );
-}
-
-function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void }) {
+function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean }) {
     const isEdit = !!editData && !!editData.id;
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
@@ -2168,6 +1631,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         contact_name: editData?.contact_name || '',
         phone: editData?.phone || '',
         email: editData?.email || '',
+        contact_email: (editData as any)?.contact_email || '',
         address: editData?.address || '',
         address_complement: (editData as any)?.address_complement || '',
         city: editData?.city || 'Bogotá',
@@ -2198,7 +1662,25 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         economic_activity_code: (editData as any)?.economic_activity_code || '',
         collection_responsible_name: (editData as any)?.collection_responsible_name || '',
         collection_responsible_email: (editData as any)?.collection_responsible_email || '',
-        collection_responsible_phone: (editData as any)?.collection_responsible_phone || ''
+        collection_responsible_phone: (editData as any)?.collection_responsible_phone || '',
+        legal_rep_id_url: (editData as any)?.legal_rep_id_url || '',
+        comm_ref_1_name: (editData as any)?.comm_ref_1_name || '',
+        comm_ref_1_nit: (editData as any)?.comm_ref_1_nit || '',
+        comm_ref_1_phone: (editData as any)?.comm_ref_1_phone || '',
+        comm_ref_1_email: (editData as any)?.comm_ref_1_email || '',
+        comm_ref_2_name: (editData as any)?.comm_ref_2_name || '',
+        comm_ref_2_nit: (editData as any)?.comm_ref_2_nit || '',
+        comm_ref_2_phone: (editData as any)?.comm_ref_2_phone || '',
+        comm_ref_2_email: (editData as any)?.comm_ref_2_email || '',
+        remission_copies: (editData as any)?.remission_copies || 2,
+        id_zr: (editData as any)?.id_zr || '',
+        id_lp: (editData as any)?.id_lp || '',
+        payment_days: (editData as any)?.payment_days || 0,
+        email_2: (editData as any)?.email_2 || '',
+        email_3: (editData as any)?.email_3 || '',
+        notify_email_1: (editData as any)?.notify_email_1 !== undefined ? (editData as any).notify_email_1 : true,
+        notify_email_2: (editData as any)?.notify_email_2 || false,
+        notify_email_3: (editData as any)?.notify_email_3 || false
     });
     const [saving, setSaving] = useState(false);
 
@@ -2209,6 +1691,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [potentialParents, setPotentialParents] = useState<Profile[]>([]);
     const [parentSearch, setParentSearch] = useState('');
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+    const [isExceptionsModalOpen, setIsExceptionsModalOpen] = useState(false);
+    const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
     useEffect(() => {
         const fetchParents = async () => {
@@ -2239,7 +1723,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 email: parent.email || prev.email,
                 pricing_model_id: parent.pricing_model_id || prev.pricing_model_id,
                 document_type: parent.document_type || prev.document_type,
-                is_corporate_parent: false
+                is_corporate_parent: false,
+                notify_email_1: true
             }));
         }
     };
@@ -2267,7 +1752,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             markerInstance.current = new window.google.maps.Marker({
                 position: { lat, lng },
                 map: mapInstance.current,
-                draggable: true,
+                draggable: !isReadOnly,
                 animation: window.google.maps.Animation.DROP
             });
 
@@ -2286,6 +1771,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
             // Click en mapa para mover marcador
             mapInstance.current.addListener('click', (e: google.maps.MapMouseEvent) => {
+                if (isReadOnly) return;
                 const pos = e.latLng;
                 if (!pos || !markerInstance.current) return;
                 markerInstance.current.setPosition(pos);
@@ -2304,7 +1790,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 markerInstance.current?.setPosition(newPos);
             }
         }
-    }, [formData.latitude, formData.longitude, formData.geocoding_status]);
+    }, [formData.latitude, formData.longitude, formData.geocoding_status, isReadOnly]);
 
     const handleGeocode = async () => {
         if (!formData.address) {
@@ -2408,8 +1894,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 window.showToast?.('Base de datos actualizada', 'success');
             } else {
                 const targetRole = role;
-                // Generamos un ID único para el nuevo cliente si no existe (importante para perfiles manuales)
-                const newId = (payload as any).id || crypto.randomUUID();
+                // Usamos el ID estable generado al inicio para asegurar consistencia con las excepciones
+                const newId = stableClientId;
                 
                 const { error, status, statusText } = await supabase
                     .from('profiles')
@@ -2433,646 +1919,725 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     };
 
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '1100px', maxHeight: '95vh', overflowY: 'auto', padding: '3rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1.5rem' }}>
+            <div style={{ 
+                backgroundColor: 'white', 
+                borderRadius: '32px', 
+                width: '100%', 
+                maxWidth: '1200px', 
+                maxHeight: '92vh', 
+                overflowY: 'auto', 
+                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
+                {isExceptionsModalOpen && (
+                    <ClientExceptionsModal 
+                        clientId={stableClientId} 
+                        readOnly={isReadOnly}
+                        onClose={() => setIsExceptionsModalOpen(false)} 
+                    />
+                )}
+                {/* HEADER PREMIUM */}
+                <header style={{ 
+                    padding: '1.2rem 2.5rem', 
+                    background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)', 
+                    borderBottom: '1px solid #E2E8F0',
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10
+                }}>
                     <div>
-                        <h2 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: 0 }}>
-                            {isEdit ? `Editando: ${editData?.company_name || editData?.contact_name || 'Cliente'}` : (isB2C ? 'Nuevo Consumidor Final' : 'Nuevo Cliente Institucional')}
-                        </h2>
-                        <p style={{ color: '#6B7280', margin: '0.5rem 0' }}>Gestiona la información comercial y logística del cliente.</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '1.5rem' }}>{isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
+                            <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
+                                {isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Consumidor' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta B2C' : 'Cuenta Institucional'}`)}
+                            </h2>
+                        </div>
+                        <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>
+                            {isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
+                        </p>
                     </div>
-                    <button onClick={onClose} style={{ border: 'none', background: '#F3F4F6', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
+                    <button 
+                        onClick={onClose} 
+                        style={{ 
+                            border: 'none', 
+                            background: 'white', 
+                            width: '44px', 
+                            height: '44px', 
+                            borderRadius: '14px', 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+                            fontSize: '1.2rem',
+                            color: '#94A3B8',
+                            transition: 'all 0.2s'
+                        }}
+                    >✕</button>
                 </header>
 
-                <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                    {/* SECCIÓN ESTRUCTURA CORPORATIVA (PADRE/HIJO) - MOVIDA AL INICIO */}
-                    {!isB2C && (
-                        <section style={{ gridColumn: '1 / -1', backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
-                                <span style={{ fontSize: '1.2rem' }}>🏢</span>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', margin: 0 }}>ESTRUCTURA CORPORATIVA</h4>
-                            </div>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '1.5rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Tipo de Entidad</label>
-                                    <select 
-                                        value={formData.is_corporate_parent ? 'parent' : 'branch'}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === 'parent') {
-                                                setFormData({ ...formData, is_corporate_parent: true, parent_id: '', branch_id: '' });
-                                            } else {
-                                                setFormData({ ...formData, is_corporate_parent: false });
-                                            }
-                                        }}
-                                        style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
-                                    >
-                                        <option value="parent">🏢 Casa Matriz (Sede Administrativa)</option>
-                                        <option value="branch">📍 Sucursal (Sede Operativa)</option>
-                                    </select>
+                <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
+                    
+                    {/* SELECTOR DE TIPO DE ENTIDAD (SOLO CREACIÓN) - ULTRA COMPACTO */}
+                    {!isEdit && !isReadOnly && (
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', backgroundColor: '#F1F5F9', padding: '6px', borderRadius: '16px', maxWidth: '600px', margin: '0 auto 2.5rem auto' }}>
+                            {[
+                                { id: 'matriz', label: 'CASA MATRIZ', icon: '🏛️', sub: 'Legal / Fiscal', color: '#0891B2', active: formData.is_corporate_parent },
+                                { id: 'sucursal', label: 'SUCURSAL', icon: '📍', sub: 'Entrega / Picking', color: '#10B981', active: !formData.is_corporate_parent }
+                            ].map(type => (
+                                <div 
+                                    key={type.id}
+                                    onClick={() => setFormData({ ...formData, is_corporate_parent: type.id === 'matriz', parent_id: '', branch_id: '' })}
+                                    style={{ 
+                                        flex: 1, padding: '0.8rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                                        backgroundColor: type.active ? 'white' : 'transparent',
+                                        boxShadow: type.active ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                        border: type.active ? `1px solid ${type.color}40` : '1px solid transparent'
+                                    }}
+                                >
+                                    <span style={{ fontSize: '1.2rem' }}>{type.icon}</span>
+                                    <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: '900', color: type.active ? type.color : '#64748B' }}>{type.label}</div>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: '#94A3B8' }}>{type.sub}</div>
+                                    </div>
                                 </div>
+                            ))}
+                        </div>
+                    )}
 
+                    {isReadOnly && (
+                        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                            <span style={{ 
+                                padding: '0.6rem 1.5rem', borderRadius: '50px', backgroundColor: formData.is_corporate_parent ? '#ECFEFF' : '#F0FDF4',
+                                color: formData.is_corporate_parent ? '#0891B2' : '#10B981', fontWeight: '900', fontSize: '0.75rem', border: `1px solid ${formData.is_corporate_parent ? '#0891B2' : '#10B981'}40`
+                            }}>
+                                {formData.is_corporate_parent ? '🏢 PERFIL DE CASA MATRIZ (FISCAL)' : '📍 PERFIL DE SUCURSAL (LOGÍSTICO)'}
+                            </span>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        
+                        {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
+                        <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🆔</div>
+                                <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>IDENTIFICACIÓN Y VÍNCULOS</h4>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: formData.is_corporate_parent ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '1.2rem' }}>
                                 {!formData.is_corporate_parent && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Vincular a Casa Matriz</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
                                         <div style={{ position: 'relative' }}>
                                             <input 
                                                 type="text"
-                                                placeholder="Buscar por Nombre, NIT o Teléfono..."
+                                                placeholder="Buscar Matriz..."
                                                 value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
-                                                onFocus={() => setIsParentDropdownOpen(true)}
+                                                onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
                                                 onChange={(e) => {
+                                                    if (isReadOnly) return;
                                                     setParentSearch(e.target.value);
                                                     if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
                                                     setIsParentDropdownOpen(true);
                                                 }}
-                                                style={{ 
-                                                    height: '45px', 
-                                                    padding: '0 1rem', 
-                                                    borderRadius: '12px', 
-                                                    border: '2px solid #E2E8F0', 
-                                                    fontWeight: '700', 
-                                                    width: '100%',
-                                                    outline: 'none',
-                                                    backgroundColor: formData.parent_id ? '#F0F9FF' : 'white',
-                                                    borderColor: formData.parent_id ? '#3B82F6' : '#E2E8F0'
-                                                }}
+                                                readOnly={isEdit || isReadOnly}
+                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
                                             />
-                                            {formData.parent_id && (
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFormData({ ...formData, parent_id: '' });
-                                                        setParentSearch('');
-                                                    }}
-                                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#64748B' }}
-                                                >
-                                                    ✕
-                                                </button>
+                                            {isParentDropdownOpen && !formData.parent_id && (
+                                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                                                    {potentialParents.filter(p => 
+                                                        p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
+                                                        p.nit?.includes(parentSearch) ||
+                                                        p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
+                                                    ).map(p => (
+                                                        <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
+                                                            <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{p.company_name}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
+                                                                <span>NIT: {p.nit}</span>
+                                                                <span>•</span>
+                                                                <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {formData.is_corporate_parent ? (
+                                    <>
+                                        <FormField label="Razón Social Legal" value={formData.razon_social} onChange={(v) => setFormData({...formData, razon_social: v, company_name: v})} required readOnly={isEdit || isReadOnly} />
+                                        <FormField label="NIT" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} />
+                                        <FormField label="Email Principal (Facturación)" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} required readOnly={isReadOnly} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} />
+                                    </>
+                                )}
+                            </div>
+
+                            {!formData.is_corporate_parent && (
+                                <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #E2E8F0', paddingTop: '1.5rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem', marginBottom: '1.5rem' }}>
+                                        <FormField label="Razón Social (Heredada)" value={formData.razon_social} onChange={() => {}} readOnly />
+                                        <FormField label="NIT (Heredado)" value={formData.nit} onChange={() => {}} readOnly />
+                                        <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
+                                    </div>
+
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
+                                            <span style={{ fontSize: '1rem' }}>📧</span>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Configuración de Notificación de Factura</span>
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                                            {/* Email 1 */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                                <input type="checkbox" checked={formData.notify_email_1} onChange={(e) => setFormData({...formData, notify_email_1: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
+                                                <div style={{ flex: 1 }}>
+                                                    <FormField label="Email Principal" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} placeholder="correo@ejemplo.com" readOnly={isReadOnly} />
+                                                </div>
+                                            </div>
+
+                                            {/* Email 2 */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                                <input type="checkbox" checked={formData.notify_email_2} onChange={(e) => setFormData({...formData, notify_email_2: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
+                                                <div style={{ flex: 1 }}>
+                                                    <FormField label="Email Secundario" value={formData.email_2} onChange={(v) => setFormData({...formData, email_2: v})} placeholder="correo2@ejemplo.com" readOnly={isReadOnly} />
+                                                </div>
+                                            </div>
+
+                                            {/* Email 3 */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                                <input type="checkbox" checked={formData.notify_email_3} onChange={(e) => setFormData({...formData, notify_email_3: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
+                                                <div style={{ flex: 1 }}>
+                                                    <FormField label="Email Terciario" value={formData.email_3} onChange={(v) => setFormData({...formData, email_3: v})} placeholder="correo3@ejemplo.com" readOnly={isReadOnly} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
+                        {formData.is_corporate_parent && (
+                            <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BAE6FD' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>⚖️</div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0369A1', margin: 0 }}>CARTERA, DOCUMENTACIÓN Y REFERENCIAS</h4>
+                                </div>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
+                                    <FormField label="Responsable Pagos" value={formData.collection_responsible_name} onChange={(v) => setFormData({...formData, collection_responsible_name: v})} readOnly={isReadOnly} />
+                                    <FormField label="Teléfono Tesorería" value={formData.collection_responsible_phone} onChange={(v) => setFormData({...formData, collection_responsible_phone: v})} readOnly={isReadOnly} />
+                                    <FormField label="Email Pagos" value={formData.collection_responsible_email} onChange={(v) => setFormData({...formData, collection_responsible_email: v})} readOnly={isReadOnly} />
+                                </div>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem', marginTop: '1.2rem' }}>
+                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E0F2FE' }}>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 01</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.8rem' }}>
+                                            <FormField label="Razón Social" value={formData.comm_ref_1_name} onChange={(v) => setFormData({...formData, comm_ref_1_name: v})} readOnly={isReadOnly} />
+                                            <FormField label="NIT" value={formData.comm_ref_1_nit} onChange={(v) => setFormData({...formData, comm_ref_1_nit: v})} readOnly={isReadOnly} />
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <FormField label="Teléfono" value={formData.comm_ref_1_phone} onChange={(v) => setFormData({...formData, comm_ref_1_phone: v})} readOnly={isReadOnly} />
+                                            <FormField label="Email" value={formData.comm_ref_1_email} onChange={(v) => setFormData({...formData, comm_ref_1_email: v})} readOnly={isReadOnly} />
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E0F2FE' }}>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 02</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.8rem' }}>
+                                            <FormField label="Razón Social" value={formData.comm_ref_2_name} onChange={(v) => setFormData({...formData, comm_ref_2_name: v})} readOnly={isReadOnly} />
+                                            <FormField label="NIT" value={formData.comm_ref_2_nit} onChange={(v) => setFormData({...formData, comm_ref_2_nit: v})} readOnly={isReadOnly} />
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <FormField label="Teléfono" value={formData.comm_ref_2_phone} onChange={(v) => setFormData({...formData, comm_ref_2_phone: v})} readOnly={isReadOnly} />
+                                            <FormField label="Email" value={formData.comm_ref_2_email} onChange={(v) => setFormData({...formData, comm_ref_2_email: v})} readOnly={isReadOnly} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                            {/* BLOQUE: CONFIGURACIÓN COMERCIAL (COMMON) */}
+                            <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                                    <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
+                                            <select 
+                                                value={formData.pricing_model_id} 
+                                                onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
+                                                disabled={isReadOnly}
+                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
+                                            >
+                                                <option value="">Seleccionar...</option>
+                                                {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <FormField label="Días de Pago" value={formData.payment_days} onChange={(v) => setFormData({...formData, payment_days: parseInt(v) || 0})} type="number" readOnly={isReadOnly} />
+                                    </div>
+                                    {!formData.is_corporate_parent && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                                            <FormField label="ID ZR" value={formData.id_zr} onChange={(v) => setFormData({...formData, id_zr: v})} readOnly={isReadOnly} />
+                                            <FormField label="ID LP" value={formData.id_lp} onChange={(v) => setFormData({...formData, id_lp: v})} readOnly={isReadOnly} />
+                                            <FormField label="Copias Rem." value={formData.remission_copies} onChange={(v) => setFormData({...formData, remission_copies: Math.max(2, parseInt(v) || 2)})} type="number" readOnly={isReadOnly} />
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+
+
+
+                            
+                            {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
+                            <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                                    <div style={{ width: '36px', height: '36px', backgroundColor: '#FFF7ED', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📞</div>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>CONTACTO OPERATIVO</h4>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
+                                    <FormField label="Responsable Directo" value={formData.contact_name} onChange={(v) => setFormData({...formData, contact_name: v})} required readOnly={isReadOnly} />
+                                    <FormField label="WhatsApp" value={formData.phone} onChange={(v) => setFormData({...formData, phone: v})} required readOnly={isReadOnly} />
+                                    <FormField label="Email Contacto" value={formData.contact_email} onChange={(v) => setFormData({...formData, contact_email: v})} required readOnly={isReadOnly} />
+                                </div>
+                            </section>
+
+                            {/* BLOQUE: UBICACIÓN Y LOGÍSTICA (SOLO SUCURSAL) */}
+                            {!formData.is_corporate_parent && (
+                                <section style={{ backgroundColor: '#F0FDF4', padding: '2rem', borderRadius: '32px', border: '1px solid #DCFCE7' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ width: '36px', height: '36px', backgroundColor: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📍</div>
+                                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>🚢 LOCALIZACIÓN OPERATIVA</h4>
+                                        </div>
+                                        {!isReadOnly && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleGeocode} 
+                                                disabled={geocoding} 
+                                                style={{ 
+                                                    backgroundColor: '#3B82F6', 
+                                                    color: 'white', 
+                                                    border: 'none', 
+                                                    padding: '0.5rem 1.2rem', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '0.8rem', 
+                                                    fontWeight: '800', 
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}
+                                            >
+                                                {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN PRINCIPAL (Calle/Cra/Num)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.address} 
+                                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                                        placeholder="Ej: AV CRA 68 # 90-88"
+                                                        readOnly={isReadOnly}
+                                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', backgroundColor: isReadOnly ? '#F8FAFC' : '#F0F9FF', cursor: isReadOnly ? 'default' : 'text' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>COMPLEMENTO (Local/Of/Torre)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.address_complement} 
+                                                        onChange={(e) => setFormData({...formData, address_complement: e.target.value})}
+                                                        placeholder="Ej: Local 1-006"
+                                                        readOnly={isReadOnly}
+                                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'text' }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                <FormField label="Ciudad/Mnpio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} readOnly={isReadOnly} />
+                                                <FormField label="Departamento" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} readOnly={isReadOnly} />
+                                            </div>
+
+                                            {/* PANEL DE GEOCERCAS MANUAL */}
+                                            <div style={{ backgroundColor: 'rgba(255,255,255,0.6)', padding: '1.5rem', borderRadius: '24px', border: '1px solid #DCFCE7' }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#166534', marginBottom: '1rem', letterSpacing: '0.05rem' }}>GEOCERCAS (LAT/LNG)</div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                                    <FormField label="LAT" value={formData.latitude} onChange={(v) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} readOnly={isReadOnly} />
+                                                    <FormField label="LNG" value={formData.longitude} onChange={(v) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} readOnly={isReadOnly} />
+                                                </div>
+                                                {!isReadOnly && (
+                                                    <div style={{ marginTop: '0.8rem', fontSize: '0.65rem', fontWeight: '900', color: '#B45309' }}>
+                                                        ⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div style={{ height: '300px', width: '100%', borderRadius: '24px', overflow: 'hidden', border: '4px solid white', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', position: 'relative' }}>
+                                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
+                                                {!formData.latitude && (
+                                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)', zIndex: 10 }}>
+                                                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', marginBottom: '4px' }}>Esperando dirección...</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Usa el pin inteligente o arrastra el mapa</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {!isReadOnly && (
+                                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', fontSize: '0.75rem', color: '#92400E', fontWeight: '700' }}>
+                                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* BLOQUE: RESTRICCIONES Y OPERACIÓN LOGÍSTICA (SOLO SUCURSAL) */}
+                            {!formData.is_corporate_parent && (
+                                <section style={{ backgroundColor: '#FFFBEB', padding: '2.5rem', borderRadius: '32px', border: '1px solid #FEF3C7' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ width: '40px', height: '40px', backgroundColor: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>🚚</div>
+                                            <div>
+                                                <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#92400E', margin: 0 }}>RESTRICCIONES Y OPERACIÓN LOGÍSTICA</h4>
+                                                <p style={{ fontSize: '0.75rem', color: '#B45309', margin: 0, fontWeight: '600' }}>Configura las franjas horarias para el optimizador de rutas.</p>
+                                            </div>
+                                        </div>
+                                        {!isReadOnly && (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
+                                                    const parsed = parseLogisticsText(formData.delivery_restrictions);
+                                                    setFormData({ ...formData, logistics_data: parsed });
+                                                    window.showToast?.('IA: Franja actualizada según el texto', 'info');
+                                                }}
+                                                style={{ backgroundColor: '#F59E0B', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '14px', fontSize: '0.8rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 10px 15px -3px rgba(245, 158, 11, 0.3)' }}
+                                            >
+                                                🪄 Autodiagnóstico IA
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '2rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.6rem', display: 'block' }}>Instrucciones Naturales (Voz o Texto)</label>
+                                                <textarea 
+                                                    value={formData.delivery_restrictions} 
+                                                    onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})} 
+                                                    placeholder="Ej: 'Entregar todos los días antes de las 9:30 AM, menos los jueves'..."
+                                                    readOnly={isReadOnly}
+                                                    style={{ width: '100%', padding: '1.2rem', borderRadius: '24px', border: '1px solid #FEF3C7', minHeight: '160px', outline: 'none', fontWeight: '600', fontSize: '1rem', resize: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : 'white', lineHeight: '1.5', cursor: isReadOnly ? 'default' : 'text' }} 
+                                                />
+                                                {!isReadOnly && (
+                                                    <div style={{ marginTop: '0.8rem', padding: '0.8rem 1.2rem', backgroundColor: '#FEF3C7', borderRadius: '14px', fontSize: '0.7rem', color: '#B45309', fontWeight: '700', border: '1px solid #FDE68A' }}>
+                                                        💡 Tip: Describe las condiciones de entrega y usa el Autodiagnóstico para generar el JSON técnico automáticamente.
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {formData.logistics_data?.allowed_days?.length > 0 && (
+                                                <div style={{ backgroundColor: '#FFF7ED', padding: '1.2rem', borderRadius: '24px', border: '1px solid #FFEDD5', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                    <div style={{ width: '45px', height: '45px', backgroundColor: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', border: '1px solid #FFEDD5', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>🤖</div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05rem', marginBottom: '2px' }}>
+                                                            FRANJA IA GENERADA (JSON ACTIVO)
+                                                        </div>
+                                                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#C2410C' }}>
+                                                            {formatTimeWindow(formData.logistics_data)}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
 
-                                        {isParentDropdownOpen && !formData.parent_id && (
-                                            <div style={{ 
-                                                position: 'absolute', 
-                                                top: '100%', 
-                                                left: 0, 
-                                                right: 0, 
-                                                zIndex: 100, 
-                                                backgroundColor: 'white', 
-                                                borderRadius: '12px', 
-                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
-                                                border: '1px solid #E2E8F0',
-                                                marginTop: '4px',
-                                                maxHeight: '200px',
-                                                overflowY: 'auto'
-                                            }}>
-                                                {potentialParents
-                                                    .filter(p => {
-                                                        const search = parentSearch.toLowerCase();
-                                                        return p.company_name?.toLowerCase().includes(search) || 
-                                                               p.razon_social?.toLowerCase().includes(search) || 
-                                                               p.nit?.toLowerCase().includes(search) || 
-                                                               p.phone?.toLowerCase().includes(search);
-                                                    })
-                                                    .map(p => (
-                                                        <div 
-                                                            key={p.id}
-                                                            onClick={() => {
-                                                                handleParentSelection(p.id);
-                                                                setIsParentDropdownOpen(false);
-                                                                setParentSearch('');
-                                                            }}
-                                                            style={{ 
-                                                                padding: '0.8rem 1rem', 
-                                                                cursor: 'pointer', 
-                                                                borderBottom: '1px solid #F1F5F9',
-                                                                transition: 'background 0.2s'
-                                                            }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                        >
-                                                            <div style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B' }}>{p.company_name}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: '#64748B' }}>NIT: {p.nit} • 📞 {p.phone || 'N/A'}</div>
-                                                        </div>
-                                                    ))
-                                                }
-                                                {potentialParents.length === 0 && <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.8rem', color: '#94A3B8' }}>No hay casas matrices registradas</div>}
+                                        <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '28px', border: '1px solid #FEF3C7', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+                                            <div style={{ marginBottom: '1.5rem' }}>
+                                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '1rem' }}>DÍAS PERMITIDOS</label>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, idx) => {
+                                                        const days = formData.logistics_data?.allowed_days || [];
+                                                        const isActive = days.includes(idx + 1);
+                                                        return (
+                                                            <div 
+                                                                key={day}
+                                                                onClick={() => {
+                                                                    if (isReadOnly) return;
+                                                                    const newDays = isActive ? days.filter((d: number) => d !== idx + 1) : [...days, idx + 1];
+                                                                    setFormData({ ...formData, logistics_data: { 
+                                                                        ...formData.logistics_data, 
+                                                                        allowed_days: newDays,
+                                                                        days: newDays.map((d: number) => d === 7 ? 0 : d) 
+                                                                    } });
+                                                                }}
+                                                                style={{ 
+                                                                    width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: '900', cursor: isReadOnly ? 'default' : 'pointer',
+                                                                    backgroundColor: isActive ? '#F59E0B' : '#F8FAFC',
+                                                                    color: isActive ? 'white' : '#94A3B8',
+                                                                    transition: 'all 0.2s',
+                                                                    boxShadow: isActive ? '0 4px 12px -2px rgba(245, 158, 11, 0.4)' : 'none',
+                                                                    pointerEvents: isReadOnly ? 'none' : 'auto'
+                                                                }}
+                                                            >
+                                                                {day}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
 
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '0.5rem' }}>INICIO (MIN 04:30)</label>
+                                                    <input 
+                                                        type="time" 
+                                                        value={formData.logistics_data?.start_time || '04:30'} 
+                                                        onChange={(e) => {
+                                                            if (isReadOnly) return;
+                                                            setFormData({ ...formData, logistics_data: { 
+                                                                ...formData.logistics_data, 
+                                                                start_time: e.target.value,
+                                                                windows: [{ startTime: e.target.value, endTime: formData.logistics_data?.end_time || '12:00' }]
+                                                            } });
+                                                        }}
+                                                        readOnly={isReadOnly}
+                                                        style={{ width: '100%', height: '48px', padding: '0 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '1rem', outline: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer' }} 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '0.5rem' }}>FIN (MAX 19:00)</label>
+                                                    <input 
+                                                        type="time" 
+                                                        value={formData.logistics_data?.end_time || '12:00'} 
+                                                        onChange={(e) => {
+                                                            if (isReadOnly) return;
+                                                            setFormData({ ...formData, logistics_data: { 
+                                                                ...formData.logistics_data, 
+                                                                end_time: e.target.value,
+                                                                windows: [{ startTime: formData.logistics_data?.start_time || '04:30', endTime: e.target.value }]
+                                                            } });
+                                                        }}
+                                                        readOnly={isReadOnly}
+                                                        style={{ width: '100%', height: '48px', padding: '0 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '1rem', outline: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer' }} 
+                                                    />
+                                                </div>
+                                            </div>
 
-                                {!formData.is_corporate_parent && (
-                                    <FormField 
-                                        label="ID de Sucursal (Interno)" 
-                                        value={formData.branch_id} 
-                                        onChange={(v) => setFormData({...formData, branch_id: v})} 
-                                        required
-                                    />
-                                )}
-                            </div>
-                            
-                            {!formData.is_corporate_parent && formData.parent_id && (
-                                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ fontSize: '1.2rem' }}>ℹ️</span>
-                                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369A1', fontWeight: '600' }}>
-                                        Esta es una sede operativa. Los datos legales (NIT/Razón Social) se heredan automáticamente de la Casa Matriz.
-                                    </p>
-                                </div>
-                            )}
-                        </section>
-                    )}
-
-                    {/* SECCIÓN DATOS BÁSICOS Y CONTACTO */}
-                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-                                {isB2C ? '👤 DATOS PERSONALES' : '🏢 DATOS DE LA EMPRESA'}
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <FormField label={isB2C ? "Apodo / Nombre Visible" : "Nombre Comercial"} value={formData.company_name} onChange={(v: string) => setFormData({...formData, company_name: v})} required />
-                                {!isB2C && (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <FormField label="Razón Social" value={formData.razon_social} onChange={(v: string) => setFormData({...formData, razon_social: v})} readOnly={!!formData.parent_id} />
-                                        <FormField label="NIT" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} readOnly={!!formData.parent_id} />
-                                    </div>
-                                )}
-                                {isB2C && (
-                                    <FormField label="Cédula / Documento (Opcional)" value={formData.nit} onChange={(v: string) => setFormData({...formData, nit: v})} />
-                                )}
-                            </div>
-                        </section>
-
-                        <section>
-                            <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0891B2', borderBottom: '2px solid #E0F2FE', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>📞 CONTACTO PRINCIPAL</h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <FormField label="Responsable" value={formData.contact_name} onChange={(v: string) => setFormData({...formData, contact_name: v})} required />
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <FormField label="Teléfono" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} required />
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                        <FormField label="Email Facturación" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} required={formData.is_corporate_parent} />
-                                        {!formData.is_corporate_parent && (
-                                            <FormField label="Email Facturación Adicional" value={formData.additional_billing_emails} onChange={(v: string) => setFormData({...formData, additional_billing_emails: v})} />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-
-                    {/* SECCIÓN EXCLUSIVA MATRIZ: FISCAL Y CARTERA */}
-                    {formData.is_corporate_parent && (
-                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', backgroundColor: '#F0F9FF', padding: '2rem', borderRadius: '32px', border: '1px solid #BAE6FD' }}>
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>⚖️ RESPONSABILIDAD FISCAL</h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <input type="checkbox" checked={formData.iva_responsible} onChange={e => setFormData({...formData, iva_responsible: e.target.checked})} style={{ width: '20px', height: '20px' }} />
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Resp. IVA</label>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <input type="checkbox" checked={formData.is_gran_contribuyente} onChange={e => setFormData({...formData, is_gran_contribuyente: e.target.checked})} style={{ width: '20px', height: '20px' }} />
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Gran Contribuyente</label>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <input type="checkbox" checked={formData.is_autorretenedor} onChange={e => setFormData({...formData, is_autorretenedor: e.target.checked})} style={{ width: '20px', height: '20px' }} />
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Autorretenedor</label>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <input type="checkbox" checked={formData.is_regimen_simple} onChange={e => setFormData({...formData, is_regimen_simple: e.target.checked})} style={{ width: '20px', height: '20px' }} />
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1E40AF' }}>Reg. Simple</label>
-                                    </div>
-                                    <FormField label="Cód. Actividad (4 dígs)" value={formData.economic_activity_code} onChange={v => setFormData({...formData, economic_activity_code: v.slice(0,4)})} />
-                                </div>
-                                
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem', marginTop: '2rem' }}>📁 DOCUMENTACIÓN LEGAL (PDF/IMG)</h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <DocumentUploadField 
-                                        label="RUT" 
-                                        url={formData.rut_url} 
-                                        onUpload={(url) => setFormData({...formData, rut_url: url})} 
-                                    />
-                                    <DocumentUploadField 
-                                        label="Registro Mercantil" 
-                                        url={formData.mercantile_registry_url} 
-                                        onUpload={(url) => setFormData({...formData, mercantile_registry_url: url})} 
-                                    />
-                                </div>
-                            </section>
-
-                            <section>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#0369A1', borderBottom: '2px solid #BAE6FD', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>💰 RESPONSABLE DE CARTERA</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                    <FormField label="Nombre Completo" value={formData.collection_responsible_name} onChange={v => setFormData({...formData, collection_responsible_name: v})} />
-                                    <FormField label="Email Cartera" value={formData.collection_responsible_email} onChange={v => setFormData({...formData, collection_responsible_email: v})} />
-                                    <FormField label="Teléfono Directo" value={formData.collection_responsible_phone} onChange={v => setFormData({...formData, collection_responsible_phone: v})} />
-                                </div>
-                            </section>
-                        </div>
-                    )}
-                    {!formData.is_corporate_parent && (
-                     <section style={{ gridColumn: '1 / -1' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
-                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>📍 LOCALIZACIÓN OPERATIVA</h4>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
-                                    type="button"
-                                    onClick={handleGeocode}
-                                    disabled={geocoding}
-                                    style={{ 
-                                        backgroundColor: '#3B82F6', 
-                                        color: 'white', 
-                                        border: 'none', 
-                                        padding: '0.5rem 1.2rem', 
-                                        borderRadius: '12px', 
-                                        fontSize: '0.8rem', 
-                                        fontWeight: '800', 
-                                        cursor: 'pointer',
-                                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}
-                                >
-                                    {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
-                                </button>
-                            </div>
-                         </div>
-
-                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '2rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN PRINCIPAL (Calle/Cra/Num)</label>
-                                        <input 
-                                            type="text" 
-                                            value={formData.address} 
-                                            onChange={(e) => setFormData({...formData, address: e.target.value})}
-                                            placeholder="Ej: AV CRA 68 # 90-88"
-                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', backgroundColor: '#F0F9FF' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>COMPLEMENTO (Local/Of/Torre)</label>
-                                        <input 
-                                            type="text" 
-                                            value={formData.address_complement} 
-                                            onChange={(e) => setFormData({...formData, address_complement: e.target.value})}
-                                            placeholder="Ej: Local 1-006"
-                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600' }}
-                                        />
-                                    </div>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <FormField label="Ciudad/Mnpio" value={formData.municipality} onChange={(v: string) => setFormData({...formData, municipality: v, city: v})} />
-                                    <FormField label="Departamento" value={formData.department} onChange={(v: string) => setFormData({...formData, department: v})} />
-                                </div>
-                                
-                                <div style={{ backgroundColor: '#F8FAFC', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', display: 'block', marginBottom: '1rem', letterSpacing: '0.5px' }}>GEOCERCAS (LAT/LNG)</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <FormField label="LAT" type="number" step="any" value={formData.latitude} onChange={(v: string) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} />
-                                        <FormField label="LNG" type="number" step="any" value={formData.longitude} onChange={(v: string) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} />
-                                    </div>
-                                    <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '8px', color: formData.geocoding_status === 'verified' ? '#059669' : '#D97706', fontSize: '0.7rem', fontWeight: '800' }}>
-                                        {formData.geocoding_status === 'verified' ? '✅ COORDENADAS VERIFICADAS POR GOOGLE' : '⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)'}
-                                    </div>
-                                </div>
-
-                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', border: '1px solid #FEF3C7', fontSize: '0.7rem', color: '#92400E', fontWeight: '700' }}>
-                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
-                                </div>
-                            </div>
-
-                            <div style={{ 
-                                height: '400px', 
-                                width: '100%', 
-                                borderRadius: '24px', 
-                                overflow: 'hidden', 
-                                border: '4px solid white',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                                position: 'relative',
-                                background: '#E2E8F0'
-                            }}>
-                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
-                                {!formData.latitude && (
-                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', zIndex: 1, textAlign: 'center', padding: '2rem' }}>
-                                        <div>
-                                            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
-                                            <div style={{ fontWeight: '800', color: '#1E40AF' }}>Esperando dirección...</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Usa el pin inteligente o arrastra el mapa.</div>
+                                            <div style={{ 
+                                                backgroundColor: formData.logistics_data?.allowed_days?.length > 0 ? '#ECFDF5' : '#F1F5F9', 
+                                                padding: '1.2rem', 
+                                                borderRadius: '20px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '12px',
+                                                border: `1px solid ${formData.logistics_data?.allowed_days?.length > 0 ? '#10B981' : '#E2E8F0'}`,
+                                                transition: 'all 0.3s'
+                                            }}>
+                                                <span style={{ fontSize: '1.5rem' }}>{formData.logistics_data?.allowed_days?.length > 0 ? '✅' : '⏳'}</span>
+                                                <div>
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: formData.logistics_data?.allowed_days?.length > 0 ? '#065F46' : '#64748B' }}>
+                                                        {formData.logistics_data?.allowed_days?.length > 0 ? 'RESTRICCIÓN LISTA' : 'ESPERANDO DATOS'}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.65rem', color: formData.logistics_data?.allowed_days?.length > 0 ? '#059669' : '#94A3B8', fontWeight: '700' }}>
+                                                        {formData.logistics_data?.allowed_days?.length > 0 ? 'Estructura JSON generada para el planeador.' : 'Completa la info para generar el JSON.'}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                         </div>
-                     </section>
-                    )}
-
-
-                    {/* CONFIGURACIÓN COMERCIAL - ACCESIBLE PARA AMBOS */}
-                    <section style={{ gridColumn: '1 / -1' }}>
-                        <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#10B981', borderBottom: '2px solid #D1FAE5', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>CONFIGURACIÓN COMERCIAL</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Modelo de Precios</label>
-                                <select 
-                                    value={formData.pricing_model_id} 
-                                    onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})}
-                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {pricingModels
-                                        .filter((pm: PricingModel) => !pm.name.toUpperCase().includes('B2C'))
-                                        .sort((a: PricingModel, b: PricingModel) => {
-                                            const getPriority = (name: string) => {
-                                                if (name.includes('Grande')) return 1;
-                                                if (name.includes('Mediano')) return 2;
-                                                if (name.includes('Pequeño')) return 3;
-                                                return 4;
-                                            };
-                                            const getDays = (name: string) => {
-                                                const match = name.match(/(\d+)/);
-                                                return match ? parseInt(match[0]) : 999;
-                                            };
-                                            
-                                            const priorityA = getPriority(a.name);
-                                            const priorityB = getPriority(b.name);
-                                            
-                                            if (priorityA !== priorityB) return priorityA - priorityB;
-                                            return getDays(a.name) - getDays(b.name);
-                                        })
-                                        .map((pm: PricingModel) => (
-                                            <option key={pm.id} value={pm.id}>{pm.name} ({pm.base_margin_percent}%)</option>
-                                        ))
-                                    }
-                                </select>
-                            </div>
-
-                            {isEdit && setNicknameClientId && setIsNicknameModalOpen && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Máscaras de Productos</label>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            setNicknameClientId((editData as Profile).id);
-                                            setIsNicknameModalOpen(true);
-                                        }}
-                                        style={{ 
-                                            height: '45px',
-                                            padding: '0 0.8rem', 
-                                            borderRadius: '12px', 
-                                            border: '1px solid #10B981', 
-                                            backgroundColor: '#D1FAE5',
-                                            color: '#065F46',
-                                            fontWeight: '900',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            justifyContent: 'center',
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                                    >
-                                        🏷️ Gestionar Nicknames
-                                    </button>
-                                </div>
+                                </section>
                             )}
-                        </div>
 
-                        {!formData.is_corporate_parent && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>¿Requiere Canastillas?</label>
-                                <select 
-                                    value={formData.needs_crates ? 'yes' : 'no'} 
-                                    onChange={(e) => setFormData({...formData, needs_crates: e.target.value === 'yes'})}
-                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
-                                >
-                                    <option value="no">❌ No usa canastillas</option>
-                                    <option value="yes">🧺 Sí, requiere canastillas</option>
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>Documento de Venta</label>
-                                <select 
-                                    value={formData.document_type} 
-                                    onChange={(e) => setFormData({...formData, document_type: e.target.value})}
-                                    style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
-                                >
-                                    <option value="invoice">📜 Factura Electrónica</option>
-                                    <option value="remission">📄 Remisión Comercial</option>
-                                </select>
-                            </div>
-
-                            {formData.document_type === 'remission' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>¿Mostrar Precios en Rem? </label>
-                                    <select 
-                                        value={formData.remission_with_prices ? 'yes' : 'no'} 
-                                        onChange={(e) => setFormData({...formData, remission_with_prices: e.target.value === 'yes'})}
-                                        style={{ height: '45px', padding: '0 0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', width: '100%' }}
-                                    >
-                                        <option value="yes">💰 Mostrar Precios</option>
-                                        <option value="no">🚫 Ocultar Precios</option>
-                                    </select>
-                                </div>
-                            )}
-                        </div>
-                        )}
-                    </section>
-                    
-
-                    {/* SECCIÓN MUESTRA EL ESPACIO PARA RESTRICCIONES SIEMPRE - SOLO PARA SUCURSALES */}
-                    {!formData.is_corporate_parent && (
-                    <section style={{ gridColumn: '1 / -1', backgroundColor: '#FFFBEB', padding: '1.5rem', borderRadius: '24px', border: '1px solid #FEF3C7' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '800', color: '#92400E', margin: 0 }}>RESTRICCIONES Y OPERACIÓN LOGÍSTICA</h4>
-                            </div>
-                            <button 
-                                type="button"
-                                onClick={() => {
-                                    if (!formData.delivery_restrictions) return window.showToast?.('Escribe algo primero', 'info');
-                                    const parsed = parseLogisticsText(formData.delivery_restrictions);
-                                    setFormData({ ...formData, logistics_data: parsed });
-                                    window.showToast?.('IA: Franja actualizada según el texto', 'info');
-                                }}
-                                style={{ 
-                                    backgroundColor: '#F59E0B', 
-                                    color: 'white', 
-                                    border: 'none', 
-                                    padding: '0.4rem 1rem', 
-                                    borderRadius: '10px', 
-                                    fontSize: '0.75rem', 
-                                    fontWeight: '800', 
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                <span>🪄</span> Autodiagnóstico IA
-                            </button>
-                        </div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem' }}>
-                            <div>
-                                <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Instrucciones Naturales (Voz o Texto)</label>
-                                <textarea 
-                                    value={formData.delivery_restrictions}
-                                    onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})}
-                                    placeholder="Ej: 'Entregar todos los días antes de las 9:30 AM, menos los jueves'..."
-                                    style={{ width: '100%', padding: '1.2rem', borderRadius: '16px', border: '1px solid #FEF3C7', minHeight: '120px', outline: 'none', backgroundColor: 'white', fontSize: '1rem', fontWeight: '600', color: '#1F2937' }}
-                                />
-                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.65rem', color: '#B45309', fontWeight: '600' }}>
-                                    💡 Tip: Escribe las restricciones y usa el botón de la varita para que la IA proponga la franja.
-                                </p>
-                            </div>
-
-                            <div style={{ 
-                                padding: '1.2rem', 
-                                backgroundColor: 'white', 
-                                borderRadius: '20px', 
-                                border: '1px solid #FEF3C7',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '1.2rem'
-                            }}>
-                                {/* Días */}
-                                <div>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.8rem', display: 'block' }}>Días Permitidos</label>
-                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            {/* BLOQUE: INFORMACIÓN FISCAL (SOLO MATRIZ) */}
+                            {formData.is_corporate_parent && (
+                                <section style={{ backgroundColor: '#F1F5F9', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>⚖️</div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>RÉGIMEN FISCAL</h4>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', alignItems: 'center' }}>
                                         {[
-                                            { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' }, 
-                                            { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                                        ].map(day => {
-                                            const isActive = formData.logistics_data?.days?.includes(day.id);
-                                            return (
-                                                <button
-                                                    key={day.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const currentDays = formData.logistics_data?.days || [];
-                                                        const newDays = isActive 
-                                                            ? currentDays.filter(d => d !== day.id)
-                                                            : [...currentDays, day.id].sort();
-                                                        
-                                                        setFormData({
-                                                            ...formData,
-                                                            logistics_data: {
-                                                                ...(formData.logistics_data || { windows: [{ startTime: '04:30', endTime: '12:00' }], parsing_date: new Date().toISOString() }),
-                                                                days: newDays
-                                                            }
-                                                        });
-                                                    }}
-                                                    style={{
-                                                        width: '32px',
-                                                        height: '32px',
-                                                        borderRadius: '8px',
-                                                        border: 'none',
-                                                        backgroundColor: isActive ? '#F59E0B' : '#F9FAFB',
-                                                        color: isActive ? 'white' : '#9CA3AF',
-                                                        fontWeight: '900',
-                                                        fontSize: '0.75rem',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    {day.label}
-                                                </button>
-                                            );
-                                        })}
+                                            { label: 'Resp. IVA', key: 'iva_responsible' },
+                                            { label: 'G. Contribuyente', key: 'is_gran_contribuyente' },
+                                            { label: 'Autorretenedor', key: 'is_autorretenedor' },
+                                            { label: 'Reg. Simple', key: 'is_regimen_simple' }
+                                        ].map(tax => (
+                                            <div 
+                                                key={tax.key} 
+                                                onClick={() => {
+                                                    if (isReadOnly) return;
+                                                    setFormData({...formData, [tax.key]: !formData[tax.key as keyof typeof formData]});
+                                                }} 
+                                                style={{ 
+                                                    padding: '0.6rem 1.2rem', 
+                                                    borderRadius: '14px', 
+                                                    border: `2px solid ${formData[tax.key as keyof typeof formData] ? '#10B981' : 'white'}`, 
+                                                    backgroundColor: formData[tax.key as keyof typeof formData] ? '#ECFDF5' : 'rgba(255,255,255,0.5)', 
+                                                    cursor: isReadOnly ? 'default' : 'pointer', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '10px',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: formData[tax.key as keyof typeof formData] ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
+                                                    transform: (formData[tax.key as keyof typeof formData] && !isReadOnly) ? 'translateY(-1px)' : 'none',
+                                                    opacity: isReadOnly ? 0.9 : 1,
+                                                    pointerEvents: isReadOnly ? 'none' : 'auto'
+                                                }}
+                                            >
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: formData[tax.key as keyof typeof formData] ? '#10B981' : '#CBD5E1', boxShadow: (formData[tax.key as keyof typeof formData] && !isReadOnly) ? '0 0 8px #10B981' : 'none', border: `2px solid ${formData[tax.key as keyof typeof formData] ? 'white' : 'transparent'}` }}></div>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: '900', color: formData[tax.key as keyof typeof formData] ? '#1E293B' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>{tax.label}</div>
+                                            </div>
+                                        ))}
+                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#0F172A', padding: '0.5rem 1rem', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.2)' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>CIIU</label>
+                                            <input 
+                                                type="text" 
+                                                maxLength={4}
+                                                value={formData.economic_activity_code} 
+                                                onChange={(e) => {
+                                                    if (isReadOnly) return;
+                                                    setFormData({...formData, economic_activity_code: e.target.value.replace(/\D/g, '')});
+                                                }} 
+                                                readOnly={isReadOnly}
+                                                placeholder="0000"
+                                                style={{ width: '50px', height: '24px', border: 'none', borderBottom: '2px solid #334155', textAlign: 'center', fontWeight: '900', fontSize: '1rem', color: 'white', outline: 'none', backgroundColor: 'transparent', cursor: isReadOnly ? 'default' : 'text' }}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                </section>
+                            )}
 
-                                {/* Horario Selectores */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.6rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'block' }}>Inicio (Min 04:30)</label>
-                                        <input 
-                                            type="time" 
-                                            min="04:30"
-                                            max="19:00"
-                                            value={formData.logistics_data?.windows?.[0]?.startTime || '04:30'} 
-                                            onChange={(e) => {
-                                                const newWindows = [{ 
-                                                    startTime: e.target.value, 
-                                                    endTime: formData.logistics_data?.windows?.[0]?.endTime || '12:00' 
-                                                }];
-                                                setFormData({
-                                                    ...formData,
-                                                    logistics_data: {
-                                                        ...(formData.logistics_data || { days: [1,2,3,4,5,6], parsing_date: new Date().toISOString() }),
-                                                        windows: newWindows
-                                                    }
-                                                });
-                                            }}
-                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.85rem' }}
-                                        />
+                            {/* BLOQUE CONDICIONAL: EXPEDIENTE (MATRIZ) VS OPERACIÓN (SUCURSAL) */}
+                            {formData.is_corporate_parent ? (
+                                <section style={{ backgroundColor: '#F8FAFC', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📎</div>
+                                        <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#475569', margin: 0 }}>EXPEDIENTE DIGITAL</h4>
                                     </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.6rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'block' }}>Fin (Max 19:00)</label>
-                                        <input 
-                                            type="time" 
-                                            min="04:30"
-                                            max="19:00"
-                                            value={formData.logistics_data?.windows?.[0]?.endTime || '12:00'} 
-                                            onChange={(e) => {
-                                                const newWindows = [{ 
-                                                    startTime: formData.logistics_data?.windows?.[0]?.startTime || '04:30', 
-                                                    endTime: e.target.value 
-                                                }];
-                                                setFormData({
-                                                    ...formData,
-                                                    logistics_data: {
-                                                        ...(formData.logistics_data || { days: [1,2,3,4,5,6], parsing_date: new Date().toISOString() }),
-                                                        windows: newWindows
-                                                    }
-                                                });
-                                            }}
-                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.85rem' }}
-                                        />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <DocumentUploadField label="Registro RUT (PDF)" url={formData.rut_url} onUpload={(url) => setFormData({...formData, rut_url: url})} readOnly={isReadOnly} />
+                                        <DocumentUploadField label="Cámara de Comercio" url={formData.mercantile_registry_url} onUpload={(url) => setFormData({...formData, mercantile_registry_url: url})} readOnly={isReadOnly} />
+                                        <DocumentUploadField label="Cédula Representante Legal" url={formData.legal_rep_id_url} onUpload={(url) => setFormData({...formData, legal_rep_id_url: url})} readOnly={isReadOnly} />
                                     </div>
-                                </div>
+                                </section>
+                            ) : (
+                                <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '32px', border: '1px solid #BAE6FD' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
+                                        <div 
+                                            onClick={() => {
+                                                if (isReadOnly) return;
+                                                setFormData({...formData, needs_crates: !formData.needs_crates});
+                                            }}
+                                            style={{ 
+                                                height: '42px', padding: '0 1.2rem', borderRadius: '14px', border: `2px solid ${formData.needs_crates ? '#10B981' : '#E0F2FE'}`, 
+                                                backgroundColor: formData.needs_crates ? '#ECFDF5' : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                                boxShadow: formData.needs_crates ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
+                                                opacity: isReadOnly ? 0.9 : 1
+                                            }}
+                                        >
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? '#10B981' : '#CBD5E1', boxShadow: formData.needs_crates ? '0 0 8px #10B981' : 'none' }}></div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: formData.needs_crates ? '#065F46' : '#64748B' }}>
+                                                REQUIERE CANASTILLAS
+                                            </span>
+                                        </div>
 
-                                {/* Resumen Visual */}
-                                <div style={{ 
-                                    padding: '0.8rem', 
-                                    backgroundColor: '#FEF3C7', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid #FDE68A',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px'
-                                }}>
-                                    <span style={{ fontSize: '1.2rem' }}>🚚</span>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
-                                        {formData.logistics_data ? formatTimeWindow(formData.logistics_data) : 'Define una restricción operativa'}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                            <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase' }}>Tipo de Documento</label>
+                                            <select 
+                                                value={formData.document_type} 
+                                                onChange={(e) => setFormData({...formData, document_type: e.target.value as any})}
+                                                disabled={isReadOnly}
+                                                style={{ height: '42px', padding: '0 0.8rem', borderRadius: '14px', border: '2px solid #E0F2FE', fontWeight: '700', outline: 'none', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'pointer' }}
+                                            >
+                                                <option value="invoice">Factura Electrónica</option>
+                                                <option value="remission">Remisión Administrativa</option>
+                                            </select>
+                                        </div>
+
+                                        <div 
+                                            onClick={() => {
+                                                if (isReadOnly) return;
+                                                setFormData({...formData, remission_with_prices: !formData.remission_with_prices});
+                                            }}
+                                            style={{ 
+                                                height: '42px', padding: '0 1.2rem', borderRadius: '14px', border: `2px solid ${formData.remission_with_prices ? '#10B981' : '#E0F2FE'}`, 
+                                                backgroundColor: formData.remission_with_prices ? '#ECFDF5' : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s', opacity: formData.document_type === 'remission' ? 1 : 0.5, pointerEvents: (formData.document_type === 'remission' && !isReadOnly) ? 'auto' : (isReadOnly ? 'none' : 'none'),
+                                                boxShadow: formData.remission_with_prices ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none'
+                                            }}
+                                        >
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.remission_with_prices ? '#10B981' : '#CBD5E1', boxShadow: formData.remission_with_prices ? '0 0 8px #10B981' : 'none' }}></div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: formData.remission_with_prices ? '#065F46' : '#64748B' }}>
+                                                {formData.remission_with_prices ? 'CON PRECIOS' : 'SIN PRECIOS'}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                    )}
-                    
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: '20px', border: 'none', background: '#F3F4F6', color: '#4B5563', fontWeight: '800', cursor: 'pointer' }}>Cerrar</button>
-                        <button 
-                            type="submit" 
-                            disabled={saving}
-                            style={{ flex: 2, padding: '1.2rem', borderRadius: '20px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '800', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)' }}
-                        >
-                            {saving ? 'Guardando...' : (isEdit ? 'Actualizar Información' : 'Registrar Cliente')}
-                        </button>
+
+                                    {/* BOTÓN DE EXCEPCIONES LOGÍSTICAS (SOLO SUCURSAL) */}
+                                    <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: '1px dashed #BAE6FD' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsExceptionsModalOpen(true)}
+                                            style={{ 
+                                                width: '100%',
+                                                backgroundColor: 'white', 
+                                                color: '#0369A1', 
+                                                border: '1px solid #0891B2', 
+                                                padding: '0.8rem 1.2rem', 
+                                                borderRadius: '16px', 
+                                                fontSize: '0.75rem', 
+                                                fontWeight: '900', 
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '10px',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0F2FE'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        >
+                                            <span>⚙️</span> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
+                                        </button>
+                                    </div>
+                                </section>
+                            )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.5rem', marginTop: '3rem' }}>
+                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: '20px', border: '2px solid #F1F5F9', background: 'white', color: '#64748B', fontWeight: '900', cursor: 'pointer', transition: 'all 0.2s' }}>{isReadOnly ? 'CERRAR' : 'CANCELAR'}</button>
+                        {!isReadOnly && (
+                            <button type="submit" disabled={saving} style={{ flex: 2, padding: '1.2rem', borderRadius: '20px', border: 'none', background: '#0F172A', color: 'white', fontWeight: '900', cursor: 'pointer', boxShadow: '0 10px 20px -5px rgba(15, 23, 42, 0.3)', transition: 'all 0.2s' }}>
+                                {saving ? '⌛ GUARDANDO...' : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>
@@ -3080,11 +2645,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     );
 }
 
-function FormField({ label, value, onChange, type = 'text', required = false, step = undefined, readOnly = false }: { label: string, value: string | number | undefined, onChange: (v: string) => void, type?: string, required?: boolean, step?: string, readOnly?: boolean }) {
+
+
+function FormField({ label, value, onChange, type = 'text', required = false, step = undefined, readOnly = false, placeholder = '' }: { label: string, value: string | number | undefined, onChange: (v: string) => void, type?: string, required?: boolean, step?: string, readOnly?: boolean, placeholder?: string }) {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#374151', minHeight: '1.2rem', display: 'flex', alignItems: 'center' }}>
-                {label} {required && <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>
+                {label} {required && <span style={{ color: '#EF4444' }}>*</span>}
             </label>
             <input 
                 type={type}
@@ -3093,23 +2660,24 @@ function FormField({ label, value, onChange, type = 'text', required = false, st
                 onChange={(e) => onChange(e.target.value)}
                 required={required}
                 readOnly={readOnly}
+                placeholder={placeholder}
                 style={{ 
                     width: '100%', 
-                    height: '45px',
-                    padding: '0 0.8rem', 
-                    borderRadius: '12px', 
-                    border: '1px solid #E5E7EB', 
+                    height: '34px',
+                    padding: '0 0.6rem', 
+                    borderRadius: '8px', 
+                    border: '1px solid #E2E8F0', 
                     outline: 'none', 
                     fontWeight: '600',
-                    backgroundColor: readOnly ? '#F3F4F6' : 'white',
-                    cursor: readOnly ? 'not-allowed' : 'text'
+                    fontSize: '0.8rem',
+                    backgroundColor: readOnly ? '#F8FAFC' : 'white'
                 }}
             />
         </div>
     );
 }
 
-function DocumentUploadField({ label, url, onUpload }: { label: string, url: string | undefined, onUpload: (url: string) => void }) {
+function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label: string, url: string | undefined, onUpload: (url: string) => void, readOnly?: boolean }) {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -3134,10 +2702,10 @@ function DocumentUploadField({ label, url, onUpload }: { label: string, url: str
                 .getPublicUrl(filePath);
             
             onUpload(publicUrl);
-            window.showToast?.(`Archivo ${label} subido correctamente`, 'success');
+            window.showToast?.(`Archivo subido correctamente`, 'success');
         } catch (err: any) {
             console.error('Error uploading document:', err);
-            window.showToast?.(`Error al subir ${label}: ${err.message}`, 'error');
+            window.showToast?.(`Error: ${err.message}`, 'error');
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -3145,56 +2713,258 @@ function DocumentUploadField({ label, url, onUpload }: { label: string, url: str
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563' }}>{label}</label>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    style={{ 
-                        flex: 1,
-                        padding: '0.6rem', 
-                        borderRadius: '10px', 
-                        border: '2px dashed #CBD5E1', 
-                        backgroundColor: '#F8FAFC', 
-                        color: '#64748B',
-                        fontWeight: '700',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer'
-                    }}
-                >
-                    {uploading ? '⌛ Subiendo...' : url ? '🔄 Cambiar Archivo' : '📤 Cargar PDF/IMG'}
-                </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ fontSize: '1.2rem' }}>{url ? '✅' : '📄'}</div>
+                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>{label}</div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+                <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="application/pdf,image/*" />
                 {url && (
-                    <a 
-                        href={url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ 
-                            backgroundColor: '#0EA5E9', 
-                            color: 'white', 
-                            width: '35px', 
-                            height: '35px', 
-                            borderRadius: '8px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            textDecoration: 'none'
-                        }}
-                        title="Ver documento"
+                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', backgroundColor: 'white', color: '#0891B2', fontSize: '0.65rem', fontWeight: '900', textDecoration: 'none', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center' }}>VER</a>
+                )}
+                {!readOnly && (
+                    <button 
+                        type="button" 
+                        onClick={() => fileInputRef.current?.click()} 
+                        disabled={uploading}
+                        style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', backgroundColor: uploading ? '#E2E8F0' : '#0F172A', color: 'white', fontSize: '0.65rem', fontWeight: '900', border: 'none', cursor: 'pointer' }}
                     >
-                        👁️
-                    </a>
+                        {uploading ? '...' : (url ? 'CAMBIAR' : 'SUBIR')}
+                    </button>
+                )}
+                {readOnly && !url && (
+                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '700' }}>PENDIENTE</span>
                 )}
             </div>
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".pdf,image/*" 
-                style={{ display: 'none' }} 
-            />
+        </div>
+    );
+}
+
+function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { clientId: string, onClose: () => void, readOnly?: boolean }) {
+    const [exceptions, setExceptions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [products, setProducts] = useState<any[]>([]);
+    const [isAdding, setIsAdding] = useState(false);
+    
+    const [newException, setNewException] = useState({
+        product_id: '',
+        nickname: '',
+        picking_note: ''
+    });
+    const [searchTerm, setSearchTerm] = useState('');
+    const [showResults, setShowResults] = useState(false);
+
+    const fetchData = async () => {
+        setLoading(true);
+        const { data: excData } = await supabase
+            .from('product_nicknames')
+            .select('*, products(name, sku)')
+            .eq('profile_id', clientId);
+        
+        const { data: prodData } = await supabase
+            .from('products')
+            .select('id, name, sku')
+            .eq('is_active', true);
+
+        if (excData) setExceptions(excData);
+        if (prodData) setProducts(prodData);
+        setLoading(false);
+    };
+
+    useEffect(() => { fetchData(); }, [clientId]);
+
+    const handleSave = async () => {
+        if (!newException.product_id) return;
+        const { error } = await supabase
+            .from('product_nicknames')
+            .insert([{
+                profile_id: clientId,
+                product_id: newException.product_id,
+                nickname: newException.nickname,
+                picking_note: newException.picking_note
+            }]);
+        
+        if (error) {
+            window.showToast?.('Error al guardar la excepción', 'error');
+        } else {
+            window.showToast?.('Excepción guardada con éxito', 'success');
+            setIsAdding(false);
+            setNewException({ product_id: '', nickname: '', picking_note: '' });
+            setSearchTerm('');
+            fetchData();
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        const { error } = await supabase
+            .from('product_nicknames')
+            .delete()
+            .eq('id', id);
+        if (!error) fetchData();
+    };
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                <header style={{ padding: '2rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#0F172A' }}>{readOnly ? '📋 Consulta de Excepciones' : '⚙️ Excepciones Logísticas'}</h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>{readOnly ? 'Visualizando nombres de factura y notas de picking personalizadas.' : 'Personaliza nombres de factura y notas de picking para este cliente.'}</p>
+                    </div>
+                    <button onClick={onClose} style={{ border: 'none', background: '#F1F5F9', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer' }}>✕</button>
+                </header>
+
+                <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
+                    {!readOnly && !isAdding && (
+                        <button 
+                            onClick={() => setIsAdding(true)}
+                            style={{ width: '100%', padding: '1rem', borderRadius: '16px', border: '2px dashed #CBD5E1', background: '#F8FAFC', color: '#64748B', fontWeight: '800', cursor: 'pointer', marginBottom: '2rem' }}
+                        >
+                            + Agregar nueva regla personalizada
+                        </button>
+                    )}
+
+                    {!readOnly && isAdding && (
+                        <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginBottom: '2rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '6px' }}>Producto Original (Buscador)</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem', pointerEvents: 'none' }}>🔍</span>
+                                            <input 
+                                                type="text"
+                                                placeholder="Buscar por nombre o ID (SKU)..."
+                                                value={searchTerm}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setShowResults(true);
+                                                }}
+                                                onFocus={() => setShowResults(true)}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    height: '48px', 
+                                                    padding: '0 1rem 0 2.8rem', 
+                                                    borderRadius: '12px', 
+                                                    border: '2px solid #E2E8F0', 
+                                                    fontWeight: '700',
+                                                    fontSize: '0.9rem',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s',
+                                                    backgroundColor: 'white'
+                                                }}
+                                                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                                            />
+                                            {newException.product_id && (
+                                                <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ backgroundColor: '#ECFDF5', color: '#059669', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900' }}>SELECCIONADO ✅</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {showResults && searchTerm.length > 0 && (
+                                            <div style={{ 
+                                                position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', 
+                                                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', 
+                                                zIndex: 10, marginTop: '8px', maxHeight: '250px', overflowY: 'auto' 
+                                            }}>
+                                                {products
+                                                    .filter(p => 
+                                                        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                                        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+                                                    )
+                                                    .slice(0, 15) // Limit results for performance
+                                                    .map(p => (
+                                                        <div 
+                                                            key={p.id}
+                                                            onClick={() => {
+                                                                setNewException({...newException, product_id: p.id});
+                                                                setSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setShowResults(false);
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9',
+                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                transition: 'background 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                        >
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B' }}>{p.name}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B' }}>SKU: {p.sku}</span>
+                                                            </div>
+                                                            <span style={{ color: '#0891B2', fontSize: '0.9rem' }}>＋</span>
+                                                        </div>
+                                                    ))
+                                                }
+                                                {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                                                    <div style={{ padding: '1.2rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                                        No se encontraron productos.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <FormField 
+                                        label="Nombre en Factura (Alias)" 
+                                        value={newException.nickname} 
+                                        onChange={(v) => setNewException({...newException, nickname: v})} 
+                                        placeholder="Ej: Papa Amarilla"
+                                    />
+                                    <FormField 
+                                        label="Nota de Picking (Bodega)" 
+                                        value={newException.picking_note} 
+                                        onChange={(v) => setNewException({...newException, picking_note: v})} 
+                                        placeholder="Ej: Lavada y grande"
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                                    <button onClick={() => {
+                                        setIsAdding(false);
+                                        setSearchTerm('');
+                                    }} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', background: 'white', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
+                                    <button onClick={handleSave} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '800', cursor: 'pointer' }}>Guardar Regla</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {loading ? (
+                            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>Cargando reglas...</div>
+                        ) : exceptions.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', border: '1px dashed #E2E8F0', borderRadius: '20px' }}>No hay excepciones configuradas.</div>
+                        ) : (
+                            exceptions.map(exc => (
+                                <div key={exc.id} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ width: '40px', height: '40px', backgroundColor: '#F1F5F9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>📦</div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase' }}>Original: {exc.products?.name}</div>
+                                        <div style={{ display: 'flex', gap: '1.5rem', marginTop: '4px' }}>
+                                            <div>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>Factura: </span>
+                                                <span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: '800' }}>{exc.nickname || '---'}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>Picking: </span>
+                                                <span style={{ fontSize: '0.85rem', color: '#0891B2', fontWeight: '800' }}>{exc.picking_note || '---'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {!readOnly && (
+                                        <button onClick={() => handleDelete(exc.id)} style={{ border: 'none', background: '#FEE2E2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

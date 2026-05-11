@@ -428,13 +428,7 @@ export default function Navbar() {
                                                     📦 Control de Inventarios
                                                 </Link>
                                             )}
-                                            {hasPermission('transport') && (
-                                                <Link href="/ops/picking/dashboard" 
-                                                    onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle('#D97706')}>
-                                                    🚚 Despachos
-                                                </Link>
-                                            )}
+
                                             
                                             {hasPermission('dashboard') && (
                                                 <Link href="/admin/strategy" 

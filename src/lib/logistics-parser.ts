@@ -14,6 +14,9 @@ export interface TimeWindow {
 export interface LogisticsData {
   windows: TimeWindow[];
   days: number[]; // 0=Sunday, 1=Monday...
+  allowed_days: number[]; // Flat field for UI compatibility
+  start_time: string;    // Flat field for UI compatibility
+  end_time: string;      // Flat field for UI compatibility
   special_notes?: string;
   parsing_date: string;
 }
@@ -51,9 +54,13 @@ const parseH = (s: string, p?: string) => {
 };
 
 export function parseLogisticsText(text: string): LogisticsData {
+  const defaultDays = [1, 2, 3, 4, 5, 6];
   if (!text) return {
     windows: [{ startTime: "04:30", endTime: "12:00" }],
-    days: [1, 2, 3, 4, 5, 6],
+    days: defaultDays,
+    allowed_days: defaultDays,
+    start_time: "04:30",
+    end_time: "12:00",
     parsing_date: new Date().toISOString()
   };
 
@@ -185,6 +192,9 @@ export function parseLogisticsText(text: string): LogisticsData {
   return {
     windows,
     days: days.length > 0 ? days : [1, 2, 3, 4, 5, 6],
+    allowed_days: days.length > 0 ? days.map(d => d === 0 ? 7 : d) : [1, 2, 3, 4, 5, 6],
+    start_time: windows[0].startTime,
+    end_time: windows[0].endTime,
     special_notes: text,
     parsing_date: new Date().toISOString()
   };

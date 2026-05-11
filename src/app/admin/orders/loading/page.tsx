@@ -589,14 +589,14 @@ export default function OrderLoadingPage() {
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F0F2F5' }}>
             
-            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.2rem 2rem' }}>
-                <header style={{ marginBottom: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
-                             <span style={{ color: '#94A3B8', fontSize: '0.7rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
+                <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <h1 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>Cargue de <span style={{ color: 'var(--primary)' }}>Pedidos</span></h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
+                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
+                             <span style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
                         </div>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>Cargue de <span style={{ color: 'var(--primary)' }}>Pedidos</span></h1>
                     </div>
                 </header>
 
@@ -605,7 +605,7 @@ export default function OrderLoadingPage() {
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(5, 1fr)', 
                     gap: '1.2rem', 
-                    marginBottom: '1.5rem'
+                    marginBottom: '1rem'
                 }}>
                     <KPICard title="Total Pedidos" value={totalOrders} icon="📦" color="#6366F1" subtitle="Para entrega hoy" />
                     <KPICard title="Valor Carga" value={`$${totalSales.toLocaleString()}`} icon="💰" color="#10B981" subtitle="Monto bruto" />
@@ -620,7 +620,7 @@ export default function OrderLoadingPage() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '1rem', 
-                    marginBottom: '1.5rem', 
+                    marginBottom: '1rem', 
                     backgroundColor: 'white', 
                     padding: '0.4rem 0.6rem', 
                     borderRadius: '12px', 
@@ -659,24 +659,103 @@ export default function OrderLoadingPage() {
                             />
                         </div>
 
-                        {/* Search Segment */}
-                        <div style={{ position: 'relative', width: '320px' }}>
-                            <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#9CA3AF' }}>🔍</span>
-                            <input 
-                                placeholder="Buscar por ID, empresa, @estado..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                        {/* Search Segment - Flexible & Responsive */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, maxWidth: '800px' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#9CA3AF' }}>🔍</span>
+                                <input 
+                                    placeholder="Buscar por ID, empresa, @estado..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.5rem 1rem 0.5rem 2.2rem', 
+                                        borderRadius: '8px', 
+                                        border: '1px solid #E5E7EB', 
+                                        fontSize: '0.8rem',
+                                        fontWeight: '700',
+                                        outline: 'none',
+                                        backgroundColor: '#F9FAFB',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.backgroundColor = 'white';
+                                        e.target.style.borderColor = 'var(--primary)';
+                                        e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.backgroundColor = '#F9FAFB';
+                                        e.target.style.borderColor = '#E5E7EB';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                />
+                            </div>
+                            
+                            {/* Info Button for Commands */}
+                            <div 
+                                onMouseEnter={() => setShowHelpTooltip(true)}
+                                onMouseLeave={() => setShowHelpTooltip(false)}
                                 style={{ 
-                                    width: '100%', 
-                                    padding: '0.5rem 1rem 0.5rem 2.2rem', 
+                                    position: 'relative',
+                                    width: '32px', 
+                                    height: '32px', 
                                     borderRadius: '8px', 
-                                    border: '1px solid #E5E7EB', 
-                                    fontSize: '0.8rem',
-                                    fontWeight: '700',
-                                    outline: 'none',
-                                    backgroundColor: '#F9FAFB'
+                                    backgroundColor: '#EFF6FF', 
+                                    color: '#2563EB', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    cursor: 'help',
+                                    border: '1px solid #DBEAFE',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '900',
+                                    flexShrink: 0
                                 }}
-                            />
+                            >
+                                i
+                                {showHelpTooltip && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '40px',
+                                        right: '0',
+                                        width: '280px',
+                                        backgroundColor: '#1E293B',
+                                        color: 'white',
+                                        padding: '1rem',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                                        zIndex: 1000,
+                                        fontSize: '0.7rem',
+                                        lineHeight: '1.4',
+                                        pointerEvents: 'none',
+                                        animation: 'fadeInUp 0.2s ease-out'
+                                    }}>
+                                        <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            🚀 COMANDOS RÁPIDOS (@)
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                            <div>
+                                                <b style={{ color: '#FCD34D' }}>@pendiente</b>: Recibidos<br/>
+                                                <b style={{ color: '#FCD34D' }}>@aprobado</b>: Aprobados<br/>
+                                                <b style={{ color: '#FCD34D' }}>@compra</b>: Compras<br/>
+                                                <b style={{ color: '#FCD34D' }}>@b2b</b>: Corporativos
+                                            </div>
+                                            <div>
+                                                <b style={{ color: '#FCD34D' }}>@b2c</b>: Hogares<br/>
+                                                <b style={{ color: '#FCD34D' }}>@sin_gps</b>: Falta geo<br/>
+                                                <b style={{ color: '#FCD34D' }}>@web</b>: De la App<br/>
+                                                <b style={{ color: '#FCD34D' }}>@pago</b>: Pagados
+                                            </div>
+                                        </div>
+                                        <style>{`
+                                            @keyframes fadeInUp {
+                                                from { opacity: 0; transform: translateY(10px); }
+                                                to { opacity: 1; transform: translateY(0); }
+                                            }
+                                        `}</style>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
