@@ -274,23 +274,23 @@ export default function AdminSettingsPage() {
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
             <Toast />
             {showAttributesModal && <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />}
-            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '1rem 2rem' }}>
                 <Link href="/admin/dashboard" style={{
                     display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#6B7280',
-                    textDecoration: 'none', fontWeight: '600', marginBottom: '1rem', fontSize: '0.9rem'
+                    textDecoration: 'none', fontWeight: '600', marginBottom: '0.5rem', fontSize: '0.9rem'
                 }}>
                     ← Volver al Dashboard
                 </Link>
 
-                <header style={{ marginBottom: '2.5rem' }}>
-                    <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza del Sistema</h1>
-                    <p style={{ color: '#6B7280', marginTop: '0.5rem' }}>Control Maestro de parámetros globales.</p>
+                <header style={{ marginBottom: '1.2rem' }}>
+                    <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza del Sistema</h1>
+                    <p style={{ color: '#6B7280', marginTop: '0.3rem', fontSize: '0.9rem' }}>Control Maestro de parámetros globales.</p>
                 </header>
 
                 {/* --- CONNECTIVITY CHECKER --- */}
                 <div style={{ 
-                    marginBottom: '2rem', 
-                    padding: '1rem 1.5rem', 
+                    marginBottom: '1.2rem', 
+                    padding: '0.8rem 1.2rem', 
                     backgroundColor: connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#ECFDF5' : '#FEF2F2') : '#F3F4F6',
                     borderRadius: '16px',
                     border: `1px solid ${connStatus.checked ? (connStatus.ok && connStatus.storageOk ? '#10B981' : '#EF4444') : '#E5E7EB'}`,
@@ -340,7 +340,7 @@ export default function AdminSettingsPage() {
                 </div>
 
                 {/* --- SECCIÓN 1: OPERACIÓN --- */}
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
                     <button 
                         onClick={() => toggleSection('operation')}
                         style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
@@ -396,7 +396,7 @@ export default function AdminSettingsPage() {
                 </div>
 
                 {/* --- SECCIÓN NUEVA: VARIANTES --- */}
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
                     <button 
                         onClick={() => toggleSection('variants')}
                         style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
@@ -442,7 +442,7 @@ export default function AdminSettingsPage() {
                 </div>
 
                 {/* --- SECCIÓN 2: DISEÑO --- */}
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
                     <button 
                         onClick={() => toggleSection('design')}
                         style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
