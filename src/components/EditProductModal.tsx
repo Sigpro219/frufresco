@@ -270,35 +270,56 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 variants_count: variants.length
             });
 
-            const { error } = await supabase
+            const updatePayload: any = {
+                name: formData.name,
+                sku: formData.sku,
+                category: formData.category,
+                unit_of_measure: formData.unit_of_measure,
+                description: formData.description,
+                min_inventory_level: formData.min_inventory_level,
+                is_active: formData.is_active,
+                image_url: uploadedImageUrl,
+                parent_id: formData.parent_id,
+                buying_team: formData.buying_team,
+                procurement_method: formData.procurement_method,
+                inventory_group: formData.inventory_group,
+                purchase_sublist: formData.purchase_sublist,
+                utility_deviation_pct: formData.utility_deviation_pct || 0,
+                options_config: options,
+                variants: variants,
+                iva_rate: formData.iva_rate,
+                display_name: formData.display_name,
+                web_unit: formData.web_unit,
+                web_conversion_factor: formData.web_conversion_factor,
+                name_en: formData.name_en,
+                description_en: formData.description_en,
+                tags: formData.tags
+            };
+
+            // Intentar incluir inherit_price si está definido
+            if ('inherit_price' in formData) {
+                updatePayload.inherit_price = (formData as any).inherit_price ?? false;
+            }
+
+            let { error } = await supabase
                 .from('products')
-                .update({
-                    name: formData.name,
-                    sku: formData.sku,
-                    category: formData.category,
-                    unit_of_measure: formData.unit_of_measure,
-                    description: formData.description,
-                    min_inventory_level: formData.min_inventory_level,
-                    is_active: formData.is_active,
-                    image_url: uploadedImageUrl,
-                    parent_id: formData.parent_id,
-                    buying_team: formData.buying_team,
-                    procurement_method: formData.procurement_method,
-                    inventory_group: formData.inventory_group,
-                    purchase_sublist: formData.purchase_sublist,
-                    utility_deviation_pct: formData.utility_deviation_pct || 0,
-                    options_config: options,
-                    variants: variants,
-                    iva_rate: formData.iva_rate,
-                    display_name: formData.display_name,
-                    web_unit: formData.web_unit,
-                    web_conversion_factor: formData.web_conversion_factor,
-                    name_en: formData.name_en,
-                    description_en: formData.description_en,
-                    tags: formData.tags,
-                    inherit_price: (formData as any).inherit_price ?? false
-                })
+                .update(updatePayload)
                 .eq('id', product.id);
+
+            // Si falla por columna faltante, reintentar sin inherit_price
+            if (error && error.message?.includes('column "inherit_price" does not exist')) {
+                console.warn('⚠️ Column inherit_price missing in DB. Retrying without it...');
+                delete updatePayload.inherit_price;
+                const retry = await supabase
+                    .from('products')
+                    .update(updatePayload)
+                    .eq('id', product.id);
+                error = retry.error;
+                
+                if (!error) {
+                    alert('⚠️ El producto se guardó, pero la opción "Heredar Precio" requiere una actualización de la base de datos (Columna inherit_price faltante).');
+                }
+            }
 
             if (error) throw error;
             

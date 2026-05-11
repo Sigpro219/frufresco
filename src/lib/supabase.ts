@@ -123,5 +123,6 @@ export interface Product {
     web_conversion_factor?: number;
     name_en?: string | null;
     description_en?: string | null;
+    inherit_price?: boolean;
 }
  
