@@ -299,9 +299,9 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                     </p>
                 </div>
                 
-                <style jsx>{`
+                <style dangerouslySetInnerHTML={{ __html: `
                     @keyframes spin { to { transform: rotate(360deg); } }
-                `}</style>
+                ` }} />
             </div>
         </div>
     );

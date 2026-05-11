@@ -703,13 +703,13 @@ export default function AdminSettingsPage() {
                     </p>
                 </div>
 
-                <style jsx global>{`
+                <style dangerouslySetInnerHTML={{ __html: `
                     @keyframes spin { to { transform: rotate(360deg); } }
                     @keyframes slideDown { 
                         from { opacity: 0; transform: translateY(-10px); }
                         to { opacity: 1; transform: translateY(0); }
                     }
-                `}</style>
+                ` }} />
             </div>
         </main>
     );
