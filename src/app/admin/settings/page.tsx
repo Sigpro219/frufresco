@@ -5,6 +5,7 @@ import { supabase, verifyConnectivity } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { diagnoseStorageError } from '@/lib/errorUtils';
+import ManageAttributesModal from '@/components/ManageAttributesModal';
 
 function ImageUpload({ 
     label, 
@@ -100,7 +101,8 @@ export default function AdminSettingsPage() {
     const [settings, setSettings] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [persisted, setPersisted] = useState(false);
-    const [openSections, setOpenSections] = useState<string[]>(['operation']); // Por defecto abre Operación
+    const [openSections, setOpenSections] = useState<string[]>(['operation']); 
+    const [showAttributesModal, setShowAttributesModal] = useState(false);
     const [connStatus, setConnStatus] = useState<{ ok: boolean, latency?: string, storageOk?: boolean, checked: boolean, checking: boolean }>({
         ok: true, checked: false, checking: false
     });
@@ -270,6 +272,7 @@ export default function AdminSettingsPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
             <Toast />
+            {showAttributesModal && <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />}
             <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/dashboard" style={{
                     display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#6B7280',
@@ -387,6 +390,49 @@ export default function AdminSettingsPage() {
                                     )}
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* --- SECCIÓN NUEVA: VARIANTES --- */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <button 
+                        onClick={() => toggleSection('variants')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', border: '1px solid #E5E7EB', cursor: 'pointer', width: '100%', padding: '1.2rem', borderRadius: '16px', transition: 'all 0.2s' }}>
+                        <span style={{ fontSize: '1.5rem' }}>🧬</span>
+                        <div style={{ textAlign: 'left', flex: 1 }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza de Variantes</h2>
+                            <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: 0 }}>Control maestro de atributos (Procesos, Madurez, Tamaños).</p>
+                        </div>
+                        <span style={{ transform: openSections.includes('variants') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
+                    </button>
+                    {openSections.includes('variants') && (
+                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+                            <div style={{ textAlign: 'center', padding: '2rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🧬</div>
+                                <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#111827', marginBottom: '0.5rem' }}>Diccionario Maestro de Atributos</h3>
+                                <p style={{ color: '#6B7280', fontSize: '0.8rem', maxWidth: '400px', margin: '0 auto 1.5rem auto' }}>
+                                    Configura aquí las variables globales que aparecerán al crear o editar productos. 
+                                    Define qué es "Madurez", qué valores tiene "Proceso", etc.
+                                </p>
+                                <button 
+                                    onClick={() => setShowAttributesModal(true)}
+                                    style={{ 
+                                        padding: '0.8rem 2rem', 
+                                        backgroundColor: '#111827', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '700', 
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                    Abrir Gestor de Atributos
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

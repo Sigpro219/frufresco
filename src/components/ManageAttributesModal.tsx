@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { Plus, X, Tag, AlertCircle, Save, Trash2, Edit3 } from 'lucide-react';
 
 interface MasterAttribute {
     id: string;
@@ -13,20 +14,14 @@ interface ManageAttributesModalProps {
     onClose: () => void;
 }
 
-const INITIAL_ATTRIBUTES = [
-    { name: 'Madurez', values: ['Verde', 'Pintón', 'Maduro', 'Sobremaduro'] },
-    { name: 'Tamaño', values: ['Pequeño', 'Mediano', 'Grande', 'Extra Grande'] },
-    { name: 'Calidad', values: ['Primera (Extra)', 'Segunda (Estándar)', 'Industrial'] },
-    { name: 'Presentación', values: ['Granel', 'Empacado', 'Malla', 'Caja'] },
-    { name: 'Corte', values: ['Entero', 'Picado', 'Troceado', 'Pelado'] },
-    { name: 'Proceso', values: ['Lavado', 'Sucio', 'Cepillado'] }
-];
-
 export default function ManageAttributesModal({ onClose }: ManageAttributesModalProps) {
     const [attributes, setAttributes] = useState<MasterAttribute[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [newAttrName, setNewAttrName] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState('');
+    const [newValueInputs, setNewValueInputs] = useState<Record<string, string>>({});
 
     const fetchAttributes = useCallback(async () => {
         try {
@@ -36,41 +31,12 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 .select('*')
                 .order('name', { ascending: true });
             
-            if (error) {
-                console.warn('Supabase fetch issue:', error.message, error.code);
-                if (error.code === '42P01') { // Table doesn't exist - Common on first setup
-                    console.info('Table product_attributes_master missing. Using local initial list.');
-                    // Map local INITIAL_ATTRIBUTES to the format the table uses
-                    const mapped = INITIAL_ATTRIBUTES.map((a, i) => ({ 
-                        id: `local-${i}`, 
-                        name: a.name, 
-                        suggested_values: a.values 
-                    }));
-                    setAttributes(mapped);
-                } else {
-                    // Si llegamos aquí con un error desconocido, intentamos desmenuzarlo
-                    console.error('Unhandled database error detail:', {
-                        msg: error?.message,
-                        code: error?.code,
-                        full: error,
-                        props: error ? Object.getOwnPropertyNames(error) : 'null'
-                    });
-                    const mapped = INITIAL_ATTRIBUTES.map((a, i) => ({ 
-                        id: `local-${i}`, 
-                        name: a.name, 
-                        suggested_values: a.values 
-                    }));
-                    setAttributes(mapped);
-                }
-            } else {
-                setAttributes(data || []);
-            }
-        } catch (error: unknown) {
-            const err = error as Error;
-            console.error('❌ Error crítico en fetchAttributes:', err.message || err);
-            if (err.message?.includes('Unexpected token') || err.message?.includes('valid JSON')) {
-                console.error('💡 TIP: La respuesta de Supabase es HTML. Esto ocurre cuando la URL es incorrecta (apunta al sitio web en vez de a la API) o cuando el proyecto de Supabase está en pausa.');
-            }
+            if (error) throw error;
+            setAttributes(data || []);
+        } catch (error: any) {
+            console.error('❌ Error fetching attributes:', error.message);
+            // Fallback to empty but don't show local mode unless explicitly needed
+            setAttributes([]);
         } finally {
             setLoading(false);
         }
@@ -89,169 +55,236 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 .insert([{ name: newAttrName, suggested_values: [] }])
                 .select();
             
-            if (error) {
-                console.error('Insert error:', error);
-                throw error;
-            }
-            if (data && data.length > 0) {
-                setAttributes([...attributes, data[0]]);
-            }
+            if (error) throw error;
+            if (data) setAttributes([...attributes, data[0]]);
             setNewAttrName('');
         } catch (err) {
-            console.error('Catch error:', err);
-            alert('Error añadiendo atributo. ¿Quizás ya existe?');
+            alert('Error añadiendo atributo.');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleUpdateValues = async (id: string, valuesStr: string) => {
-        const values = valuesStr.split(',').map(v => v.trim()).filter(v => v !== '');
-        
-        // Si es un ID local (vista previa), solo actualizamos el estado visual
-        if (id.toString().startsWith('local-')) {
-            console.info('Actualización local (Vista Previa):', values);
-            setAttributes(attributes.map(a => a.id === id ? { ...a, suggested_values: values } : a));
+    const handleRenameAttribute = async (id: string) => {
+        if (!editingName.trim()) {
+            setEditingId(null);
             return;
         }
-
         try {
             const { error } = await supabase
                 .from('product_attributes_master')
-                .update({ suggested_values: values })
+                .update({ name: editingName })
                 .eq('id', id);
             
-            if (error) {
-                console.error('Update fail:', error.message, error.code);
-                throw error;
-            }
-            setAttributes(attributes.map(a => a.id === id ? { ...a, suggested_values: values } : a));
-        } catch (err: unknown) {
-            const error = err as Error;
-            console.error('Error updating values in DB:', error?.message || error);
-            alert('No se pudo guardar permanentemente. ¿Está la tabla configurada?');
+            if (error) throw error;
+            setAttributes(attributes.map(a => a.id === id ? { ...a, name: editingName } : a));
+            setEditingId(null);
+        } catch (err) {
+            alert('Error renombrando atributo.');
+        }
+    };
+
+    const handleAddValue = async (attrId: string) => {
+        const val = newValueInputs[attrId]?.trim();
+        if (!val) return;
+
+        const attr = attributes.find(a => a.id === attrId);
+        if (!attr) return;
+
+        if (attr.suggested_values.includes(val)) {
+            setNewValueInputs({ ...newValueInputs, [attrId]: '' });
+            return;
+        }
+
+        const newValues = [...attr.suggested_values, val];
+        try {
+            const { error } = await supabase
+                .from('product_attributes_master')
+                .update({ suggested_values: newValues })
+                .eq('id', attrId);
+            
+            if (error) throw error;
+            setAttributes(attributes.map(a => a.id === attrId ? { ...a, suggested_values: newValues } : a));
+            setNewValueInputs({ ...newValueInputs, [attrId]: '' });
+        } catch (err) {
+            alert('Error guardando valor.');
+        }
+    };
+
+    const handleRemoveValue = async (attrId: string, valueToRemove: string) => {
+        const attr = attributes.find(a => a.id === attrId);
+        if (!attr) return;
+
+        const newValues = attr.suggested_values.filter(v => v !== valueToRemove);
+        try {
+            const { error } = await supabase
+                .from('product_attributes_master')
+                .update({ suggested_values: newValues })
+                .eq('id', attrId);
+            
+            if (error) throw error;
+            setAttributes(attributes.map(a => a.id === attrId ? { ...a, suggested_values: newValues } : a));
+        } catch (err) {
+            alert('Error eliminando valor.');
         }
     };
 
     const handleDeleteAttribute = async (id: string) => {
-        if (!confirm('¿Estás seguro de eliminar este tipo de variación? No afectará a los productos existentes pero ya no aparecerá como opción maestra.')) return;
+        if (!confirm('¿Estás seguro de eliminar este atributo? Esto no borrará las variantes existentes en los productos, pero ya no aparecerá como opción para nuevos SKUs.')) return;
         
-        if (id.toString().startsWith('local-')) {
-            setAttributes(attributes.filter(a => a.id !== id));
-            return;
-        }
-
         try {
             const { error } = await supabase
                 .from('product_attributes_master')
                 .delete()
                 .eq('id', id);
             
-            if (error) {
-                console.error('Delete fail:', error.message, error.code);
-                throw error;
-            }
+            if (error) throw error;
             setAttributes(attributes.filter(a => a.id !== id));
-        } catch (err: unknown) {
-            const error = err as Error;
-            console.error('Error deleting attribute from DB:', error?.message || error);
+        } catch (err) {
+            alert('Error eliminando atributo.');
         }
     };
 
     return (
         <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            backdropFilter: 'blur(4px)'
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, backdropFilter: 'blur(8px)', padding: '20px'
         }}>
             <div style={{
-                backgroundColor: 'white',
-                width: '90%',
-                maxWidth: '600px',
-                borderRadius: '24px',
-                padding: '2rem',
-                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-                display: 'flex',
-                flexDirection: 'column',
-                maxHeight: '85vh'
+                backgroundColor: 'white', width: '100%', maxWidth: '700px',
+                borderRadius: '28px', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                display: 'flex', flexDirection: 'column', maxHeight: '90vh', position: 'relative'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <div>
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#111827' }}>Variaciones Maestras 🧬</h2>
-                        <p style={{ fontSize: '0.9rem', color: '#6B7280' }}>Define los tipos y valores sugeridos para todos tus productos.</p>
-                    </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF' }}>✕</button>
-                </div>
+                <button 
+                    onClick={onClose} 
+                    style={{ position: 'absolute', top: '20px', right: '20px', background: '#F3F4F6', border: 'none', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}
+                >
+                    <X size={20} />
+                </button>
 
-                {attributes.some(a => a.id.toString().startsWith('local-')) && (
-                    <div style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #FDE68A', fontSize: '0.85rem', fontWeight: '600' }}>
-                        ⚠️ <b>Modo Vista Previa:</b> La tabla no existe en DB. Puedes usar estas opciones para crear productos, pero para editarlas de forma permanente debes ejecutar el script SQL de &quot;Data Maestra&quot;.
+                <header style={{ marginBottom: '2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                        <div style={{ padding: '8px', backgroundColor: '#111827', borderRadius: '12px', color: 'white' }}>
+                            <Tag size={24} />
+                        </div>
+                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza de Variantes</h2>
                     </div>
-                )}
+                    <p style={{ fontSize: '0.95rem', color: '#6B7280', margin: 0 }}>Define el diccionario maestro de atributos que rige tu catálogo inteligente.</p>
+                </header>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem' }}>
+                <div style={{ 
+                    display: 'flex', gap: '12px', padding: '1rem', backgroundColor: '#F9FAFB', 
+                    borderRadius: '20px', border: '1px solid #E5E7EB', marginBottom: '2rem' 
+                }}>
                     <input 
                         type="text" 
-                        placeholder="Nuevo tipo: Ej. Color, Calibre..." 
+                        placeholder="Nuevo tipo: Ej. Calibre, Proceso, Empaque..." 
                         value={newAttrName}
                         onChange={(e) => setNewAttrName(e.target.value)}
-                        style={{ flex: 1, padding: '0.8rem 1.2rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', fontWeight: '600' }}
+                        onKeyPress={(e) => e.key === 'Enter' && handleAddAttribute()}
+                        style={{ flex: 1, padding: '0.8rem 1.2rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '1rem', fontWeight: '600', outline: 'none' }}
                     />
                     <button 
                         onClick={handleAddAttribute}
                         disabled={saving || !newAttrName.trim()}
                         style={{ 
-                            padding: '0.8rem 1.5rem', 
-                            backgroundColor: '#2563EB', 
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '12px', 
-                            fontWeight: '700', 
-                            cursor: 'pointer',
-                            opacity: saving ? 0.5 : 1
+                            padding: '0 1.5rem', backgroundColor: '#111827', color: 'white', 
+                            border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '8px', opacity: saving ? 0.5 : 1
                         }}
                     >
-                        {saving ? '...' : '+ Añadir'}
+                        <Plus size={18} /> Añadir
                     </button>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
                     {loading ? (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: '#6B7280' }}>Cargando configuraciones...</div>
+                        <div style={{ textAlign: 'center', padding: '3rem', color: '#6B7280' }}>
+                            <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #111827', borderRadius: '50%', margin: '0 auto 1rem auto', animation: 'spin 1s linear infinite' }} />
+                            Cargando diccionario...
+                        </div>
                     ) : attributes.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '2px dashed #E5E7EB' }}>
-                            <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>No hay variaciones maestras aún.</p>
-                            <p style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>Crea una para que rinda más configurar SKU hijos.</p>
+                        <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: '#F9FAFB', borderRadius: '24px', border: '2px dashed #E5E7EB' }}>
+                            <p style={{ color: '#6B7280', fontSize: '1rem', fontWeight: '600' }}>No hay variaciones maestras configuradas.</p>
+                            <p style={{ fontSize: '0.85rem', color: '#9CA3AF', marginTop: '8px' }}>Las variaciones permiten crear sub-productos (ej: Picado, Maduro) con un solo clic.</p>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                             {attributes.map(attr => (
-                                <div key={attr.id} style={{ padding: '1.2rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F3F4F6' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                                        <span style={{ fontWeight: '800', color: '#111827', fontSize: '1.1rem' }}>{attr.name}</span>
+                                <div key={attr.id} style={{ 
+                                    padding: '1.5rem', backgroundColor: 'white', borderRadius: '20px', 
+                                    border: '1px solid #E5E7EB', transition: 'all 0.2s',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                                        {editingId === attr.id ? (
+                                            <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                                                <input 
+                                                    autoFocus
+                                                    value={editingName}
+                                                    onChange={(e) => setEditingName(e.target.value)}
+                                                    onBlur={() => handleRenameAttribute(attr.id)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && handleRenameAttribute(attr.id)}
+                                                    style={{ fontSize: '1.2rem', fontWeight: '900', border: '2px solid #111827', borderRadius: '8px', padding: '4px 8px', outline: 'none', width: '200px' }}
+                                                />
+                                                <button onClick={() => handleRenameAttribute(attr.id)} style={{ background: '#111827', color: 'white', border: 'none', borderRadius: '8px', padding: '0 8px' }}><Save size={16}/></button>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span style={{ fontWeight: '900', color: '#111827', fontSize: '1.2rem' }}>{attr.name}</span>
+                                                <button 
+                                                    onClick={() => { setEditingId(attr.id); setEditingName(attr.name); }}
+                                                    style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '4px' }}
+                                                >
+                                                    <Edit3 size={16} />
+                                                </button>
+                                            </div>
+                                        )}
+                                        
                                         <button 
                                             onClick={() => handleDeleteAttribute(attr.id)}
-                                            style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer' }}
+                                            style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', opacity: 0.6 }}
+                                            onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
+                                            onMouseOut={(e) => e.currentTarget.style.opacity = '0.6'}
                                         >
-                                            ELIMINAR
+                                            <Trash2 size={16} />
                                         </button>
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                            VALORES (Separados por coma)
+
+                                    <div style={{ backgroundColor: '#F9FAFB', padding: '12px', borderRadius: '12px', border: '1px solid #F3F4F6' }}>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: '900', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>
+                                            Valores Sugeridos
                                         </label>
-                                        <input 
-                                            type="text" 
-                                            defaultValue={attr.suggested_values.join(', ')}
-                                            onBlur={(e) => handleUpdateValues(attr.id, e.target.value)}
-                                            placeholder="Valor 1, Valor 2, Valor 3..."
-                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E5E7EB', fontSize: '0.9rem' }}
-                                        />
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                            {attr.suggested_values.map(val => (
+                                                <span key={val} style={{ 
+                                                    display: 'inline-flex', alignItems: 'center', gap: '6px', 
+                                                    backgroundColor: 'white', border: '1.5px solid #E5E7EB', 
+                                                    padding: '6px 12px', borderRadius: '100px', fontSize: '0.85rem', 
+                                                    fontWeight: '700', color: '#374151' 
+                                                }}>
+                                                    {val}
+                                                    <button 
+                                                        onClick={() => handleRemoveValue(attr.id, val)}
+                                                        style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                            <input 
+                                                placeholder="+ Añadir..."
+                                                value={newValueInputs[attr.id] || ''}
+                                                onChange={(e) => setNewValueInputs({ ...newValueInputs, [attr.id]: e.target.value })}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleAddValue(attr.id)}
+                                                style={{ 
+                                                    border: '1.5px dashed #D1D5DB', background: 'none', 
+                                                    padding: '6px 12px', borderRadius: '100px', fontSize: '0.85rem', 
+                                                    fontWeight: '700', outline: 'none', width: '100px'
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -259,22 +292,16 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                     )}
                 </div>
 
-                <div style={{ marginTop: '2rem', textAlign: 'right' }}>
-                    <button 
-                        onClick={onClose} 
-                        style={{ 
-                            padding: '0.8rem 2rem', 
-                            backgroundColor: '#F3F4F6', 
-                            color: '#4B5563', 
-                            border: 'none', 
-                            borderRadius: '12px', 
-                            fontWeight: '700', 
-                            cursor: 'pointer' 
-                        }}
-                    >
-                        Cerrar
-                    </button>
+                <div style={{ marginTop: '2.5rem', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#FFF7ED', padding: '1rem', borderRadius: '16px', border: '1px solid #FFEDD5' }}>
+                    <AlertCircle size={20} color="#EA580C" />
+                    <p style={{ fontSize: '0.8rem', color: '#9A3412', margin: 0, fontWeight: '500' }}>
+                        Los cambios realizados aquí son globales. Si eliminas un valor, ya no se podrá seleccionar en nuevos productos, pero no afectará a los SKUs ya creados.
+                    </p>
                 </div>
+                
+                <style jsx>{`
+                    @keyframes spin { to { transform: rotate(360deg); } }
+                `}</style>
             </div>
         </div>
     );
