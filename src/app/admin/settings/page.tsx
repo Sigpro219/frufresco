@@ -6,6 +6,7 @@ import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { diagnoseStorageError } from '@/lib/errorUtils';
 import ManageAttributesModal from '@/components/ManageAttributesModal';
+import { AlertCircle } from 'lucide-react';
 
 function ImageUpload({ 
     label, 
@@ -407,30 +408,33 @@ export default function AdminSettingsPage() {
                         <span style={{ transform: openSections.includes('variants') ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>▼</span>
                     </button>
                     {openSections.includes('variants') && (
-                        <div style={{ marginTop: '1rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
-                            <div style={{ textAlign: 'center', padding: '2rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
-                                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🧬</div>
-                                <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#111827', marginBottom: '0.5rem' }}>Diccionario Maestro de Atributos</h3>
-                                <p style={{ color: '#6B7280', fontSize: '0.8rem', maxWidth: '400px', margin: '0 auto 1.5rem auto' }}>
-                                    Configura aquí las variables globales que aparecerán al crear o editar productos. 
-                                    Define qué es "Madurez", qué valores tiene "Proceso", etc.
-                                </p>
+                        <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', backgroundColor: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                <div style={{ fontSize: '2rem' }}>🧬</div>
+                                <div style={{ flex: 1 }}>
+                                    <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#111827', margin: '0 0 4px 0' }}>Diccionario Maestro de Categorías</h3>
+                                    <p style={{ color: '#6B7280', fontSize: '0.75rem', margin: '0 0 8px 0', maxWidth: '500px' }}>
+                                        Define las variables globales del catálogo. Estos valores rigen la creación de variantes en todos los productos.
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#DC2626', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                        <AlertCircle size={14} /> 
+                                        <span>Precaución: Modificar o borrar variables activas puede afectar la integridad del catálogo.</span>
+                                    </div>
+                                </div>
                                 <button 
                                     onClick={() => setShowAttributesModal(true)}
                                     style={{ 
-                                        padding: '0.8rem 2rem', 
+                                        padding: '0.7rem 1.2rem', 
                                         backgroundColor: '#111827', 
                                         color: 'white', 
                                         border: 'none', 
                                         borderRadius: '10px', 
                                         fontWeight: '700', 
                                         cursor: 'pointer',
-                                        transition: 'transform 0.2s'
+                                        fontSize: '0.85rem'
                                     }}
-                                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                 >
-                                    Abrir Gestor de Atributos
+                                    Gestionar
                                 </button>
                             </div>
                         </div>
