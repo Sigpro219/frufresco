@@ -629,16 +629,17 @@ export default function OrderLoadingPage() {
                     boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
                     border: '1px solid #E5E7EB'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                         {/* Date Selector Segment */}
                         <div style={{ 
                             display: 'flex',
                             alignItems: 'center',
-                            padding: '0.4rem 0.8rem',
+                            padding: '0 0.8rem',
                             backgroundColor: '#F9FAFB',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             border: '1px solid #E5E7EB',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            height: '40px'
                         }} onClick={(e) => {
                             const input = e.currentTarget.querySelector('input');
                             if (input) (input as any).showPicker?.();
@@ -661,47 +662,69 @@ export default function OrderLoadingPage() {
                             />
                         </div>
 
-                        {/* Search Segment - Flexible & Responsive */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, maxWidth: '800px' }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#9CA3AF' }}>🔍</span>
-                                <input 
-                                    placeholder="Buscar por ID, empresa, @estado..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    style={{ 
-                                        width: '100%', 
-                                        padding: '0.5rem 1rem 0.5rem 2.2rem', 
-                                        borderRadius: '8px', 
-                                        border: '1px solid #E5E7EB', 
-                                        fontSize: '0.8rem',
-                                        fontWeight: '700',
-                                        outline: 'none',
-                                        backgroundColor: '#F9FAFB',
-                                        transition: 'all 0.2s'
+                        {/* Search Segment - Flexible & Responsive (MATCHING CLIENTS UI) */}
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <input 
+                                placeholder="Buscar por ID, empresa, @estado..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                style={{ 
+                                    width: '100%', 
+                                    padding: '0 2.5rem 0 2.5rem', 
+                                    borderRadius: '10px', 
+                                    border: '1px solid #F1F5F9', 
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    height: '40px',
+                                    backgroundColor: '#F8FAFC',
+                                    transition: 'all 0.2s'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.backgroundColor = 'white';
+                                    e.target.style.borderColor = '#0891B2';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.backgroundColor = '#F8FAFC';
+                                    e.target.style.borderColor = '#E2E8F0';
+                                }}
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '0.8rem',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: '#E2E8F0',
+                                        border: 'none',
+                                        color: '#64748B',
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 'bold'
                                     }}
-                                    onFocus={(e) => {
-                                        e.target.style.backgroundColor = 'white';
-                                        e.target.style.borderColor = 'var(--primary)';
-                                        e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
-                                    }}
-                                    onBlur={(e) => {
-                                        e.target.style.backgroundColor = '#F9FAFB';
-                                        e.target.style.borderColor = '#E5E7EB';
-                                        e.target.style.boxShadow = 'none';
-                                    }}
-                                />
-                            </div>
-                            
-                            {/* Info Button for Commands */}
+                                >✕</button>
+                            )}
+                        </div>
+
+                        {/* Info Button for Commands */}
                             <div 
                                 onMouseEnter={() => setShowHelpTooltip(true)}
                                 onMouseLeave={() => setShowHelpTooltip(false)}
                                 style={{ 
                                     position: 'relative',
-                                    width: '32px', 
-                                    height: '32px', 
-                                    borderRadius: '8px', 
+                                    width: '40px', 
+                                    height: '40px', 
+                                    borderRadius: '10px', 
                                     backgroundColor: '#EFF6FF', 
                                     color: '#2563EB', 
                                     display: 'flex', 
@@ -709,7 +732,7 @@ export default function OrderLoadingPage() {
                                     justifyContent: 'center',
                                     cursor: 'help',
                                     border: '1px solid #DBEAFE',
-                                    fontSize: '0.85rem',
+                                    fontSize: '1rem',
                                     fontWeight: '900',
                                     flexShrink: 0
                                 }}
@@ -759,7 +782,6 @@ export default function OrderLoadingPage() {
                                 )}
                             </div>
                         </div>
-                    </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {/* View Switcher */}

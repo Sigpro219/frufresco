@@ -1526,9 +1526,19 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
-                <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 4px', borderRadius: '3px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
-                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 4px', borderRadius: '3px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
+                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
+                    
+                    {/* ICONOS OPERATIVOS ADICIONALES */}
+                    {!isLead && (
+                        <>
+                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0' }}>🧺 SI</span>}
+                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0' }}>
+                                📄 {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                            </span>
+                        </>
+                    )}
                 </div>
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>

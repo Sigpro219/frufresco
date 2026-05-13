@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
 
 function CreateOrderContent() {
@@ -41,6 +42,10 @@ function CreateOrderContent() {
     const [originSource, setOriginSource] = useState(searchParams.get('source') || 'phone'); // phone, whatsapp, email
     const [deliveryDate, setDeliveryDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]); // Default tomorrow
     const [deliverySlot, setDeliverySlot] = useState('AM'); // AM or PM
+    const [isManualDelivery, setIsManualDelivery] = useState(false);
+    const [manualDeliveryTime, setManualDeliveryTime] = useState('');
+    const [manualDeliveryMargin, setManualDeliveryMargin] = useState(15);
+    const [manualDeliveryNote, setManualDeliveryNote] = useState('');
     const [adminNotes, setAdminNotes] = useState('');
 
     // MODAL STATE (For Product Variants)
@@ -62,7 +67,7 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions')
                 .eq('role', 'b2b_client')
                 .order('company_name', { ascending: true });
 
@@ -380,75 +385,119 @@ function CreateOrderContent() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
-            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
 
                     {/* LEFT COLUMN: FORM */}
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', marginBottom: '2rem' }}>📝 Nuevo Pedido Manual</h1>
-
-                        {/* CLIENT SEGMENTATION */}
-                        <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', padding: '0.3rem', backgroundColor: '#F3F4F6', borderRadius: '10px' }}>
-                            <button
-                                onClick={() => setClientType('B2B')}
-                                style={{
-                                    flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none',
-                                    backgroundColor: clientType === 'B2B' ? 'white' : 'transparent',
-                                    color: clientType === 'B2B' ? '#111827' : '#6B7280',
-                                    fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                🏢 Institucional (B2B)
-                            </button>
-                            <button
-                                onClick={() => setClientType('B2C')}
-                                style={{
-                                    flex: 1, padding: '0.6rem', borderRadius: '8px', border: 'none',
-                                    backgroundColor: clientType === 'B2C' ? 'white' : 'transparent',
-                                    color: clientType === 'B2C' ? '#111827' : '#6B7280',
-                                    fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                🏠 Hogar / Invitado (B2C)
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                            <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0 }}>📝 Nuevo Pedido Manual</h1>
+                            
+                            {/* CLIENT SEGMENTATION (SLIMMER) */}
+                            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.2rem', backgroundColor: '#F3F4F6', borderRadius: '10px', width: '400px' }}>
+                                <button
+                                    onClick={() => setClientType('B2B')}
+                                    style={{
+                                        flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                                        backgroundColor: clientType === 'B2B' ? 'white' : 'transparent',
+                                        color: clientType === 'B2B' ? '#111827' : '#6B7280',
+                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.2s', fontSize: '0.85rem'
+                                    }}
+                                >
+                                    🏢 B2B
+                                </button>
+                                <button
+                                    onClick={() => setClientType('B2C')}
+                                    style={{
+                                        flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                                        backgroundColor: clientType === 'B2C' ? 'white' : 'transparent',
+                                        color: clientType === 'B2C' ? '#111827' : '#6B7280',
+                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.2s', fontSize: '0.85rem'
+                                    }}
+                                >
+                                    🏠 Hogar / B2C
+                                </button>
+                            </div>
                         </div>
 
-
-
-                        {/* CLIENT FIELDS */}
-                        <div style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '1px dashed #D1D5DB' }}>
+                        {/* TOP SECTION GRID: CLIENT + LOGISTICS */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+                            
+                            {/* LEFT: CLIENT FIELDS */}
+                            <div>
+                                <div style={{ padding: '1.5rem', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '1px dashed #D1D5DB', height: '100%' }}>
                             {clientType === 'B2B' ? (
                                 <div style={{ position: 'relative' }}>
                                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Buscar Empresa (Nombre, NIT, Dir, Tel)</label>
 
                                     {selectedClient ? (
                                         <div style={{
-                                            padding: '0.8rem', backgroundColor: '#ECFDF5', border: '1px solid #059669', borderRadius: '8px',
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                            padding: '1.2rem', 
+                                            backgroundColor: '#F0FDF4', 
+                                            border: '1px solid #BBF7D0', 
+                                            borderRadius: '16px',
+                                            display: 'flex', 
+                                            flexDirection: 'column',
+                                            gap: '0.8rem',
+                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
                                         }}>
-                                            <div>
-                                                <div style={{ fontWeight: '700', color: '#065F46' }}>
-                                                    {getSelectedClientDetails()?.company_name}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
+                                                        🏢 SUCURSAL SELECCIONADA
+                                                    </div>
+                                                    <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1.2rem', lineHeight: '1.2' }}>
+                                                        {getSelectedClientDetails()?.company_name}
+                                                    </div>
+                                                    {getSelectedClientDetails()?.parent_id && (
+                                                        <div style={{ fontSize: '0.85rem', color: '#15803D', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span style={{ opacity: 0.7 }}>Matriz:</span> 
+                                                            {clients.find(c => c.id === getSelectedClientDetails()?.parent_id)?.company_name || 'Corporativo'}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#047857' }}>
-                                                    NIT: {getSelectedClientDetails()?.nit || 'Sin NIT'} • {getSelectedClientDetails()?.contact_name}
+                                                <button
+                                                    onClick={() => setSelectedClient('')}
+                                                    style={{ 
+                                                        background: '#DCFCE7', 
+                                                        border: 'none', 
+                                                        color: '#166534', 
+                                                        width: '28px', 
+                                                        height: '28px', 
+                                                        borderRadius: '50%', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center', 
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.8rem'
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid #DCFCE7', paddingTop: '0.8rem' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>👤 Encargado</div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534' }}>{getSelectedClientDetails()?.contact_name || 'No asignado'}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#15803D' }}>{getSelectedClientDetails()?.contact_phone || 'Sin teléfono'}</div>
                                                 </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#065F46', marginTop: '2px' }}>
-                                                    📍 {getSelectedClientDetails()?.address || 'Sin dirección'}
+                                                <div>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>📍 Ubicación GPS</div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        {getSelectedClientDetails()?.latitude ? '✅ Confirmada' : '⚠️ Pendiente'}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#15803D' }}>
+                                                        {getSelectedClientDetails()?.latitude ? `${getSelectedClientDetails()?.latitude.toFixed(4)}, ${getSelectedClientDetails()?.longitude.toFixed(4)}` : getSelectedClientDetails()?.address}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => setSelectedClient('')}
-                                                style={{ background: 'transparent', border: 'none', color: '#059669', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.2rem' }}
-                                            >
-                                                ✕
-                                            </button>
                                         </div>
                                     ) : (
                                         <>
@@ -490,14 +539,6 @@ function CreateOrderContent() {
                                     )}
 
 
-                                    <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px dashed #E5E7EB', fontSize: '0.75rem', color: '#6B7280', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '1rem' }}>💡</span>
-                                        <span>
-                                            <strong>Nota:</strong> La carga automática de PDF está habilitada para 
-                                            <span style={{ color: '#7C3AED', fontWeight: 'bold' }}> Colegio San Bartolomé</span> y 
-                                            <span style={{ color: '#7C3AED', fontWeight: 'bold' }}> Hotel Estelar</span>.
-                                        </span>
-                                    </div>
                                 </div>
 
                             ) : (
@@ -719,56 +760,119 @@ function CreateOrderContent() {
                                     )}
                                 </div>
                             )}
-                        </div>
+                                </div>
+                            </div>
 
-                        {/* 2. SOURCE & DELIVERY (MOVED HERE) */}
-                        <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                            {/* RIGHT: LOGISTICS & DELIVERY */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Canal</label>
-                                <select
-                                    value={originSource} onChange={e => setOriginSource(e.target.value)}
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: '#F9FAFB' }}
-                                >
-                                    <option value="phone">📞 Teléfono</option>
-                                    <option value="whatsapp">💬 WhatsApp</option>
-                                    <option value="email">📧 Email</option>
-                                    <option value="flat_file">📁 Archivo Plano</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Entrega</label>
-                                <input
-                                    type="date"
-                                    value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                />
-                            </div>
-                            
-                            {clientType === 'B2C' && (
-                                <>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Franja</label>
-                                        <select
-                                            value={deliverySlot} onChange={e => setDeliverySlot(e.target.value)}
-                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                        >
-                                            <option value="AM">☀️ AM</option>
-                                            <option value="PM">🌙 PM</option>
-                                        </select>
+                                <div style={{ padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', height: '100%' }}>
+                                    <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#475569', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Configuración de Entrega
+                                    </h3>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>CANAL DE VENTA</label>
+                                            <select
+                                                value={originSource} onChange={e => setOriginSource(e.target.value)}
+                                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '0.9rem' }}
+                                            >
+                                                <option value="phone">📞 Teléfono</option>
+                                                <option value="whatsapp">💬 WhatsApp</option>
+                                                <option value="email">📧 Email</option>
+                                                <option value="flat_file">📁 Archivo Plano</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '0.4rem' }}>FECHA DE ENTREGA</label>
+                                            <input
+                                                type="date"
+                                                value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
+                                                style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem' }}
+                                            />
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Método de Pago</label>
-                                        <select
-                                            value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                                            style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                        >
-                                            <option value="contra_entrega">💵 Contra Entrega</option>
-                                            <option value="transferencia">🏦 Transferencia Anticipada</option>
-                                            <option value="wompi">💳 Wompi (Link de Pago)</option>
-                                        </select>
+
+                                    {/* INFO FRANJA (Final Refined Version) */}
+                                    {selectedClient && (getSelectedClientDetails()?.logistics_data || getSelectedClientDetails()?.delivery_restrictions) && (
+                                        <div style={{ 
+                                            marginTop: '1.2rem', 
+                                            padding: '1.2rem 1.5rem', 
+                                            backgroundColor: '#FFF7ED', 
+                                            borderRadius: '20px', 
+                                            border: '1px solid #FFEDD5',
+                                            boxShadow: '0 2px 8px rgba(154, 52, 18, 0.04)'
+                                        }}>
+                                            <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                                                FRANJA DE ENTREGA
+                                            </div>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#431407', lineHeight: '1.2' }}>
+                                                {getSelectedClientDetails()?.logistics_data?.days?.length > 0 
+                                                    ? formatTimeWindow(getSelectedClientDetails()?.logistics_data)
+                                                    : (getSelectedClientDetails()?.delivery_restrictions || 'Sin restricciones horarias')}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* MANUAL OVERRIDE TOGGLE */}
+                                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '1rem' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={isManualDelivery} 
+                                                onChange={e => setIsManualDelivery(e.target.checked)}
+                                                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10B981' }}
+                                            />
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#334155' }}>Configuración Manual de Entrega</span>
+                                        </label>
+
+                                        {isManualDelivery && (
+                                            <div style={{ 
+                                                padding: '1rem', 
+                                                backgroundColor: '#F0FDF4', 
+                                                borderRadius: '12px', 
+                                                border: '1px solid #DCFCE7',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '0.8rem',
+                                                animation: 'fadeIn 0.2s ease-out'
+                                            }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>HORA ESPECÍFICA</label>
+                                                        <input 
+                                                            type="time" 
+                                                            value={manualDeliveryTime}
+                                                            onChange={e => setManualDeliveryTime(e.target.value)}
+                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>MARGEN (+/- min)</label>
+                                                        <select
+                                                            value={manualDeliveryMargin} onChange={e => setManualDeliveryMargin(Number(e.target.value))}
+                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem' }}
+                                                        >
+                                                            <option value={15}>15 min</option>
+                                                            <option value={30}>30 min</option>
+                                                            <option value={45}>45 min</option>
+                                                            <option value={60}>60 min</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#166534', marginBottom: '0.3rem' }}>NOTA DE ENTREGA</label>
+                                                    <textarea 
+                                                        placeholder="Instrucciones específicas..."
+                                                        value={manualDeliveryNote}
+                                                        onChange={e => setManualDeliveryNote(e.target.value)}
+                                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '0.85rem', minHeight: '60px', resize: 'none' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </>
-                            )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* PDF UPLOAD FOR SPECIFIC B2B CLIENTS */}
@@ -883,44 +987,65 @@ function CreateOrderContent() {
                                     No hay productos agregados.
                                 </div>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
+                                    {/* Table Header */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 150px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <div>Producto</div>
+                                        <div style={{ textAlign: 'right' }}>Precio Unit.</div>
+                                        <div style={{ textAlign: 'center' }}>Cantidad</div>
+                                        <div style={{ textAlign: 'right' }}>Subtotal</div>
+                                        <div></div>
+                                    </div>
+
                                     {cart.map((item, idx) => (
-                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 150px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: '700' }}>
+                                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
                                                     {item.product.name}
                                                     {item.variant_label && (
-                                                        <span style={{ fontWeight: '400', color: '#6B7280', fontSize: '0.9em', marginLeft: '6px' }}>
-                                                            ({item.variant_label})
+                                                        <span style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', marginLeft: '6px', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px' }}>
+                                                            {item.variant_label}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>${item.product.base_price.toLocaleString()} x {item.product.unit_of_measure}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>SKU: {item.product.sku || 'N/A'}</div>
+                                            </div>
+
+                                            <div style={{ textAlign: 'right', fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>
+                                                ${item.product.base_price.toLocaleString()}
                                             </div>
 
                                             {/* STEPPER CONTROL */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #D1D5DB', borderRadius: '8px', overflow: 'hidden', backgroundColor: 'white' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
                                                     <button
                                                         onClick={() => updateQty(idx, Math.max(0.5, item.qty - 0.5))}
-                                                        style={{ width: '32px', height: '32px', border: 'none', borderRight: '1px solid #D1D5DB', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}
+                                                        style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
                                                     >−</button>
                                                     <input
                                                         type="number"
                                                         value={item.qty}
                                                         min="0.5" step="0.5"
                                                         onChange={(e) => updateQty(idx, parseFloat(e.target.value) || 0)}
-                                                        style={{ width: '50px', height: '32px', border: 'none', textAlign: 'center', fontWeight: 'bold', fontSize: '1rem', outline: 'none' }}
+                                                        style={{ width: '45px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}
                                                     />
                                                     <button
                                                         onClick={() => updateQty(idx, item.qty + 0.5)}
-                                                        style={{ width: '32px', height: '32px', border: 'none', borderLeft: '1px solid #D1D5DB', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
+                                                        style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
                                                     >+</button>
                                                 </div>
+                                            </div>
 
+                                            <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
+                                                ${(item.product.base_price * item.qty).toLocaleString()}
+                                            </div>
+
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                                 <button
                                                     onClick={() => removeFromCart(idx)}
-                                                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: '0.5rem' }}
+                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FECACA'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
                                                     title="Eliminar item"
                                                 >
                                                     ✕
