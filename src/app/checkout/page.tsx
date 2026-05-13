@@ -161,9 +161,9 @@ export default function CheckoutPage() {
                     .from('app_settings')
                     .select('value')
                     .eq('key', 'enable_cutoff_rules')
-                    .single();
+                    .limit(1);
 
-                const cutoffEnabled = cutoffData?.value !== 'false';
+                const cutoffEnabled = (cutoffData && cutoffData.length > 0) ? cutoffData[0].value !== 'false' : true;
                 
                 const now = new Date();
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -223,18 +223,14 @@ export default function CheckoutPage() {
                 .insert({
                     type: 'b2c_wompi',
                     status: 'pending_approval',
-                    origin_source: 'web',
                     delivery_date: date,
                     shipping_address: address,
-                    customer_name: name,
-                    customer_email: email,
-                    customer_phone: phone,
                     subtotal: totalPrice - taxAmount,
                     tax: taxAmount,
                     total: totalPrice,
                     latitude: safeLat,
                     longitude: safeLng,
-                    special_notes: specialNotes
+                    special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email}]\n[ORIGIN: web]\n${specialNotes || ''}`
                 })
                 .select()
                 .single();
@@ -266,8 +262,7 @@ export default function CheckoutPage() {
                 quantity: item.quantity,
                 unit_price: item.price,
                 unit: item.unit, // Guardamos la unidad comercial (Libra, Kg, etc)
-                ...(item.variant_label && { variant_label: item.variant_label }),
-                ...(item.selected_options && { selected_options: item.selected_options })
+                ...(item.variant_label && { nickname: item.variant_label }),
             }));
 
             const { error: itemsError } = await supabase
@@ -355,21 +350,20 @@ export default function CheckoutPage() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
 
-            <div className="container mobile-stack" style={{ padding: '4rem 1rem', display: 'grid', gridTemplateColumns: '1fr 400px', gap: '4rem' }}>
+            <div className="container mobile-stack" style={{ padding: '2.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '2.5rem' }}>
 
                 {/* LEFT COLUMN: LIST */}
                 <div style={{ position: 'relative', zIndex: 1 }}>
-                    <div style={{ 
+                        <div style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center', 
-                        marginBottom: '2.5rem',
-                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                        padding: '1.25rem 2rem',
-                        borderRadius: '24px',
-                        backdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(255, 255, 255, 0.5)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.05)'
+                        marginBottom: '1.5rem',
+                        backgroundColor: 'white',
+                        padding: '1rem 1.5rem',
+                        borderRadius: '20px',
+                        border: '1px solid var(--border)',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
                     }}>
                         <h1 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
@@ -382,7 +376,7 @@ export default function CheckoutPage() {
                             gap: '12px',
                             letterSpacing: '-0.04em'
                         }}>
-                            <ShoppingCart size={28} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
+                            <ShoppingCart size={24} strokeWidth={2.5} color="var(--primary)" /> {t.checkoutTitle}
                         </h1>
                         {items.length > 0 && (
                             <button
@@ -390,20 +384,24 @@ export default function CheckoutPage() {
                                     clearCart();
                                     router.push('/');
                                 }}
-                                className="btn-glass"
                                 style={{
-                                    padding: '0.6rem 1.2rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    fontSize: '0.85rem',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '12px',
+                                    fontSize: '0.8rem',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
-                                    color: '#6B7280',
-                                    fontWeight: '800',
-                                    cursor: 'pointer'
+                                    gap: '0.5rem',
+                                    color: '#EF4444',
+                                    backgroundColor: '#FEF2F2',
+                                    border: '1px solid #FEE2E2',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
                             >
-                                <Trash2 size={16} /> {t.clearCart}
+                                <Trash2 size={14} /> {t.clearCart}
                             </button>
                         )}
                     </div>
@@ -423,76 +421,96 @@ export default function CheckoutPage() {
                             </Link>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {items.map((item) => (
                                 <div key={`${item.id}-${item.name}`} style={{
                                     backgroundColor: 'white',
-                                    padding: '1.25rem 1.75rem',
-                                    borderRadius: '24px',
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: '16px',
                                     border: '1px solid var(--border)',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                    transition: 'all 0.2s',
                                 }}
                                 className="cart-item-card"
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ 
+                                            width: '56px', 
+                                            height: '56px', 
+                                            borderRadius: '12px', 
+                                            overflow: 'hidden', 
+                                            backgroundColor: '#f3f4f6',
+                                            flexShrink: 0,
+                                            border: '1px solid #f0f0f0'
+                                        }}>
+                                            <img 
+                                                src={item.image_url || 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=100'} 
+                                                alt={item.name} 
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                            />
+                                        </div>
                                         <div>
                                             <h4 style={{ 
                                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                                fontSize: '1.15rem',
+                                                fontSize: '1rem',
                                                 fontWeight: '800', 
-                                                margin: '0 0 0.25rem 0',
+                                                margin: '0 0 0.1rem 0',
                                                 color: 'var(--text-main)',
                                                 letterSpacing: '-0.02em'
                                             }}>{item.name}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <span style={{ 
                                                     color: 'var(--primary)', 
-                                                    fontSize: '0.9rem', 
+                                                    fontSize: '0.8rem', 
                                                     fontWeight: '700',
-                                                    backgroundColor: 'rgba(26, 77, 46, 0.05)',
-                                                    padding: '2px 10px',
-                                                    borderRadius: '8px'
                                                 }}>
-                                                    ${item.price.toLocaleString('es-CO')}
+                                                    ${item.price.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
                                                 </span>
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '600' }}>
-                                                    {t.quantity}: {item.quantity} {item.unit || ''}
+                                                <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                    • {item.quantity} {item.unit || ''}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <p style={{ 
-                                            fontFamily: 'var(--font-outfit), sans-serif',
-                                            fontSize: '1.25rem',
-                                            fontWeight: '900', 
-                                            color: 'var(--text-main)',
-                                            margin: 0,
-                                            letterSpacing: '-0.02em'
-                                        }}>
-                                            ${(item.price * item.quantity).toLocaleString('es-CO')}
-                                        </p>
+                                    <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                            <p style={{ 
+                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                fontSize: '1.1rem',
+                                                fontWeight: '900', 
+                                                color: 'var(--text-main)',
+                                                margin: 0,
+                                                letterSpacing: '-0.02em'
+                                            }}>
+                                                ${(item.price * item.quantity).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
+                                            </p>
+                                        </div>
                                         <button
                                             onClick={() => removeItem(item.id, item.name)}
                                             style={{ 
-                                                color: '#EF4444', 
-                                                fontSize: '0.85rem', 
+                                                color: '#CBD5E1', 
                                                 background: 'none', 
                                                 border: 'none', 
                                                 cursor: 'pointer', 
-                                                marginTop: '0.6rem',
-                                                fontWeight: '700',
+                                                padding: '8px',
+                                                borderRadius: '50%',
+                                                transition: 'all 0.2s',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '4px',
-                                                marginLeft: 'auto'
+                                                justifyContent: 'center'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.color = '#EF4444';
+                                                e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.color = '#CBD5E1';
+                                                e.currentTarget.style.backgroundColor = 'transparent';
                                             }}
                                         >
-                                            <Trash2 size={14} /> {t.remove}
+                                            <Trash2 size={16} />
                                         </button>
                                     </div>
                                 </div>
@@ -504,14 +522,13 @@ export default function CheckoutPage() {
                 {/* RIGHT COLUMN: FORM & TOTAL */}
                 <div style={{ position: 'relative', zIndex: 1 }}>
                     <div style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                        backdropFilter: 'blur(20px)',
-                        padding: '1.5rem',
+                        backgroundColor: 'white',
+                        padding: '1.25rem',
                         borderRadius: '24px',
-                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.04)',
                         position: 'sticky',
                         top: '100px',
-                        border: '1px solid rgba(255, 255, 255, 0.5)'
+                        border: '1px solid var(--border)'
                     }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
@@ -541,7 +558,7 @@ export default function CheckoutPage() {
                                         placeholder={t.fullNamePlaceholder}
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none', transition: 'border-color 0.2s' }}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -561,7 +578,7 @@ export default function CheckoutPage() {
                                             placeholder={t.whatsappPlaceholder}
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
-                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
@@ -579,7 +596,7 @@ export default function CheckoutPage() {
                                             placeholder={t.emailPlaceholder}
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                             className="checkout-input-modern"
                                         />
                                     </div>
@@ -599,7 +616,7 @@ export default function CheckoutPage() {
                                         placeholder="Ej: Calle 10 # 20-30, Apto 5, Barrio Centro"
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
-                                        style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontSize: '0.9rem', fontWeight: '500', backgroundColor: 'white', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none' }}
                                         className="checkout-input-modern"
                                     />
                                 </div>
@@ -697,12 +714,12 @@ export default function CheckoutPage() {
                                         min={minDeliveryDate}
                                         style={{ 
                                             width: '100%', 
-                                            padding: '0.65rem 1rem 0.65rem 2.75rem', 
-                                            borderRadius: '12px', 
+                                            padding: '0.5rem 1rem 0.5rem 2.5rem', 
+                                            borderRadius: '10px', 
                                             border: '1px solid #E5E7EB', 
-                                            fontSize: '0.9rem', 
+                                            fontSize: '0.85rem', 
                                             fontWeight: '500', 
-                                            backgroundColor: 'white', 
+                                            backgroundColor: '#F9FAFB', 
                                             outline: 'none', 
                                             cursor: 'pointer',
                                             WebkitAppearance: 'none'
@@ -727,14 +744,14 @@ export default function CheckoutPage() {
                                     onChange={(e) => setSpecialNotes(e.target.value.slice(0, 150))}
                                     style={{ 
                                         width: '100%', 
-                                        padding: '0.65rem 0.85rem', 
-                                        borderRadius: '12px', 
+                                        padding: '0.5rem 0.75rem', 
+                                        borderRadius: '10px', 
                                         border: '1px solid #E5E7EB', 
-                                        fontSize: '0.9rem', 
+                                        fontSize: '0.85rem', 
                                         fontWeight: '500', 
-                                        backgroundColor: 'white', 
+                                        backgroundColor: '#F9FAFB', 
                                         outline: 'none', 
-                                        minHeight: '60px', 
+                                        minHeight: '50px', 
                                         resize: 'none',
                                         fontFamily: 'inherit',
                                         transition: 'all 0.3s'
@@ -747,84 +764,81 @@ export default function CheckoutPage() {
                         <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '2px dashed rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.subtotal}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${(totalPrice - taxAmount).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <span style={{ color: 'var(--text-muted)', fontWeight: '600', fontSize: '0.9rem' }}>{t.taxes}</span>
-                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
+                                <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.9rem' }}>${taxAmount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '1.2rem', 
+                                    fontSize: '1.1rem', 
                                     fontWeight: '900', 
                                     color: 'var(--text-main)',
                                     letterSpacing: '-0.02em'
                                 }}>{t.totalPurchase}</span>
                                 <span style={{ 
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '1.75rem', 
+                                    fontSize: '1.6rem', 
                                     fontWeight: '900', 
                                     color: 'var(--primary)',
                                     letterSpacing: '-0.04em'
-                                }}>${totalPrice.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}</span>
+                                }}>${totalPrice.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}</span>
                             </div>
 
                             {!isMinOrderMet && (
                                 <div style={{
-                                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                                    color: '#B91C1C',
-                                    padding: '1rem',
-                                    borderRadius: '16px',
-                                    fontSize: '0.85rem',
-                                    marginBottom: '1.5rem',
-                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                    color: '#DC2626',
+                                    padding: '0.5rem',
+                                    fontSize: '0.8rem',
+                                    marginBottom: '0.75rem',
                                     textAlign: 'center',
-                                    fontWeight: '700',
+                                    fontWeight: '800',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '8px'
+                                    gap: '6px'
                                 }}>
-                                    <AlertCircle size={18} /> {t.minOrderMsg}: ${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}
+                                    <AlertCircle size={14} /> {t.minOrderMsg}: ${minOrder.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}{locale === 'en' ? ' COP' : ''}
                                 </div>
                             )}
 
                             {outOfZone && latitude && !isB2B && (
                                 <div style={{
-                                    backgroundColor: 'rgba(249, 115, 22, 0.08)',
-                                    color: '#C2410C',
-                                    padding: '1.25rem',
-                                    borderRadius: '20px',
-                                    fontSize: '0.85rem',
-                                    marginBottom: '1.5rem',
-                                    border: '1px solid rgba(249, 115, 22, 0.2)',
+                                    backgroundColor: '#FFF7ED',
+                                    color: '#9A3412',
+                                    padding: '1rem',
+                                    borderRadius: '12px',
+                                    fontSize: '0.8rem',
+                                    marginBottom: '1rem',
+                                    border: '1px solid #FFEDD5',
                                     textAlign: 'center'
                                 }}>
                                     <p style={{ 
                                         fontFamily: 'var(--font-outfit), sans-serif',
                                         fontWeight: '900', 
-                                        margin: '0 0 8px 0',
-                                        fontSize: '1.1rem',
+                                        margin: '0 0 4px 0',
+                                        fontSize: '1rem',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         gap: '6px'
                                     }}>
-                                        <MapPin size={18} /> {locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}
+                                        <MapPin size={16} /> {locale === 'es' ? 'Fuera de Cobertura' : 'Out of Coverage'}
                                     </p>
-                                    <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: '600', opacity: 0.8 }}>
+                                    <p style={{ margin: '0 0 10px 0', fontSize: '0.75rem', fontWeight: '600', opacity: 0.8 }}>
                                         {locale === 'es' ? 'B2C solo disponible en Zona Norte.' : 'B2C only available in North Zone.'} 
                                     </p>
                                     <Link href="/b2b/register" style={{ 
                                         color: 'white', 
-                                        backgroundColor: '#C2410C',
-                                        padding: '0.6rem 1.2rem',
-                                        borderRadius: 'var(--radius-full)',
+                                        backgroundColor: '#9A3412',
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '10px',
                                         fontWeight: '800', 
                                         textDecoration: 'none',
                                         display: 'inline-block',
-                                        fontSize: '0.8rem'
+                                        fontSize: '0.75rem'
                                     }}>
                                         {locale === 'es' ? 'Registrar mi Negocio (B2B)' : 'Register my Business (B2B)'}
                                     </Link>
@@ -835,11 +849,11 @@ export default function CheckoutPage() {
                                 className="btn-premium"
                                 style={{ 
                                     width: '100%', 
-                                    padding: '1.25rem', 
-                                    fontSize: '1.3rem', 
-                                    borderRadius: 'var(--radius-full)', 
+                                    padding: '1rem', 
+                                    fontSize: '1.1rem', 
+                                    borderRadius: '16px', 
                                     fontWeight: '900', 
-                                    backgroundColor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.1)' : 'var(--primary)', 
+                                    backgroundColor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.06)' : 'var(--primary)', 
                                     color: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'rgba(0,0,0,0.3)' : 'white', 
                                     border: 'none', 
                                     cursor: (loading || !isMinOrderMet || !latitude || outOfZone) ? 'not-allowed' : 'pointer',
@@ -848,19 +862,19 @@ export default function CheckoutPage() {
                                     justifyContent: 'center',
                                     gap: '12px',
                                     fontFamily: 'var(--font-outfit), sans-serif',
-                                    boxShadow: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'none' : '0 10px 30px rgba(26, 77, 46, 0.2)'
+                                    boxShadow: (loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)) ? 'none' : '0 10px 30px rgba(26, 77, 46, 0.12)'
                                 }}
                                 disabled={loading || !isMinOrderMet || !latitude || (outOfZone && !isB2B)}
                                 onClick={handleSubmit}
                             >
                                 {loading ? (
-                                    <>{t.processing} <Loader2 size={24} className="animate-spin" /></>
+                                    <>{t.processing} <Loader2 size={20} className="animate-spin" /></>
                                 ) : !latitude ? (
-                                    <><MapPin size={18} strokeWidth={2} style={{ opacity: 0.6 }} /> {locale === 'es' ? 'Selecciona tu punto de entrega' : 'Select your delivery point'}</>
+                                    <><MapPin size={16} strokeWidth={2.5} style={{ opacity: 0.6 }} /> {locale === 'es' ? 'Ubica tu entrega' : 'Locate delivery'}</>
                                 ) : (outOfZone && !isB2B) ? (
-                                    <>{locale === 'es' ? 'Zona No Soportada' : 'Unsupported Zone'} <MapPin size={24} /></>
+                                    <>{locale === 'es' ? 'Sin Cobertura' : 'No Coverage'} <MapPin size={20} /></>
                                 ) : (
-                                    <>{locale === 'es' ? 'Pagar Pedido Seguro' : 'Secure Order Payment'} <Rocket size={24} strokeWidth={2.5} /></>
+                                    <>{locale === 'es' ? 'Pagar Pedido' : 'Pay Order'} <Rocket size={20} strokeWidth={2.5} /></>
                                 )}
                             </button>
 
@@ -876,15 +890,15 @@ export default function CheckoutPage() {
                                     <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{locale === 'es' ? 'Pago seguro' : 'Secure Payment'}</span>
                                     <div style={{ height: '1px', flex: 1, background: 'rgba(0,0,0,0.06)' }} />
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
-                                        <ShieldCheck size={13} color="#16A34A" /> Wompi
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
+                                        <ShieldCheck size={12} color="#10B981" /> Wompi
                                     </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
-                                        <Truck size={13} color="#2563EB" /> Contraentrega
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
+                                        <Truck size={12} color="#3B82F6" /> Contraentrega
                                     </span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.35rem 0.85rem', borderRadius: '999px', border: '1px solid #E5E7EB', fontSize: '0.75rem', fontWeight: '800', color: '#374151', backgroundColor: 'white' }}>
-                                        <LockIcon size={13} color="#7C3AED" /> SSL
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', gap: '4px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #F1F5F9', fontSize: '0.65rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F8FAFC' }}>
+                                        <LockIcon size={12} color="#8B5CF6" /> SSL
                                     </span>
                                 </div>
                             </div>

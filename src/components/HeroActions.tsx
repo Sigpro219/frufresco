@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, Building2, ShoppingCart } from 'lucide-react';
+import { LayoutGrid, Building2, ShoppingCart, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 interface HeroActionsProps {
@@ -21,84 +21,86 @@ export default function HeroActions({ t, isB2bEnabled }: HeroActionsProps) {
     <div style={{ 
       display: 'flex', 
       flexDirection: 'column',
-      gap: '2rem', 
+      gap: '2.5rem', 
       justifyContent: 'center', 
-      alignItems: 'center' 
+      alignItems: 'center',
+      marginTop: '1rem'
     }}>
-      <style jsx>{`
-        .hero-btn-main:hover {
-          transform: scale(1.05) translateY(-5px) !important;
-          box-shadow: 0 25px 50px rgba(0,0,0,0.4) !important;
-          filter: brightness(1.1);
-        }
-        .hero-btn-secondary:hover {
-          background-color: rgba(255,255,255,0.2) !important;
-          transform: translateY(-3px) !important;
-          border-color: rgba(255,255,255,0.5) !important;
-        }
-      `}</style>
       {/* Main CTA: Catalog */}
       <button 
         onClick={scrollToCatalog}
-        className="btn btn-primary hero-btn-main" 
+        className="btn-premium" 
         style={{
           fontSize: '1.4rem',
-          padding: '1.2rem 4rem',
+          padding: '1.2rem 4.5rem',
           fontWeight: '900',
           borderRadius: 'var(--radius-full)',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.8rem',
+          gap: '1rem',
           backgroundColor: 'var(--primary)',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           border: 'none',
           cursor: 'pointer',
-          color: 'white'
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden'
         }}
       >
-        <LayoutGrid size={28} strokeWidth={2.5} /> {t.navCatalog || 'Nuestro Catálogo'}
+        <LayoutGrid size={28} strokeWidth={2.5} /> 
+        {t.navCatalog || 'Nuestro Catálogo'}
+        <ArrowRight size={20} style={{ opacity: 0.7 }} />
       </button>
 
-      <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '1.5rem', 
+        justifyContent: 'center', 
+        flexWrap: 'wrap',
+        padding: '0.5rem'
+      }}>
         {isB2bEnabled && (
-          <Link href="/b2b/register">
-            <button className="btn-glass hero-btn-secondary" style={{
+          <Link href="/b2b/register" style={{ textDecoration: 'none' }}>
+            <button className="btn-glass" style={{
               fontSize: '1.1rem',
-              padding: '1rem 2.5rem',
+              padding: '0.9rem 2.8rem',
               fontWeight: '700',
               borderRadius: 'var(--radius-full)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.6rem',
+              gap: '0.8rem',
               color: 'white',
-              border: '1px solid rgba(255,255,255,0.3)',
+              border: '1px solid rgba(255,255,255,0.4)',
               cursor: 'pointer',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(10px)',
-              transition: 'all 0.3s ease'
+              backgroundColor: 'rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(15px)',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
             }}>
-              <Building2 size={22} /> {t.btnInstitutional}
+              <Building2 size={22} strokeWidth={2} /> 
+              {t.btnInstitutional}
             </button>
           </Link>
         )}
-        <Link href="/register">
-          <button className="btn-glass hero-btn-secondary" style={{
+        
+        <Link href="/register" style={{ textDecoration: 'none' }}>
+          <button className="btn-glass" style={{
             fontSize: '1.1rem',
-            padding: '1rem 2.5rem',
+            padding: '0.9rem 2.8rem',
             fontWeight: '700',
             borderRadius: 'var(--radius-full)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.6rem',
+            gap: '0.8rem',
             color: 'white',
-            border: '1px solid rgba(255,255,255,0.3)',
+            border: '1px solid rgba(255,255,255,0.4)',
             cursor: 'pointer',
-            backgroundColor: 'rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(10px)',
-            transition: 'all 0.3s ease'
+            backgroundColor: 'rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(15px)',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
           }}>
-            <ShoppingCart size={22} /> {t.btnHome}
+            <ShoppingCart size={22} strokeWidth={2} /> 
+            {t.btnHome}
           </button>
         </Link>
       </div>

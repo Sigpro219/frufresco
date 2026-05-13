@@ -12,22 +12,17 @@ const outfit = Outfit({
   variable: '--font-outfit',
 });
 
-import { supabase } from '@/lib/supabase';
+import { getSeoSettings } from '@/lib/data';
 
 export async function generateMetadata() {
   try {
-    const { data: strategies } = await supabase
-      .from('seo_strategies')
-      .select('*')
-      .eq('is_active', true)
-      .order('last_generated_at', { ascending: false });
+    const primary = await getSeoSettings();
 
-    if (strategies && strategies.length > 0) {
-      const primary = strategies[0];
+    if (primary) {
       return {
         title: primary.meta_title,
         description: primary.meta_description,
-        keywords: primary.keywords.join(', '),
+        keywords: primary.keywords?.join(', '),
       };
     }
   } catch (e) {
@@ -46,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <style dangerouslySetInnerHTML={{ __html: `
           #nextjs-portal, 

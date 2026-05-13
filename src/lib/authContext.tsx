@@ -37,6 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchProfile = async (userId: string, signal?: AbortSignal) => {
         if (!userId) return;
         
+        // Prevent redundant fetches if we already have the profile for this user
+        if (profile && profile.id === userId) {
+            return;
+        }
+        
         // Network pre-check
         if (typeof window !== 'undefined' && !navigator.onLine) {
             console.warn('⚠️ Se intentó cargar perfil pero el navegador está OFFLINE. Esperando reconexión...');
@@ -108,17 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (isMounted) {
                     const currentUser = session?.user ?? null;
                     setUser(currentUser);
-                    if (currentUser) {
-                        fetchProfile(currentUser.id).catch(e => console.error('Error perfil:', e));
-                    }
                     setLoading(false);
                 }
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
                     if (isMounted) {
-                        setUser(session?.user ?? null);
-                        if (session?.user) fetchProfile(session.user.id);
-                        else setProfile(null);
+                        const newUser = session?.user ?? null;
+                        setUser(newUser);
+                        if (newUser) {
+                            fetchProfile(newUser.id);
+                        } else {
+                            setProfile(null);
+                        }
                         setLoading(false);
                     }
                 });

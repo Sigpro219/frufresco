@@ -86,7 +86,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             image_url: product.image_url
         });
 
-        alert(`¡${product.display_name || product.name} añadido al carrito!`);
+        const name = (isEn && product.name_en) ? product.name_en : (product.display_name || product.name);
+        alert(t.addedToCart.replace('{name}', name));
     };
 
     const handleBuyNow = () => {
@@ -107,7 +108,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             {/* Breadcrumbs */}
             <nav style={{ marginBottom: '2.5rem', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Link href={`/${isEn ? '?lang=en' : ''}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>
-                    {isEn ? 'Home' : 'Inicio'}
+                    {t.navHome}
                 </Link> 
                 <ChevronRight size={14} />
                 <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
@@ -189,7 +190,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {/* Quantity Section */}
                     <div style={{ marginBottom: '2.5rem' }}>
                         <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                            Cantidad
+                            {t.quantity}
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
                             <button

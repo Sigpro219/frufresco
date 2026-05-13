@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { isInsidePolygon, Point } from '../lib/geoUtils';
 import { Map, Marker, MapMouseEvent } from '@vis.gl/react-google-maps';
 import { User } from 'lucide-react';
+import { translations, Locale } from '../lib/translations';
 
 type Message = {
     id: number;
@@ -27,13 +28,16 @@ type LeadData = {
     longitude: number | null;
 };
 
-export default function LeadGenBotV2() {
+export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
+    const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
+
     const [messages, setMessages] = useState<Message[]>([
-        { id: 1, text: 'Bienvenido. Soy el asistente de servicios corporativos de FruFresco.', sender: 'bot' },
-        { id: 2, text: 'Me encantaría acompañarte en el proceso de activación de tu cuenta institucional con precios de origen.', sender: 'bot' },
-        { id: 3, text: 'Para comenzar, ¿cuál es el nombre de tu empresa o negocio?', sender: 'bot' }
+        { id: 1, text: t.b2b.bot.welcome, sender: 'bot' },
+        { id: 2, text: t.b2b.bot.intro, sender: 'bot' },
+        { id: 3, text: t.b2b.bot.qCompany, sender: 'bot' }
     ]);
-    const [currentStep, setCurrentStep] = useState<number>(0); // 0: Co, 1: Typ, 2: Siz, 3: Address, 4: LocationConfirm, 5: Name, 6: Phone, 7: Email, 8: Done
+    const [currentStep, setCurrentStep] = useState<number>(0); 
     const [inputValue, setInputValue] = useState('');
     const [leadData, setLeadData] = useState<LeadData>({ 
         company_name: '', business_type: '', business_size: '', 
@@ -89,25 +93,25 @@ export default function LeadGenBotV2() {
         const updatedLeadData = { ...leadDataRef.current, ...dataUpdate };
         if (currentStep === 3) { // Address
             if (userText.length < 5) {
-                setError('Por favor ingresa una dirección más completa.');
+                setError(locale === 'en' ? 'Please enter a more complete address.' : 'Por favor ingresa una dirección más completa.');
                 return;
             }
         }
         if (currentStep === 5) { // Name
             if (userText.length < 2) {
-                setError('Por favor ingresa un nombre válido');
+                setError(locale === 'en' ? 'Please enter a valid name.' : 'Por favor ingresa un nombre válido');
                 return;
             }
         }
         if (currentStep === 6) { // Phone
             if (userText.length < 7) {
-                setError('Por favor ingresa un número válido');
+                setError(locale === 'en' ? 'Please enter a valid number.' : 'Por favor ingresa un número válido');
                 return;
             }
         }
         if (currentStep === 7) { // Email
             if (!userText.toLowerCase().includes('no') && !userText.includes('@')) {
-                setError('Formato de correo inválido');
+                setError(locale === 'en' ? 'Invalid email format' : 'Formato de correo inválido');
                 return;
             }
         }
@@ -124,24 +128,24 @@ export default function LeadGenBotV2() {
             updatedLeadData.company_name = userText;
             nextBotMessages = [{ 
                 id: Date.now() + 1, 
-                text: `Excelente. ¿Qué tipo de operación maneja ${userText}?`, 
+                text: t.b2b.bot.qType.replace('{name}', userText), 
                 sender: 'bot',
-                options: ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
+                options: locale === 'en' ? ['Restaurant', 'Hotel', 'School', 'Casino/Catering', 'Other'] : ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro']
             }];
         } else if (currentStep === 1) { // Captured Type
             updatedLeadData.business_type = userText;
-            let sizeOptions = ['Pequeño', 'Mediano', 'Grande'];
-            let sizeQuestion = '¿Cuál es el tamaño aproximado de tu operación?';
+            let sizeOptions = locale === 'en' ? ['Small', 'Medium', 'Large'] : ['Pequeño', 'Mediano', 'Grande'];
+            let sizeQuestion = t.b2b.bot.qSize;
 
-            if (userText === 'Restaurante') {
-                sizeQuestion = '¿Cuántas mesas o sedes manejas actualmente?';
-                sizeOptions = ['Boutique (< 10 mesas)', 'Estándar (10-30 mesas)', 'Gran Formato / Cadena'];
-            } else if (userText === 'Colegio') {
-                sizeQuestion = '¿Qué tipo de institución atiendes?';
-                sizeOptions = ['Jardín / Preescolar', 'Colegio (Primaria/Bach)', 'Universidad / Instituto'];
+            if (userText === 'Restaurante' || userText === 'Restaurant') {
+                sizeQuestion = locale === 'en' ? 'How many tables or locations do you currently manage?' : '¿Cuántas mesas o sedes manejas actualmente?';
+                sizeOptions = locale === 'en' ? ['Boutique (< 10 tables)', 'Standard (10-30 tables)', 'Chain / Large Format'] : ['Boutique (< 10 mesas)', 'Estándar (10-30 mesas)', 'Gran Formato / Cadena'];
+            } else if (userText === 'Colegio' || userText === 'School') {
+                sizeQuestion = locale === 'en' ? 'What type of institution do you serve?' : '¿Qué tipo de institución atiendes?';
+                sizeOptions = locale === 'en' ? ['Preschool', 'K-12 School', 'University / Institute'] : ['Jardín / Preescolar', 'Colegio (Primaria/Bach)', 'Universidad / Instituto'];
             } else if (userText === 'Hotel') {
-                sizeQuestion = '¿Cuántas habitaciones o huéspedes manejas?';
-                sizeOptions = ['Hotel Boutique (< 20 hab)', 'Mediano (20-80 hab)', 'Gran Hotel / Resort'];
+                sizeQuestion = locale === 'en' ? 'How many rooms or guests do you manage?' : '¿Cuántas habitaciones o huéspedes manejas?';
+                sizeOptions = locale === 'en' ? ['Boutique (< 20 rooms)', 'Medium (20-80 rooms)', 'Resort / Large Hotel'] : ['Hotel Boutique (< 20 hab)', 'Mediano (20-80 hab)', 'Gran Hotel / Resort'];
             }
 
             nextBotMessages = [{ 
@@ -153,31 +157,30 @@ export default function LeadGenBotV2() {
         } else if (currentStep === 2) { // Captured Size
             updatedLeadData.business_size = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: 'Entendido. Esta información es clave para priorizar tu atención.', sender: 'bot' },
-                { id: Date.now() + 2, text: '¿Podrías indicarnos la dirección para verificar la logística de entrega?', sender: 'bot' }
+                { id: Date.now() + 1, text: locale === 'en' ? 'Understood. This information is key to prioritizing your care.' : 'Entendido. Esta información es clave para priorizar tu atención.', sender: 'bot' },
+                { id: Date.now() + 2, text: t.b2b.bot.qAddress, sender: 'bot' }
             ];
         } else if (currentStep === 3) { // Captured Address
             updatedLeadData.address = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: 'Por favor, confirma tu ubicación exacta en el mapa para habilitar los beneficios mayoristas.', sender: 'bot' }
+                { id: Date.now() + 1, text: t.b2b.bot.qLocation, sender: 'bot' }
             ];
-            // We'll show a map after this message is displayed
         } else if (currentStep === 4) { // Location confirmed
             nextBotMessages = [
-                { id: Date.now() + 1, text: 'Ubicación verificada. Contamos con cobertura total en tu zona.', sender: 'bot' },
-                { id: Date.now() + 2, text: '¿Con quién tenemos el gusto de hablar?', sender: 'bot' }
+                { id: Date.now() + 1, text: locale === 'en' ? 'Location verified. We have full coverage in your area.' : 'Ubicación verificada. Contamos con cobertura total en tu zona.', sender: 'bot' },
+                { id: Date.now() + 2, text: t.b2b.bot.qName, sender: 'bot' }
             ];
         } else if (currentStep === 5) { // Captured Name
             updatedLeadData.contact_name = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: `Un gusto, ${userText}.`, sender: 'bot' },
-                { id: Date.now() + 2, text: '¿A qué número de WhatsApp podemos enviarte el catálogo?', sender: 'bot' }
+                { id: Date.now() + 1, text: locale === 'en' ? `Pleasure to meet you, ${userText}.` : `Un gusto, ${userText}.`, sender: 'bot' },
+                { id: Date.now() + 2, text: t.b2b.bot.qPhone, sender: 'bot' }
             ];
         } else if (currentStep === 6) { // Captured Phone
             updatedLeadData.phone = userText;
             nextBotMessages = [
-                { id: Date.now() + 1, text: 'Perfecto.', sender: 'bot' },
-                { id: Date.now() + 2, text: 'Por último, ¿tu correo electrónico? (O escribe "no" para saltar)', sender: 'bot' }
+                { id: Date.now() + 1, text: locale === 'en' ? 'Perfect.' : 'Perfecto.', sender: 'bot' },
+                { id: Date.now() + 2, text: t.b2b.bot.qEmail, sender: 'bot' }
             ];
         } else if (currentStep === 7) { // Captured Email
             updatedLeadData.email = userText.toLowerCase().includes('no') ? '' : userText;
@@ -248,7 +251,7 @@ export default function LeadGenBotV2() {
                 setIsTyping(false);
                 setMessages(prev => [...prev, {
                     id: Date.now(),
-                    text: 'Registro completado. Hemos recibido tus datos con éxito. Un Gerente de Cuenta se pondrá en contacto contigo a la brevedad.',
+                    text: t.b2b.bot.success,
                     sender: 'bot'
                 }]);
                 setIsSubmitting(false); 
@@ -258,7 +261,7 @@ export default function LeadGenBotV2() {
         } catch (error) {
             console.error(error);
             setIsTyping(false);
-            setMessages(prev => [...prev, { id: Date.now(), text: 'Ups, tuve un problema guardando tus datos. Por favor intenta de nuevo o usa el botón de WhatsApp.', sender: 'bot' }]);
+            setMessages(prev => [...prev, { id: Date.now(), text: t.b2b.bot.error, sender: 'bot' }]);
             setIsSubmitting(false);
         }
     };
@@ -390,12 +393,12 @@ export default function LeadGenBotV2() {
                                                 setIsTyping(false);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now(),
-                                                    text: 'Lo sentimos, por el momento FruFresco solo opera en Bogotá, Girardot, Melgar y Anapoima. No podemos habilitar el registro para tu ubicación actual.',
+                                                    text: t.b2b.bot.outOfZone,
                                                     sender: 'bot'
                                                 }]);
                                                 setMessages(prev => [...prev, {
                                                     id: Date.now() + 1,
-                                                    text: 'Guardaremos tu contacto para avisarte apenas abramos cobertura en tu zona. ¡Muchas gracias!',
+                                                    text: locale === 'en' ? 'We will save your contact to notify you as soon as we open coverage in your area. Thank you very much!' : 'Guardaremos tu contacto para avisarte apenas abramos cobertura en tu zona. ¡Muchas gracias!',
                                                     sender: 'bot'
                                                 }]);
                                             }, 1000);
@@ -411,7 +414,7 @@ export default function LeadGenBotV2() {
                 )}
                 {isTyping && (
                     <div style={{ alignSelf: 'flex-start', backgroundColor: '#E5E7EB', padding: '0.6rem 1rem', borderRadius: '4px 20px 20px 20px', fontSize: '0.8rem', color: '#4B5563', fontWeight: '500' }}>
-                        FruFresco está escribiendo...
+                        {t.b2b.bot.typing}
                     </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -432,7 +435,7 @@ export default function LeadGenBotV2() {
                                 type="text"
                                 value={inputValue}
                                 onChange={(e) => { setInputValue(e.target.value); setError(''); }}
-                                placeholder={currentStep === 5 ? "Tu nombre o cargo" : currentStep === 6 ? "Ej: 3001234567" : currentStep === 7 ? "tu@correo.com" : "Escribe aquí..."}
+                                placeholder={currentStep === 5 ? (locale === 'en' ? "Your name or position" : "Tu nombre o cargo") : currentStep === 6 ? (locale === 'en' ? "E.g. 3001234567" : "Ej: 3001234567") : currentStep === 7 ? "you@email.com" : t.b2b.bot.placeholder}
                                 autoFocus
                                 style={{
                                     flex: 1,

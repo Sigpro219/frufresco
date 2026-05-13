@@ -1,4 +1,5 @@
-import { supabase, type Product } from '../lib/supabase';
+import { type Product } from '../lib/supabase';
+import { getVisibleProducts, getTranslationCache } from '../lib/data';
 import ProductCard from './ProductCard';
 import { expandSearchQuery } from '@/lib/ai_search';
 import { CATEGORY_MAP } from '../lib/constants';
@@ -6,6 +7,7 @@ import { translations, Locale } from '../lib/translations';
 import Link from 'next/link';
 import FeaturedProductsCarousel from './FeaturedProductsCarousel';
 import ProductGridClient from './ProductGridClient';
+import { supabase } from '../lib/supabase';
 
 interface Props {
     q?: string;
@@ -16,48 +18,42 @@ interface Props {
 export default async function ProductGridContainer({ q, category, locale }: Props) {
     const t = translations[locale];
 
-    // 1. Data Fetching for the Grid
+    // 1. Data Fetching for the Grid (Optimized with Cache)
     const [
-        allVisibleResponse,
+        allVisible,
         sessionResponse,
-        translationCacheResponse
+        translationCache
     ] = await Promise.all([
-        supabase
-            .from('products')
-            .select('*')
-            .eq('is_active', true)
-            .eq('show_on_web', true)
-            .order('image_url', { ascending: false, nullsFirst: false })
-            .limit(300),
+        getVisibleProducts(),
         supabase.auth.getSession(),
-        locale === 'en'
-            ? supabase.from('product_translations_cache').select('source_text, translated_text').eq('lang', 'en')
-            : Promise.resolve({ data: [] })
+        locale === 'en' ? getTranslationCache() : Promise.resolve({})
     ]);
 
-    const allVisible = allVisibleResponse.data || [];
     const session = sessionResponse.data?.session;
     const userId = session?.user?.id;
 
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 
-        ? await supabase.from('product_nicknames').select('product_id, custom_name').eq('profile_id', userId)
+        ? await supabase.from('product_nicknames').select('product_id, nickname').eq('customer_id', userId)
         : { data: [] };
 
     const nicknameMap = (nicknamesData || []).reduce((acc, item) => ({
         ...acc,
-        [item.product_id]: item.custom_name
+        [item.product_id]: item.nickname
     }), {} as Record<string, string>);
 
-    const translationCache = (translationCacheResponse.data || []).reduce((acc, item) => ({
-        ...acc,
-        [item.source_text]: item.translated_text
-    }), {} as Record<string, string>);
+    // Translations are now an object from cache
 
-    const applyNicknames = (plist: Product[]) => plist.map(p => ({
-        ...p,
-        display_name: nicknameMap[p.id] || p.name_en || translationCache[p.name] || p.display_name || p.name
-    }));
+    const applyNicknames = (plist: Product[]) => plist.map(p => {
+        const baseTranslated = locale === 'en' 
+            ? (p.name_en || translationCache[p.name] || p.display_name || p.name)
+            : (p.display_name || p.name);
+        
+        return {
+            ...p,
+            display_name: nicknameMap[p.id] || baseTranslated
+        };
+    });
 
     const productsWithNicknames = applyNicknames(allVisible);
 

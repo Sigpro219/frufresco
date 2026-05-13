@@ -1,4 +1,4 @@
-import { supabase, type Product } from '../lib/supabase';
+import { getVisibleProducts, getAppSettings, getWebCategories } from '../lib/data';
 import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -11,20 +11,13 @@ import ProductGridContainer from '../components/ProductGridContainer';
 import ProductSkeleton from '../components/ProductSkeleton';
 import HeroActions from '../components/HeroActions';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600; // Revalidate every hour
 
 // --- SUB-COMPONENTS FOR STREAMING ---
 
 async function CategoryPills({ category, q, locale }: { category?: string, q?: string, locale: Locale }) {
     const t = translations[locale];
-    const { data: categoriesData } = await supabase
-      .from('products')
-      .select('category')
-      .eq('is_active', true)
-      .eq('show_on_web', true)
-      .not('category', 'is', null);
-
-    const dynamicCategories = ['Todos', ...Array.from(new Set((categoriesData || []).map(c => c.category)))];
+    const dynamicCategories = await getWebCategories();
     
     const getCategoryName = (cat: string) => {
         if (cat === 'Todos') return t.allCategories;
@@ -65,14 +58,8 @@ async function CategoryPills({ category, q, locale }: { category?: string, q?: s
 async function FeaturedSection({ locale }: { locale: Locale }) {
     const t = translations[locale];
     
-    // Fetch products for featured section
-    const { data: allVisible } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true)
-        .eq('show_on_web', true)
-        .order('image_url', { ascending: false, nullsFirst: false })
-        .limit(100);
+    // Fetch products from cache
+    const allVisible = await getVisibleProducts();
 
     if (!allVisible || allVisible.length === 0) return null;
 
@@ -117,8 +104,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const locale = (lang === 'en' ? 'en' : 'es') as Locale;
   const t = translations[locale];
 
-  // 1. CRITICAL FETCH (FAST)
-  const { data: appSettings } = await supabase.from('app_settings').select('key, value');
+  // 1. CRITICAL FETCH (FAST CACHED)
+  const appSettings = await getAppSettings();
   
   const getSetting = (key: string, defaultValue: string) => {
     const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
@@ -136,7 +123,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
       {/* HERO SECTION - Renders with appSettings */}
       <section className="hero-container" style={{ position: 'relative', height: '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', overflow: 'hidden', backgroundColor: '#1a4d2e' }}>
-        <Image src={heroImageUrl} alt="Hero" fill priority quality={85} style={{ objectFit: 'cover', zIndex: 0 }} />
+        <Image src={heroImageUrl} alt="Hero" fill priority quality={75} style={{ objectFit: 'cover', zIndex: 0 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.5))', zIndex: 1 }} />
         <div className="container" style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <h1 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: '4.5rem', fontWeight: '900', marginBottom: '1.5rem', textShadow: '0 10px 30px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{heroTitle}</h1>

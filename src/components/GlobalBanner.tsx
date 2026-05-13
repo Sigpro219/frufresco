@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSearchParams } from 'next/navigation';
+import { translations, Locale } from '../lib/translations';
 
 export default function GlobalBanner() {
   const searchParams = useSearchParams();
-  const locale = searchParams.get('lang') === 'en' ? 'en' : 'es';
+  const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+  const t = translations[locale];
   const [bannerText, setBannerText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,9 +25,8 @@ export default function GlobalBanner() {
         if (!isMounted) return;
 
         if (error) {
-            // Only log if it's not a known "no rows" error (though maybeSingle handles that)
-            // and not an abort error
             console.warn('GlobalBanner: Error fetching banner config', error.message);
+            setBannerText(t.bannerText);
             return;
         }
 
@@ -33,23 +34,18 @@ export default function GlobalBanner() {
           let text = data.value;
           text = text.replace(/Logistic\s*Pro/gi, 'FruFresco');
           setBannerText(text);
-        } else if (locale === 'en') {
-          // Fallback to Spanish banner if English one is not defined yet
-          const { data: esData } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'global_banner')
-            .maybeSingle();
-          if (esData?.value) setBannerText(esData.value.replace(/Logistic\s*Pro/gi, 'FruFresco'));
+        } else {
+          // Use hardcoded translation if DB is empty or key is missing
+          setBannerText(t.bannerText);
         }
       } catch (err: unknown) {
         if (!isMounted) return;
-        // console.error('GlobalBanner exception:', err); 
+        setBannerText(t.bannerText);
       }
     }
     fetchBanner();
     return () => { isMounted = false; };
-  }, []);
+  }, [locale]);
 
   if (!bannerText) return null;
 

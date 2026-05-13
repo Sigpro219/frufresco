@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 function CreateOrderContent() {
     const router = useRouter();
@@ -313,46 +314,49 @@ function CreateOrderContent() {
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
-                    user_id: null,
                     profile_id: finalProfileId,
                     total: calculateTotal(),
                     status: clientType === 'B2C' ? 'pending_approval' : 'approved',
                     type: clientType === 'B2B' ? 'b2b_credit' : 'b2c',
-                    origin_source: originSource,
                     delivery_date: deliveryDate,
                     delivery_slot: finalDeliverySlot,
-                    admin_notes: finalAdminNotes,
+                    admin_notes: `[ORIGIN: ${originSource}] ${finalAdminNotes}`,
                     shipping_address: shippingAddress,
-                    total_weight_kg: cart.reduce((acc, item) => acc + (item.qty * (item.product.weight_kg || 0)), 0),
                     latitude: latitude,
                     longitude: longitude
                 })
                 .select()
                 .single();
 
-            if (orderError) throw orderError;
+            if (orderError) {
+                console.error('Order Insert Error Detail:', orderError);
+                throw new Error(orderError.message);
+            }
 
             const itemsData = cart.map(item => ({
                 order_id: order.id,
                 product_id: item.product.id,
                 quantity: item.qty,
                 unit_price: item.product.base_price,
-                variant_label: item.variant_label,
-                selected_options: item.selected_options
+                nickname: item.variant_label
             }));
 
             const { error: itemsError } = await supabase
                 .from('order_items')
                 .insert(itemsData);
 
-            if (itemsError) throw itemsError;
+            if (itemsError) {
+                console.error('Order Items Insert Error Detail:', itemsError);
+                throw new Error(itemsError.message);
+            }
 
             alert('Pedido creado exitosamente ✅');
             router.push('/admin/orders/loading');
 
         } catch (e: any) {
-            console.error(e);
-            alert('Error creando pedido: ' + e.message);
+            console.error('Submit Full Error:', e);
+            const msg = e.message || JSON.stringify(e);
+            alert('Error creando pedido: ' + msg);
         } finally {
             setLoading(false);
         }

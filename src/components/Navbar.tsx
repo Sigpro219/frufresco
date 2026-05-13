@@ -1,18 +1,15 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../lib/cartContext';
 import { useAuth } from '../lib/authContext';
-
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
-import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2 } from 'lucide-react';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, Globe } from 'lucide-react';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
 import { translations, Locale } from '@/lib/translations';
-import { Globe } from 'lucide-react';
- import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function Navbar() {
     const { totalItems, totalPrice } = useCart();
@@ -328,11 +325,11 @@ export default function Navbar() {
                     {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
                             <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Home size={18} strokeWidth={2.5} /> Inicio
+                                <Home size={18} strokeWidth={2.5} /> {t.navHome}
                             </Link>
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Building2 size={18} strokeWidth={2.5} /> Canal Institucional
+                                    <Building2 size={18} strokeWidth={2.5} /> {t.navInstitutional}
                                 </Link>
                             )}
                             
@@ -355,7 +352,7 @@ export default function Navbar() {
                                             fontSize: '1.05rem'
                                         }}
                                     >
-                                        <Package size={18} strokeWidth={2.5} /> Operaciones <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+                                        <Package size={18} strokeWidth={2.5} /> {t.navOperations} <ChevronDown size={16} strokeWidth={3} style={{ transform: operationsOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
                                     </span>
                                     {operationsOpen && (
                                         <div style={{
@@ -371,28 +368,27 @@ export default function Navbar() {
                                             zIndex: 1000,
                                             padding: '8px 0'
                                         }}>
-                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Administración</div>
+                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.navAdministration}</div>
                                             {hasPermission('dashboard') && (
                                                 <Link href="/admin/dashboard" 
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={{ ...dropdownLinkStyle('#334155'), display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <Settings size={14} strokeWidth={2.5} /> Panel Admin
+                                                    <Settings size={14} strokeWidth={2.5} /> {t.navAdmin}
                                                 </Link>
                                             )}
                                             <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }}></div>
-                                            {/* Links condicionales basados en permisos */}
                                             {hasPermission('commercial') && (
                                                 <Link href="/admin/orders/loading" 
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle('#0891B2')}>
-                                                    📋 Pedidos
+                                                    📋 {t.navOrders}
                                                 </Link>
                                             )}
                                             {hasPermission('transport') && (
                                                 <Link href="/admin/transport" 
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle('#EA580C')}>
-                                                    🚛 Transporte
+                                                    🚛 {t.navTransport}
                                                 </Link>
                                             )}
                                             {hasPermission('commercial') && (
@@ -400,17 +396,17 @@ export default function Navbar() {
                                                     <Link href="/admin/commercial/billing" 
                                                         onClick={() => setOperationsOpen(false)}
                                                         style={dropdownLinkStyle('#6366F1')}>
-                                                        💰 Facturación
+                                                        💰 {t.navBilling}
                                                     </Link>
                                                     <Link href="/admin/procurement" 
                                                         onClick={() => setOperationsOpen(false)}
                                                         style={dropdownLinkStyle('#0EA5E9')}>
-                                                        🛒 Compras
+                                                        🛒 {t.navProcurement}
                                                     </Link>
                                                     <Link href="/admin/commercial"
                                                         onClick={() => setOperationsOpen(false)}
                                                         style={dropdownLinkStyle('#059669')}>
-                                                        💼 Comercial
+                                                        💼 {t.navCommercial}
                                                     </Link>
                                                 </>
                                             )}
@@ -418,14 +414,14 @@ export default function Navbar() {
                                                 <Link href="/admin/hr"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle('#8B5CF6')}>
-                                                    👥 Talento Humano
+                                                    👥 {t.navHR}
                                                 </Link>
                                             )}
                                             {hasPermission('inventory') && (
                                                 <Link href="/admin/commercial/inventory"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle('#0369A1')}>
-                                                    📦 Control de Inventarios
+                                                    📦 {t.navInventory}
                                                 </Link>
                                             )}
 
@@ -434,7 +430,7 @@ export default function Navbar() {
                                                 <Link href="/admin/strategy" 
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={{ ...dropdownLinkStyle('#7C3AED'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
-                                                    🧠 Inteligencia & Estrategia
+                                                    🧠 {t.navStrategy}
                                                 </Link>
                                             )}
 
@@ -442,7 +438,7 @@ export default function Navbar() {
                                                 <Link href="/ops" 
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={{ ...dropdownLinkStyle('#10B981'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
-                                                    🏭 Portal Operacional
+                                                    🏭 {t.navOpsPortal}
                                                 </Link>
                                             )}
                                         </div>
@@ -470,14 +466,14 @@ export default function Navbar() {
                                 transition: 'all 0.2s ease'
                             }}>
                                 <ShoppingCart size={20} color="var(--primary)" strokeWidth={2.5} /> 
-                                <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{totalItems}</span>
+                                <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{mounted ? totalItems : 0}</span>
                             </button>
                         </Link>
-                        {totalItems > 0 && (
+                        {mounted && totalItems > 0 && (
                             <div className="cart-tooltip">
                                 <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Total Estimado</div>
                                 <div style={{ fontSize: '1.15rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                    ${totalPrice.toLocaleString()}
+                                    ${mounted ? totalPrice.toLocaleString() : '0'}
                                 </div>
                             </div>
                         )}

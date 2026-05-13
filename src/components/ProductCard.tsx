@@ -5,7 +5,8 @@ import { Product } from '../lib/supabase';
 import { Apple, Eye, Info } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import QuickViewModal from './QuickViewModal';
+import dynamic from 'next/dynamic';
+const QuickViewModal = dynamic(() => import('./QuickViewModal'), { ssr: false });
 import { useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
 
@@ -85,7 +86,7 @@ export default function ProductCard({ product }: { product: Product }) {
                             fill
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             quality={75} 
-                            onLoadingComplete={() => setImageLoaded(true)}
+                            onLoad={() => setImageLoaded(true)}
                             style={{ 
                                 objectFit: 'cover',
                                 transition: 'transform 0.8s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.5s ease-in-out',

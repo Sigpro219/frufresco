@@ -42,8 +42,7 @@ export default function OrderDetailPage() {
         product_id: string;
         quantity: number;
         unit_price: number;
-        variant_label?: string;
-        selected_options?: Record<string, string>;
+        nickname?: string;
         product?: {
             id: string;
             name: string;
@@ -323,12 +322,11 @@ export default function OrderDetailPage() {
 
             const upsertPayload = editItems.map(item => ({
                 id: item.id,
-                order_id: id as string, // Ensure id is string
+                order_id: id as string,
                 product_id: item.product_id,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
-                selected_options: item.selected_options, // Save Variants!
-                variant_label: item.variant_label || formatVariantLabel(item.selected_options)
+                nickname: item.nickname || formatVariantLabel(null) // Format placeholder or existing
             }));
 
             // Split
@@ -471,8 +469,7 @@ export default function OrderDetailPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <tbody>
                                     {(isEditing ? editItems : items).map((item, i) => {
-                                        // Display Label: Either item.variant_label OR format(item.selected_options)
-                                        const label = item.variant_label || formatVariantLabel(item.selected_options);
+                                        const label = item.nickname;
 
                                         return (
                                             <tr key={i} style={{ borderBottom: '1px solid #F3F4F6' }}>

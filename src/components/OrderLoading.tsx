@@ -11,7 +11,6 @@ interface Order {
     delivery_date: string;
     status: string;
     total: number;
-    origin_source: string;
     type: string;
     created_at: string;
     sequence_id?: number;
@@ -19,6 +18,8 @@ interface Order {
     latitude?: number;
     longitude?: number;
     total_weight_kg?: number;
+    admin_notes?: string;
+    special_notes?: string;
     profile?: {
         company_name?: string;
         latitude?: number;
@@ -77,9 +78,7 @@ export default function OrderLoading() {
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
-                if (filterSource !== 'all') {
-                    query = query.eq('origin_source', filterSource);
-                }
+                // Removed origin_source DB filter because column is missing
                 if (filterStatus !== 'all') {
                     query = query.eq('status', filterStatus);
                 }
@@ -114,6 +113,17 @@ export default function OrderLoading() {
 
     // CLIENT-SIDE FILTERING
     const filteredOrders = orders.filter(order => {
+        // 1. Source Filter (Manual check in notes since column is missing)
+        if (filterSource !== 'all') {
+            const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+            if (!notes.includes(`[origin: ${filterSource}]`)) {
+                // Fallback for old orders or if tag is missing
+                if (filterSource === 'web' && order.type !== 'b2c_wompi') return false;
+                if (filterSource !== 'web') return false; // Hard to guess others
+            }
+        }
+
+        // 2. Search Term
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
         return (
@@ -250,9 +260,13 @@ export default function OrderLoading() {
                                                 {order.shipping_address}
                                             </td>
                                             <td style={{ padding: '1rem' }}>
-                                                {order.origin_source === 'web' && '🌐'}
-                                                {order.origin_source === 'whatsapp' && '💬'}
-                                                {order.origin_source === 'phone' && '📞'}
+                                                 {(() => {
+                                                     const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+                                                     if (notes.includes('[origin: web]') || order.type === 'b2c_wompi') return '🌐';
+                                                     if (notes.includes('[origin: whatsapp]')) return '💬';
+                                                     if (notes.includes('[origin: phone]')) return '📞';
+                                                     return '❓';
+                                                 })()}
                                             </td>
                                             <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#059669' }}>
                                                 ${order.total.toLocaleString()}

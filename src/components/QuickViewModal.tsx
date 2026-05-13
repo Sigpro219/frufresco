@@ -10,6 +10,7 @@ import { translations, Locale } from '../lib/translations';
 interface Product {
     id: string;
     name: string;
+    name_en?: string;
     base_price: number;
     unit_of_measure: string;
     image_url: string;
@@ -19,6 +20,7 @@ interface Product {
     options_config?: any[];
     variants?: any[];
     web_conversion_factor?: number;
+    display_name?: string;
 }
 
 interface QuickViewModalProps {
@@ -64,7 +66,8 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
         const optionString = Object.entries(selections)
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
-        return optionString ? `${product.name} (${optionString})` : product.name;
+        const baseName = locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name);
+        return optionString ? `${baseName} (${optionString})` : baseName;
     };
 
     const handleAddToCart = () => {
@@ -160,17 +163,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
                         />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <h2 style={{ fontSize: '1.35rem', fontWeight: '800', margin: '0 0 0.5rem', color: '#111827' }}>{product.name}</h2>
-                        <span style={{ 
-                            display: 'inline-block',
-                            backgroundColor: '#F3F4F6', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '0.75rem', 
-                            fontWeight: '600', 
-                            color: '#6B7280',
-                            marginBottom: '0.75rem'
-                        }}>SKU: {product.sku || 'N/A'}</span>
+                        <h2 style={{ fontSize: '1.35rem', fontWeight: '800', margin: '0 0 0.5rem', color: '#111827' }}>
+                            {locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name)}
+                        </h2>
                         <p style={{
                             fontSize: '1.75rem',
                             fontWeight: '900',

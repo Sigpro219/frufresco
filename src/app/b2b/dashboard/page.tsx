@@ -3,15 +3,17 @@
 import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/authContext';
 import { supabase } from '../../../lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3 } from 'lucide-react';
+import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info } from 'lucide-react';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
+import { translations, Locale } from '@/lib/translations';
 
 interface OrderItem {
     id: string;
     product_id: string;
     product_name: string;
+    product_name_en?: string;
     product_image: string;
     quantity: number;
     unit: string;
@@ -44,6 +46,10 @@ export default function B2BDashboard() {
     const [agreements, setAgreements] = useState<any[]>([]);
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
     const isMounted = useRef(true);
+    const hasFetchedInitial = useRef(false);
+    const searchParams = useSearchParams();
+    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+    const t = translations[locale];
 
     const categories = Object.keys(CATEGORY_MAP);
 
@@ -66,7 +72,7 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, unit_of_measure, image_url, sku, options_config')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config')
                     .eq('category', selectedCategory)
                     .eq('is_active', true)
                     .order('name')
@@ -112,7 +118,7 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, unit_of_measure, image_url, sku, options_config')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config')
                     .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
                     .limit(5)
@@ -160,10 +166,11 @@ export default function B2BDashboard() {
         const product = selectedProductForModal;
 
         // Construir nombre con variantes (ej: "Lulo (Maduro, Grande)")
-        let finalName = product.name;
+        const baseName = locale === 'en' ? (product.name_en || product.name) : product.name;
+        let finalName = baseName;
         const optionValues = Object.values(selectedOptions).filter(v => v);
         if (optionValues.length > 0) {
-            finalName = `${product.name} (${optionValues.join(', ')})`;
+            finalName = `${baseName} (${optionValues.join(', ')})`;
         }
 
         const exists = orderItems.find(item => item.product_name === finalName && item.product_id === product.id);
@@ -174,13 +181,18 @@ export default function B2BDashboard() {
             const newItem: OrderItem = {
                 id: Math.random().toString(36).substr(2, 9), // Temp ID
                 product_id: product.id,
-                product_name: finalName,
+                product_name: product.name,
+                product_name_en: product.name_en,
                 product_image: product.image_url || '',
                 quantity: modalQuantity,
                 unit: product.unit_of_measure || 'kg',
                 variant_label: optionValues.join(', ') || undefined
             };
-            setOrderItems(prev => [...prev, newItem].sort((a, b) => a.product_name.localeCompare(b.product_name)));
+            setOrderItems(prev => [...prev, newItem].sort((a, b) => {
+                const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
+                const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
+                return nameA.localeCompare(nameB);
+            }));
         }
 
         setSelectedProductForModal(null);
@@ -194,12 +206,14 @@ export default function B2BDashboard() {
         const calculateTime = async (signal?: AbortSignal) => {
             try {
                 // Check Global Cutoff Switch
-                const { data: cutoffSetting } = await supabase
+                const { data: cutoffData } = await supabase
                     .from('app_settings')
                     .select('value')
                     .eq('key', 'enable_cutoff_rules')
                     .abortSignal(signal as any)
-                    .single();
+                    .limit(1);
+
+                const cutoffSetting = (cutoffData && cutoffData.length > 0) ? cutoffData[0] : null;
 
                 if (!isMounted.current) return;
 
@@ -217,10 +231,8 @@ export default function B2BDashboard() {
                     } else {
                         nextDeliveryDate.setDate(now.getDate() + 1);
                     }
-                    console.log('⏱️ Cutoff Rules ENABLED');
                 } else {
                     nextDeliveryDate.setDate(now.getDate() + 1);
-                    console.log('🛑 Cutoff Rules DISABLED');
                 }
 
                 if (isMounted.current) {
@@ -242,25 +254,26 @@ export default function B2BDashboard() {
         };
     }, []);
 
-    // Fetch last order items or fallback to Top 10 for new clients
+    const lastFetchedLocale = useRef<string | null>(null);
+ 
     useEffect(() => {
         const controller = new AbortController();
         const signal = controller.signal;
-
+ 
         const fetchInitialOrder = async () => {
             if (!user) return;
-
+ 
             try {
                 // 1. Try to fetch last order
                 const { data: lastOrder } = await supabase
                     .from('orders')
                     .select(`
                         id,
-                        order_items (
+                        order_items(
                             id,
                             product_id,
                             quantity,
-                            products (name, unit_of_measure, image_url)
+                            products(name, name_en, unit_of_measure, image_url)
                         )
                     `)
                     .eq('user_id', user.id)
@@ -277,17 +290,22 @@ export default function B2BDashboard() {
                         id: item.id,
                         product_id: item.product_id,
                         product_name: p?.name || 'Producto',
+                        product_name_en: p?.name_en,
                         product_image: p?.image_url || '',
                         quantity: item.quantity,
                         unit: p?.unit_of_measure || 'kg'
                     };
-                }).sort((a: any, b: any) => a.product_name.localeCompare(b.product_name));
+                }).sort((a: any, b: any) => {
+                    const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
+                    const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
+                    return nameA.localeCompare(nameB);
+                });
                 setOrderItems(items);
             } else {
                 // 2. Fallback: New Client - Load Top 10 products
                 const { data: topProducts } = await supabase
                     .from('products')
-                    .select('id, name, unit_of_measure, image_url')
+                    .select('id, name, name_en, unit_of_measure, image_url')
                     .eq('is_active', true)
                     .limit(10);
 
@@ -304,6 +322,7 @@ export default function B2BDashboard() {
                         id: Math.random().toString(36).substr(2, 9),
                         product_id: p.id,
                         product_name: p.name,
+                        product_name_en: p.name_en,
                         product_image: p.image_url || '',
                         quantity: 0,
                         unit: p.unit_of_measure || 'kg'
@@ -319,12 +338,14 @@ export default function B2BDashboard() {
             }
         };
 
-        if (!authLoading && user) {
+        if (!authLoading && user && (!hasFetchedInitial.current || lastFetchedLocale.current !== locale)) {
+            hasFetchedInitial.current = true;
+            lastFetchedLocale.current = locale;
             fetchInitialOrder();
         }
-
+ 
         return () => controller.abort();
-    }, [authLoading, user]);
+    }, [authLoading, user, locale]);
 
     const updateQuantity = (id: string, newQty: number) => {
         if (newQty < 0) return;
@@ -347,7 +368,7 @@ export default function B2BDashboard() {
                 const { data, error } = await supabase
                     .from('orders')
                     .select('*')
-                    .eq('customer_name', profile.company_name)
+                    .eq('profile_id', profile.id)
                     .order('created_at', { ascending: false });
 
                 if (error) throw error;
@@ -373,17 +394,17 @@ export default function B2BDashboard() {
                 const { data: ordersData, error: ordersError } = await supabase
                     .from('orders')
                     .select('id')
-                    .eq('customer_name', profile.company_name);
+                    .eq('profile_id', profile.id);
 
                 if (ordersError) throw ordersError;
                 
                 if (ordersData && ordersData.length > 0) {
                     const orderIds = ordersData.map(o => o.id);
                     
-                    // Fetch all items from those orders
+                    // Fetch all items from those orders joining with products
                     const { data: itemsData, error: itemsError } = await supabase
                         .from('order_items')
-                        .select('product_name, quantity, unit, product_image')
+                        .select('quantity, products(name, name_en, unit_of_measure, image_url)')
                         .in('order_id', orderIds);
 
                     if (itemsError) throw itemsError;
@@ -391,17 +412,19 @@ export default function B2BDashboard() {
                     // Aggregate
                     const aggregation: Record<string, any> = {};
                     itemsData?.forEach(item => {
-                        if (!aggregation[item.product_name]) {
-                            aggregation[item.product_name] = {
-                                name: item.product_name,
+                        const p = Array.isArray(item.products) ? item.products[0] : item.products;
+                        const pName = locale === 'en' ? (p?.name_en || p?.name) : (p?.name || 'Producto');
+                        if (!aggregation[pName]) {
+                            aggregation[pName] = {
+                                name: pName,
                                 totalQuantity: 0,
-                                unit: item.unit,
-                                image: item.product_image,
+                                unit: p?.unit_of_measure || 'un',
+                                image: p?.image_url || '',
                                 ordersCount: 0
                             };
                         }
-                        aggregation[item.product_name].totalQuantity += Number(item.quantity || 0);
-                        aggregation[item.product_name].ordersCount += 1;
+                        aggregation[pName].totalQuantity += Number(item.quantity || 0);
+                        aggregation[pName].ordersCount += 1;
                     });
 
                     const sorted = Object.values(aggregation)
@@ -483,7 +506,6 @@ export default function B2BDashboard() {
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
-                    user_id: user?.id,
                     profile_id: profile?.id,
                     type: 'b2b_credit',
                     status: 'pending_approval',
@@ -491,7 +513,7 @@ export default function B2BDashboard() {
                     shipping_address: profile?.address_main || 'Dirección registrada',
                     subtotal: 0,
                     total: 0,
-                    origin_source: 'web'
+                    special_notes: '[ORIGIN: web]'
                 })
                 .select()
                 .single();
@@ -509,7 +531,7 @@ export default function B2BDashboard() {
 
             await supabase.from('order_items').insert(itemsToInsert);
 
-            alert('✅ ¡Pedido recibido con éxito! Tu entrega ha sido programada.');
+            alert(t.b2b.dashboard.successMsg);
             setIsSummaryModalOpen(false);
             router.push('/');
         } catch (error: any) {
@@ -523,7 +545,7 @@ export default function B2BDashboard() {
         return (
             <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
                 <div className="container" style={{ padding: '4rem', textAlign: 'center' }}>
-                    <p>Cargando tu pedido...</p>
+                    <p>{t.b2b.dashboard.loadingOrder}</p>
                 </div>
             </main>
         );
@@ -544,7 +566,7 @@ export default function B2BDashboard() {
                         marginBottom: '0.75rem',
                         letterSpacing: '-0.04em'
                     }}>
-                        {profile?.company_name || 'Panel Institucional'}
+                        {profile?.company_name || t.b2b.dashboard.title}
                     </h1>
 
                 </div>
@@ -575,7 +597,7 @@ export default function B2BDashboard() {
                             backdropFilter: 'blur(8px)'
                         }}
                     >
-                        <ShoppingCart size={18} strokeWidth={2.5} /> Pedido Rápido
+                        <ShoppingCart size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabQuickOrder}
                     </button>
                     <button 
                         onClick={() => setActiveTab('invoices')}
@@ -596,7 +618,7 @@ export default function B2BDashboard() {
                             backdropFilter: 'blur(8px)'
                         }}
                     >
-                        <FileText size={18} strokeWidth={2.5} /> Mis Facturas
+                        <FileText size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabInvoices}
                     </button>
                     <button 
                         onClick={() => setActiveTab('consumption')}
@@ -617,7 +639,7 @@ export default function B2BDashboard() {
                             backdropFilter: 'blur(8px)'
                         }}
                     >
-                        <BarChart3 size={18} strokeWidth={2.5} /> Mi Consumo
+                        <BarChart3 size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabConsumption}
                     </button>
                     <button 
                         onClick={() => setActiveTab('agreements')}
@@ -638,7 +660,7 @@ export default function B2BDashboard() {
                             backdropFilter: 'blur(8px)'
                         }}
                     >
-                        <Rocket size={18} strokeWidth={2.5} /> Mis Acuerdos
+                        <Rocket size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabAgreements}
                     </button>
                 </div>
 
@@ -677,10 +699,10 @@ export default function B2BDashboard() {
                                         gap: '10px',
                                         letterSpacing: '-0.02em'
                                     }}>
-                                        <Package size={22} strokeWidth={2.5} /> Pedido Sugerido
+                                        <Package size={22} strokeWidth={2.5} /> {t.b2b.dashboard.cardTitle}
                                     </h2>
                                     <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem', fontWeight: '500' }}>
-                                        Personaliza cantidades o añade nuevos productos
+                                        {t.b2b.dashboard.cardDesc}
                                     </p>
                                 </div>
                                 {orderItems.length > 0 && (
@@ -700,7 +722,7 @@ export default function B2BDashboard() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        <Trash2 size={16} /> Borrar Todo
+                                        <Trash2 size={16} /> {t.b2b.dashboard.btnClear}
                                     </button>
                                 )}
                             </div>
@@ -713,7 +735,7 @@ export default function B2BDashboard() {
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Buscar productos por nombre o SKU..."
+                                        placeholder={t.b2b.dashboard.searchPlaceholder}
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         style={{
@@ -784,7 +806,7 @@ export default function B2BDashboard() {
                                         border: '1px solid var(--border)'
                                     }}>
                                         {isSearching ? (
-                                            <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>Buscando...</p>
+                                            <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
                                         ) : (
                                             searchResults.map(p => (
                                                 <div
@@ -803,10 +825,10 @@ export default function B2BDashboard() {
                                                 >
                                                     <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
                                                     <div style={{ flex: 1 }}>
-                                                        <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{p.name}</p>
+                                                        <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
                                                         <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>SKU: {p.sku}</p>
                                                     </div>
-                                                    <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ Agregar</span>
+                                                    <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
                                                 </div>
                                             ))
                                         )}
@@ -836,7 +858,7 @@ export default function B2BDashboard() {
                                         cursor: 'pointer',
                                         whiteSpace: 'nowrap'
                                     }}
-                                >Todos</button>
+                                >{t.b2b.dashboard.allCategories}</button>
                                 {categories.map(cat => (
                                     <button
                                         key={cat}
@@ -853,16 +875,16 @@ export default function B2BDashboard() {
                                             cursor: 'pointer',
                                             whiteSpace: 'nowrap'
                                         }}
-                                    >{CATEGORY_MAP[cat] || cat}</button>
+                                    >{t.categories[cat as keyof typeof t.categories] || cat}</button>
                                 ))}
                             </div>
 
                             {/* Category Products Results */}
                             {selectedCategory && (
                                 <div style={{ marginTop: '1rem', borderTop: '1px solid #f0f0f0', paddingTop: '1rem', padding: '0 1rem 1rem' }}>
-                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Catálogo: {CATEGORY_MAP[selectedCategory] || selectedCategory}</h4>
+                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t.navCatalog}: {t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory}</h4>
                                     {isLoadingCategory ? (
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando articulos...</p>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
                                     ) : categoryProducts.length > 0 ? (
                                         <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
                                             {categoryProducts.map(p => (
@@ -873,13 +895,15 @@ export default function B2BDashboard() {
                                                         setSelectedProductForModal(p);
                                                     }}
                                                     style={{
-                                                        padding: '0.75rem',
+                                                        padding: '0',
                                                         border: '1px solid var(--border)',
                                                         borderRadius: 'var(--radius-md)',
                                                         cursor: 'pointer',
                                                         textAlign: 'center',
                                                         backgroundColor: '#fff',
-                                                        transition: 'all 0.2s'
+                                                        transition: 'all 0.2s',
+                                                        display: 'flex',
+                                                        flexDirection: 'column'
                                                     }}
                                                     onMouseEnter={(e) => {
                                                         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -892,14 +916,20 @@ export default function B2BDashboard() {
                                                         e.currentTarget.style.borderColor = 'var(--border)';
                                                     }}
                                                 >
-                                                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '4px', marginBottom: '0.5rem' }} />
-                                                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '700', lineHeight: '1.2', color: 'var(--text-main)' }}>{p.name}</p>
-                                                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
+                                                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
+                                                    <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                        <h5 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                            {locale === 'en' ? (p.name_en || p.name) : p.name}
+                                                        </h5>
+                                                        <p style={{ margin: 'auto 0 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                                                            SKU: {p.sku} | {p.unit_of_measure}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No hay productos disponibles por ahora.</p>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.noProducts}</p>
                                     )}
                                 </div>
                             )}
@@ -927,7 +957,7 @@ export default function B2BDashboard() {
                                                         margin: 0,
                                                         color: 'var(--text-main)',
                                                         letterSpacing: '-0.02em'
-                                                    }}>{item.product_name}</p>
+                                                    }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}</p>
                                                     {item.variant_label && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{item.variant_label}</span>}
                                                 </div>
                                             </div>
@@ -990,7 +1020,7 @@ export default function B2BDashboard() {
                                                         fontWeight: '700',
                                                         textTransform: 'uppercase'
                                                     }}
-                                                >Quitar</button>
+                                                > {t.b2b.dashboard.remove} </button>
                                             </div>
                                         </div>
                                     ))}
@@ -1009,7 +1039,7 @@ export default function B2BDashboard() {
                                                 border: '1px solid #FEE2E2',
                                                 display: 'inline-block'
                                             }}>
-                                                ⚠️ Agrega cantidades mayores a 0 para continuar
+                                                {t.b2b.dashboard.minQtyWarning}
                                             </p>
                                         )}
                                         <button
@@ -1036,9 +1066,9 @@ export default function B2BDashboard() {
                                                 margin: '0 auto'
                                             }}
                                         >
-                                            {submitting ? 'Emitiendo...' : (
+                                            {submitting ? t.b2b.dashboard.submitting : (
                                                 <>
-                                                    <ShoppingCart size={26} strokeWidth={2.5} /> Finalizar Pedido
+                                                    <ShoppingCart size={26} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
                                                 </>
                                             )}
                                         </button>
@@ -1050,13 +1080,13 @@ export default function B2BDashboard() {
                                         <Package size={40} color="#94A3B8" />
                                     </div>
                                     <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', fontWeight: '500' }}>
-                                        No hay productos seleccionados para hoy.
+                                        {t.b2b.dashboard.emptyOrder}
                                     </p>
                                     <button 
-                                        onClick={() => setSelectedCategory('Frutas')}
+                                        onClick={() => setSelectedCategory('FR')}
                                         className="btn btn-primary"
                                         style={{ padding: '0.8rem 2rem' }}
-                                    >Explorar Catálogo</button>
+                                    >{t.b2b.dashboard.exploreCatalog}</button>
                                 </div>
                             )}
                         </div>
@@ -1084,10 +1114,10 @@ export default function B2BDashboard() {
                                     alignItems: 'center',
                                     gap: '10px'
                                 }}>
-                                    <Smile size={22} color="var(--primary)" strokeWidth={2.5} /> ¿Necesitas un requerimiento especial?
+                                    <Smile size={22} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
                                 </h3>
                                 <p style={{ margin: '0.4rem 0 0', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                    Tu ejecutivo de cuenta FruFresco está disponible para asistirte.
+                                    {t.b2b.dashboard.specialReqDesc}
                                 </p>
                             </div>
                             <a
@@ -1110,7 +1140,7 @@ export default function B2BDashboard() {
                                     boxShadow: '0 6px 12px rgba(7, 94, 84, 0.15)'
                                 }}
                             >
-                                WhatsApp Directo
+                                {t.b2b.dashboard.whatsappBtn}
                             </a>
                         </div>
                     </>
@@ -1136,10 +1166,10 @@ export default function B2BDashboard() {
                                     alignItems: 'center',
                                     gap: '12px'
                                 }}>
-                                    <FileText size={28} color="var(--primary)" strokeWidth={2.5} /> Historial de Facturas
+                                    <FileText size={28} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.invoiceHistory}
                                 </h2>
                                 <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
-                                    Gestiona tus pedidos anteriores y descarga comprobantes.
+                                    {t.b2b.dashboard.invoiceDesc}
                                 </p>
                             </div>
                         </div>
@@ -1147,18 +1177,18 @@ export default function B2BDashboard() {
                         {isLoadingInvoices ? (
                             <div style={{ padding: '3rem', textAlign: 'center' }}>
                                 <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
-                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Cargando facturas...</p>
+                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{t.b2b.dashboard.loadingInvoices}</p>
                             </div>
                         ) : invoices.length > 0 ? (
                             <div style={{ overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.75rem' }}>
                                     <thead>
                                         <tr style={{ textAlign: 'left', color: '#64748B', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            <th style={{ padding: '0 1rem' }}>ID Pedido</th>
-                                            <th style={{ padding: '0 1rem' }}>Fecha</th>
-                                            <th style={{ padding: '0 1rem' }}>Monto</th>
-                                            <th style={{ padding: '0 1rem' }}>Estado</th>
-                                            <th style={{ padding: '0 1rem', textAlign: 'right' }}>Acciones</th>
+                                            <th style={{ padding: '0 1rem' }}>{t.b2b.dashboard.orderId}</th>
+                                            <th style={{ padding: '0 1rem' }}>{t.b2b.dashboard.date}</th>
+                                            <th style={{ padding: '0 1rem' }}>{t.b2b.dashboard.amount}</th>
+                                            <th style={{ padding: '0 1rem' }}>{t.b2b.dashboard.status}</th>
+                                            <th style={{ padding: '0 1rem', textAlign: 'right' }}>{t.b2b.dashboard.actions}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1175,7 +1205,7 @@ export default function B2BDashboard() {
                                                     #{inv.id.substring(0, 8)}
                                                 </td>
                                                 <td style={{ padding: '1rem', color: '#64748B', fontWeight: '500' }}>
-                                                    {new Date(inv.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    {new Date(inv.created_at).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </td>
                                                 <td style={{ padding: '1rem', fontWeight: '800', color: 'var(--primary)' }}>
                                                     ${Number(inv.total_amount || 0).toLocaleString()}
@@ -1190,7 +1220,7 @@ export default function B2BDashboard() {
                                                         backgroundColor: inv.status === 'delivered' ? '#DCFCE7' : inv.status === 'pending' ? '#FEF3C7' : '#F1F5F9',
                                                         color: inv.status === 'delivered' ? '#166534' : inv.status === 'pending' ? '#92400E' : '#475569'
                                                     }}>
-                                                        {inv.status === 'delivered' ? 'Entregado' : inv.status === 'pending' ? 'Pendiente' : inv.status}
+                                                        {inv.status === 'delivered' ? t.b2b.dashboard.delivered : inv.status === 'pending' ? t.b2b.dashboard.pending : inv.status}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '1rem', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
@@ -1207,7 +1237,7 @@ export default function B2BDashboard() {
                                                             fontSize: '0.85rem',
                                                             textDecoration: 'underline'
                                                         }}
-                                                    >Re-pedir</button>
+                                                    >{t.b2b.dashboard.reorder}</button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -1219,9 +1249,9 @@ export default function B2BDashboard() {
                                 <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                                     <ShoppingCart size={32} color="#94A3B8" />
                                 </div>
-                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin facturas todavía</h3>
-                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>Cuando realices tu primer pedido institucional, aparecerá aquí.</p>
-                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">Hacer un Pedido</button>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>{t.b2b.dashboard.noInvoices}</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>{t.b2b.dashboard.noInvoicesDesc}</p>
+                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">{t.b2b.dashboard.makeOrder}</button>
                             </div>
                         )}
                     </div>
@@ -1246,17 +1276,17 @@ export default function B2BDashboard() {
                                 alignItems: 'center',
                                 gap: '12px'
                             }}>
-                                <BarChart3 size={28} color="var(--primary)" strokeWidth={2.5} /> Mi Consumo Habitual
+                                <BarChart3 size={28} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.consumptionTitle}
                             </h2>
                             <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
-                                Analiza tus hábitos de compra y optimiza tus pedidos.
+                                {t.b2b.dashboard.consumptionDesc}
                             </p>
                         </div>
 
                         {isLoadingConsumption ? (
                             <div style={{ padding: '3rem', textAlign: 'center' }}>
                                 <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
-                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Calculando analíticas...</p>
+                                <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{t.b2b.dashboard.calculating}</p>
                             </div>
                         ) : consumptionData.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
@@ -1290,7 +1320,7 @@ export default function B2BDashboard() {
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>{item.name}</h4>
-                                                <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Total: {item.totalQuantity} {item.unit}</p>
+                                                <p style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Total: {item.totalQuantity} {item.unit}</p>
                                             </div>
                                         </div>
                                         
@@ -1304,8 +1334,8 @@ export default function B2BDashboard() {
                                                 }}></div>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>
-                                                <span>Frecuencia</span>
-                                                <span>{item.ordersCount} pedidos</span>
+                                                <span>{t.b2b.dashboard.frequency}</span>
+                                                <span>{item.ordersCount} {t.b2b.dashboard.ordersLabel}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1316,9 +1346,9 @@ export default function B2BDashboard() {
                                 <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                                     <BarChart3 size={32} color="#94A3B8" />
                                 </div>
-                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin datos de consumo</h3>
-                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>Realiza pedidos para generar analíticas personalizadas.</p>
-                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">Hacer un Pedido</button>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>{t.b2b.dashboard.noConsumption}</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 1.5rem', fontWeight: '500' }}>{t.b2b.dashboard.noConsumptionDesc}</p>
+                                <button onClick={() => setActiveTab('order')} className="btn btn-primary">{t.b2b.dashboard.makeOrder}</button>
                             </div>
                         )}
                         
@@ -1332,7 +1362,7 @@ export default function B2BDashboard() {
                                 alignItems: 'center'
                             }}>
                                 <div style={{ opacity: 0.7, fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                                    * Basado en tus últimos {invoices.length} pedidos institucionales.
+                                    * {t.b2b.dashboard.basedOn.replace('{count}', invoices.length.toString())}
                                 </div>
                                 <button onClick={() => alert('Pronto: Reporte en PDF')} style={{
                                     backgroundColor: '#EFF6FF',
@@ -1343,7 +1373,7 @@ export default function B2BDashboard() {
                                     fontSize: '0.85rem',
                                     fontWeight: '800',
                                     cursor: 'pointer'
-                                }}>Exportar Reporte</button>
+                                }}>{t.b2b.dashboard.exportReport}</button>
                             </div>
                         )}
                     </div>
@@ -1368,12 +1398,12 @@ export default function B2BDashboard() {
                                 alignItems: 'center',
                                 gap: '12px'
                             }}>
-                                <Rocket size={24} color="var(--primary)" /> Mis Acuerdos Comerciales
+                                <Rocket size={24} color="var(--primary)" /> {t.b2b.dashboard.agreementsTitle}
                             </h2>
                         </div>
 
                         {isLoadingAgreements ? (
-                            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Cargando acuerdos...</p>
+                            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingAgreements}</p>
                         ) : agreements.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
                                 {agreements.map((agreement) => (
@@ -1403,14 +1433,14 @@ export default function B2BDashboard() {
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>
-                                                    Modelo de Precios Activo
+                                                    {t.b2b.dashboard.activeModel}
                                                 </div>
                                                 <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-main)' }}>
                                                     {agreement.pricing_models?.name || 'Acuerdo de Precios Personalizado'}
                                                 </h3>
                                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        📅 Válido hasta: <strong>{new Date(agreement.valid_until).toLocaleDateString()}</strong>
+                                                        📅 {t.b2b.dashboard.validUntil} <strong>{new Date(agreement.valid_until).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US')}</strong>
                                                     </span>
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         🏷️ Ref: <strong>{agreement.quote_number || 'N/A'}</strong>
@@ -1429,7 +1459,7 @@ export default function B2BDashboard() {
                                                 fontWeight: '900',
                                                 textTransform: 'uppercase'
                                             }}>
-                                                Vigente
+                                                {t.b2b.dashboard.statusActive}
                                             </span>
                                         </div>
                                     </div>
@@ -1440,9 +1470,9 @@ export default function B2BDashboard() {
                                 <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                                     <Rocket size={32} color="#94A3B8" />
                                 </div>
-                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>Sin acuerdos activos</h3>
-                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0', fontWeight: '500' }}>Actualmente no tienes un modelo de precios fijo vinculado.</p>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Contacta a tu asesor comercial para activar beneficios institucionales.</p>
+                                <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: '800' }}>{t.b2b.dashboard.noAgreements}</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0', fontWeight: '500' }}>{t.b2b.dashboard.noAgreementsDesc}</p>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>{t.b2b.dashboard.contactAdvisor}</p>
                             </div>
                         )}
                     </div>
@@ -1486,8 +1516,8 @@ export default function B2BDashboard() {
                             fontWeight: '900',
                             letterSpacing: '-0.02em',
                             color: 'var(--text-main)'
-                        }}>{selectedProductForModal.name}</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontWeight: '500' }}>Personaliza tu selección:</p>
+                        }}>{locale === 'en' ? (selectedProductForModal.name_en || selectedProductForModal.name) : selectedProductForModal.name}</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontWeight: '500' }}>{t.b2b.dashboard.modalTitle}</p>
 
                         {/* Variantes / Opciones */}
                         {selectedProductForModal.options_config && Array.isArray(selectedProductForModal.options_config) && (
@@ -1509,7 +1539,7 @@ export default function B2BDashboard() {
                                                 backgroundColor: '#F9FAFB'
                                             }}
                                         >
-                                            <option value="">Seleccionar {opt.name}...</option>
+                                            <option value="">{t.b2b.dashboard.selectOption.replace('{name}', opt.name)}</option>
                                             {opt.values?.map((val: string) => (
                                                 <option key={val} value={val}>{val}</option>
                                             ))}
@@ -1554,14 +1584,14 @@ export default function B2BDashboard() {
                                 className="btn"
                                 style={{ flex: 1, backgroundColor: '#f3f4f6', color: 'var(--text-main)' }}
                             >
-                                Cancelar
+                                {t.b2b.dashboard.cancelBtn}
                             </button>
                             <button
                                 onClick={confirmModalAdd}
                                 className="btn btn-primary"
                                 style={{ flex: 1 }}
                             >
-                                Agregar
+                                {t.b2b.dashboard.addBtn}
                             </button>
                         </div>
                     </div>
@@ -1614,10 +1644,10 @@ export default function B2BDashboard() {
                                 margin: 0,
                                 letterSpacing: '-0.04em'
                             }}>
-                                Confirmación de Pedido
+                                {t.b2b.dashboard.confirmTitle}
                             </h2>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '0.5rem', fontWeight: '500' }}>
-                                Revisa los detalles finales antes de enviar.
+                                {t.b2b.dashboard.confirmDesc}
                             </p>
                         </div>
 
@@ -1633,15 +1663,18 @@ export default function B2BDashboard() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
                                 <thead style={{ backgroundColor: 'white', position: 'sticky', top: 0 }}>
                                     <tr>
-                                        <th style={{ textAlign: 'left', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>Producto</th>
-                                        <th style={{ textAlign: 'right', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>Cantidad</th>
+                                        <th style={{ textAlign: 'left', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>{t.b2b.dashboard.product}</th>
+                                        <th style={{ textAlign: 'right', padding: '1rem', borderBottom: '1px solid #E5E7EB', color: '#6B7280', fontSize: '0.75rem', textTransform: 'uppercase' }}>{t.b2b.dashboard.quantity}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {orderItems.filter(i => i.quantity > 0).map(item => (
                                         <tr key={item.id}>
-                                            <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E5E7EB', color: '#374151', fontWeight: '600' }}>
-                                                {item.product_name}
+                                            <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E5E7EB' }}>
+                                                <p style={{ margin: 0, fontWeight: '800', color: 'var(--text-main)', fontSize: '1rem', letterSpacing: '-0.02em' }}>
+                                                    {locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                    {item.variant_label && <span style={{ fontWeight: '500', color: 'var(--text-muted)', marginLeft: '6px', fontSize: '0.9rem' }}>({item.variant_label})</span>}
+                                                </p>
                                             </td>
                                             <td style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right', color: 'var(--primary-dark)', fontWeight: '800' }}>
                                                 {item.quantity} {item.unit}
@@ -1662,7 +1695,7 @@ export default function B2BDashboard() {
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3B82F6', fontWeight: '800' }}>
-                                    <Truck size={18} /> Fecha requerida:
+                                    <Truck size={18} /> {t.b2b.dashboard.deliveryDate}:
                                 </div>
                                 <input
                                     type="date"
@@ -1701,7 +1734,7 @@ export default function B2BDashboard() {
                                     justifyContent: 'center',
                                     border: '1px solid var(--border)'
                                 }}
-                                title="Imprimir copia"
+                                title={t.b2b.dashboard.printCopy}
                             >
                                 <Printer size={20} />
                             </button>
@@ -1720,7 +1753,7 @@ export default function B2BDashboard() {
                                     fontSize: '0.95rem'
                                 }}
                             >
-                                Ajustar Pedido
+                                {t.b2b.dashboard.adjustOrder}
                             </button>
                             <button
                                 onClick={handleFinalSubmit}
@@ -1743,9 +1776,9 @@ export default function B2BDashboard() {
                                     boxShadow: '0 12px 24px rgba(26, 77, 46, 0.2)'
                                 }}
                             >
-                                {submitting ? 'Enviando...' : (
+                                {submitting ? t.b2b.dashboard.sending : (
                                     <>
-                                        <Rocket size={20} strokeWidth={2.5} /> Enviar Ahora
+                                        <Rocket size={20} strokeWidth={2.5} /> {t.b2b.dashboard.sendNow}
                                     </>
                                 )}
                             </button>

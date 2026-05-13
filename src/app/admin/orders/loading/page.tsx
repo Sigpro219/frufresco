@@ -67,9 +67,10 @@ export default function OrderLoadingPage() {
             if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
             if (command === 'b2b') return isB2B;
             if (command === 'b2c' || command === 'hogar') return !isB2B;
-            if (command === 'web' || command === '🛒' || command === 'app') return order.origin_source === 'web';
-            if (command === 'whatsapp' || command === '💬') return order.origin_source === 'whatsapp';
-            if (command === 'telefono' || command === 'phone' || command === '📞') return order.origin_source === 'phone';
+            const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+            if (command === 'web' || command === '🛒' || command === 'app') return notes.includes('[origin: web]') || order.type === 'b2c_wompi';
+            if (command === 'whatsapp' || command === '💬') return notes.includes('[origin: whatsapp]');
+            if (command === 'telefono' || command === 'phone' || command === '📞') return notes.includes('[origin: phone]');
             if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
             if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
             if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
@@ -99,8 +100,9 @@ export default function OrderLoadingPage() {
             (order.customer_phone || '').toLowerCase().includes(term) ||
             (order.shipping_address || '').toLowerCase().includes(term) ||
             (order.status || '').toLowerCase().includes(term) ||
-            (order.origin_source || '').toLowerCase().includes(term) ||
-            (order.paymentMethod || '').toLowerCase().includes(term)
+            (order.paymentMethod || '').toLowerCase().includes(term) ||
+            (order.admin_notes || '').toLowerCase().includes(term) ||
+            (order.special_notes || '').toLowerCase().includes(term)
         );
     });
 

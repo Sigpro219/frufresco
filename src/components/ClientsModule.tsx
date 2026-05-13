@@ -35,6 +35,7 @@ interface Profile {
     needs_crates?: boolean;
     document_type?: string;
     remission_with_prices?: boolean;
+    print_invoice?: boolean;
     total_orders?: number;
     total_spent?: number;
     last_order?: string;
@@ -1297,7 +1298,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         )}
                         <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>📄</span> {profileData.document_type === 'remission' ? (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)') : 'FACTURA'}
+                            <span>📄</span> {
+                                profileData.document_type === 'invoice' 
+                                    ? (profileData.print_invoice ? 'FACTURA IMPRESA' : 'FACTURA DIGITAL')
+                                    : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)')
+                            }
                         </div>
                     </div>
                 )}
@@ -1529,6 +1534,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
                 <div style={{ fontSize: '0.8rem', color: '#64748B' }}>📞 {client.phone}</div>
+                {client.email && <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '600', marginTop: '2px' }}>📧 {client.email}</div>}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{client.city} / {client.municipality}</div>
@@ -1648,6 +1654,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         needs_crates: editData?.needs_crates || false,
         document_type: editData?.document_type || 'invoice',
         remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
+        print_invoice: (editData as any)?.print_invoice || false,
         is_corporate_parent: editData?.is_corporate_parent || false,
         parent_id: editData?.parent_id || '',
         branch_id: editData?.branch_id || '',
@@ -1692,6 +1699,20 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     const [parentSearch, setParentSearch] = useState('');
     const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
     const [isExceptionsModalOpen, setIsExceptionsModalOpen] = useState(false);
+    const [exceptionCount, setExceptionCount] = useState(0);
+
+    const fetchExceptionCount = async () => {
+        if (!editData?.id) return;
+        const { count } = await supabase
+            .from('product_nicknames')
+            .select('*', { count: 'exact', head: true })
+            .eq('customer_id', editData.id);
+        setExceptionCount(count || 0);
+    };
+
+    useEffect(() => {
+        fetchExceptionCount();
+    }, [editData?.id]);
     const [stableClientId] = useState(editData?.id || crypto.randomUUID());
 
     useEffect(() => {
@@ -1937,7 +1958,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     <ClientExceptionsModal 
                         clientId={stableClientId} 
                         readOnly={isReadOnly}
-                        onClose={() => setIsExceptionsModalOpen(false)} 
+                        onClose={() => {
+                            setIsExceptionsModalOpen(false);
+                            fetchExceptionCount();
+                        }} 
                     />
                 )}
                 {/* HEADER PREMIUM */}
@@ -2024,7 +2048,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                         
                         {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
                         <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
@@ -2033,69 +2057,63 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>IDENTIFICACIÓN Y VÍNCULOS</h4>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: formData.is_corporate_parent ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '1.2rem' }}>
-                                {!formData.is_corporate_parent && (
-                                    <div style={{ position: 'relative' }}>
-                                        <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
+                                    {!formData.is_corporate_parent && (
                                         <div style={{ position: 'relative' }}>
-                                            <input 
-                                                type="text"
-                                                placeholder="Buscar Matriz..."
-                                                value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
-                                                onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
-                                                onChange={(e) => {
-                                                    if (isReadOnly) return;
-                                                    setParentSearch(e.target.value);
-                                                    if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
-                                                    setIsParentDropdownOpen(true);
-                                                }}
-                                                readOnly={isEdit || isReadOnly}
-                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
-                                            />
-                                            {isParentDropdownOpen && !formData.parent_id && (
-                                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
-                                                    {potentialParents.filter(p => 
-                                                        p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
-                                                        p.nit?.includes(parentSearch) ||
-                                                        p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
-                                                    ).map(p => (
-                                                        <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
-                                                            <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{p.company_name}</div>
-                                                            <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
-                                                                <span>NIT: {p.nit}</span>
-                                                                <span>•</span>
-                                                                <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Buscar Matriz..."
+                                                    value={formData.parent_id ? (potentialParents.find(p => p.id === formData.parent_id)?.company_name || parentSearch) : parentSearch}
+                                                    onFocus={() => !isReadOnly && setIsParentDropdownOpen(true)}
+                                                    onChange={(e) => {
+                                                        if (isReadOnly) return;
+                                                        setParentSearch(e.target.value);
+                                                        if (formData.parent_id) setFormData({ ...formData, parent_id: '' });
+                                                        setIsParentDropdownOpen(true);
+                                                    }}
+                                                    readOnly={isEdit || isReadOnly}
+                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
+                                                />
+                                                {isParentDropdownOpen && !formData.parent_id && (
+                                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                                                        {potentialParents.filter(p => 
+                                                            p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
+                                                            p.nit?.includes(parentSearch) ||
+                                                            p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
+                                                        ).map(p => (
+                                                            <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
+                                                                <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{p.company_name}</div>
+                                                                <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
+                                                                    <span>NIT: {p.nit}</span>
+                                                                    <span>•</span>
+                                                                    <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {formData.is_corporate_parent ? (
-                                    <>
-                                        <FormField label="Razón Social Legal" value={formData.razon_social} onChange={(v) => setFormData({...formData, razon_social: v, company_name: v})} required readOnly={isEdit || isReadOnly} />
-                                        <FormField label="NIT" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} />
-                                        <FormField label="Email Principal (Facturación)" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} required readOnly={isReadOnly} />
-                                    </>
-                                ) : (
-                                    <>
-                                        <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} />
-                                    </>
-                                )}
-                            </div>
+                                    {formData.is_corporate_parent ? (
+                                        <>
+                                            <FormField label="Razón Social Legal" value={formData.razon_social} onChange={(v) => setFormData({...formData, razon_social: v, company_name: v})} required readOnly={isEdit || isReadOnly} />
+                                            <FormField label="NIT" value={formData.nit} onChange={(v) => setFormData({...formData, nit: v})} required readOnly={isEdit || isReadOnly} />
+                                            <FormField label="Email Principal (Facturación)" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} required readOnly={isReadOnly} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FormField label="Nombre Comercial Sucursal" value={formData.company_name} onChange={(v) => setFormData({...formData, company_name: v})} required readOnly={isReadOnly} />
+                                            <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
+                                        </>
+                                    )}
+                                </div>
 
-                            {!formData.is_corporate_parent && (
-                                <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #E2E8F0', paddingTop: '1.5rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem', marginBottom: '1.5rem' }}>
-                                        <FormField label="Razón Social (Heredada)" value={formData.razon_social} onChange={() => {}} readOnly />
-                                        <FormField label="NIT (Heredado)" value={formData.nit} onChange={() => {}} readOnly />
-                                        <FormField label="ID Sucursal" value={formData.branch_id} onChange={(v) => setFormData({...formData, branch_id: v})} placeholder="Ej: SUC-01" readOnly={isReadOnly} />
-                                    </div>
 
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginTop: '1.5rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
                                             <span style={{ fontSize: '1rem' }}>📧</span>
                                             <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Configuración de Notificación de Factura</span>
@@ -2126,9 +2144,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
                                 </div>
-                            )}
                         </section>
 
                         {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
@@ -2570,34 +2586,53 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </span>
                                         </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase' }}>Tipo de Documento</label>
-                                            <select 
-                                                value={formData.document_type} 
-                                                onChange={(e) => setFormData({...formData, document_type: e.target.value as any})}
-                                                disabled={isReadOnly}
-                                                style={{ height: '42px', padding: '0 0.8rem', borderRadius: '14px', border: '2px solid #E0F2FE', fontWeight: '700', outline: 'none', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'pointer' }}
-                                            >
-                                                <option value="invoice">Factura Electrónica</option>
-                                                <option value="remission">Remisión Administrativa</option>
-                                            </select>
-                                        </div>
-
-                                        <div 
-                                            onClick={() => {
-                                                if (isReadOnly) return;
-                                                setFormData({...formData, remission_with_prices: !formData.remission_with_prices});
-                                            }}
-                                            style={{ 
-                                                height: '42px', padding: '0 1.2rem', borderRadius: '14px', border: `2px solid ${formData.remission_with_prices ? '#10B981' : '#E0F2FE'}`, 
-                                                backgroundColor: formData.remission_with_prices ? '#ECFDF5' : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s', opacity: formData.document_type === 'remission' ? 1 : 0.5, pointerEvents: (formData.document_type === 'remission' && !isReadOnly) ? 'auto' : (isReadOnly ? 'none' : 'none'),
-                                                boxShadow: formData.remission_with_prices ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none'
-                                            }}
-                                        >
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.remission_with_prices ? '#10B981' : '#CBD5E1', boxShadow: formData.remission_with_prices ? '0 0 8px #10B981' : 'none' }}></div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: formData.remission_with_prices ? '#065F46' : '#64748B' }}>
-                                                {formData.remission_with_prices ? 'CON PRECIOS' : 'SIN PRECIOS'}
-                                            </span>
+                                        <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>Configuración de Documento (Excluyente)</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
+                                                {[
+                                                    { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: '📧', doc: 'invoice', withPrices: true, print: false },
+                                                    { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: '🖨️', doc: 'invoice', withPrices: true, print: true },
+                                                    { id: 'remission_prices', label: 'REM. CON $', icon: '📄', doc: 'remission', withPrices: true, print: true },
+                                                    { id: 'remission_no_prices', label: 'REM. SIN $', icon: '📝', doc: 'remission', withPrices: false, print: true }
+                                                ].map((opt) => {
+                                                    const isActive = formData.document_type === opt.doc && 
+                                                                   (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={opt.id}
+                                                            onClick={() => {
+                                                                if (isReadOnly) return;
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    document_type: opt.doc,
+                                                                    remission_with_prices: opt.withPrices,
+                                                                    print_invoice: opt.print
+                                                                });
+                                                            }}
+                                                            style={{
+                                                                padding: '0.5rem 0.4rem',
+                                                                borderRadius: '12px',
+                                                                border: `1.5px solid ${isActive ? '#10B981' : '#E2E8F0'}`,
+                                                                backgroundColor: isActive ? '#ECFDF5' : 'white',
+                                                                cursor: isReadOnly ? 'default' : 'pointer',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '4px',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: isActive ? '0 4px 10px rgba(16, 185, 129, 0.1)' : 'none',
+                                                                opacity: isReadOnly ? 0.8 : 1,
+                                                                minHeight: '60px'
+                                                            }}
+                                                        >
+                                                            <span style={{ fontSize: '1.1rem' }}>{opt.icon}</span>
+                                                            <div style={{ fontSize: '0.6rem', fontWeight: '900', color: isActive ? '#065F46' : '#475569', textAlign: 'center' }}>{opt.label}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2626,6 +2661,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                         >
                                             <span>⚙️</span> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
+                                            {exceptionCount > 0 && (
+                                                <span style={{ backgroundColor: '#0EA5E9', color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px' }}>
+                                                    {exceptionCount}
+                                                </span>
+                                            )}
                                         </button>
                                     </div>
                                 </section>
@@ -2746,6 +2786,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<any[]>([]);
     const [isAdding, setIsAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     
     const [newException, setNewException] = useState({
         product_id: '',
@@ -2760,7 +2801,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         const { data: excData } = await supabase
             .from('product_nicknames')
             .select('*, products(name, sku)')
-            .eq('profile_id', clientId);
+            .eq('customer_id', clientId);
         
         const { data: prodData } = await supabase
             .from('products')
@@ -2776,20 +2817,24 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
     const handleSave = async () => {
         if (!newException.product_id) return;
-        const { error } = await supabase
-            .from('product_nicknames')
-            .insert([{
-                profile_id: clientId,
-                product_id: newException.product_id,
-                nickname: newException.nickname,
-                picking_note: newException.picking_note
-            }]);
+        
+        const payload = {
+            customer_id: clientId,
+            product_id: newException.product_id,
+            nickname: newException.nickname || '',
+            picking_note: newException.picking_note || ''
+        };
+
+        const { error } = editingId 
+            ? await supabase.from('product_nicknames').update(payload).eq('id', editingId)
+            : await supabase.from('product_nicknames').insert([payload]);
         
         if (error) {
-            window.showToast?.('Error al guardar la excepción', 'error');
+            window.showToast?.(`Error [${error.code}]: ${error.message}`, 'error');
         } else {
-            window.showToast?.('Excepción guardada con éxito', 'success');
+            window.showToast?.(editingId ? 'Excepción actualizada' : 'Excepción guardada', 'success');
             setIsAdding(false);
+            setEditingId(null);
             setNewException({ product_id: '', nickname: '', picking_note: '' });
             setSearchTerm('');
             fetchData();
@@ -2926,6 +2971,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button onClick={() => {
                                         setIsAdding(false);
+                                        setEditingId(null);
+                                        setNewException({ product_id: '', nickname: '', picking_note: '' });
                                         setSearchTerm('');
                                     }} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', background: 'white', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
                                     <button onClick={handleSave} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '800', cursor: 'pointer' }}>Guardar Regla</button>
@@ -2957,7 +3004,24 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         </div>
                                     </div>
                                     {!readOnly && (
-                                        <button onClick={() => handleDelete(exc.id)} style={{ border: 'none', background: '#FEE2E2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button 
+                                                onClick={() => {
+                                                    setEditingId(exc.id);
+                                                    setNewException({
+                                                        product_id: exc.product_id,
+                                                        nickname: exc.nickname,
+                                                        picking_note: exc.picking_note
+                                                    });
+                                                    setSearchTerm(`[${exc.products?.sku}] ${exc.products?.name}`);
+                                                    setIsAdding(true);
+                                                }} 
+                                                style={{ border: 'none', background: '#F1F5F9', color: '#64748B', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button onClick={() => handleDelete(exc.id)} style={{ border: 'none', background: '#FEE2E2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                                        </div>
                                     )}
                                 </div>
                             ))
