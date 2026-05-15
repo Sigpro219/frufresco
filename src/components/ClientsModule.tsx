@@ -18,6 +18,7 @@ interface Profile {
     nit?: string;
     contact_name?: string;
     phone?: string;
+    contact_phone?: string;
     email?: string;
     address?: string;
     city?: string;
@@ -151,10 +152,14 @@ export default function ClientsModule() {
                 .eq('status', 'agreement')
                 .gte('valid_until', new Date().toISOString());
             
-            setClientsB2B(b2bData || []);
+            const normalizeProfile = (p: any) => ({
+                ...p,
+                phone: p.phone || p.contact_phone || ''
+            });
+            setClientsB2B((b2bData || []).map(normalizeProfile));
             setLeads(leadData || []);
             setPricingModels(pmData || []);
-            setClientsB2C(b2cData || []);
+            setClientsB2C((b2cData || []).map(normalizeProfile));
             setOrders(orderData || []);
             setAllAgreements(agreementData || []);
         } catch (error) {
@@ -300,7 +305,7 @@ export default function ClientsModule() {
     const tabs = [
         { id: 'dashboard', label: '📊 Resumen', icon: '📈' },
         { id: 'b2b', label: '🏢 Institucionales', icon: '🏛️' },
-        { id: 'b2c', label: '🏠 Consumidor Final', icon: '👤' },
+        { id: 'b2c', label: '🏠 Hogar', icon: '👤' },
         { id: 'leads', label: '🔔 Prospectos', icon: '🔥' },
     ];
 
@@ -459,7 +464,7 @@ export default function ClientsModule() {
                                     fontSize: '0.85rem'
                                 }}
                             >
-                                <span>👤</span> Nuevo B2C
+                                <span>👤</span> Nuevo Cliente Hogar
                             </button>
                         )}
 
@@ -637,7 +642,7 @@ export default function ClientsModule() {
                                 {/* Top Row: Main KPIs */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
                                     <KPICard title="Clientes B2B" value={clientsB2B.length} icon="🏛️" color="#E0F2FE" textColor="#0369A1" subtitle="Empresas operativas" />
-                                    <KPICard title="Clientes B2C" value={clientsB2C.length} icon="👥" color="#DCFCE7" textColor="#15803D" subtitle="Consumidores activos" />
+                                    <KPICard title="Clientes Hogar" value={clientsB2C.length} icon="👥" color="#DCFCE7" textColor="#15803D" subtitle="Clientes Hogar activos" />
                                     <KPICard 
                                         title="Tareas Críticas" 
                                         value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
@@ -677,7 +682,7 @@ export default function ClientsModule() {
                                     <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
                                         <div style={{ marginBottom: '2.5rem' }}>
                                             <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>💰 Distribución de Ventas</h3>
-                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Balance B2B vs B2C (Histórico)</p>
+                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Balance Institucional vs Hogar (Histórico)</p>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '180px' }}>
                                             <SalesPieChart 
@@ -783,7 +788,7 @@ export default function ClientsModule() {
                                                 onEdit={() => handleEditClient(client)}
                                             />
                                         ))}
-                                        {clientsB2C.length === 0 && <EmptyState text="No hay consumidores registrados aún." />}
+                                        {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
                                     </div>
                                 ) : (
                                     <div style={{ backgroundColor: 'white', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
@@ -937,7 +942,7 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0369A1' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal B2B</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Institucional</div>
                         <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0369A1' }}>${totalB2B.toLocaleString()}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2bPercent)}% del total</div>
                     </div>
@@ -945,7 +950,7 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#15803D' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal B2C</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Hogar</div>
                         <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#15803D' }}>${totalB2C.toLocaleString()}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2cPercent)}% del total</div>
                     </div>
@@ -1124,7 +1129,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
                     textTransform: 'uppercase'
                 }}>
-                    {isB2B ? 'Institucional' : isB2C ? 'Consumidor' : 'Prospecto'}
+                    {isB2B ? 'Institucional' : isB2C ? 'Hogar' : 'Prospecto'}
                 </div>
 
                 {/* TRAFFIC LIGHT (Semáforo Comercial) */}
@@ -1569,7 +1574,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                         {(client as any).status}
                     </span>
                 ) : (
-                    <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Consumidor</span>
+                    <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
                 )}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
@@ -1898,6 +1903,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             
             const payload: any = {
                 ...coreData,
+                contact_phone: formData.phone,
                 latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
                 longitude: formData.longitude ? parseFloat(String(formData.longitude)) : null,
                 logistics_data: formData.logistics_data,
@@ -1990,7 +1996,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
                             <span style={{ fontSize: '1.5rem' }}>{isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
                             <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
-                                {isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Consumidor' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta B2C' : 'Cuenta Institucional'}`)}
+                                {isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
                             </h2>
                         </div>
                         <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>

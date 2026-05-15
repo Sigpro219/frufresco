@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { isInsidePolygon, Point } from '@/lib/geoUtils';
+import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
+import { Map, Marker } from '@vis.gl/react-google-maps';
+import { MapPin, X, CheckCircle2, Map as MapIcon, Loader2 } from 'lucide-react';
 
 function CreateOrderContent() {
     const router = useRouter();
@@ -32,6 +36,14 @@ function CreateOrderContent() {
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
+    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [lastGeocodedAddress, setLastGeocodedAddress] = useState('');
+    const [hasCoverageOverride, setHasCoverageOverride] = useState(false);
+    const [coverageOverrideReason, setCoverageOverrideReason] = useState('');
+    const [isOverrideMode, setIsOverrideMode] = useState(false);
+    const [createdB2CProfileId, setCreatedB2CProfileId] = useState<string | null>(null);
+
+
     
     // Payment Method State
     const [paymentMethod, setPaymentMethod] = useState('contra_entrega');
@@ -46,6 +58,18 @@ function CreateOrderContent() {
     const [manualDeliveryTime, setManualDeliveryTime] = useState('');
     const [manualDeliveryMargin, setManualDeliveryMargin] = useState(15);
     const [manualDeliveryNote, setManualDeliveryNote] = useState('');
+
+    // Estilos para ocultar flechas del input number
+    const hideSpinnersStyle = `
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    `;
     const [adminNotes, setAdminNotes] = useState('');
 
     // MODAL STATE (For Product Variants)
@@ -54,11 +78,44 @@ function CreateOrderContent() {
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     // Cart Logic
-    const [cart, setCart] = useState<{ product: any, qty: number, variant_label?: string, selected_options?: any }[]>([]);
+    const [cart, setCart] = useState<{ product: any, qty: any, variant_label?: string, selected_options?: any }[]>([]);
+
+    // --- STAGING AREA STATE (Mesa de Trabajo) ---
+    const [isStaging, setIsStaging] = useState(false);
+    const [stagedItems, setStagedItems] = useState<any[]>([]);
+    const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
+    const [outOfZone, setOutOfZone] = useState(false);
+    const [parsingFile, setParsingFile] = useState(false);
+    const [importValidation, setImportValidation] = useState<{
+        clientInDocument: string,
+        isMatch: boolean,
+        documentType: 'PDF' | 'EXCEL' | 'CSV' | null
+    }>({ clientInDocument: '', isMatch: true, documentType: null });
 
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        async function fetchGeofence() {
+            const { data } = await supabase.from('app_settings').select('value').eq('key', 'geofence_b2c_poly').single();
+            if (data) setB2cGeofence(JSON.parse(data.value));
+        }
+        fetchGeofence();
+    }, []);
+
+    // Perform validation whenever coordinates change
+    useEffect(() => {
+        if (latitude && longitude && b2cGeofence.length > 0) {
+            const inside = isInsidePolygon({ lat: latitude, lng: longitude }, b2cGeofence);
+            setOutOfZone(!inside);
+            if (inside) {
+                setHasCoverageOverride(false);
+                setCoverageOverrideReason('');
+                setIsOverrideMode(false);
+            }
+        }
+    }, [latitude, longitude, b2cGeofence]);
 
     const loadData = async () => {
         try {
@@ -73,7 +130,7 @@ function CreateOrderContent() {
 
             const fetchB2C = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality')
+                .select('id, company_name, contact_name, nit, address, contact_phone, phone, latitude, longitude, email, city, municipality, delivery_restrictions, geocoding_status')
                 .eq('role', 'b2c_client') // Matched with Admin Drivers Core
                 .order('contact_name', { ascending: true });
 
@@ -109,12 +166,26 @@ function CreateOrderContent() {
         setSelectedClientB2C(client.id);
         setGuestInfo({
             name: client.contact_name || client.company_name || '',
-            phone: client.contact_phone || '',
+            phone: client.phone || client.contact_phone || '',
             address: client.address || '',
             city: client.city || 'Bogotá',
             email: client.email || '',
             nit: client.nit || ''
         });
+        if (client.latitude && client.longitude) {
+            setLatitude(client.latitude);
+            setLongitude(client.longitude);
+            setLastGeocodedAddress(client.address || '');
+            if (client.geocoding_status === 'OVERRIDE' || (client.delivery_restrictions && client.delivery_restrictions.includes('EXCEPCIÓN'))) {
+                setOutOfZone(true);
+                setHasCoverageOverride(true);
+                setCoverageOverrideReason(client.delivery_restrictions ? client.delivery_restrictions.replace('EXCEPCIÓN AUTORIZADA: ', '') : 'Excepción Guardada en BD');
+            } else {
+                setOutOfZone(false);
+                setHasCoverageOverride(false);
+                setCoverageOverrideReason('');
+            }
+        }
         setClientSearchB2C('');
     };
 
@@ -149,10 +220,15 @@ function CreateOrderContent() {
 
             if (existingIndex >= 0) {
                 const newCart = [...prev];
-                newCart[existingIndex].qty += qty;
-                return newCart;
+                const item = { ...newCart[existingIndex] };
+                item.qty += qty;
+                
+                // Prepend and remove from old position
+                const filteredCart = newCart.filter((_, i) => i !== existingIndex);
+                return [item, ...filteredCart];
             } else {
-                return [...prev, { product, qty, variant_label: variantLabel, selected_options: optionsRaw }];
+                // Prepend new item
+                return [{ product, qty, variant_label: variantLabel, selected_options: optionsRaw }, ...prev];
             }
         });
     };
@@ -165,7 +241,7 @@ function CreateOrderContent() {
         setSelectedProductForModal(null);
     };
 
-    const updateQty = (index: number, newQty: number) => {
+    const updateQty = (index: number, newQty: any) => {
         setCart(prev => prev.map((item, i) =>
             i === index ? { ...item, qty: newQty } : item
         ));
@@ -176,7 +252,10 @@ function CreateOrderContent() {
     };
 
     const calculateTotal = () => {
-        return cart.reduce((acc, item) => acc + (item.product.base_price * item.qty), 0);
+        return cart.reduce((acc, item) => {
+            const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+            return acc + (item.product.base_price * qtyNum);
+        }, 0);
     };
 
     const selectClient = (client: any) => {
@@ -203,6 +282,100 @@ function CreateOrderContent() {
             }
         );
     };
+    // --- ORDER IMPORT LOGIC (Mesa de Trabajo) ---
+
+    // --- ORDER IMPORT LOGIC (Mesa de Trabajo) ---
+
+    const parseOrderWithAI = async (file: File) => {
+        setParsingFile(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/api/ai/extract-order', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Error en la API de extracción');
+            }
+
+            const data = await response.json();
+            
+            // Intentamos encontrar el mejor SKU sugerido para cada item extraído por la IA
+            const suggested = data.items.map((item: any) => {
+                // Algoritmo de Fuzzy Match simple
+                const match = products.find(p => 
+                    item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                    p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
+                );
+                return {
+                    id: crypto.randomUUID(),
+                    originalName: item.originalName,
+                    quantity: item.quantity,
+                    suggestedProduct: match || null,
+                    status: match ? 'MATCH' : 'PENDING'
+                };
+            });
+
+            // Lógica de Validación de Cliente (Auditoría)
+            const selectedDetails = clientType === 'B2B' ? getSelectedClientDetails() : getSelectedB2CDetails();
+            const clientInFile = data.clientInDocument;
+            
+            // Verificamos si hay coincidencia entre el documento y el sistema
+            const selectedName = (selectedDetails?.company_name || selectedDetails?.contact_name || '').toUpperCase();
+            const detectedName = clientInFile.toUpperCase();
+            
+            const isMatch = selectedName.includes(detectedName.split(' ')[0]) || 
+                            detectedName.includes(selectedName.split(' ')[0]);
+
+            setImportValidation({
+                clientInDocument: clientInFile,
+                isMatch: !!isMatch,
+                documentType: data.documentType || (file.name.endsWith('.pdf') ? 'PDF' : 'Documento')
+            });
+
+            setStagedItems(suggested);
+            setIsStaging(true);
+        } catch (error: any) {
+            console.error('AI Parsing Error:', error);
+            alert(`Error: ${error.message}`);
+        } finally {
+            setParsingFile(false);
+        }
+    };
+
+    const handleConfirmImport = () => {
+        // Inyectamos los items validados al carrito real
+        const itemsToInject = stagedItems
+            .filter(item => item.suggestedProduct)
+            .map(item => ({
+                product: item.suggestedProduct,
+                qty: item.quantity,
+                variant_label: undefined,
+                selected_options: undefined
+            }));
+
+        setCart(prev => [...itemsToInject, ...prev]);
+        setIsStaging(false);
+        setStagedItems([]);
+        alert(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`);
+    };
+
+    const updateStagedItem = (id: string, field: string, value: any) => {
+        setStagedItems(prev => prev.map(item => {
+            if (item.id === id) {
+                if (field === 'product') {
+                    return { ...item, suggestedProduct: value, status: 'MATCH' };
+                }
+                return { ...item, [field]: value };
+            }
+            return item;
+        }));
+    };
+
     const handleGeocode = async () => {
         if (!guestInfo.address || !guestInfo.city) {
             alert("Por favor ingrese dirección y ciudad para validar coordenadas.");
@@ -210,29 +383,64 @@ function CreateOrderContent() {
         }
         setIsGettingLocation(true);
         try {
-            const query = `${guestInfo.address}, ${guestInfo.city}, Colombia`;
-            const encodedQuery = encodeURIComponent(query);
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodedQuery}&format=json&limit=1`);
+            const response = await fetch(`/api/geocode?address=${encodeURIComponent(guestInfo.address)}&city=${encodeURIComponent(guestInfo.city)}`);
             const data = await response.json();
 
-            if (data && data.length > 0) {
-                const lat = parseFloat(data[0].lat);
-                const lon = parseFloat(data[0].lon);
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+                const location = data.results[0].geometry.location;
+                const lat = location.lat;
+                const lon = location.lng;
                 setLatitude(lat);
                 setLongitude(lon);
-                alert(`✅ Coordenadas encontradas: ${lat}, ${lon}`);
+                setLastGeocodedAddress(guestInfo.address);
+
+                // Validar Geocerca
+                if (b2cGeofence.length > 0) {
+                    const inside = isInsidePolygon({ lat, lng: lon }, b2cGeofence);
+                    setOutOfZone(!inside);
+                } else {
+                    setOutOfZone(false);
+                }
             } else {
-                alert("❌ No se encontraron coordenadas para esta dirección. Intente ser más específico (ej: Kr 15 # 85-10).");
+                alert("❌ No se encontraron coordenadas para esta dirección en " + guestInfo.city + ". Intente verificar la nomenclatura (ej: Cra 100 Sur # 100-21).");
                 setLatitude(null);
                 setLongitude(null);
             }
         } catch (error) {
             console.error("Geocoding error:", error);
-            alert("Error al validar dirección.");
+            alert("Error al validar dirección con Google Maps.");
         } finally {
             setIsGettingLocation(false);
         }
     };
+
+    const handleOpenMap = async () => {
+        if (guestInfo.address && guestInfo.address !== lastGeocodedAddress) {
+            setIsGettingLocation(true);
+            try {
+                const response = await fetch(`/api/geocode?address=${encodeURIComponent(guestInfo.address)}&city=${encodeURIComponent(guestInfo.city || 'Bogotá')}`);
+                const data = await response.json();
+
+                if (data.status === 'OK' && data.results && data.results.length > 0) {
+                    const location = data.results[0].geometry.location;
+                    const lat = location.lat;
+                    const lon = location.lng;
+                    setLatitude(lat);
+                    setLongitude(lon);
+                    setLastGeocodedAddress(guestInfo.address);
+                }
+            } catch (error) {
+                console.error("Geocoding error in handleOpenMap:", error);
+            } finally {
+                setIsGettingLocation(false);
+                setShowMapPicker(true);
+            }
+        } else {
+            setShowMapPicker(true);
+        }
+    };
+
+
 
 
     const handleSubmit = async () => {
@@ -242,12 +450,20 @@ function CreateOrderContent() {
         if (clientType === 'B2C') {
             if (b2cMode === 'new') {
                 if (!guestInfo.name || !guestInfo.phone) return alert('Debes ingresar al menos Nombre y Teléfono para cliente nuevo.');
+                if (outOfZone && !hasCoverageOverride) return alert('No se puede crear el pedido: La dirección está fuera de la zona de cobertura y no cuenta con Excepción Administrativa.');
+                if (!latitude) return alert('Debes validar la dirección con el botón "Validar" antes de continuar.');
+
             } else {
                 if (!selectedClientB2C) return alert('Debes buscar y seleccionar un cliente B2C existente.');
             }
         }
 
         if (cart.length === 0) return alert('El pedido debe tener al menos un producto');
+
+        // Manual Delivery Validation
+        if (isManualDelivery && !manualDeliveryTime) {
+            return alert('Si activas entrega manual, debes especificar la Hora.');
+        }
 
         setLoading(true);
         try {
@@ -265,32 +481,39 @@ function CreateOrderContent() {
 
             // 1. If New B2C Client -> Create Profile
             if (clientType === 'B2C' && b2cMode === 'new') {
-                const newProfileId = crypto.randomUUID();
+                let newProfileId = createdB2CProfileId;
                 
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .insert({
-                        id: newProfileId,
-                        role: 'b2c_client',
-                        contact_name: guestInfo.name,
-                        contact_phone: guestInfo.phone,
-                        address: guestInfo.address,
-                        city: guestInfo.city,
-                        company_name: guestInfo.name, // Helper for search
-                        latitude: latitude,
-                        longitude: longitude,
-                        created_at: new Date().toISOString(),
-                        email: guestInfo.email || null,
-                        nit: guestInfo.nit || null
-                    });
+                if (!newProfileId) {
+                    newProfileId = crypto.randomUUID();
+                    const { error: profileError } = await supabase
+                        .from('profiles')
+                        .insert({
+                            id: newProfileId,
+                            role: 'b2c_client',
+                            contact_name: guestInfo.name,
+                            contact_phone: guestInfo.phone,
+                            phone: guestInfo.phone,
+                            address: guestInfo.address,
+                            city: guestInfo.city,
+                            company_name: guestInfo.name, // Helper for search
+                            latitude: latitude,
+                            longitude: longitude,
+                            delivery_restrictions: (outOfZone && hasCoverageOverride) ? `EXCEPCIÓN AUTORIZADA: ${coverageOverrideReason}` : null,
+                            geocoding_status: (outOfZone && hasCoverageOverride) ? 'OVERRIDE' : 'VALID',
+                            created_at: new Date().toISOString(),
+                            email: guestInfo.email || null,
+                            nit: guestInfo.nit || null
+                        });
 
-                if (profileError) {
-                    console.error('Error creating B2C profile:', profileError);
-                    throw new Error('No se pudo guardar el cliente nuevo.');
+                    if (profileError) {
+                        console.error('Error creating B2C profile:', profileError);
+                        throw new Error('No se pudo guardar el cliente nuevo.');
+                    }
                 }
 
                 finalProfileId = newProfileId;
-                finalAdminNotes = `[CLIENTE HOGAR CREADO] ID: ${newProfileId} | Nombre: ${guestInfo.name} | CC: ${guestInfo.nit} | Tel: ${guestInfo.phone} | Email: ${guestInfo.email}\n\n${adminNotes}`;
+                const overrideNote = (outOfZone && hasCoverageOverride) ? ` [EXCEPCIÓN DE COBERTURA: ${coverageOverrideReason}]` : '';
+                finalAdminNotes = `[CLIENTE HOGAR CREADO] ID: ${newProfileId} | Nombre: ${guestInfo.name} | CC: ${guestInfo.nit} | Tel: ${guestInfo.phone} | Email: ${guestInfo.email}${overrideNote}\n\n${adminNotes}`;
             } else if (clientType === 'B2C' && b2cMode === 'search') {
                 const b2cDetails = getSelectedB2CDetails();
                 finalAdminNotes = `[CLIENTE HOGAR EXISTENTE] ID: ${selectedClientB2C} | Nombre: ${b2cDetails?.contact_name}\n\n${adminNotes}`;
@@ -316,19 +539,56 @@ function CreateOrderContent() {
             // Only send delivery_slot if B2C (or send null/default if B2B)
             const finalDeliverySlot = clientType === 'B2C' ? deliverySlot : 'AM'; 
 
+            // Construct Logistics Data Override if Manual
+            let logisticsOverride = null;
+            if (isManualDelivery && manualDeliveryTime) {
+                const [h, m] = manualDeliveryTime.split(':').map(Number);
+                const totalMinutes = h * 60 + m;
+                
+                const startTotal = totalMinutes - manualDeliveryMargin;
+                const endTotal = totalMinutes + manualDeliveryMargin;
+                
+                const startH = Math.floor(startTotal / 60);
+                const startM = startTotal % 60;
+                const endH = Math.floor(endTotal / 60);
+                const endM = endTotal % 60;
+
+                const formatT = (hh: number, mm: number) => `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+                
+                logisticsOverride = {
+                    is_manual: true,
+                    manual_time: manualDeliveryTime,
+                    manual_margin: manualDeliveryMargin,
+                    manual_note: manualDeliveryNote,
+                    windows: [{
+                        startTime: formatT(startH, startM),
+                        endTime: formatT(endH, endM)
+                    }],
+                    parsing_date: new Date().toISOString()
+                };
+            }
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
                     profile_id: finalProfileId,
                     total: calculateTotal(),
-                    status: clientType === 'B2C' ? 'pending_approval' : 'approved',
-                    type: clientType === 'B2B' ? 'b2b_credit' : 'b2c',
+                    status: 'Aprobado',
+                    payment_status: 'Pendiente',
+                    payment_method: paymentMethod,
+                    origin: 'Admin Panel',
                     delivery_date: deliveryDate,
                     delivery_slot: finalDeliverySlot,
                     admin_notes: `[ORIGIN: ${originSource}] ${finalAdminNotes}`,
                     shipping_address: shippingAddress,
                     latitude: latitude,
-                    longitude: longitude
+                    longitude: longitude,
+                    // New Manual Delivery Fields
+                    is_manual_delivery: isManualDelivery,
+                    manual_delivery_time: manualDeliveryTime || null,
+                    manual_delivery_margin: manualDeliveryMargin,
+                    manual_delivery_note: manualDeliveryNote || null,
+                    logistics_data: logisticsOverride
                 })
                 .select()
                 .single();
@@ -338,13 +598,16 @@ function CreateOrderContent() {
                 throw new Error(orderError.message);
             }
 
-            const itemsData = cart.map(item => ({
-                order_id: order.id,
-                product_id: item.product.id,
-                quantity: item.qty,
-                unit_price: item.product.base_price,
-                nickname: item.variant_label
-            }));
+            const itemsData = cart.map(item => {
+                const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                return {
+                    order_id: order.id,
+                    product_id: item.product.id,
+                    quantity: qtyNum,
+                    unit_price: item.product.base_price,
+                    nickname: item.variant_label
+                };
+            });
 
             const { error: itemsError } = await supabase
                 .from('order_items')
@@ -385,6 +648,7 @@ function CreateOrderContent() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
+            <style>{hideSpinnersStyle}</style>
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
@@ -409,7 +673,7 @@ function CreateOrderContent() {
                                         transition: 'all 0.2s', fontSize: '0.85rem'
                                     }}
                                 >
-                                    🏢 B2B
+                                    🏢 Institucional
                                 </button>
                                 <button
                                     onClick={() => setClientType('B2C')}
@@ -421,7 +685,7 @@ function CreateOrderContent() {
                                         transition: 'all 0.2s', fontSize: '0.85rem'
                                     }}
                                 >
-                                    🏠 Hogar / B2C
+                                    🏠 Hogar
                                 </button>
                             </div>
                         </div>
@@ -482,19 +746,35 @@ function CreateOrderContent() {
                                                 </button>
                                             </div>
 
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid #DCFCE7', paddingTop: '0.8rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px solid #DCFCE7', paddingTop: '0.8rem' }}>
+                                                {/* Fila 1: Dirección Full Width */}
                                                 <div>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>👤 Encargado</div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534' }}>{getSelectedClientDetails()?.contact_name || 'No asignado'}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#15803D' }}>{getSelectedClientDetails()?.contact_phone || 'Sin teléfono'}</div>
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>📍 Ubicación GPS</div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        {getSelectedClientDetails()?.latitude ? '✅ Confirmada' : '⚠️ Pendiente'}
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>📍 DIRECCIÓN DE ENTREGA</div>
+                                                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532D' }}>
+                                                        {getSelectedClientDetails()?.address}
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: '500', marginLeft: '6px', opacity: 0.8 }}>
+                                                            ({getSelectedClientDetails()?.city || 'Bogotá'})
+                                                        </span>
                                                     </div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#15803D' }}>
-                                                        {getSelectedClientDetails()?.latitude ? `${getSelectedClientDetails()?.latitude.toFixed(4)}, ${getSelectedClientDetails()?.longitude.toFixed(4)}` : getSelectedClientDetails()?.address}
+                                                </div>
+
+                                                {/* Fila 2: Grid para Encargado y GPS */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(22, 101, 52, 0.1)', paddingTop: '0.8rem' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>👤 Encargado</div>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534' }}>{getSelectedClientDetails()?.contact_name || 'No asignado'}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#15803D' }}>{getSelectedClientDetails()?.contact_phone || 'Sin teléfono'}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>🛰️ Estado GPS</div>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            {getSelectedClientDetails()?.latitude ? '✅ Confirmado' : '⚠️ Pendiente'}
+                                                        </div>
+                                                        {getSelectedClientDetails()?.latitude && (
+                                                            <div style={{ fontSize: '0.7rem', color: '#15803D', opacity: 0.8 }}>
+                                                                {getSelectedClientDetails()?.latitude.toFixed(5)}, {getSelectedClientDetails()?.longitude.toFixed(5)}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -743,18 +1023,64 @@ function CreateOrderContent() {
                                                     <button
                                                         onClick={handleGeocode}
                                                         disabled={isGettingLocation}
+                                                        type="button"
                                                         style={{
-                                                            backgroundColor: '#3B82F6', color: 'white', border: 'none', borderRadius: '8px', padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold'
+                                                            backgroundColor: '#3B82F6', color: 'white', border: 'none', borderRadius: '8px', padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px'
                                                         }}
                                                     >
-                                                        {isGettingLocation ? '...' : '📍 Validar'}
+                                                        {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />} Validar
+                                                    </button>
+                                                    <button
+                                                        onClick={handleOpenMap}
+                                                        type="button"
+                                                        style={{
+                                                            backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px'
+                                                        }}
+                                                    >
+                                                        <MapIcon size={16} /> Ver en Mapa
                                                     </button>
                                                 </div>
                                                 {latitude && longitude && (
-                                                    <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '4px' }}>
-                                                        ✅ Ubicación confirmada: {latitude}, {longitude}
+                                                    <div style={{ 
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                                                        padding: '0.6rem 1rem', backgroundColor: (outOfZone && !hasCoverageOverride) ? '#FEF2F2' : (outOfZone && hasCoverageOverride) ? '#FFFBEB' : '#F0FDF4', 
+                                                        border: (outOfZone && !hasCoverageOverride) ? '1px solid #FECACA' : (outOfZone && hasCoverageOverride) ? '1px solid #FDE68A' : '1px solid #DCFCE7', 
+                                                        borderRadius: '8px', marginTop: '8px' 
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            {(outOfZone && !hasCoverageOverride) ? (
+                                                                <>
+                                                                    <X size={18} color="#DC2626" />
+                                                                    <span style={{ fontSize: '0.8rem', color: '#DC2626', fontWeight: '700' }}>
+                                                                        ⚠️ Fuera de Cobertura ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                    </span>
+                                                                </>
+                                                            ) : (outOfZone && hasCoverageOverride) ? (
+                                                                <>
+                                                                    <CheckCircle2 size={18} color="#D97706" />
+                                                                    <span style={{ fontSize: '0.8rem', color: '#D97706', fontWeight: '700' }}>
+                                                                        🌟 Excepción Autorizada: {coverageOverrideReason || 'Sin motivo'} ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <CheckCircle2 size={18} color="#166534" />
+                                                                    <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>
+                                                                        ✅ Ubicación Confirmada ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={handleOpenMap}
+                                                            type="button"
+                                                            style={{ background: 'none', border: 'none', color: (outOfZone && !hasCoverageOverride) ? '#DC2626' : (outOfZone && hasCoverageOverride) ? '#D97706' : '#166534', fontWeight: '800', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.75rem' }}
+                                                        >
+                                                            Ajustar Pin
+                                                        </button>
                                                     </div>
                                                 )}
+
                                             </div>
                                         </div>
                                     )}
@@ -779,7 +1105,7 @@ function CreateOrderContent() {
                                                 <option value="phone">📞 Teléfono</option>
                                                 <option value="whatsapp">💬 WhatsApp</option>
                                                 <option value="email">📧 Email</option>
-                                                <option value="flat_file">📁 Archivo Plano</option>
+                                                <option value="flat_file">📄 Documento de compra</option>
                                             </select>
                                         </div>
                                         <div>
@@ -793,22 +1119,33 @@ function CreateOrderContent() {
                                     </div>
 
                                     {/* INFO FRANJA (Final Refined Version) */}
-                                    {selectedClient && (getSelectedClientDetails()?.logistics_data || getSelectedClientDetails()?.delivery_restrictions) && (
+                                    {(selectedClient || selectedClientB2C) && (
                                         <div style={{ 
                                             marginTop: '1.2rem', 
                                             padding: '1.2rem 1.5rem', 
-                                            backgroundColor: '#FFF7ED', 
+                                            backgroundColor: isManualDelivery ? '#F0FDF4' : '#FFF7ED', 
                                             borderRadius: '20px', 
-                                            border: '1px solid #FFEDD5',
-                                            boxShadow: '0 2px 8px rgba(154, 52, 18, 0.04)'
+                                            border: isManualDelivery ? '1px solid #BBF7D0' : '1px solid #FFEDD5',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
                                         }}>
-                                            <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                                                FRANJA DE ENTREGA
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '900', color: isManualDelivery ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                                    {isManualDelivery ? '⚠️ OVERRIDE MANUAL ACTIVO' : 'FRANJA DE ENTREGA'}
+                                                </div>
+                                                {isManualDelivery && (
+                                                    <span style={{ fontSize: '0.6rem', backgroundColor: '#10B981', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                        ESTADO: PRIORITARIO
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#431407', lineHeight: '1.2' }}>
-                                                {getSelectedClientDetails()?.logistics_data?.days?.length > 0 
-                                                    ? formatTimeWindow(getSelectedClientDetails()?.logistics_data)
-                                                    : (getSelectedClientDetails()?.delivery_restrictions || 'Sin restricciones horarias')}
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: isManualDelivery ? '#14532D' : '#431407', lineHeight: '1.2' }}>
+                                                {isManualDelivery ? (
+                                                    <span>{manualDeliveryTime || '??:??'} (±{manualDeliveryMargin} min)</span>
+                                                ) : (
+                                                    getSelectedClientDetails()?.logistics_data?.days?.length > 0 
+                                                        ? formatTimeWindow(getSelectedClientDetails()?.logistics_data)
+                                                        : (getSelectedClientDetails()?.delivery_restrictions || 'Sin restricciones horarias')
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -915,70 +1252,293 @@ function CreateOrderContent() {
                             </div>
                         )}
 
-                        {originSource === 'flat_file' ? (
-                            <div style={{ 
-                                padding: '3rem', 
-                                border: '2px dashed #3B82F6', 
-                                borderRadius: '12px', 
-                                backgroundColor: '#EFF6FF',
-                                textAlign: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                            onClick={() => alert('Funcionalidad de carga de archivo plano en desarrollo...')}
-                            >
-                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📁</div>
-                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#1E40AF', marginBottom: '0.5rem' }}>
-                                    Cargar Archivo Plano (CSV / Excel)
-                                </h3>
-                                <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>
-                                    Arrastra tu archivo aquí o haz clic para seleccionarlo
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                {/* 2. PRODUCT SEARCH */}
-                                <div style={{ marginBottom: '2rem', position: 'relative' }}>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Escribe para buscar (ej: Tomate)..."
-                                        value={productSearch} onChange={e => setProductSearch(e.target.value)}
-                                        style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #3B82F6', fontSize: '1.1rem' }}
-                                    />
+                        {/* --- MESA DE TRABAJO (STAGING AREA) --- */}
+                        {originSource === 'flat_file' && (
+                            <div style={{ marginBottom: '2.5rem' }}>
+                                {/* Global Datalist for SKUs to improve performance */}
+                                <datalist id="all-products-list">
+                                    {products.map(p => (
+                                        <option key={p.id} value={`${p.name} (${p.sku})`} />
+                                    ))}
+                                </datalist>
 
-                                    {filteredProducts.length > 0 && (
-                                        <div style={{
-                                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                            backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
-                                        }}>
-                                            {filteredProducts.map(p => (
-                                                <div
-                                                    key={p.id}
-                                                    onClick={() => handleProductClick(p)}
-                                                    style={{
-                                                        padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                >
-                                                    <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                        ${p.base_price}/{p.unit_of_measure}
-                                                        {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                {!isStaging ? (
+                                <div 
+                                    style={{ 
+                                        padding: '3rem', 
+                                        border: parsingFile ? '3px solid #3B82F6' : '2px dashed #CBD5E1', 
+                                        borderRadius: '24px', 
+                                        backgroundColor: parsingFile ? '#EFF6FF' : '#F8FAFC',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        position: 'relative',
+                                        overflow: 'hidden'
+                                    }}
+                                    onClick={() => (document.getElementById('fileInput') as HTMLInputElement)?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.backgroundColor = '#EFF6FF'; }}
+                                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                                    onDrop={(e) => { 
+                                        e.preventDefault(); 
+                                        const file = e.dataTransfer.files[0];
+                                        if (file) parseOrderWithAI(file);
+                                    }}
+                                >
+                                    <input 
+                                        id="fileInput"
+                                        type="file" 
+                                        style={{ display: 'none' }} 
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) parseOrderWithAI(file);
+                                        }}
+                                    />
+                                    {parsingFile ? (
+                                        <div style={{ animation: 'pulse 1.5s infinite' }}>
+                                            <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>🤖</div>
+                                            <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
+                                            <p style={{ color: '#64748B', fontSize: '0.9rem' }}>La IA está extrayendo productos y validando el cliente.</p>
                                         </div>
+                                    ) : (
+                                        <>
+                                            <div style={{ fontSize: '3.5rem', marginBottom: '1rem', opacity: 0.8 }}>📁</div>
+                                            <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.5rem' }}>
+                                                Mesa de Trabajo Inteligente
+                                            </h3>
+                                            <p style={{ color: '#64748B', fontSize: '0.95rem', maxWidth: '400px', margin: '0 auto' }}>
+                                                Arrastra una <b>Orden de Compra (PDF)</b> o <b>Excel</b> aquí. El sistema la tabulará automáticamente para tu revisión.
+                                            </p>
+                                        </>
                                     )}
                                 </div>
-                            </>
+                            ) : (
+                                <div style={{ 
+                                    backgroundColor: 'white', 
+                                    borderRadius: '24px', 
+                                    border: '1px solid #E2E8F0', 
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                                    overflow: 'hidden',
+                                    animation: 'fadeInUp 0.3s ease-out'
+                                }}>
+                                    {/* Mesa de Trabajo Header: Client Validation */}
+                                    <div style={{ 
+                                        padding: '1.5rem 2rem', 
+                                        backgroundColor: importValidation.isMatch ? '#F0FDF4' : '#FFF7ED', 
+                                        borderBottom: `1px solid ${importValidation.isMatch ? '#BBF7D0' : '#FFEDD5'}`,
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                            <div style={{ fontSize: '1.8rem' }}>{importValidation.isMatch ? '✅' : '⚠️'}</div>
+                                            <div>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: importValidation.isMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Validación de Cliente (Auditoría)
+                                                </div>
+                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0F172A' }}>
+                                                    Documento detectado para: <span style={{ textDecoration: 'underline' }}>{importValidation.clientInDocument}</span>
+                                                </div>
+                                                {!importValidation.isMatch && (
+                                                    <div style={{ fontSize: '0.85rem', color: '#C2410C', fontWeight: '600', marginTop: '2px' }}>
+                                                        ¡ALERTA! El nombre del documento no coincide con el cliente seleccionado.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ 
+                                                padding: '6px 12px', 
+                                                backgroundColor: 'white', 
+                                                borderRadius: '100px', 
+                                                fontSize: '0.75rem', 
+                                                fontWeight: '800', 
+                                                color: '#475569',
+                                                border: '1px solid rgba(0,0,0,0.05)'
+                                            }}>
+                                                DOCUMENTO {importValidation.documentType}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Mesa de Trabajo Body: Table Mapping */}
+                                    <div style={{ padding: '0', maxHeight: '550px', overflowY: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                                <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
+                                                    <th style={{ padding: '1rem 2rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>NOMBRE EN DOCUMENTO</th>
+                                                    <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>TU PRODUCTO (SKU)</th>
+                                                    <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', textAlign: 'center' }}>CANT.</th>
+                                                    <th style={{ padding: '1rem 2rem', width: '50px' }}></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {stagedItems.map((item, idx) => (
+                                                    <tr 
+                                                        key={item.id} 
+                                                        style={{ 
+                                                            borderBottom: '1px solid #F8FAFC',
+                                                            backgroundColor: item.suggestedProduct ? 'white' : '#FFF7ED',
+                                                            transition: 'background-color 0.2s'
+                                                        }}
+                                                    >
+                                                        <td style={{ padding: '1rem 2rem' }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#475569' }}>{item.originalName}</div>
+                                                        </td>
+                                                        <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
+                                                            <input 
+                                                                type="text"
+                                                                placeholder="🔍 Buscar SKU..."
+                                                                defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.sku})` : ''}
+                                                                list="all-products-list"
+                                                                onFocus={(e) => e.target.select()}
+                                                                className="sku-search-input"
+                                                                id={`sku-input-${idx}`}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
+                                                                    if (p) {
+                                                                        updateStagedItem(item.id, 'product', p);
+                                                                    }
+                                                                }}
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '10px 14px', 
+                                                                    borderRadius: '10px', 
+                                                                    border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                                    fontSize: '1rem',
+                                                                    fontWeight: '700',
+                                                                    backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
+                                                                    outline: 'none',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
+                                                            <input 
+                                                                type="number"
+                                                                value={item.quantity}
+                                                                onFocus={(e) => e.target.select()}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        const nextInput = document.getElementById(`sku-input-${idx + 1}`);
+                                                                        if (nextInput) {
+                                                                            nextInput.focus();
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                onChange={(e) => updateStagedItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                                style={{ 
+                                                                    width: '80px', 
+                                                                    padding: '10px', 
+                                                                    borderRadius: '8px', 
+                                                                    border: '2px solid #E2E8F0', 
+                                                                    textAlign: 'center',
+                                                                    fontWeight: '800',
+                                                                    fontSize: '1.1rem',
+                                                                    backgroundColor: 'white'
+                                                                }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '1rem 2rem' }}>
+                                                            <button 
+                                                                onClick={() => setStagedItems(prev => prev.filter(i => i.id !== item.id))}
+                                                                tabIndex={-1}
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#94A3B8' }}
+                                                            >✕</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Mesa de Trabajo Footer */}
+                                    <div style={{ 
+                                        padding: '1.5rem 2rem', 
+                                        backgroundColor: '#F8FAFC', 
+                                        borderTop: '1px solid #E2E8F0',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <button 
+                                            onClick={() => { setIsStaging(false); setStagedItems([]); }}
+                                            style={{ padding: '10px 20px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#64748B', fontWeight: '700', cursor: 'pointer' }}
+                                        >
+                                            Cancelar y Limpiar
+                                        </button>
+                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                            <div style={{ textAlign: 'right', marginRight: '1rem' }}>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items Auditados</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B' }}>{stagedItems.length} productos</div>
+                                            </div>
+                                            <button 
+                                                onClick={handleConfirmImport}
+                                                style={{ 
+                                                    padding: '12px 28px', 
+                                                    borderRadius: '14px', 
+                                                    border: 'none', 
+                                                    backgroundColor: '#059669', 
+                                                    color: 'white', 
+                                                    fontWeight: '800', 
+                                                    fontSize: '1rem',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)',
+                                                    transition: 'transform 0.2s'
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                                                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                                            >
+                                                Confirmar e Inyectar al Pedido ✨
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         )}
 
+                        {/* 2. PRODUCT SEARCH (Visible only if NOT importing a document) */}
+                        {originSource !== 'flat_file' && (
+                            <div style={{ marginBottom: '2rem', position: 'relative' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos Manualmente</label>
+                            <input
+                                type="text"
+                                placeholder="Escribe para buscar (ej: Tomate)..."
+                                value={productSearch} onChange={e => setProductSearch(e.target.value)}
+                                style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #E2E8F0', fontSize: '1.1rem', outline: 'none' }}
+                                onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
+                                onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
+                            />
+
+                            {filteredProducts.length > 0 && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                                    backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
+                                }}>
+                                    {filteredProducts.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => handleProductClick(p)}
+                                            style={{
+                                                padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                        >
+                                            <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
+                                            <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
+                                                ${p.base_price.toLocaleString('es-CO')}/{p.unit_of_measure}
+                                                {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        )}
                         {/* 3. CART LIST WITH IMPROVED STEPPER */}
                         <div>
                             <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem' }}>Detalle del Pedido</h3>
@@ -989,16 +1549,16 @@ function CreateOrderContent() {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     {/* Table Header */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 150px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 120px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         <div>Producto</div>
-                                        <div style={{ textAlign: 'right' }}>Precio Unit.</div>
                                         <div style={{ textAlign: 'center' }}>Cantidad</div>
+                                        <div style={{ textAlign: 'right' }}>Precio Unit.</div>
                                         <div style={{ textAlign: 'right' }}>Subtotal</div>
                                         <div></div>
                                     </div>
 
                                     {cart.map((item, idx) => (
-                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 150px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
+                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 120px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
                                                     {item.product.name}
@@ -1011,33 +1571,58 @@ function CreateOrderContent() {
                                                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>SKU: {item.product.sku || 'N/A'}</div>
                                             </div>
 
-                                            <div style={{ textAlign: 'right', fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>
-                                                ${item.product.base_price.toLocaleString()}
-                                            </div>
-
-                                            {/* STEPPER CONTROL */}
-                                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                            {/* STEPPER CONTROL + UoM */}
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
                                                     <button
                                                         onClick={() => updateQty(idx, Math.max(0.5, item.qty - 0.5))}
                                                         style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
                                                     >−</button>
                                                     <input
-                                                        type="number"
-                                                        value={item.qty}
-                                                        min="0.5" step="0.5"
-                                                        onChange={(e) => updateQty(idx, parseFloat(e.target.value) || 0)}
-                                                        style={{ width: '45px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.9rem', outline: 'none', backgroundColor: 'white' }}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={item.qty.toString().replace('.', ',')}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === '.') {
+                                                                e.preventDefault();
+                                                                const input = e.target as HTMLInputElement;
+                                                                const start = input.selectionStart || 0;
+                                                                const end = input.selectionEnd || 0;
+                                                                const val = input.value;
+                                                                // Si no hay coma, la ponemos. Si hay, no hacemos nada.
+                                                                if (!val.includes(',')) {
+                                                                    const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                                                    updateQty(idx, newVal);
+                                                                }
+                                                            }
+                                                        }}
+                                                        onChange={(e) => {
+                                                            // Permitimos solo números y una única coma
+                                                            let val = e.target.value.replace(/[^0-9,]/g, '');
+                                                            const parts = val.split(',');
+                                                            if (parts.length > 2) {
+                                                                val = parts[0] + ',' + parts.slice(1).join('');
+                                                            }
+                                                            updateQty(idx, val);
+                                                        }}
+                                                        style={{ width: '85px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
                                                     />
                                                     <button
                                                         onClick={() => updateQty(idx, item.qty + 0.5)}
                                                         style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
                                                     >+</button>
                                                 </div>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em', minWidth: '35px' }}>
+                                                    {item.product.unit_of_measure?.toUpperCase() || 'UND'}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ textAlign: 'right', fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>
+                                                ${item.product.base_price.toLocaleString('es-CO')}
                                             </div>
 
                                             <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
-                                                ${(item.product.base_price * item.qty).toLocaleString()}
+                                                ${(item.product.base_price * parseFloat(item.qty.toString().replace(',', '.') || '0')).toLocaleString('es-CO')}
                                             </div>
 
                                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1080,7 +1665,7 @@ function CreateOrderContent() {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
                                 <span>TOTAL:</span>
-                                <span>${calculateTotal().toLocaleString()}</span>
+                                <span>${calculateTotal().toLocaleString('es-CO')}</span>
                             </div>
 
                             <button
@@ -1173,6 +1758,292 @@ function CreateOrderContent() {
                             >
                                 Agregar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MAP PICKER MODAL */}
+            {showMapPicker && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)', zIndex: 9999, display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', padding: '2rem',
+                    backdropFilter: 'blur(8px)'
+                }}>
+                    <div style={{
+                        width: '100%', maxWidth: '1000px', height: '85vh', backgroundColor: 'white',
+                        borderRadius: '32px', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)'
+                    }}>
+                        <div style={{ 
+                            padding: '1.5rem 2rem', 
+                            borderBottom: '1px solid #E5E7EB', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            backgroundColor: 'white'
+                        }}>
+                            <div>
+                                <h3 style={{ 
+                                    margin: 0, 
+                                    fontWeight: '900', 
+                                    fontSize: '1.4rem',
+                                    color: '#111827',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <MapPin size={24} color="#10B981" /> Selecciona y Valida la Ubicación
+                                </h3>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '500' }}>
+                                    Mueve el mapa o haz clic para ajustar el pin en la dirección exacta de entrega.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowMapPicker(false)}
+                                style={{ 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: '12px', 
+                                    cursor: 'pointer', 
+                                    fontWeight: '800',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.85rem',
+                                    background: '#F3F4F6',
+                                    border: '1px solid #E5E7EB',
+                                    color: '#374151'
+                                }}
+                            >
+                                <X size={18} /> Cerrar
+                            </button>
+                        </div>
+                        
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <Map
+                                defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Bogota o actual
+                                defaultZoom={15}
+                                mapId="DEMO_MAP_ID"
+                                gestureHandling="greedy"
+                                onClick={(e) => {
+                                    const lat = e.detail?.latLng?.lat;
+                                    const lng = e.detail?.latLng?.lng;
+                                    if (lat && lng) {
+                                        setLatitude(lat);
+                                        setLongitude(lng);
+                                    }
+                                }}
+                            >
+                                {latitude && longitude && (
+                                    <Marker 
+                                        position={{ lat: latitude, lng: longitude }} 
+                                        draggable={true}
+                                        onDragEnd={(e) => {
+                                            const lat = e.latLng?.lat();
+                                            const lng = e.latLng?.lng();
+                                            if (lat && lng) {
+                                                setLatitude(lat);
+                                                setLongitude(lng);
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </Map>
+                        </div>
+
+
+                        <div style={{ padding: '1.5rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E5E7EB' }}>
+                            <div>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                    {outOfZone ? (
+                                        <>
+                                            <X size={18} color="#DC2626" />
+                                            <span style={{ fontSize: '0.9rem', color: '#DC2626', fontWeight: '700' }}>Fuera de Zona de Cobertura</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={18} color="#166534" />
+                                            <span style={{ fontSize: '0.9rem', color: '#166534', fontWeight: '700' }}>Dentro de Zona Permitida</span>
+                                        </>
+                                    )}
+                                    <span style={{ fontSize: '0.85rem', color: '#6B7280', fontFamily: 'monospace', marginLeft: '10px' }}>
+                                        ({latitude?.toFixed(5)}, {longitude?.toFixed(5)})
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* DECISION CENTER */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                {!outOfZone ? (
+                                    <button 
+                                        onClick={async () => {
+                                            if (clientType === 'B2C' && b2cMode === 'new') {
+                                                if (!guestInfo.name || !guestInfo.phone) {
+                                                    alert('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de confirmar la ubicación.');
+                                                    return;
+                                                }
+                                                const newProfileId = crypto.randomUUID();
+                                                const { error: profileError } = await supabase
+                                                    .from('profiles')
+                                                    .insert({
+                                                        id: newProfileId,
+                                                        role: 'b2c_client',
+                                                        contact_name: guestInfo.name,
+                                                        contact_phone: guestInfo.phone,
+                                                        phone: guestInfo.phone,
+                                                        address: guestInfo.address,
+                                                        city: guestInfo.city,
+                                                        company_name: guestInfo.name,
+                                                        latitude: latitude,
+                                                        longitude: longitude,
+                                                        delivery_restrictions: null,
+                                                        geocoding_status: 'VALID',
+                                                        created_at: new Date().toISOString(),
+                                                        email: guestInfo.email || null,
+                                                        nit: guestInfo.nit || null
+                                                    });
+
+                                                if (profileError) {
+                                                    console.error('Error guardando cliente en BD:', profileError);
+                                                    alert('Hubo un error al guardar el cliente en la base de datos.');
+                                                    return;
+                                                }
+                                                setCreatedB2CProfileId(newProfileId);
+                                                alert(`🌟 Cliente Hogar Creado Exitosamente.\n\nEl perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                            }
+                                            setShowMapPicker(false);
+                                        }}
+                                        style={{ 
+                                            padding: '1rem 2.5rem', 
+                                            borderRadius: '99px', 
+                                            fontWeight: '900',
+                                            fontSize: '1rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            backgroundColor: '#10B981',
+                                            color: 'white',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                        }}
+                                    >
+                                        <CheckCircle2 size={20} /> Confirmar Ubicación
+                                    </button>
+                                ) : isOverrideMode ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px', borderRadius: '99px', border: '1px solid #F59E0B', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.15)' }}>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Motivo (Ej: Cliente VIP, Flete extra)..."
+                                            value={coverageOverrideReason}
+                                            onChange={e => setCoverageOverrideReason(e.target.value)}
+                                            autoFocus
+                                            style={{ border: 'none', outline: 'none', padding: '0.5rem 1rem', fontSize: '0.9rem', width: '220px', background: 'transparent', fontWeight: '600', color: '#92400E' }}
+                                        />
+                                        <button 
+                                            onClick={async () => {
+                                                if (!coverageOverrideReason.trim()) return alert('Por favor ingresa el motivo de la excepción.');
+                                                if (clientType === 'B2C' && b2cMode === 'new') {
+                                                    if (!guestInfo.name || !guestInfo.phone) {
+                                                        alert('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de autorizar la excepción.');
+                                                        return;
+                                                    }
+                                                    const newProfileId = crypto.randomUUID();
+                                                    const { error: profileError } = await supabase
+                                                        .from('profiles')
+                                                        .insert({
+                                                            id: newProfileId,
+                                                            role: 'b2c_client',
+                                                            contact_name: guestInfo.name,
+                                                            contact_phone: guestInfo.phone,
+                                                            phone: guestInfo.phone,
+                                                            address: guestInfo.address,
+                                                            city: guestInfo.city,
+                                                            company_name: guestInfo.name,
+                                                            latitude: latitude,
+                                                            longitude: longitude,
+                                                            delivery_restrictions: `EXCEPCIÓN AUTORIZADA: ${coverageOverrideReason}`,
+                                                            geocoding_status: 'OVERRIDE',
+                                                            created_at: new Date().toISOString(),
+                                                            email: guestInfo.email || null,
+                                                            nit: guestInfo.nit || null
+                                                        });
+
+                                                    if (profileError) {
+                                                        console.error('Error guardando cliente en BD:', profileError);
+                                                        alert('Hubo un error al guardar el cliente en la base de datos.');
+                                                        return;
+                                                    }
+                                                    setCreatedB2CProfileId(newProfileId);
+                                                }
+                                                setHasCoverageOverride(true);
+                                                setShowMapPicker(false);
+                                                alert(`🌟 Excepción Autorizada y Cliente Guardado.\n\nEl perfil de ${guestInfo.name} se ha guardado exitosamente en la base de datos con estado de Excepción Permanente.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                            }}
+                                            style={{ padding: '0.6rem 1.5rem', borderRadius: '99px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
+                                        >
+                                            <CheckCircle2 size={16} /> Confirmar Excepción
+                                        </button>
+                                        <button 
+                                            onClick={() => setIsOverrideMode(false)}
+                                            style={{ padding: '0.6rem 1rem', borderRadius: '99px', border: 'none', background: '#F3F4F6', color: '#4B5563', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem' }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <button 
+                                            onClick={() => {
+                                                setLatitude(null);
+                                                setLongitude(null);
+                                                setOutOfZone(false);
+                                                setHasCoverageOverride(false);
+                                                setCoverageOverrideReason('');
+                                                setShowMapPicker(false);
+                                                alert("❌ Dirección Rechazada por Fuera de Cobertura.\n\nSe ha limpiado la ubicación del pedido. Por favor informe al cliente que su dirección se encuentra fuera de nuestra zona logística actual.");
+                                            }}
+                                            style={{ 
+                                                padding: '0.8rem 1.5rem', 
+                                                borderRadius: '99px', 
+                                                fontWeight: '800',
+                                                fontSize: '0.9rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                backgroundColor: '#F3F4F6',
+                                                color: '#DC2626',
+                                                border: '1px solid #FECACA',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <X size={18} /> Rechazar Dirección
+                                        </button>
+                                        <button 
+                                            onClick={() => setIsOverrideMode(true)}
+                                            style={{ 
+                                                padding: '0.8rem 1.8rem', 
+                                                borderRadius: '99px', 
+                                                fontWeight: '900',
+                                                fontSize: '0.9rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                backgroundColor: '#F59E0B',
+                                                color: 'white',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)'
+                                            }}
+                                        >
+                                            ⚠️ Autorizar Excepción
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -153,31 +153,44 @@ export default function OrderLoadingPage() {
                 return;
             }
 
-            // Explicit select to avoid RLS issues with unneeded columns and improve performance
-            const { data, error } = await supabase
+            // --- REFINED FETCH LOGIC WITH FALLBACK ---
+            let { data, error } = await supabase
                 .from('order_items')
                 .select(`
-                    id,
-                    order_id,
-                    product_id,
-                    quantity,
-                    unit_price,
-                    variant_label,
-                    selected_options,
+                    *,
                     products (
-                        name,
-                        sku,
-                        unit_of_measure,
-                        weight_kg,
-                        image_url
+                        name, sku, unit_of_measure, weight_kg, image_url
                     )
                 `)
                 .eq('order_id', order.id);
             
-            if (error) {
-                console.error('Supabase Error:', error);
-                alert(`Error cargando productos: ${error.message}`);
-                throw error;
+            // FALLBACK: Si el Join falla (a veces por RLS o Schema Cache), pedimos los productos por separado
+            if (error || !data || data.some(item => !item.products)) {
+                console.warn('⚠️ Falló el Join automático, intentando carga manual de productos...');
+                
+                const { data: rawItems, error: itemsErr } = await supabase
+                    .from('order_items')
+                    .select('*')
+                    .eq('order_id', order.id);
+                
+                if (itemsErr) throw itemsErr;
+
+                if (rawItems && rawItems.length > 0) {
+                    const productIds = [...new Set(rawItems.map(i => i.product_id))];
+                    const { data: rawProducts, error: prodErr } = await supabase
+                        .from('products')
+                        .select('id, name, sku, unit_of_measure, weight_kg, image_url')
+                        .in('id', productIds);
+                    
+                    if (!prodErr && rawProducts) {
+                        data = rawItems.map(item => ({
+                            ...item,
+                            products: rawProducts.find(p => p.id === item.product_id)
+                        }));
+                    } else {
+                        data = rawItems; // Al menos mostramos las cantidades
+                    }
+                }
             }
 
             if (!data || data.length === 0) {
@@ -189,10 +202,7 @@ export default function OrderLoadingPage() {
             setOrderItems(data || []);
         } catch (err: any) {
             console.error('Error fetching order items:', err);
-            // Alert already shown if Supabase error, otherwise generic
-            if (!err.message?.includes('Error cargando productos')) {
-                 alert(`Error inesperado: ${err.message || 'Desconocido'}`);
-            }
+            alert(`Error cargando productos: ${err.message || 'Error de conexión o permisos'}`);
         } finally {
             setLoadingItems(false);
         }
@@ -201,8 +211,10 @@ export default function OrderLoadingPage() {
     // Real-time calculations
     const currentTotal = orderItems.reduce((acc, item) => acc + ((item.unit_price || 0) * item.quantity), 0);
     const currentWeight = orderItems.reduce((acc, item) => {
-        const weight = item.products?.weight_kg || 0;
-        return acc + (weight * item.quantity);
+        const unit = (item.products?.unit_of_measure || '').toLowerCase();
+        // Si la unidad es Kg, el peso es la cantidad misma. Si es otra unidad, multiplicamos por weight_kg
+        const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (item.products?.weight_kg || 0);
+        return acc + (weightFactor * item.quantity);
     }, 0);
 
     const handleSearchProducts = async (term: string) => {
@@ -1335,7 +1347,7 @@ export default function OrderLoadingPage() {
                                                                 color: '#334155',
                                                                 fontSize: '1rem'
                                                             }}>
-                                                                {item.quantity} 
+                                                                {item.quantity.toString().replace('.', ',')} 
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
                                                                     {item.products?.unit_of_measure}
                                                                 </span>
@@ -1343,10 +1355,10 @@ export default function OrderLoadingPage() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#475569', fontWeight: '600' }}>
-                                                        ${(item.unit_price || 0).toLocaleString()}
+                                                        ${(item.unit_price || 0).toLocaleString('es-CO')}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
-                                                        ${((item.unit_price || 0) * item.quantity).toLocaleString()}
+                                                        ${((item.unit_price || 0) * item.quantity).toLocaleString('es-CO')}
                                                     </td>
                                                     {editMode && (
                                                         <td style={{ paddingRight: '1rem' }}>
@@ -1388,7 +1400,7 @@ export default function OrderLoadingPage() {
                                         <div>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>PESO TOTAL</div>
                                             <div style={{ fontWeight: '900', color: '#1E293B', fontSize: '1.125rem' }}>
-                                                {currentWeight.toFixed(1)} kg
+                                                {currentWeight.toFixed(1).replace('.', ',')} kg
                                             </div>
                                         </div>
                                     </div>
@@ -1403,7 +1415,7 @@ export default function OrderLoadingPage() {
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
                                     <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669', lineHeight: '1' }}>
-                                        ${currentTotal.toLocaleString()}
+                                        ${currentTotal.toLocaleString('es-CO')}
                                     </div>
                                 </div>
                             </div>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('address');
+    const city = searchParams.get('city');
     const latlng = searchParams.get('latlng');
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -15,6 +16,12 @@ export async function GET(request: Request) {
         
         if (address) {
             url += `&address=${encodeURIComponent(address)}`;
+            if (city) {
+                // Imperative filtering: force search within Colombia and the specific city
+                url += `&components=country:CO|locality:${encodeURIComponent(city)}`;
+            } else {
+                url += `&components=country:CO`;
+            }
         } else if (latlng) {
             url += `&latlng=${encodeURIComponent(latlng)}`;
         } else {
