@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -12,7 +14,7 @@ export async function GET(request: Request) {
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-        let query = supabase.from('orders').select('*').eq('status', 'approved');
+        let query = supabase.from('orders').select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address_complement, logistics_data)').in('status', ['approved', 'para_compra']);
 
         if (date) {
             query = query.eq('delivery_date', date);

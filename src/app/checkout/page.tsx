@@ -34,6 +34,7 @@ import { useAuth } from '../../lib/authContext';
 
 export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart } = useCart();
+    const [isMounted, setIsMounted] = useState(false);
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -69,6 +70,10 @@ export default function CheckoutPage() {
     }, 0);
 
     const isB2B = profile?.role === 'b2b_client';
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     useEffect(() => {
         async function fetchGeofence() {
@@ -137,7 +142,7 @@ export default function CheckoutPage() {
     // Load Profile data for B2B/Registered users
     useEffect(() => {
         if (profile) {
-            if (!name) setName(profile.contact_name || '');
+            // El nombre se deja limpio a propósito para que se llene manualmente
             if (!email && profile.company_name?.includes('@')) setEmail(profile.company_name);
             if (!address) setAddress(profile.address_main || '');
             console.log('👤 profile found, filling member data...');
@@ -346,6 +351,8 @@ export default function CheckoutPage() {
             setLoading(false);
         }
     };
+
+    if (!isMounted) return null;
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
@@ -649,7 +656,27 @@ export default function CheckoutPage() {
                                         </button>
 
                                         <button 
-                                            onClick={() => setShowMapPicker(true)}
+                                            onClick={() => {
+                                                if (!latitude && address.trim().length > 5) {
+                                                    setIsGettingLocation(true);
+                                                    if (window.google && window.google.maps && window.google.maps.Geocoder) {
+                                                        const geocoder = new window.google.maps.Geocoder();
+                                                        geocoder.geocode({ address: `${address}, Bogotá, Colombia` }, (results, status) => {
+                                                            setIsGettingLocation(false);
+                                                            if (status === 'OK' && results && results[0]) {
+                                                                setLatitude(results[0].geometry.location.lat());
+                                                                setLongitude(results[0].geometry.location.lng());
+                                                            }
+                                                            setShowMapPicker(true);
+                                                        });
+                                                    } else {
+                                                        setIsGettingLocation(false);
+                                                        setShowMapPicker(true);
+                                                    }
+                                                } else {
+                                                    setShowMapPicker(true);
+                                                }
+                                            }}
                                             type="button"
                                             className="btn-glass"
                                             style={{ 
@@ -666,8 +693,9 @@ export default function CheckoutPage() {
                                                 justifyContent: 'center',
                                                 gap: '8px'
                                             }}
+                                            disabled={isGettingLocation}
                                         >
-                                            <MapIcon size={14} /> {t.selectOnMap}
+                                            {isGettingLocation ? <Loader2 size={14} className="animate-spin" /> : <MapIcon size={14} />} {t.selectOnMap}
                                         </button>
                                     </div>
                                 )}
@@ -966,7 +994,7 @@ export default function CheckoutPage() {
                         <div style={{ flex: 1, position: 'relative' }}>
 
                                 <Map
-                                    defaultCenter={{ lat: 4.6097, lng: -74.0817 }} // Bogota
+                                    defaultCenter={{ lat: latitude || 4.6097, lng: longitude || -74.0817 }} // Uses geocoded address or Bogota
                                     defaultZoom={15}
                                     mapId="DEMO_MAP_ID"
                                     onCenterChanged={(e) => {

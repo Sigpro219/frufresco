@@ -712,12 +712,12 @@ export default function MasterProductsPage() {
                     marginBottom: '2rem' 
                 }}>
                     {[
-                        { label: 'Total Histórico', value: kpiMetrics.total, icon: '🗂️', color: '#6366F1', bg: '#EEF2FF' },
-                        { label: 'Catálogo Activo', value: `${((kpiMetrics.activeCount / kpiMetrics.total) * 100).toFixed(1)}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5' },
-                        { label: 'Publicados en Web', value: kpiMetrics.webCount, icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
-                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage}%`, icon: '📸', color: '#F59E0B', bg: '#FFFBEB' },
-                        { label: 'Alertas Inventario', value: kpiMetrics.alerts, icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
-                        { label: 'Jerarquía (P/H)', value: `${kpiMetrics.parentCount} P / ${kpiMetrics.childCount} H`, icon: '💎', color: '#6D28D9', bg: '#F5F3FF' },
+                        { label: 'Total Histórico', value: kpiMetrics.total.toLocaleString('es-CO'), icon: '🗂️', color: '#6366F1', bg: '#EEF2FF' },
+                        { label: 'Catálogo Activo', value: `${((kpiMetrics.activeCount / kpiMetrics.total) * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5' },
+                        { label: 'Publicados en Web', value: kpiMetrics.webCount.toLocaleString('es-CO'), icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage.toLocaleString('es-CO')}%`, icon: '📸', color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Alertas Inventario', value: kpiMetrics.alerts.toLocaleString('es-CO'), icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
+                        { label: 'Jerarquía (P/H)', value: `${kpiMetrics.parentCount.toLocaleString('es-CO')} P / ${kpiMetrics.childCount.toLocaleString('es-CO')} H`, icon: '💎', color: '#6D28D9', bg: '#F5F3FF' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: 'white',

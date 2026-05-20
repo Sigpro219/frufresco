@@ -15,7 +15,7 @@ interface AppSetting {
 
 interface GeofencingManagerProps {
     settings: AppSetting[];
-    onSave: (key: string, poly: string) => void;
+    onSave: (key: string, poly: string) => Promise<boolean> | boolean;
     saving: boolean;
     canEdit: boolean;
 }

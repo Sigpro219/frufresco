@@ -1,7 +1,15 @@
+try {
+    require('dotenv').config({ path: '.env.local' });
+} catch (e) {}
+
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 async function listPaidModels() {
-    const API_KEY = "AIzaSyAyEecFLG76siiuaoAb722VGc-URrpPe4o";
+    const API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (!API_KEY) {
+        console.error("❌ ERROR: GOOGLE_GENERATIVE_AI_API_KEY no definida en .env.local");
+        return;
+    }
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
         const data = await response.json();

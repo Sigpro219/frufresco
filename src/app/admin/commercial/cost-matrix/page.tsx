@@ -1051,8 +1051,8 @@ export default function CostMatrixPage() {
                                                                             gap: '0.4rem'
                                                                         }}>
                                                                             ${Math.round(smart).toLocaleString()}
-                                                                            {isAligned && <CheckCircle2 size={16} color="#10B981" title="Precio Autorizado por IA" />}
-                                                                            {harvestStatus === 'harvest' && <Brain size={16} color="#0EA5E9" className="animate-pulse" title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL" />}
+                                                                            {isAligned && <span title="Precio Autorizado por IA"><CheckCircle2 size={16} color="#10B981" /></span>}
+                                                                            {harvestStatus === 'harvest' && <span title="RECOMENDACIÓN: ABUNDANCIA ESTACIONAL"><Brain size={16} color="#0EA5E9" className="animate-pulse" /></span>}
                                                                         </div>
                                                                         <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>
                                                                             Sugerido IA

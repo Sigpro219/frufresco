@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
+import Link from 'next/link';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -52,6 +53,8 @@ export default function OrderDetailPage() {
             options_config?: any;
             weight_kg?: number;
         };
+        selected_options?: any;
+        variant_label?: any;
     }
 
     // UI States
@@ -364,7 +367,7 @@ export default function OrderDetailPage() {
     };
 
     const getDisplayStatus = (status: string) => {
-        const map: any = { 'pending_approval': 'Pendiente', 'approved': 'Pendiente', 'shipped': 'En Transporte', 'delivered': 'Entregado', 'cancelled': 'Cancelado' };
+        const map: any = { 'pending_approval': 'POR APROBAR', 'para_compra': 'PARA COMPRA', 'approved': 'APROBADO', 'shipped': 'EN TRANSPORTE', 'delivered': 'ENTREGADO', 'cancelled': 'CANCELADO' };
         return map[status] || status;
     };
     const getStatusColor = (status: string) => {
@@ -441,12 +444,12 @@ export default function OrderDetailPage() {
                                 onChange={e => setEditForm({ ...editForm, status: e.target.value })}
                                 style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: 'bold' }}
                             >
-                                <option value="pending_approval">Pendiente</option>
-                                <option value="para_compra">Para Compra</option>
-                                <option value="approved">Aprobado</option>
-                                <option value="shipped">En Transporte</option>
-                                <option value="delivered">Entregado</option>
-                                <option value="cancelled">Cancelado</option>
+                                <option value="pending_approval">POR APROBAR</option>
+                                <option value="para_compra">PARA COMPRA</option>
+                                <option value="approved">APROBADO</option>
+                                <option value="shipped">EN TRANSPORTE</option>
+                                <option value="delivered">ENTREGADO</option>
+                                <option value="cancelled">CANCELADO</option>
                             </select>
                         )}
                     </div>

@@ -26,6 +26,7 @@ function CreateOrderContent() {
     // B2B State
     const [selectedClient, setSelectedClient] = useState('');
     const [clientSearch, setClientSearch] = useState('');
+    const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
 
     // B2C State
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
@@ -255,6 +256,14 @@ function CreateOrderContent() {
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
             return acc + (item.product.base_price * qtyNum);
+        }, 0);
+    };
+
+    const calculateTotalWeight = () => {
+        return cart.reduce((acc, item) => {
+            const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+            const w = item.product.weight_kg || (item.product.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+            return acc + (qtyNum * w);
         }, 0);
     };
 
@@ -573,7 +582,8 @@ function CreateOrderContent() {
                 .insert({
                     profile_id: finalProfileId,
                     total: calculateTotal(),
-                    status: 'Aprobado',
+                    total_weight_kg: calculateTotalWeight(),
+                    status: 'pending_approval',
                     payment_status: 'Pendiente',
                     payment_method: paymentMethod,
                     origin: 'Admin Panel',
@@ -785,7 +795,25 @@ function CreateOrderContent() {
                                                 type="text"
                                                 placeholder="Ej: 'Calle 100' o 'Restaurante'..."
                                                 value={clientSearch}
-                                                onChange={(e) => setClientSearch(e.target.value)}
+                                                onChange={(e) => {
+                                                    setClientSearch(e.target.value);
+                                                    setFocusedClientIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedClientIndex(prev => Math.max(prev - 1, -1));
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
+                                                        if (filteredClients[targetIndex]) {
+                                                            selectClient(filteredClients[targetIndex]);
+                                                        }
+                                                    }
+                                                }}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                             />
                                             {filteredClients.length > 0 && (
@@ -794,16 +822,17 @@ function CreateOrderContent() {
                                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
                                                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
                                                 }}>
-                                                    {filteredClients.map(c => (
+                                                    {filteredClients.map((c, idx) => (
                                                         <div
                                                             key={c.id}
                                                             onClick={() => selectClient(c)}
                                                             style={{
                                                                 padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                backgroundColor: idx === focusedClientIndex ? '#EFF6FF' : 'white'
                                                             }}
-                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                            onMouseEnter={() => setFocusedClientIndex(idx)}
+                                                            onMouseLeave={() => setFocusedClientIndex(-1)}
                                                         >
                                                             <div>
                                                                 <div style={{ fontWeight: '600', color: '#1F2937' }}>{c.company_name}</div>
@@ -1294,10 +1323,16 @@ function CreateOrderContent() {
                                         }}
                                     />
                                     {parsingFile ? (
-                                        <div style={{ animation: 'pulse 1.5s infinite' }}>
-                                            <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>🤖</div>
-                                            <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
-                                            <p style={{ color: '#64748B', fontSize: '0.9rem' }}>La IA está extrayendo productos y validando el cliente.</p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 0' }}>
+                                            <Loader2 size={56} color="#3B82F6" style={{ animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
+                                            <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
+                                            <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está extrayendo productos y validando el cliente.</p>
+                                            <style>{`
+                                                @keyframes spin {
+                                                    0% { transform: rotate(0deg); }
+                                                    100% { transform: rotate(360deg); }
+                                                }
+                                            `}</style>
                                         </div>
                                     ) : (
                                         <>
@@ -1549,7 +1584,7 @@ function CreateOrderContent() {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     {/* Table Header */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 120px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 120px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         <div>Producto</div>
                                         <div style={{ textAlign: 'center' }}>Cantidad</div>
                                         <div style={{ textAlign: 'right' }}>Precio Unit.</div>
@@ -1558,7 +1593,7 @@ function CreateOrderContent() {
                                     </div>
 
                                     {cart.map((item, idx) => (
-                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 120px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
+                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 190px 120px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
                                                     {item.product.name}
@@ -1683,7 +1718,7 @@ function CreateOrderContent() {
                             </button>
 
                             <p style={{ fontSize: '0.8rem', color: '#9CA3AF', textAlign: 'center', lineHeight: '1.4' }}>
-                                Al confirmar, el pedido entrará automáticamente en estado &quot;Aprobado&quot; y se sumará a la demanda de compras.
+                                Al confirmar, el pedido entrará a la Mesa de Control en estado &quot;Recibido&quot; para su revisión y aprobación.
                             </p>
                         </div>
                     </div>

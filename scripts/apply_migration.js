@@ -15,10 +15,10 @@ async function runSql() {
     
     try {
         await client.connect();
-        const sql = fs.readFileSync(path.join(__dirname, 'add_inherit_price.sql'), 'utf8');
+        const sql = fs.readFileSync(path.join(__dirname, 'add_order_weight.sql'), 'utf8');
         console.log(`🚀 Executing SQL...`);
         await client.query(sql);
-        console.log(`✅ Column inherit_price added successfully.`);
+        console.log(`✅ Column total_weight_kg added successfully.`);
     } catch (err) {
         console.error(`❌ Error executing SQL:`, err.message);
     } finally {

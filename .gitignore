@@ -48,3 +48,5 @@ next-env.d.ts
 brain/
 scratch/
 models_list*.json
+gcp-service-account.json
+

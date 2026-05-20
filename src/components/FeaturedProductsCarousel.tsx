@@ -102,48 +102,51 @@ export default function FeaturedProductsCarousel({ products }: Props) {
             </div>
 
             {/* Degradados laterales para suavizar los bordes */}
-            <div style={{ position: 'absolute', top: 0, left: 0, width: '100px', height: '100%', background: 'linear-gradient(to right, #FFFFFF 15%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
-            <div style={{ position: 'absolute', top: 0, right: 0, width: '100px', height: '100%', background: 'linear-gradient(to left, #FFFFFF 15%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '120px', height: '100%', background: 'linear-gradient(to right, var(--background) 20%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '100%', background: 'linear-gradient(to left, var(--background) 20%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
 
             {/* BOTÓN IZQUIERDA */}
             <button 
                 onClick={() => scrollByAmount(-304 * 2)}
                 style={{
                     position: 'absolute',
-                    left: '5px',
+                    left: '20px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '46px',
-                    height: '46px',
+                    width: '48px',
+                    height: '48px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                    border: '1px solid rgba(0,0,0,0.05)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                    border: '1px solid rgba(255, 255, 255, 0.6)',
+                    boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(8px)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
                     color: 'var(--primary)',
-                    transition: 'all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                    opacity: isHovered ? 1 : 0.4
+                    transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                    opacity: isHovered ? 1 : 0
                 }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--primary)';
                     e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
-                    e.currentTarget.style.boxShadow = '0 10px 30px rgba(26, 77, 46, 0.2)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.08)';
+                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(26, 77, 46, 0.2)';
+                    e.currentTarget.style.borderColor = 'var(--primary)';
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.85)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.75)';
                     e.currentTarget.style.color = 'var(--primary)';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
+                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(26, 77, 46, 0.08)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.6)';
                 }}
                 aria-label="Anterior"
             >
-                <ChevronLeft size={24} strokeWidth={2.5} />
+                <ChevronLeft size={22} strokeWidth={2.5} />
             </button>
 
             {/* BOTÓN DERECHA */}
@@ -151,40 +154,43 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 onClick={() => scrollByAmount(304 * 2)}
                 style={{
                     position: 'absolute',
-                    right: '5px',
+                    right: '20px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '46px',
-                    height: '46px',
+                    width: '48px',
+                    height: '48px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                    border: '1px solid rgba(0,0,0,0.05)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                    border: '1px solid rgba(255, 255, 255, 0.6)',
+                    boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(8px)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
                     color: 'var(--primary)',
-                    transition: 'all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                    opacity: isHovered ? 1 : 0.4
+                    transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                    opacity: isHovered ? 1 : 0
                 }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--primary)';
                     e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
-                    e.currentTarget.style.boxShadow = '0 10px 30px rgba(26, 77, 46, 0.2)';
+                    e.currentTarget.style.transform = 'translateY(-50%) scale(1.08)';
+                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(26, 77, 46, 0.2)';
+                    e.currentTarget.style.borderColor = 'var(--primary)';
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.85)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.75)';
                     e.currentTarget.style.color = 'var(--primary)';
                     e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
+                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(26, 77, 46, 0.08)';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.6)';
                 }}
                 aria-label="Siguiente"
             >
-                <ChevronRight size={24} strokeWidth={2.5} />
+                <ChevronRight size={22} strokeWidth={2.5} />
             </button>
         </div>
     );

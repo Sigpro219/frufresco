@@ -1,14 +1,24 @@
+// Cargar variables de entorno locales si existen
+try {
+    require('dotenv').config({ path: '.env.local' });
+} catch (e) {}
+
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Configuración
-const SUPABASE_URL = 'https://csqurhdykbalvlnpowcz.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzcXVyaGR5a2JhbHZsbnBvd2N6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjY3Njk2MSwiZXhwIjoyMDg4MjUyOTYxfQ.6lAdV9TeZvrc6nMs7VCMxnZiTWeewMsFtZn84-kJ_5E';
-const GEMINI_KEY = 'AIzaSyCDH2OFlGQ-M_QPm2o58yzpgQHKo-iXpU4';
+// Configuración cargada de entorno seguro
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://csqurhdykbalvlnpowcz.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+if (!SUPABASE_KEY || !GEMINI_KEY) {
+    console.error('❌ Error: Falta configurar SUPABASE_SERVICE_ROLE_KEY o GOOGLE_GENERATIVE_AI_API_KEY en .env.local');
+    process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Actualizado a modelo estable 2.5-flash
 
 async function processBatch(products) {
     const promises = products.map(async (product) => {

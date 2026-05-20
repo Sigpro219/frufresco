@@ -3,8 +3,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
+  let text = '';
   try {
-    const { text, targetLang } = await req.json();
+    const body = await req.json();
+    const targetLang = body.targetLang;
+    text = body.text || '';
     
     if (!text || !targetLang) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });

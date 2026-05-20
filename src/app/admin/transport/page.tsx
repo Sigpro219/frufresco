@@ -307,8 +307,8 @@ export default function TransportControlTower() {
                             {/* Map Container */}
                             <div style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
                                     {apiKey ? (
-                                        <Map defaultCenter={{ lat: 4.6300, lng: -74.1530 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
-                                            <AdvancedMarker position={{ lat: 4.6300, lng: -74.1530 }}>
+                                        <Map defaultCenter={{ lat: 4.633653, lng: -74.160647 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
+                                            <AdvancedMarker position={{ lat: 4.633653, lng: -74.160647 }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                                     <div style={{ backgroundColor: '#0F172A', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900', marginBottom: '4px' }}>🏠 BODEGA</div>
                                                     <Pin background={'#0F172A'} glyphColor={'white'} scale={1.2} />
@@ -323,7 +323,7 @@ export default function TransportControlTower() {
                                                 // If no position, spread them around the warehouse for visibility
                                                 const pos = v.last_latitude && v.last_longitude 
                                                     ? { lat: v.last_latitude, lng: v.last_longitude }
-                                                    : { lat: 4.6300 + (Math.sin(i) * 0.01), lng: -74.1530 + (Math.cos(i) * 0.01) };
+                                                    : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
 
                                                 return (
                                                     <AdvancedMarker key={v.id} position={pos}>

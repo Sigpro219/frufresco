@@ -6,7 +6,7 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 
 const getStatusLabel = (s: string) => {
     switch (s) {
-        case 'pending_approval': return 'RECIBIDO';
+        case 'pending_approval': return 'POR APROBAR';
         case 'para_compra': return 'COMPRAS / QA';
         case 'approved': return 'APROBADO';
         case 'picking': return 'EN PREPARACIÓN';
@@ -47,6 +47,8 @@ export default function OrderLoadingPage() {
     
     // Bulk Selection State
     const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [targetStatusToConfirm, setTargetStatusToConfirm] = useState('');
 
     const [variantQuantity, setVariantQuantity] = useState(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -563,12 +565,12 @@ export default function OrderLoadingPage() {
                             customer_phone: phone,
                             customer_nit: order.profiles?.nit || null,
                             paymentMethod: paymentMethod,
-                            isComplete: (
+                            isComplete: true /* (
                                 name && name !== 'Cliente Desconocido' && name !== 'Sin Razón Social' && name !== 'Cliente Registrado' &&
                                 phone && phone !== 'Sin Teléfono' && phone !== 'Sin tel.' &&
                                 order.shipping_address && order.shipping_address.length > 5 &&
                                 (!order.profiles || order.profiles.role !== 'b2b_client' || (order.profiles.nit && order.profiles.nit !== 'Sin NIT'))
-                            )
+                            ) */
                         };
                     });
                     setOrders(processedData);
@@ -622,8 +624,8 @@ export default function OrderLoadingPage() {
                     marginBottom: '1rem'
                 }}>
                     <KPICard title="Total Pedidos" value={totalOrders} icon="📦" color="#6366F1" subtitle="Para entrega hoy" />
-                    <KPICard title="Valor Carga" value={`$${totalSales.toLocaleString()}`} icon="💰" color="#10B981" subtitle="Monto bruto" />
-                    <KPICard title="Peso Total" value={`${totalWeightTons.toFixed(2)} TON`} icon="🚜" color="#F59E0B" subtitle="Logística" />
+                    <KPICard title="Valor Carga" value={`$${totalSales.toLocaleString('es-CO')}`} icon="💰" color="#10B981" subtitle="Monto bruto" />
+                    <KPICard title="Peso Total" value={`${totalWeightTons.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TON`} icon="🚜" color="#F59E0B" subtitle="Logística" />
                     <KPICard title="Efectividad" value={`${approvalRate.toFixed(0)}%`} icon="✅" color="#0891B2" subtitle="Tasa de aprobación" />
                     <KPICard title="Alertas" value={incompleteCount} icon="⚠️" color="#EF4444" subtitle="Info incompleta" />
                 </div>
@@ -844,7 +846,10 @@ export default function OrderLoadingPage() {
                             </div>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button 
-                                    onClick={() => handleBulkAction('para_compra')}
+                                    onClick={() => {
+                                        setTargetStatusToConfirm('para_compra');
+                                        setShowConfirmModal(true);
+                                    }}
                                     disabled={updateLoading}
                                     style={{
                                         backgroundColor: '#10B981',
@@ -966,10 +971,10 @@ export default function OrderLoadingPage() {
                                                         {order.origin_source === 'web' ? '🛒' : order.origin_source === 'whatsapp' ? '💬' : '📞'}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                                                        {order.total_weight_kg?.toFixed(1)} kg
+                                                        {order.total_weight_kg?.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
-                                                        ${order.total.toLocaleString()}
+                                                        ${order.total.toLocaleString('es-CO')}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                                                         <div style={{
@@ -1013,6 +1018,146 @@ export default function OrderLoadingPage() {
                 <div style={{ textAlign: 'center', marginTop: '1.5rem', color: '#94A3B8', fontSize: '0.8rem', fontWeight: '700' }}>
                     {filteredOrders.length} pedido(s) encontrado(s) en {viewMode === 'table' ? 'vista lista' : 'vista cuadrícula'}
                 </div>
+
+                {/* Bulk Confirm Modal */}
+                {showConfirmModal && (() => {
+                    const selectedOrdersList = filteredOrders.filter(o => selectedOrders.has(o.id));
+                    const unselectedOrdersCount = filteredOrders.length - selectedOrders.size;
+                    const uniqueClients = new Set(selectedOrdersList.map(o => o.customer_name)).size;
+                    const b2bCount = selectedOrdersList.filter(o => o.type?.startsWith('b2b') || o.profiles?.role === 'b2b_client').length;
+                    const b2cCount = selectedOrdersList.length - b2bCount;
+                    const totalWeight = selectedOrdersList.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0);
+                    const totalValue = selectedOrdersList.reduce((sum, o) => sum + (o.total || 0), 0);
+                    
+                    return (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            zIndex: 2000, backdropFilter: 'blur(12px)', padding: '1rem'
+                        }} onClick={() => setShowConfirmModal(false)}>
+                            <div style={{
+                                backgroundColor: '#0F172A',
+                                borderRadius: '32px',
+                                width: '95%',
+                                maxWidth: '950px',
+                                padding: '3.5rem',
+                                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1) inset',
+                                display: 'flex', flexDirection: 'column', gap: '2rem',
+                                color: 'white',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }} onClick={e => e.stopPropagation()}>
+                                {/* Background glow effect */}
+                                <div style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', background: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15), transparent 50%)', pointerEvents: 'none' }} />
+
+                                <div style={{ textAlign: 'center', zIndex: 1 }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1rem', fontSize: '3rem' }}>
+                                        🚀
+                                    </div>
+                                    <h2 style={{ margin: 0, fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #FFFFFF, #94A3B8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                        Resumen de Lanzamiento
+                                    </h2>
+                                    <p style={{ color: '#94A3B8', marginTop: '0.8rem', fontSize: '1rem', lineHeight: '1.5', maxWidth: '85%', margin: '0.8rem auto 0' }}>
+                                        Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras y Transporte.
+                                    </p>
+                                </div>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', zIndex: 1 }}>
+                                    {/* Left Column: Logistics & Finances */}
+                                    <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>📦 Pedidos a enviar</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: 'white' }}>{selectedOrders.size}</span>
+                                        </div>
+                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>🏢 Clientes Únicos</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#38BDF8' }}>{uniqueClients}</span>
+                                        </div>
+                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>⚖️ Peso Logístico Estimado</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#FBBF24' }}>
+                                                {totalWeight.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span style={{fontSize:'0.8rem', color:'#94A3B8'}}>kg</span>
+                                            </span>
+                                        </div>
+                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>💰 Valor Bruto</span>
+                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#10B981' }}>
+                                                ${totalValue.toLocaleString('es-CO')}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right Column: Breakdown & Alerts */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', flex: 1 }}>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em', marginBottom: '1.2rem' }}>SEGMENTACIÓN</div>
+                                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                                <div style={{ flex: 1, backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#38BDF8' }}>{b2bCount}</div>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#BAE6FD', marginTop: '4px' }}>B2B Institucional</div>
+                                                </div>
+                                                <div style={{ flex: 1, backgroundColor: 'rgba(167, 139, 250, 0.1)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#A78BFA' }}>{b2cCount}</div>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#DDD6FE', marginTop: '4px' }}>B2C Hogar</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {unselectedOrdersCount > 0 ? (
+                                            <div style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                                <div style={{ fontSize: '1.8rem', lineHeight: '1' }}>⚠️</div>
+                                                <div>
+                                                    <div style={{ fontWeight: '900', color: '#FDA4AF', fontSize: '0.9rem' }}>Dejaste {unselectedOrdersCount} pedido(s) por fuera</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Compras.</div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                                <div style={{ fontSize: '1.8rem', lineHeight: '1' }}>✅</div>
+                                                <div>
+                                                    <div style={{ fontWeight: '900', color: '#6EE7B7', fontSize: '0.9rem' }}>Cobertura Total</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#A7F3D0', marginTop: '4px', lineHeight: '1.4' }}>Seleccionaste el 100% de la lista. Toda la operación está cubierta.</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', zIndex: 1 }}>
+                                    <button 
+                                        onClick={() => setShowConfirmModal(false)}
+                                        style={{
+                                            flex: 1, padding: '1.2rem', backgroundColor: 'transparent', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '1rem'
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'white'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94A3B8'; }}
+                                    >
+                                        Revisar de nuevo
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            setShowConfirmModal(false);
+                                            handleBulkAction(targetStatusToConfirm);
+                                        }}
+                                        disabled={updateLoading}
+                                        style={{
+                                            flex: 2, padding: '1.2rem', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: updateLoading ? 'wait' : 'pointer', boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4)', transition: 'all 0.2s', fontSize: '1.1rem', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                    >
+                                        {updateLoading ? 'Procesando...' : 'FIRMAR Y LANZAR OPERACIÓN'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Order Details Modal */}
                 {selectedOrder && (
@@ -1069,7 +1214,7 @@ export default function OrderLoadingPage() {
                                                     backgroundColor: '#F8FAFC'
                                                 }}
                                             >
-                                                <option value="pending_approval">RECIBIDO (QA LOGÍSTICO)</option>
+                                                <option value="pending_approval">POR APROBAR</option>
                                                 <option value="para_compra">PARA COMPRA</option>
                                                 <option value="approved">APROBADO</option>
                                                 <option value="picking">EN PREPARACIÓN</option>
@@ -1574,7 +1719,6 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
         <div 
             onClick={onClick}
             style={{
-                backgroundColor: 'white',
                 padding: '1.2rem',
                 borderRadius: '16px',
                 border: '1px solid #E5E7EB',
@@ -1611,8 +1755,8 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F3F4F6', paddingTop: '0.8rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>${order.total.toLocaleString()}</div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{order.total_weight_kg?.toFixed(1)} kg</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>${order.total.toLocaleString('es-CO')}</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{order.total_weight_kg?.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</div>
             </div>
 
             <div 

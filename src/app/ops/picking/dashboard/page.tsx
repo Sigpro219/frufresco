@@ -122,19 +122,19 @@ export default function PickingDashboard() {
 
             const { data: orders } = await ordersQuery;
 
-            const activeClientNames = Array.from(new Set((orders || []).map(o => o.customer_name).filter(n => !!n)));
+            const activeClientNames = Array.from(new Set((orders || []).map(o => (o as any).customer_name).filter(n => !!n))) as string[];
 
             // 2. Fetch Profiles to get zones
-            const { data: profiles } = await supabase.from('profiles')
+            const { data: profiles } = (await supabase.from('profiles')
                 .select('id, company_name, delivery_zone_id')
                 .eq('role', 'b2b_client')
-                .abortSignal(signal as any);
+                .abortSignal(signal as any)) as { data: { id: string; company_name: string; delivery_zone_id: string }[] | null };
             
-            const profileMap = new Map((profiles || []).map(p => [p.company_name, p]));
+            const profileMap = new Map<string, { id: string; company_name: string; delivery_zone_id: string }>((profiles || []).map(p => [p.company_name, p]));
 
             // Fetch Zones for Mapping
-            const { data: zones } = await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any);
-            const zoneMap = new Map((zones || []).map(z => [z.id, z.name]));
+            const { data: zones } = (await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any)) as { data: { id: string; name: string }[] | null };
+            const zoneMap = new Map<string, string>((zones || []).map(z => [z.id, z.name]));
 
             // Build clients from ORDERS (Source of Truth)
             const formattedClients = activeClientNames

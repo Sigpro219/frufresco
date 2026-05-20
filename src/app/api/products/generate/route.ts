@@ -4,8 +4,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const GEMINI_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 export async function POST(req: Request) {
+    let current_description = '';
     try {
-        const { name, category, current_description } = await req.json();
+        const body = await req.json();
+        const { name, category } = body;
+        current_description = body.current_description || '';
 
         if (!name || !category) {
             return NextResponse.json({ error: 'Faltan datos del producto (nombre o categoría)' }, { status: 400 });

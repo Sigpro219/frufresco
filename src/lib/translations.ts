@@ -95,11 +95,7 @@ export const translations = {
     quickLinks: "Enlaces Rápidos",
     contact: "Contacto",
     allRightsReserved: "Todos los derechos reservados",
-    valueProps: [
-      { icon: '⏱️', title: 'Entrega Puntual', desc: 'Tu operación no puede detenerse. Garantizamos entregas antes de la apertura de tu cocina.' },
-      { icon: '🥬', title: 'Frescura Absoluta', desc: 'Seleccionamos producto a producto cada madrugada. Lo que recibes hoy, se cosechó ayer.' },
-      { icon: '💎', title: 'Precios Competitivos', desc: 'Sin intermediarios innecesarios. Optimizamos la cadena para darte el mejor margen.' }
-    ],
+
     categories: {
       'TODOS': 'Todo el Catálogo',
       'FR': 'Frutas',
@@ -217,6 +213,7 @@ export const translations = {
         sendNow: "Enviar Ahora",
         product: "Producto",
         printCopy: "Imprimir copia",
+        quantity: "Cantidad",
         sending: "Enviando..."
       }
     }
@@ -432,6 +429,7 @@ export const translations = {
         sendNow: "Send Now",
         product: "Product",
         printCopy: "Print copy",
+        quantity: "Quantity",
         sending: "Sending..."
       }
     }

@@ -1875,7 +1875,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     }));
                     window.showToast?.('Ubicación aproximada detectada', 'info');
                 } else {
-                    window.showToast?.('No se encontró la dirección.', 'warning');
+                    window.showToast?.('No se encontró la dirección.', 'info');
                 }
             } else {
                 console.error('Error Proxy status:', data.status, data.error_message);

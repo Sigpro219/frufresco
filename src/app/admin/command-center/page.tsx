@@ -288,9 +288,11 @@ export default function CommandCenter() {
             
             setStatusMessage({ text: 'Configuración actualizada', type: 'success' });
             setTimeout(() => setStatusMessage({ text: '', type: '' }), 3000);
+            return true;
         } catch (error) {
             console.error('Error updating setting:', error);
             setStatusMessage({ text: 'Error al actualizar gobernanza', type: 'error' });
+            return false;
         }
     };
 

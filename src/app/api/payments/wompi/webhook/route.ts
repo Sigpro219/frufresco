@@ -57,8 +57,8 @@ export async function POST(request: Request) {
             let adminNotes = order.admin_notes || '';
 
             if (status === 'APPROVED') {
-                // Sello de pago para logística
-                const paymentTag = `[PAGO: Wompi ${transaction.payment_method_type || 'CARD'} APPROVED]`;
+                // Sello de pago para logística, incluyendo el ID de Wompi
+                const paymentTag = `[PAGO: Wompi ${transaction.payment_method_type || 'CARD'} APPROVED | ID: ${transaction.id}]`;
                 if (!adminNotes.includes('[PAGO:')) {
                     adminNotes = adminNotes ? `${adminNotes} | ${paymentTag}` : paymentTag;
                 }
@@ -111,7 +111,6 @@ export async function POST(request: Request) {
                 .from('orders')
                 .update({
                     status: mappedStatus,
-                    wompi_transaction_id: transaction.id,
                     profile_id: profileId,
                     admin_notes: adminNotes
                 })

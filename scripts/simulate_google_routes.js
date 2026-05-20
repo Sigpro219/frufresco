@@ -4,7 +4,7 @@ const fs = require('fs');
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyCL_C1jEroFYTcYHOSvYyOQiVW1XNCk3Y0';
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const filePath = 'C:\\Users\\German Higuera\\OneDrive\\Documentos\\Proyectos Delta CoreTech\\2026\\Inventario Fruver\\Datas maestras\\rutas de prueba.xlsx';
 
 const supabase = createClient(

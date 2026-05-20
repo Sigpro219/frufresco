@@ -266,7 +266,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                                                 </span>
                                             ))}
                                             <input 
-                                                ref={el => inputRefs.current[attr.id] = el}
+                                                ref={el => { inputRefs.current[attr.id] = el; }}
                                                 placeholder="+ Subcat..."
                                                 value={newValueInputs[attr.id] || ''}
                                                 onChange={(e) => setNewValueInputs({ ...newValueInputs, [attr.id]: e.target.value })}

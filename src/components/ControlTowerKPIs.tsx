@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 
 interface KpiData {
     id: string;
@@ -28,19 +27,17 @@ export default function ControlTowerKPIs() {
         try {
             if (!isMounted.current) return;
             setLoading(true);
-            const { data, error } = await supabase
-                .from('routes')
-                .select('id, is_optimized, theoretical_distance_km, theoretical_duration_min, stops_count, created_at, status')
-                .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            const response = await fetch('/api/transport/kpis');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
             if (isMounted.current) {
                 setRoutes(data || []);
             }
         } catch (err: unknown) {
             const isAbortError = err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'));
             if (isAbortError) return;
-            
             console.error('Error fetching KPI data:', err);
         } finally {
             if (isMounted.current) setLoading(false);

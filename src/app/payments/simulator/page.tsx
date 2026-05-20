@@ -50,8 +50,8 @@ function SimulatorContent() {
 
             if (!response.ok) throw new Error('Error notifying webhook');
 
-            // 3. Redirigir a la página de resultados usando EL MISMO ID
-            router.push(`/checkout/result?id=${transactionId}${lang ? `&lang=${lang}` : ''}`);
+            // 3. Redirigir a la página de resultados usando la REFERENCIA DEL PEDIDO
+            router.push(`/checkout/result?id=${reference}${lang ? `&lang=${lang}` : ''}`);
 
         } catch (error) {
             console.error('Simulation Error:', error);

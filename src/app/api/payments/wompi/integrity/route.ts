@@ -9,7 +9,8 @@ import crypto from 'crypto';
 export async function POST(request: Request) {
     try {
         const { reference, amountInCents, currency = 'COP' } = await request.json();
-        const integritySecret = process.env.WOMPI_INTEGRITY_SECRET;
+        // Usa la clave del entorno o una de prueba para desarrollo local
+        const integritySecret = process.env.WOMPI_INTEGRITY_SECRET || 'test_integrity_secret_123456';
 
         if (!integritySecret) {
             return NextResponse.json(

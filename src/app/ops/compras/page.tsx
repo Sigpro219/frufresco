@@ -32,6 +32,7 @@ export default function ProcurementPage() {
   );
   const [providers, setProviders] = useState<any[]>([]);
   const [filterCategory, setFilterCategory] = useState<string>("");
+  const [showFilterGrid, setShowFilterGrid] = useState(false);
   const [conversions, setConversions] = useState<any[]>([]);
 
   // Substitution states
@@ -192,7 +193,7 @@ export default function ProcurementPage() {
 
         const { data: products, error: pErr } = await supabase
           .from("products")
-          .select("id, name, category, unit_of_measure")
+          .select("id, name, category, purchase_sublist, unit_of_measure")
           .in("id", productIds);
 
         if (pErr)
@@ -223,21 +224,20 @@ export default function ProcurementPage() {
             total_purchased: t.total_purchased,
             unit: prod?.unit_of_measure || t.unit || "kg",
             status: t.status,
-            category: prod?.category || "General",
+            category: prod?.purchase_sublist || "S/N",
             delivery_date: t.delivery_date,
             created_at: t.created_at,
           };
         });
 
-        // 4. Aplicar filtro de categoría (Soporta nombre y código mapeado)
+        // 4. Aplicar filtro de sublista
         if (
           finalCategory &&
           finalCategory !== "Ver Todo" &&
           finalCategory !== ""
         ) {
-          const mappedCode = REVERSE_CATEGORY_MAP[finalCategory] || finalCategory;
           formatted = formatted.filter(
-            (t) => t.category === finalCategory || t.category === mappedCode
+            (t) => t.category === finalCategory
           );
         }
 
@@ -300,7 +300,7 @@ export default function ProcurementPage() {
 
     try {
       // 1. Obtener items de pedidos ACTIVOS (SIN RESTRICCIÓN DE FECHA - DESACTIVADO TEMPORALMENTE)
-      const { data: items } = await supabase
+      const { data: items } = (await supabase
         .from("order_items")
         .select(
           `
@@ -313,8 +313,7 @@ export default function ProcurementPage() {
                 `,
         )
         // .eq('orders.delivery_date', targetDate) // Filtro desactivado
-        .in("orders.status", ["para_compra", "approved"]) // Solo pedidos aprobados o marcados para compra
-        .returns<any[]>();
+        .in("orders.status", ["para_compra", "approved"])) as { data: any[] | null };
 
       if (!items || items.length === 0) {
         alert(
@@ -664,14 +663,22 @@ export default function ProcurementPage() {
   const totalProgress =
     tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
 
-  // Estadísticas por Categoría
-  const categories = ["Frutas", "Verduras", "Lácteos", "Cereales"];
-  const categoryStats = categories.map((cat) => {
+  // Estadísticas por Sublista de Compra
+  const dynamicCategories = [
+    "DESPENSA",
+    "FRUTA SELECCIONADA",
+    "HORTALIZA SELECCIONADA",
+    "PLATANOS",
+    "TOMATE",
+    "TUBERCULOS - PAPA",
+    "VERDURAS"
+  ];
+  const categoryStats = dynamicCategories.map((cat) => {
     const catTasks = tasks.filter((t) => t.category === cat);
     const completed = catTasks.filter((t) => t.status === "completed").length;
     const percentage =
       catTasks.length > 0 ? Math.round((completed / catTasks.length) * 100) : 0;
-    return { name: cat, percentage, count: catTasks.length };
+    return { name: cat as string, percentage, count: catTasks.length };
   });
 
   return (
@@ -999,85 +1006,133 @@ export default function ProcurementPage() {
         )}
       </div>
 
-      {/* Category Progress Legend (Compact Breakdown) */}
-      {tasks.length > 0 && (
-        <div 
-          style={{ 
-            display: "flex", 
-            gap: "0.75rem", 
-            margin: "0 0.5rem 1rem 0.5rem", 
-            overflowX: "auto", 
-            padding: "0.2rem 0",
-            msOverflowStyle: 'none',
-            scrollbarWidth: 'none'
-          }}
-        >
-          {categoryStats.map(stat => (
-            <div 
-              key={stat.name}
-              style={{
-                fontSize: "0.65rem",
-                fontWeight: "800",
-                color: "var(--ops-text-muted)",
-                backgroundColor: "var(--ops-surface)",
-                padding: "0.3rem 0.6rem",
-                borderRadius: "8px",
-                border: "1px solid var(--ops-border)",
-                whiteSpace: "nowrap",
-                display: "flex",
-                gap: "4px"
-              }}
-            >
-              <span style={{ opacity: 0.6 }}>{stat.name}:</span>
-              <span style={{ color: stat.percentage === 100 ? "var(--ops-primary)" : stat.percentage > 0 ? "#F59E0B" : "inherit" }}>
-                {stat.percentage}%
-              </span>
-            </div>
-          ))}
+      {/* Category Filter — Colapsable */}
+      <div style={{ marginBottom: "1.5rem" }}>
+
+        {/* Barra activa: siempre visible */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Pill de categoría activa */}
+          <div
+            style={{
+              flex: 1,
+              padding: "0.5rem 1rem",
+              borderRadius: "12px",
+              backgroundColor: "var(--ops-primary)",
+              color: "white",
+              fontSize: "0.75rem",
+              fontWeight: "800",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>
+              {filterCategory === "" || filterCategory === "Ver Todo"
+                ? "📋 Ver Todo"
+                : (() => {
+                    const s = categoryStats.find(s => s.name === filterCategory);
+                    return `${filterCategory}${s ? ` · ${s.percentage}%` : ""}`;
+                  })()}
+            </span>
+            {(filterCategory !== "" && filterCategory !== "Ver Todo") && (
+              <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
+            )}
+          </div>
+
+          {/* Botón toggle del grid */}
+          <button
+            onClick={() => setShowFilterGrid(v => !v)}
+            title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "12px",
+              border: `1px solid ${showFilterGrid ? "var(--ops-primary)" : "var(--ops-border)"}`,
+              backgroundColor: showFilterGrid ? "rgba(16,185,129,0.15)" : "var(--ops-surface)",
+              color: showFilterGrid ? "var(--ops-primary)" : "var(--ops-text-muted)",
+              fontSize: "1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            {showFilterGrid ? "✕" : "⊞"}
+          </button>
         </div>
-      )}
 
-      {/* Category Filter Pills */}
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          overflowX: "auto",
-          marginBottom: "1.5rem",
-          paddingBottom: "0.5rem",
-        }}
-      >
-        {["Ver Todo", "Frutas", "Verduras", "Lácteos", "Cereales"].map(
-          (cat) => {
-            const stat = categoryStats.find(s => s.name === cat);
-            const displayLabel = stat ? `${cat} (${stat.percentage}%)` : cat;
-
-            return (
-              <button
-                key={cat}
-                onClick={() => {
-                  setFilterCategory(cat);
-                  fetchTasks(undefined, cat);
-                }}
-                style={{
-                  padding: "0.4rem 1rem",
-                  borderRadius: "20px",
-                  border: `1px solid var(--ops-border)`,
-                  backgroundColor:
-                    filterCategory === cat
+        {/* Grid 2×4 — se muestra/oculta */}
+        {showFilterGrid && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0.4rem",
+              marginTop: "0.5rem",
+              animation: "fadeSlideDown 0.18s ease-out",
+            }}
+          >
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes fadeSlideDown {
+                from { opacity: 0; transform: translateY(-6px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+            `}} />
+            {["Ver Todo", ...categoryStats.map(s => s.name)].map((cat) => {
+              const stat = categoryStats.find(s => s.name === cat);
+              const isActive = filterCategory === cat || (cat === "Ver Todo" && (filterCategory === "" || filterCategory === "Ver Todo"));
+              const pct = stat?.percentage ?? null;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setFilterCategory(cat);
+                    fetchTasks(undefined, cat);
+                    setShowFilterGrid(false);
+                  }}
+                  style={{
+                    padding: "0.55rem 0.75rem",
+                    borderRadius: "10px",
+                    border: `1px solid ${isActive ? "var(--ops-primary)" : "var(--ops-border)"}`,
+                    backgroundColor: isActive
                       ? "var(--ops-primary)"
                       : "var(--ops-surface)",
-                  color:
-                    filterCategory === cat ? "white" : "var(--ops-text-muted)",
-                  fontSize: "0.75rem",
-                  fontWeight: "700",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {displayLabel}
-              </button>
-            );
-          }
+                    color: isActive ? "white" : "var(--ops-text-muted)",
+                    fontSize: "0.7rem",
+                    fontWeight: "700",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
+                    {cat === "Ver Todo" ? "📋 Ver Todo" : cat}
+                  </span>
+                  {pct !== null && (
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: "900",
+                        opacity: isActive ? 0.85 : 0.6,
+                        color: isActive
+                          ? "white"
+                          : pct === 100 ? "#10B981" : pct > 0 ? "#F59E0B" : "inherit",
+                      }}
+                    >
+                      {pct}% listo
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 

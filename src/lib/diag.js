@@ -1,6 +1,14 @@
-const API_KEY = "AIzaSyAyEecFLG76siiuaoAb722VGc-URrpPe4o";
+try {
+    require('dotenv').config({ path: '.env.local' });
+} catch (e) {}
+
+const API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 async function check() {
+    if (!API_KEY) {
+        console.error("❌ ERROR: GOOGLE_GENERATIVE_AI_API_KEY no definida en el entorno.");
+        return;
+    }
     console.log("--- PROBANDO V1 ---");
     try {
         const r1 = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${API_KEY}`);

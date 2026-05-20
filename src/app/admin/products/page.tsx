@@ -414,10 +414,10 @@ export default function AdminProductsPage() {
 
         return {
             total,
-            activeCoverage: (active / total * 100).toFixed(1),
-            imageCoverage: (withImg / total * 100).toFixed(1),
-            variantsCoverage: (withVariants / total * 100).toFixed(1),
-            pricingStatus: (withPrice / total * 100).toFixed(1)
+            activeCoverage: (active / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+            imageCoverage: (withImg / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+            variantsCoverage: (withVariants / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+            pricingStatus: (withPrice / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
         };
     }, [products]);
 
@@ -654,7 +654,7 @@ export default function AdminProductsPage() {
 
                 {/* KPI DASHBOARD PREMIUM */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
-                    <KPIMiniCard label="Total Catálogo" value={kpiMetrics.total} icon="📦" color="#6366F1" />
+                    <KPIMiniCard label="Total Catálogo" value={kpiMetrics.total.toLocaleString('es-CO')} icon="📦" color="#6366F1" />
                     <KPIMiniCard label="Stock Activo" value={`${kpiMetrics.activeCoverage}%`} icon="✅" color="#10B981" />
                     <KPIMiniCard label="Visualización" value={`${kpiMetrics.imageCoverage}%`} icon="📸" color="#3B82F6" />
                     <KPIMiniCard label="Precios Web" value={`${kpiMetrics.pricingStatus}%`} icon="💰" color="#F59E0B" />

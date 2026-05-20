@@ -101,15 +101,15 @@ export default function PickingExecutionPage() {
                 return;
             }
 
-            const { data: profiles } = await supabase.from('profiles').select('id, company_name, delivery_zone_id').eq('role', 'b2b_client').abortSignal(signal as any);
-            const { data: zones } = await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any);
-            const zoneMap = new Map((zones || []).map(z => [z.id, z.name]));
-            const profileMap = new Map((profiles || []).map(p => [p.company_name, p]));
+            const { data: profiles } = (await supabase.from('profiles').select('id, company_name, delivery_zone_id').eq('role', 'b2b_client').abortSignal(signal as any)) as { data: { id: string; company_name: string; delivery_zone_id: string }[] | null };
+            const { data: zones } = (await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any)) as { data: { id: string; name: string }[] | null };
+            const zoneMap = new Map<string, string>((zones || []).map(z => [z.id, z.name]));
+            const profileMap = new Map<string, { id: string; company_name: string; delivery_zone_id: string }>((profiles || []).map(p => [p.company_name, p]));
 
-            const allOrderClients = new Set(
+            const allOrderClients = new Set<string>(
                 (activeOrders || [])
-                    .map(o => o.customer_name)
-                    .filter(name => !!name)
+                    .map(o => (o as any).customer_name)
+                    .filter((name): name is string => !!name)
             );
             
             const clientList = Array.from(allOrderClients)
@@ -210,8 +210,8 @@ export default function PickingExecutionPage() {
     const fetchInitialData = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const { data: prods } = await supabase.from('products').select('category').abortSignal(signal as any);
-            const uniqueCats = Array.from(new Set((prods || []).map(p => p.category))).filter(Boolean);
+            const { data: prods } = (await supabase.from('products').select('category').abortSignal(signal as any)) as { data: { category: string }[] | null };
+            const uniqueCats = Array.from(new Set((prods || []).map((p: { category: string }) => p.category))).filter(Boolean) as string[];
             
             if (isMounted.current) {
                 setCategories(uniqueCats);

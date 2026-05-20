@@ -1,4 +1,5 @@
 import { getVisibleProducts, getAppSettings, getWebCategories } from '../lib/data';
+import { type Product } from '../lib/supabase';
 import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -83,7 +84,7 @@ async function FeaturedSection({ locale }: { locale: Locale }) {
     });
 
     return (
-        <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+        <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: 'var(--background)', overflow: 'hidden' }}>
             <div className="container">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
                     <Flame size={32} strokeWidth={2.5} style={{ color: 'var(--primary)' }} />
@@ -119,7 +120,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
   const catalogTitle = (locale === 'en' ? getSetting('home_catalog_title_en', '') : getSetting('home_catalog_title', '')) || t.catalogTitle;
 
   return (
-    <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: '#FFFFFF' }}>
+    <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: 'var(--background)' }}>
 
       {/* HERO SECTION - Renders with appSettings */}
       <section className="hero-container" style={{ position: 'relative', height: '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', overflow: 'hidden', backgroundColor: '#1a4d2e' }}>

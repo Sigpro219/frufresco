@@ -109,7 +109,7 @@ export default function AdminDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
 
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>Centro de Comando</h1>
@@ -343,9 +343,10 @@ function KPICard({ title, value, icon, color }: { title: string, value: string, 
             borderTop: `4px solid ${color}`,
             display: 'flex', 
             alignItems: 'center', 
-            gap: '1.2rem', 
+            gap: '1rem', 
             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-            transition: 'transform 0.2s'
+            transition: 'transform 0.2s',
+            minWidth: 0
         }}
         onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
         onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
@@ -364,8 +365,8 @@ function KPICard({ title, value, icon, color }: { title: string, value: string, 
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{title}</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', lineHeight: '1', letterSpacing: '-0.02em' }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', whiteSpace: 'nowrap' }}>{title}</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', lineHeight: '1', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>{value}</div>
             </div>
         </div>
     );

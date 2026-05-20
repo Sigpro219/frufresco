@@ -50,15 +50,15 @@ export default function ProductCard({ product }: { product: Product }) {
         <>
             <div style={{
                 backgroundColor: 'var(--surface)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: isHovered ? 'var(--shadow-premium)' : '0 4px 15px rgba(0,0,0,0.02)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: isHovered ? 'var(--shadow-premium)' : '0 4px 20px rgba(0,0,0,0.02)',
                 overflow: 'hidden',
                 transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
                 border: '1px solid var(--border)',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
-                transform: isHovered ? 'translateY(-10px)' : 'translateY(0)',
+                transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
                 height: '100%'
             }}
                 onMouseEnter={() => setIsHovered(true)}
@@ -89,8 +89,8 @@ export default function ProductCard({ product }: { product: Product }) {
                             onLoad={() => setImageLoaded(true)}
                             style={{ 
                                 objectFit: 'cover',
-                                transition: 'transform 0.8s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.5s ease-in-out',
-                                transform: isHovered ? 'scale(1.15)' : 'scale(1)',
+                                transition: 'transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.5s ease-in-out',
+                                transform: isHovered ? 'scale(1.08)' : 'scale(1)',
                                 opacity: imageLoaded ? 1 : 0
                             }}
                             priority={false} 
@@ -108,9 +108,9 @@ export default function ProductCard({ product }: { product: Product }) {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        background: 'linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.4))',
+                        background: 'linear-gradient(to bottom, rgba(26, 77, 46, 0.01), rgba(26, 77, 46, 0.15))',
                         opacity: isHovered ? 1 : 0,
-                        transition: 'opacity 0.3s ease',
+                        transition: 'opacity 0.4s ease',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'flex-end',
@@ -118,15 +118,15 @@ export default function ProductCard({ product }: { product: Product }) {
                         gap: '0.8rem',
                         zIndex: 5
                     }}>
-                            <button
+                        <button
                             onClick={handleQuickViewClick}
                             style={{
                                 width: 'fit-content',
                                 alignSelf: 'center',
-                                padding: '0.6rem 2rem',
-                                backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                                padding: '0.6rem 2.2rem',
+                                backgroundColor: 'rgba(255, 255, 255, 0.85)',
                                 color: 'var(--primary-dark)',
-                                border: '1px solid rgba(255, 255, 255, 0.4)',
+                                border: '1px solid rgba(255, 255, 255, 0.5)',
                                 borderRadius: 'var(--radius-full)',
                                 fontWeight: '700',
                                 fontSize: '0.75rem',
@@ -137,10 +137,10 @@ export default function ProductCard({ product }: { product: Product }) {
                                 gap: '8px',
                                 backdropFilter: 'blur(10px)',
                                 WebkitBackdropFilter: 'blur(10px)',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                                transform: isHovered ? 'translateY(0)' : 'translateY(15px)',
-                                transition: 'all 0.5s cubic-bezier(0.23, 1, 0.32, 1)',
-                                letterSpacing: '0.05em'
+                                boxShadow: '0 8px 32px rgba(26, 77, 46, 0.08)',
+                                transform: isHovered ? 'translateY(0)' : 'translateY(12px)',
+                                transition: 'all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                                letterSpacing: '0.04em'
                             }}
                         >
                             <Eye size={14} strokeWidth={2.5} /> {t.quickView}
@@ -163,18 +163,17 @@ export default function ProductCard({ product }: { product: Product }) {
                             
                             return (
                                 <div key={i} style={{ 
-                                    backgroundColor: isPromo ? 'rgba(239, 68, 68, 0.9)' : isFresh ? 'rgba(16, 185, 129, 0.9)' : 'rgba(255, 255, 255, 0.85)', 
-                                    padding: '4px 10px', 
+                                    backgroundColor: isPromo ? 'rgba(239, 68, 68, 0.12)' : isFresh ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.8)', 
+                                    padding: '4px 12px', 
                                     borderRadius: '50px',
                                     fontSize: '0.65rem',
                                     fontWeight: '800',
-                                    color: (isPromo || isFresh) ? 'white' : 'var(--primary-dark)',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                    backdropFilter: 'blur(4px)',
-                                    WebkitBackdropFilter: 'blur(4px)',
+                                    color: isPromo ? '#ef4444' : isFresh ? '#10b981' : 'var(--primary-dark)',
+                                    backdropFilter: 'blur(8px)',
+                                    WebkitBackdropFilter: 'blur(8px)',
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
-                                    border: '1px solid rgba(255,255,255,0.2)'
+                                    border: isPromo ? '1px solid rgba(239, 68, 68, 0.25)' : isFresh ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(255, 255, 255, 0.5)'
                                 }}>
                                     {tag}
                                 </div>
@@ -184,16 +183,16 @@ export default function ProductCard({ product }: { product: Product }) {
                 </Link>
 
                 {/* CONTENT */}
-                <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ padding: '1.2rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                         <h3 style={{ 
                             fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.15rem', 
-                            fontWeight: '800', 
+                            fontSize: '1.1rem', 
+                            fontWeight: '700', 
                             color: 'var(--text-main)',
-                            lineHeight: '1.2',
+                            lineHeight: '1.3',
                             margin: 0,
-                            minHeight: '2.4em',
+                            minHeight: '2.6em',
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
@@ -201,10 +200,10 @@ export default function ProductCard({ product }: { product: Product }) {
                         }}>{displayName}</h3>
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0' }}>
                         {product.base_price > 0 ? (
                             <>
-                                <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                <span style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
                                     ${(Math.ceil(((product.base_price || 0) * (product.web_conversion_factor || 1)) / 50) * 50).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
                                     {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
                                 </span>
@@ -220,15 +219,15 @@ export default function ProductCard({ product }: { product: Product }) {
                     </div>
 
                     {/* ACTION BUTTONS */}
-                    <div style={{ marginTop: 'auto', paddingTop: '0.6rem' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '0.8rem' }}>
                         <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
                             <div style={{
                                 width: '100%',
-                                height: '34px',
-                                backgroundColor: 'transparent',
+                                height: '38px',
+                                backgroundColor: 'rgba(26, 77, 46, 0.04)',
                                 color: 'var(--primary)',
-                                border: '1.5px solid var(--primary)',
-                                borderRadius: '8px',
+                                border: '1px solid rgba(26, 77, 46, 0.12)',
+                                borderRadius: '10px',
                                 fontWeight: '700',
                                 fontSize: '0.8rem',
                                 cursor: 'pointer',
@@ -241,12 +240,14 @@ export default function ProductCard({ product }: { product: Product }) {
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = 'var(--primary)';
                                 e.currentTarget.style.color = 'white';
+                                e.currentTarget.style.borderColor = 'var(--primary)';
                                 e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(26, 77, 46, 0.15)';
+                                e.currentTarget.style.boxShadow = '0 6px 15px rgba(26, 77, 46, 0.18)';
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.04)';
                                 e.currentTarget.style.color = 'var(--primary)';
+                                e.currentTarget.style.borderColor = 'rgba(26, 77, 46, 0.12)';
                                 e.currentTarget.style.transform = 'translateY(0)';
                                 e.currentTarget.style.boxShadow = 'none';
                             }}

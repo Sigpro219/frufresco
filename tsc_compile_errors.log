@@ -1,0 +1,192 @@
+﻿scratch/ClientsModule_backup.tsx(807,45): error TS7006: Parameter 'n' implicitly has an 'any' type.
+scratch/ClientsModule_backup.tsx(813,48): error TS7006: Parameter 'n' implicitly has an 'any' type.
+scratch/ClientsModule_backup.tsx(815,50): error TS7006: Parameter 'p' implicitly has an 'any' type.
+scratch/ClientsModule_backup.tsx(1953,37): error TS2339: Property 'is_active' does not exist on type 'Profile'.
+scratch/ClientsModule_backup.tsx(1994,66): error TS2304: Cannot find name 'potentialParents'.
+scratch/ClientsModule_backup.tsx(1994,88): error TS7006: Parameter 'p' implicitly has an 'any' type.
+scratch/ClientsModule_backup.tsx(2356,74): error TS2345: Argument of type '"warning"' is not assignable to parameter of type '"error" | "success" | "info"'.
+scratch/ClientsModule_backup.tsx(2971,61): error TS2322: Type '{ days: number[]; windows: TimeWindow[]; allowed_days: number[]; start_time: string; end_time: string; special_notes?: string | undefined; parsing_date: string; } | { days: number[]; windows: { ...; }[]; parsing_date: string; }' is not assignable to type 'LogisticsData | null'.
+  Type '{ days: number[]; windows: { startTime: string; endTime: string; }[]; parsing_date: string; }' is missing the following properties from type 'LogisticsData': allowed_days, start_time, end_time
+scratch/ClientsModule_backup.tsx(3013,53): error TS2322: Type '{ windows: { startTime: string; endTime: string; }[]; days: number[]; allowed_days: number[]; start_time: string; end_time: string; special_notes?: string | undefined; parsing_date: string; } | { windows: { ...; }[]; days: number[]; parsing_date: string; }' is not assignable to type 'LogisticsData | null'.
+  Type '{ windows: { startTime: string; endTime: string; }[]; days: number[]; parsing_date: string; }' is missing the following properties from type 'LogisticsData': allowed_days, start_time, end_time
+scratch/ClientsModule_backup.tsx(3036,53): error TS2322: Type '{ windows: { startTime: string; endTime: string; }[]; days: number[]; allowed_days: number[]; start_time: string; end_time: string; special_notes?: string | undefined; parsing_date: string; } | { windows: { ...; }[]; days: number[]; parsing_date: string; }' is not assignable to type 'LogisticsData | null'.
+  Type '{ windows: { startTime: string; endTime: string; }[]; days: number[]; parsing_date: string; }' is missing the following properties from type 'LogisticsData': allowed_days, start_time, end_time
+src/app/admin/clients/page.tsx(592,42): error TS7006: Parameter 'lead' implicitly has an 'any' type.
+src/app/admin/clients/page.tsx(593,49): error TS7006: Parameter 'lead' implicitly has an 'any' type.
+src/app/admin/commercial/billing/page.tsx(155,48): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/admin/commercial/billing/page.tsx(155,53): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/admin/commercial/billing/page.tsx(172,41): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/admin/commercial/campaigns/page.tsx(181,30): error TS2304: Cannot find name 'Link'.
+src/app/admin/commercial/campaigns/page.tsx(183,31): error TS2304: Cannot find name 'Link'.
+src/app/admin/commercial/cost-matrix/page.tsx(181,27): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/cost-matrix/page.tsx(199,29): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/admin/commercial/cost-matrix/page.tsx(1054,131): error TS2322: Type '{ size: number; color: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/app/admin/commercial/cost-matrix/page.tsx(1055,168): error TS2322: Type '{ size: number; color: string; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+src/app/admin/commercial/inventory/page.tsx(243,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/inventory/page.tsx(251,68): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/commercial/inventory/page.tsx(347,65): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/admin/commercial/page.tsx(104,22): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/admin/commercial/page.tsx(114,66): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/admin/commercial/page.tsx(117,64): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/admin/commercial/page.tsx(117,69): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/admin/commercial/page.tsx(118,56): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/quotes/create/page.tsx(154,27): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/quotes/create/page.tsx(229,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(119,45): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(130,49): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(191,59): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(325,40): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(333,40): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(344,31): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(349,45): error TS7006: Parameter 'prod' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(400,52): error TS7006: Parameter 'up' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(488,71): error TS7006: Parameter 'part' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(488,77): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(598,67): error TS7006: Parameter 'part' implicitly has an 'any' type.
+src/app/admin/commercial/settings/page.tsx(598,73): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/admin/orders/[id]/page.tsx(282,13): error TS2353: Object literal may only specify known properties, and 'selected_options' does not exist in type 'OrderItem'.
+src/app/admin/orders/[id]/page.tsx(387,18): error TS2304: Cannot find name 'Link'.
+src/app/admin/orders/[id]/page.tsx(389,19): error TS2304: Cannot find name 'Link'.
+src/app/admin/orders/loading/page.tsx(26,49): error TS7031: Binding element 'user' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(168,45): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(179,65): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(186,45): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(188,56): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(363,52): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(365,52): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(524,60): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/app/admin/orders/loading/page.tsx(1586,17): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/admin/procurement/cash/page.tsx(54,50): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/procurement/cash/page.tsx(55,49): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/admin/products/page.tsx(289,31): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/products/page.tsx(305,36): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/admin/products/page.tsx(321,53): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/products/page.tsx(331,57): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/transport/page.tsx(76,42): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/transport/page.tsx(101,58): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/transport/page.tsx(102,44): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/app/api/products/generate/route.ts(78,37): error TS2304: Cannot find name 'current_description'.
+src/app/api/translate/route.ts(47,48): error TS2552: Cannot find name 'text'. Did you mean 'Text'?
+src/app/b2b/dashboard/page.tsx(87,51): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(87,54): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(133,51): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(133,54): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(402,53): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(414,40): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/b2b/dashboard/page.tsx(1667,212): error TS2339: Property 'quantity' does not exist on type '{ title: string; tabQuickOrder: string; tabInvoices: string; tabConsumption: string; tabAgreements: string; cardTitle: string; cardDesc: string; btnClear: string; searchPlaceholder: string; ... 62 more ...; sending: string; } | { ...; }'.
+  Property 'quantity' does not exist on type '{ title: string; tabQuickOrder: string; tabInvoices: string; tabConsumption: string; tabAgreements: string; cardTitle: string; cardDesc: string; btnClear: string; searchPlaceholder: string; ... 62 more ...; sending: string; }'.
+src/app/b2b/register/page.tsx(40,42): error TS7006: Parameter 'x' implicitly has an 'any' type.
+src/app/b2b/register/page.tsx(51,47): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/ops/compras/page.tsx(190,33): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/ops/compras/page.tsx(240,14): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/ops/compras/page.tsx(245,25): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/ops/compras/page.tsx(245,28): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/ops/compras/page.tsx(303,37): error TS2347: Untyped function calls may not accept type arguments.
+src/app/ops/compras/page.tsx(338,22): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/ops/driver/page.tsx(165,41): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/app/ops/inventory/page.tsx(69,43): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/ops/layout.tsx(21,40): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/ops/layout.tsx(24,45): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/ops/page.tsx(30,47): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/ops/page.tsx(30,52): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/ops/page.tsx(31,50): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(125,77): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(125,106): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(133,61): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(137,55): error TS7006: Parameter 'z' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(143,69): error TS2339: Property 'delivery_zone_id' does not exist on type '{}'.
+src/app/ops/picking/dashboard/page.tsx(145,38): error TS2339: Property 'id' does not exist on type '{}'.
+src/app/ops/picking/dashboard/page.tsx(151,47): error TS2339: Property 'toUpperCase' does not exist on type '{}'.
+src/app/ops/picking/dashboard/page.tsx(152,47): error TS2339: Property 'toUpperCase' does not exist on type '{}'.
+src/app/ops/picking/dashboard/page.tsx(155,35): error TS18046: 'a.company_name' is of type 'unknown'.
+src/app/ops/picking/dashboard/page.tsx(156,35): error TS18046: 'b.company_name' is of type 'unknown'.
+src/app/ops/picking/dashboard/page.tsx(160,47): error TS2345: Argument of type '{ id: any; company_name: unknown; zone_name: {}; }[]' is not assignable to parameter of type 'SetStateAction<{ id: string; company_name: string; zone_name: string; }[]>'.
+  Type '{ id: any; company_name: unknown; zone_name: {}; }[]' is not assignable to type '{ id: string; company_name: string; zone_name: string; }[]'.
+    Type '{ id: any; company_name: unknown; zone_name: {}; }' is not assignable to type '{ id: string; company_name: string; zone_name: string; }'.
+      Types of property 'company_name' are incompatible.
+        Type 'unknown' is not assignable to type 'string'.
+src/app/ops/picking/dashboard/page.tsx(189,32): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(232,94): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(236,89): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(240,53): error TS7006: Parameter 'payload' implicitly has an 'any' type.
+src/app/ops/picking/dashboard/page.tsx(244,25): error TS7006: Parameter 'status' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(106,55): error TS7006: Parameter 'z' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(107,61): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(111,26): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(112,29): error TS7006: Parameter 'name' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(118,55): error TS2339: Property 'delivery_zone_id' does not exist on type '{}'.
+src/app/ops/picking/page.tsx(123,38): error TS2339: Property 'toUpperCase' does not exist on type '{}'.
+src/app/ops/picking/page.tsx(124,38): error TS2339: Property 'toUpperCase' does not exist on type '{}'.
+src/app/ops/picking/page.tsx(126,31): error TS18046: 'a.name' is of type 'unknown'.
+src/app/ops/picking/page.tsx(127,31): error TS18046: 'b.name' is of type 'unknown'.
+src/app/ops/picking/page.tsx(133,36): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/app/ops/picking/page.tsx(138,25): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(139,26): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(166,67): error TS2339: Property 'delivery_zone_id' does not exist on type '{}'.
+src/app/ops/picking/page.tsx(172,33): error TS2322: Type '{}' is not assignable to type 'string'.
+src/app/ops/picking/page.tsx(214,69): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/ops/picking/page.tsx(217,31): error TS2345: Argument of type 'unknown[]' is not assignable to parameter of type 'SetStateAction<string[]>'.
+  Type 'unknown[]' is not assignable to type 'string[]'.
+    Type 'unknown' is not assignable to type 'string'.
+src/app/ops/picking/page.tsx(219,41): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'SetStateAction<string>'.
+src/app/ops/picking/page.tsx(258,28): error TS7006: Parameter 'status' implicitly has an 'any' type.
+src/app/page.tsx(67,29): error TS2304: Cannot find name 'Product'.
+src/components/admin/GeofencingManager.tsx(204,41): error TS1345: An expression of type 'void' cannot be tested for truthiness.
+src/components/ClientsModule.tsx(1878,72): error TS2345: Argument of type '"warning"' is not assignable to parameter of type '"error" | "success" | "info"'.
+src/components/ClientsModule.tsx(2400,46): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2408,79): error TS2345: Argument of type 'LogisticsData | null' is not assignable to parameter of type 'LogisticsData | undefined'.
+  Type 'null' is not assignable to type 'LogisticsData | undefined'.
+src/components/ClientsModule.tsx(2428,96): error TS2322: Type '{ allowed_days: number[]; days: number[]; windows?: TimeWindow[] | undefined; start_time?: string | undefined; end_time?: string | undefined; special_notes?: string; parsing_date?: string | undefined; }' is not assignable to type 'LogisticsData'.
+  Types of property 'windows' are incompatible.
+    Type 'TimeWindow[] | undefined' is not assignable to type 'TimeWindow[]'.
+      Type 'undefined' is not assignable to type 'TimeWindow[]'.
+src/components/ClientsModule.tsx(2458,88): error TS2322: Type '{ start_time: string; windows: { startTime: string; endTime: string; }[]; days?: number[] | undefined; allowed_days?: number[] | undefined; end_time?: string | undefined; special_notes?: string; parsing_date?: string | undefined; }' is not assignable to type 'LogisticsData'.
+  Types of property 'days' are incompatible.
+    Type 'number[] | undefined' is not assignable to type 'number[]'.
+      Type 'undefined' is not assignable to type 'number[]'.
+src/components/ClientsModule.tsx(2475,88): error TS2322: Type '{ end_time: string; windows: { startTime: string; endTime: string; }[]; days?: number[] | undefined; allowed_days?: number[] | undefined; start_time?: string | undefined; special_notes?: string; parsing_date?: string | undefined; }' is not assignable to type 'LogisticsData'.
+  Types of property 'days' are incompatible.
+    Type 'number[] | undefined' is not assignable to type 'number[]'.
+      Type 'undefined' is not assignable to type 'number[]'.
+src/components/ClientsModule.tsx(2488,66): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2494,70): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2497,87): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2499,113): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2500,58): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2502,95): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ClientsModule.tsx(2503,58): error TS18048: 'formData.logistics_data.allowed_days.length' is possibly 'undefined'.
+src/components/ConductorPanel.tsx(99,57): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/components/ConductorPanel.tsx(100,64): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/components/ConductorPanel.tsx(102,51): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/ConductorPanel.tsx(108,54): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/ConductorPanel.tsx(192,29): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/components/CreateProductModal.tsx(89,50): error TS7006: Parameter 'attr' implicitly has an 'any' type.
+src/components/CreateProductModal.tsx(820,77): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/components/EditProductModal.tsx(71,50): error TS7006: Parameter 'attr' implicitly has an 'any' type.
+src/components/FleetManagement.tsx(124,61): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/components/FleetManagement.tsx(126,43): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/components/MaintenanceManagement.tsx(153,54): error TS7006: Parameter 'log' implicitly has an 'any' type.
+src/components/MaintenanceManagement.tsx(155,43): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/components/ManageAttributesModal.tsx(269,49): error TS2322: Type '(el: HTMLInputElement | null) => HTMLInputElement | null' is not assignable to type 'Ref<HTMLInputElement> | undefined'.
+  Type '(el: HTMLInputElement | null) => HTMLInputElement | null' is not assignable to type '(instance: HTMLInputElement | null) => void | (() => VoidOrUndefinedOnly)'.
+    Type 'HTMLInputElement | null' is not assignable to type 'void | (() => VoidOrUndefinedOnly)'.
+      Type 'null' is not assignable to type 'void | (() => VoidOrUndefinedOnly)'.
+src/components/ProductCard.tsx(266,25): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: QuickViewModalProps): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | ... 4 more ... | undefined', gave the following error.
+    Type 'import("C:/Users/German Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase").Product' is not assignable to type 'Product'.
+      Types of property 'name_en' are incompatible.
+        Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+          Type 'null' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: QuickViewModalProps, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | ... 4 more ... | undefined', gave the following error.
+    Type 'import("C:/Users/German Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/supabase").Product' is not assignable to type 'Product'.
+      Types of property 'name_en' are incompatible.
+        Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+          Type 'null' is not assignable to type 'string | undefined'.
+src/components/ProductGridContainer.tsx(40,55): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/components/ProductGridContainer.tsx(40,60): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/RoutePlanner.tsx(114,57): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/lib/data.ts(71,33): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/lib/data.ts(71,38): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/lib/translations.ts(98,5): error TS1117: An object literal cannot have multiple properties with the same name.
