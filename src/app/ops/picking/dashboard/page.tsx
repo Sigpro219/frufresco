@@ -107,7 +107,11 @@ export default function PickingDashboard() {
     const loadData = useCallback(async (signal?: AbortSignal, silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // 1. Fetch Active Orders (matching Captain's criteria)
+            // 1. Fetch Active Orders — solo estados que requieren alistamiento:
+            // para_compra: confirmado para comprar/preparar
+            // approved: aprobado, listo para alistar
+            // picking: en preparación activa
+            // Excluidos: pending_approval (sin confirmar), shipped/delivered (ya salió), cancelled
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
@@ -116,7 +120,7 @@ export default function PickingDashboard() {
                         id, product_id, quantity, picked_quantity, quality_status
                     )
                 `)
-                .neq('status', 'cancelled');
+                .in('status', ['para_compra', 'approved', 'picking']);
             
             if (signal) ordersQuery = ordersQuery.abortSignal(signal);
 

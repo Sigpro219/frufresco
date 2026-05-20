@@ -70,7 +70,9 @@ export default function PickingExecutionPage() {
                         products (name, category, unit_of_measure)
                     )
                 `)
-                .neq('status', 'cancelled');
+                // Solo estados que requieren alistamiento activo
+                // Excluidos: pending_approval, shipped, delivered, cancelled
+                .in('status', ['para_compra', 'approved', 'picking']);
 
             // Check Global Cutoff Switch
             const { data: settings } = await supabase
