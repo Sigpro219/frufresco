@@ -36,6 +36,7 @@ export default function CheckoutPage() {
     const { items, totalPrice, removeItem, clearCart } = useCart();
     const [isMounted, setIsMounted] = useState(false);
     const [name, setName] = useState('');
+    const [identification, setIdentification] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
@@ -207,6 +208,7 @@ export default function CheckoutPage() {
 
         if (items.length === 0) return alert(t.emptyCart);
         if (!name) return alert(locale === 'es' ? 'Por favor ingresa tu Nombre Completo.' : 'Please enter your Full Name.');
+        if (!identification) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Identificación.' : 'Please enter your ID Number.');
         if (!phone) return alert(locale === 'es' ? 'Por favor ingresa tu Número de Celular.' : 'Please enter your WhatsApp Number.');
         if (!email) return alert(locale === 'es' ? 'Por favor ingresa tu Email.' : 'Please enter your Email.');
         if (!address) return alert(locale === 'es' ? 'Por favor ingresa la Dirección de Entrega.' : 'Please enter your Delivery Address.');
@@ -223,58 +225,50 @@ export default function CheckoutPage() {
             const safeLng = longitude ? parseFloat(longitude.toFixed(8)) : null;
 
             // Create a Promise race to handle potential Supabase client hangs
-            const insertOrderPromise = supabase
-                .from('orders')
-                .insert({
-                    type: 'b2c_wompi',
-                    status: 'pending_approval',
-                    delivery_date: date,
-                    shipping_address: address,
-                    subtotal: totalPrice - taxAmount,
-                    tax: taxAmount,
-                    total: totalPrice,
-                    latitude: safeLat,
-                    longitude: safeLng,
-                    special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email}]\n[ORIGIN: web]\n${specialNotes || ''}`
-                })
-                .select()
-                .single();
+            const orderDataToInsert = {
+                type: 'b2c_wompi',
+                status: 'pending_approval',
+                delivery_date: date,
+                shipping_address: address,
+                subtotal: totalPrice - taxAmount,
+                tax: taxAmount,
+                total: totalPrice,
+                latitude: safeLat,
+                longitude: safeLng,
+                special_notes: `[CLIENTE: ${name} | Tel: ${phone} | Email: ${email} | ID: ${identification}]\n[ORIGIN: web]\n${specialNotes || ''}`
+            };
+
+            const orderItemsData = items.map(item => ({
+                product_id: (item as { id: string }).id,
+                quantity: item.quantity,
+                unit_price: item.price,
+                unit: item.unit,
+                ...(item.variant_label && { nickname: item.variant_label }),
+            }));
+
+            const createOrderPromise = fetch('/api/orders/public', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: orderDataToInsert, items: orderItemsData })
+            });
 
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('La conexión está tardando demasiado (Timeout 60s). Verifica tu internet.')), 60000)
             );
 
             // Execute race
-            const result = await Promise.race([insertOrderPromise, timeoutPromise]) as { 
-                data: { id: string } | null, 
-                error: { message: string } | null 
-            };
-            const { data: orderData, error: orderError } = result;
+            const result = await Promise.race([createOrderPromise, timeoutPromise]) as Response;
 
-            if (orderError) {
-                console.error('❌ Error insertando pedido:', orderError);
-                throw new Error(`Error al crear el pedido: ${orderError.message}`);
+            if (!result.ok) {
+                const errorData = await result.json().catch(() => ({}));
+                console.error('❌ Error insertando pedido:', errorData);
+                throw new Error(`Error al crear el pedido: ${errorData.error || result.statusText}`);
             }
+
+            const { order: orderData } = await result.json();
 
             if (!orderData) throw new Error('No se recibió confirmación del pedido.');
             console.log('✅ Pedido creado:', orderData.id);
-
-            // 2. Create Order Items
-            console.log('2️⃣ Creating order items with items:', items.length);
-            const orderItemsData = items.map(item => ({
-                order_id: orderData.id,
-                product_id: (item as { id: string }).id,
-                quantity: item.quantity,
-                unit_price: item.price,
-                unit: item.unit, // Guardamos la unidad comercial (Libra, Kg, etc)
-                ...(item.variant_label && { nickname: item.variant_label }),
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItemsData);
-
-            if (itemsError) throw new Error(`Database Error (Items): ${itemsError.message}`);
 
             console.log('3️⃣ Requesting Wompi hash...');
             
@@ -565,6 +559,25 @@ export default function CheckoutPage() {
                                         placeholder={t.fullNamePlaceholder}
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
+                                        style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
+                                        className="checkout-input-modern"
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '800', fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Identificación (Cédula/NIT)
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ position: 'absolute', left: '12px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.4, pointerEvents: 'none' }}>
+                                        <User size={15} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Ej: 123456789"
+                                        value={identification}
+                                        onChange={(e) => setIdentification(e.target.value)}
                                         style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2.5rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontSize: '0.85rem', fontWeight: '500', backgroundColor: '#F9FAFB', outline: 'none', transition: 'all 0.2s' }}
                                         className="checkout-input-modern"
                                     />

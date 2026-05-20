@@ -63,12 +63,24 @@ export async function POST(request: Request) {
                     adminNotes = adminNotes ? `${adminNotes} | ${paymentTag}` : paymentTag;
                 }
 
-                // SI no tiene perfil (B2C Guest), crearlo on-the-fly
-                if (!profileId && order.customer_phone) {
+                // Extraer datos del cliente de las notas especiales (ya que no hay columnas nativas)
+                const notes = order.special_notes || '';
+                const nameMatch = notes.match(/\[CLIENTE:\s*(.*?)\s*\|/);
+                const phoneMatch = notes.match(/Tel:\s*(.*?)\s*\|/);
+                const emailMatch = notes.match(/Email:\s*(.*?)(?:\]|\s*\|)/);
+                const idMatch = notes.match(/ID:\s*(.*?)\]/);
+
+                const extractedName = nameMatch ? nameMatch[1].trim() : 'Cliente Web';
+                const extractedPhone = phoneMatch ? phoneMatch[1].trim() : null;
+                const extractedEmail = emailMatch ? emailMatch[1].trim() : null;
+                const extractedId = idMatch ? idMatch[1].trim() : null;
+
+                // SI no tiene perfil (B2C Guest) y logramos extraer el teléfono, crearlo on-the-fly
+                if (!profileId && extractedPhone) {
                     console.log('Webhook: Creating automatic profile for guest B2C customer');
                     
                     // Buscar si ya existe un perfil con este teléfono (limpio)
-                    const cleanPhone = order.customer_phone.replace(/\D/g, '');
+                    const cleanPhone = extractedPhone.replace(/\D/g, '');
                     const { data: existingProfile } = await supabase
                         .from('profiles')
                         .select('id')
@@ -79,19 +91,25 @@ export async function POST(request: Request) {
                         profileId = existingProfile.id;
                         console.log('Webhook: Existing profile found and linked:', profileId);
                     } else {
-                        // Crear nuevo perfil B2C
+                        // Crear nuevo perfil B2C (Hogar)
+                        const guestId = crypto.randomUUID();
                         const { data: newProfile, error: profileError } = await supabase
                             .from('profiles')
                             .insert({
+                                id: guestId,
                                 role: 'b2c_client',
-                                company_name: order.customer_name,
-                                contact_name: order.customer_name,
-                                contact_phone: order.customer_phone,
-                                email: order.customer_email,
+                                company_name: extractedName,
+                                contact_name: extractedName,
+                                contact_phone: extractedPhone,
+                                email: extractedEmail,
                                 address: order.shipping_address,
                                 latitude: order.latitude,
                                 longitude: order.longitude,
-                                geocoding_status: order.latitude ? 'verified' : 'pending'
+                                geocoding_status: order.latitude ? 'verified' : 'pending',
+                                document_id: extractedId,
+                                document_type: 'CC', // Por defecto Cédula para Hogar
+                                nit: extractedId,
+                                delivery_restrictions: '08:00 a 19:00'
                             })
                             .select('id')
                             .single();
