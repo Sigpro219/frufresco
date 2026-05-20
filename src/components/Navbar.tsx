@@ -20,7 +20,7 @@ export default function Navbar() {
     const [b2bEnabled, setB2bEnabled] = useState(false);
     const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
     const [appName, setAppName] = useState(config.brand.name);
-    const [lastSyncDate, setLastSyncDate] = useState(SYNC_METADATA.lastSync);
+    const [lastSyncDate, setLastSyncDate] = useState(process.env.NEXT_PUBLIC_BUILD_TIME || SYNC_METADATA.lastSync);
     const [themeConfig, setThemeConfig] = useState<{primary: string, secondary: string} | null>(null);
     const [operationsOpen, setOperationsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -75,12 +75,13 @@ export default function Navbar() {
                     const syncObj = settings.find((s: {key: string, value: string}) => s.key === 'last_core_sync');
                     if (syncObj?.value) {
                         const dbDate = new Date(syncObj.value).getTime();
-                        const codeDate = new Date(SYNC_METADATA.lastSync).getTime();
+                        const baseCodeDate = process.env.NEXT_PUBLIC_BUILD_TIME || SYNC_METADATA.lastSync;
+                        const codeDate = new Date(baseCodeDate).getTime();
                         // Mostramos la fecha más reciente (ya sea por actualización de código o de datos)
                         if (!isNaN(dbDate) && dbDate > codeDate) {
                             setLastSyncDate(syncObj.value);
                         } else {
-                            setLastSyncDate(SYNC_METADATA.lastSync);
+                            setLastSyncDate(baseCodeDate);
                         }
                     }
                     
@@ -279,7 +280,7 @@ export default function Navbar() {
                                 animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
                             }} />
                         </div>
-                        <span>V{SYNC_METADATA.version} | {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
+                        <span>V{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.substring(0, 6).toUpperCase() : SYNC_METADATA.version} | {mounted ? new Date(lastSyncDate).toLocaleDateString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : '...'}</span>
                     </div>
                 </Link>
 
