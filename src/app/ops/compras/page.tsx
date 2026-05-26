@@ -1668,7 +1668,7 @@ export default function ProcurementPage() {
                                   }} />
                                 )}
                                 <span style={{ fontWeight: "700", fontSize: "0.85rem", color: "var(--ops-text)" }}>
-                                  {item.variant_label || "Base"}
+                                  {item.product_id !== group.product_id ? item.product_name : (item.variant_label || "Estándar")}
                                 </span>
                               </div>
                               <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "2px" }}>
