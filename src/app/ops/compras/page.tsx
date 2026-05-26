@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
+import confetti from "canvas-confetti";
 
 interface ProcurementTask {
   id: string;
@@ -69,10 +70,22 @@ export default function ProcurementPage() {
       const prov = providers.find(p => p.id === selectedProvider);
       if (prov) {
         setProviderSearchText(`${prov.product ? prov.product.toUpperCase() : "PRODUCTO"} - ${prov.name}`);
-        if (prov.location) {
+        if (prov.warehouse_location || prov.puesto) {
+          const parts = [];
+          if (prov.warehouse_location) parts.push(`Bodega: ${prov.warehouse_location}`);
+          if (prov.puesto) parts.push(`Puesto: ${prov.puesto}`);
+          setLocation(parts.join(", "));
+          
+          setContingencyBodega(prov.warehouse_location ? String(prov.warehouse_location) : "");
+          setContingencyPuesto(prov.puesto ? String(prov.puesto) : "");
+        } else if (prov.location) {
           setLocation(prov.location);
+          setContingencyBodega("");
+          setContingencyPuesto("");
         } else {
           setLocation("");
+          setContingencyBodega("");
+          setContingencyPuesto("");
         }
       }
     } else {
@@ -82,6 +95,11 @@ export default function ProcurementPage() {
   }, [selectedProvider, providers]);
 
   const [location, setLocation] = useState("");
+  const [showLocationContingency, setShowLocationContingency] = useState(false);
+  const [contingencyBodega, setContingencyBodega] = useState("");
+  const [contingencyPuesto, setContingencyPuesto] = useState("");
+  const [availableBodegas, setAvailableBodegas] = useState<string[]>([]);
+  const [availablePuestos, setAvailablePuestos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
@@ -480,7 +498,17 @@ export default function ProcurementPage() {
         console.error("Error fetching providers:", error);
         return;
       }
-      if (data && isMounted.current) setProviders(data);
+      if (data && isMounted.current) {
+        setProviders(data);
+        const bodegas = new Set<string>();
+        const puestos = new Set<string>();
+        data.forEach(p => {
+          if (p.warehouse_location) bodegas.add(String(p.warehouse_location).trim());
+          if (p.puesto) puestos.add(String(p.puesto).trim());
+        });
+        setAvailableBodegas(Array.from(bodegas).filter(Boolean).sort());
+        setAvailablePuestos(Array.from(puestos).filter(Boolean).sort());
+      }
     } catch (err) {
       if (isAbortError(err)) return;
       console.error("Exception in fetchProviders:", err);
@@ -644,7 +672,9 @@ export default function ProcurementPage() {
 
       const { error: uploadError } = await supabase.storage
         .from("vouchers")
-        .upload(filePath, voucherFile);
+        .upload(filePath, voucherFile, {
+          contentType: voucherFile.type || "image/jpeg"
+        });
 
       if (uploadError) {
         diagnoseStorageError(uploadError, 'vouchers');
@@ -843,13 +873,14 @@ export default function ProcurementPage() {
         })
         .eq("id", selectedTask.id);
 
+      setSelectedTask(prev => prev ? { ...prev, total_purchased: newPurchased, status: newStatus } : null);
       setPurchaseSuccess(true);
       setTimeout(() => {
         resetForm();
         setSelectedTask(null);
-        fetchTasks();
+        fetchTasks(undefined, filterCategory);
         fetchProviders();
-      }, 2000);
+      }, 4000);
     } catch (e: any) {
       alert("Error: " + e.message);
     } finally {
@@ -875,7 +906,7 @@ export default function ProcurementPage() {
       if (error) throw error;
 
       alert("🏁 Faltante cerrado con éxito!");
-      fetchTasks();
+      fetchTasks(undefined, filterCategory);
     } catch (e: any) {
       alert("Error cerrando faltante: " + e.message);
     }
@@ -911,6 +942,27 @@ export default function ProcurementPage() {
       catTasks.length > 0 ? Math.round((completed / catTasks.length) * 100) : 0;
     return { name: cat as string, percentage, count: catTasks.length };
   });
+  const currentCategoryStat = filterCategory && filterCategory !== "Ver Todo"
+    ? categoryStats.find(s => s.name === filterCategory)
+    : { percentage: totalProgress, count: tasks.length };
+    
+  const currentProgress = currentCategoryStat ? currentCategoryStat.percentage : 0;
+  
+  const prevProgressRef = useRef(0);
+  
+  useEffect(() => {
+    if (currentProgress === 100 && prevProgressRef.current < 100 && tasks.length > 0) {
+      setTimeout(() => {
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          zIndex: 9999
+        });
+      }, 300);
+    }
+    prevProgressRef.current = currentProgress;
+  }, [currentProgress, tasks.length]);
 
   return (
     <div style={{ padding: "1rem", paddingBottom: "5rem" }}>
@@ -1441,6 +1493,25 @@ export default function ProcurementPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1rem" }}>
+          {currentProgress === 100 && tasks.length > 0 && (
+            <div style={{
+              textAlign: "center",
+              padding: "1.5rem",
+              backgroundColor: "rgba(16, 185, 129, 0.15)",
+              border: "2px solid #10B981",
+              borderRadius: "16px",
+              boxShadow: "0 0 20px rgba(16, 185, 129, 0.2)",
+              animation: "popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+            }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏆</div>
+              <h2 style={{ margin: 0, color: "#10B981", fontSize: "1.4rem", fontWeight: "900" }}>
+                ¡Misión Cumplida!
+              </h2>
+              <p style={{ margin: "0.25rem 0 0 0", color: "var(--ops-text-muted)", fontSize: "0.9rem" }}>
+                Has completado todas las compras de esta categoría por hoy.
+              </p>
+            </div>
+          )}
           {(() => {
             const grouped: Record<string, {
               product_id: string;
@@ -1457,7 +1528,7 @@ export default function ProcurementPage() {
               hasWarning: boolean;
             }> = {};
 
-            tasks.forEach((task) => {
+            tasks.filter(t => !filterCategory || filterCategory === "Ver Todo" || t.category === filterCategory).forEach((task) => {
               const baseKey = task.parent_id || task.product_id;
               if (!grouped[baseKey]) {
                 let baseName = task.parent_name || task.product_name;
@@ -1944,15 +2015,17 @@ export default function ProcurementPage() {
                   animation: "popIn 0.3s ease-out",
                 }}
               >
-                <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🎉</div>
+                <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>
+                  {selectedTask.status === "completed" ? "🎉" : "🛒"}
+                </div>
                 <h3
                   style={{
                     fontSize: "1.5rem",
-                    color: "var(--ops-primary)",
+                    color: selectedTask.status === "completed" ? "var(--ops-primary)" : "#F59E0B",
                     margin: "0 0 0.5rem 0",
                   }}
                 >
-                  ¡Excelente Trabajo!
+                  {selectedTask.status === "completed" ? "¡Excelente Trabajo!" : "¡Compra Parcial!"}
                 </h3>
                 <p
                   style={{
@@ -1961,7 +2034,9 @@ export default function ProcurementPage() {
                     margin: 0,
                   }}
                 >
-                  Compra registrada y lista para logística.
+                  {selectedTask.status === "completed" 
+                    ? "Compra total registrada y lista para logística." 
+                    : `Has registrado ${qty} ${purchaseUnit}. Aún hay faltantes pendientes.`}
                 </p>
               </div>
             ) : selectedTask.status === "completed" ? (
@@ -2730,17 +2805,39 @@ export default function ProcurementPage() {
                 </div>
 
                 <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: "bold",
-                      marginBottom: "0.5rem",
-                      color: "var(--ops-text-muted)",
-                    }}
-                  >
-                    UBICACIÓN DE RECOGIDA (OPCIONAL)
-                  </label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.8rem",
+                        fontWeight: "bold",
+                        color: "var(--ops-text-muted)",
+                      }}
+                    >
+                      UBICACIÓN DE RECOGIDA (OPCIONAL)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowLocationContingency(!showLocationContingency)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: showLocationContingency ? "var(--ops-primary)" : "var(--ops-text-muted)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        fontSize: "0.75rem",
+                        fontWeight: "bold",
+                        padding: "0.2rem 0.5rem",
+                        borderRadius: "6px",
+                        backgroundColor: showLocationContingency ? "rgba(8, 145, 178, 0.1)" : "transparent",
+                      }}
+                      title="Ingresar ubicación excepcional"
+                    >
+                      <span>✏️</span> {showLocationContingency ? "Ocultar" : "Excepcional"}
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={location}
@@ -2756,69 +2853,65 @@ export default function ProcurementPage() {
                       fontSize: "0.85rem",
                     }}
                   />
-                  <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                      <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>BODEGA</span>
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            const currentPuesto = location.match(/Puesto\s+\d+/i)?.[0] || "";
-                            setLocation(`${e.target.value}${currentPuesto ? `, ${currentPuesto}` : ""}`);
-                          } else {
-                            const currentPuesto = location.match(/Puesto\s+\d+/i)?.[0] || "";
-                            setLocation(currentPuesto);
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "0.6rem 0.8rem",
-                          borderRadius: "8px",
-                          backgroundColor: "var(--ops-surface)",
-                          border: "1px solid var(--ops-border)",
-                          color: "var(--ops-text)",
-                          fontSize: "0.8rem",
-                          outline: "none"
-                        }}
-                        value={location.match(/Bodega\s+\d+/i)?.[0] || ""}
-                      >
-                        <option value="">-- Seleccionar --</option>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                          <option key={n} value={`Bodega ${n}`}>Bodega {n}</option>
-                        ))}
-                      </select>
-                    </div>
+                  {showLocationContingency && (
+                    <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "var(--ops-surface)", borderRadius: "12px", border: "1px dashed var(--ops-border)" }}>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>BODEGA</span>
+                        <input
+                          list="bodegas-list"
+                          value={contingencyBodega}
+                          onChange={(e) => {
+                            setContingencyBodega(e.target.value);
+                            const newBodega = e.target.value ? `Bodega: ${e.target.value}` : "";
+                            const currentPuesto = contingencyPuesto ? `Puesto: ${contingencyPuesto}` : "";
+                            setLocation([newBodega, currentPuesto].filter(Boolean).join(", "));
+                          }}
+                          placeholder="Elegir o escribir..."
+                          style={{
+                            width: "100%",
+                            padding: "0.6rem 0.8rem",
+                            borderRadius: "8px",
+                            border: "1px solid var(--ops-border)",
+                            fontSize: "0.8rem",
+                            outline: "none",
+                            backgroundColor: "var(--ops-bg)",
+                            color: "var(--ops-text)",
+                          }}
+                        />
+                        <datalist id="bodegas-list">
+                          {availableBodegas.map(b => <option key={b} value={b} />)}
+                        </datalist>
+                      </div>
 
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                      <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>PUESTO</span>
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            const currentBodega = location.match(/Bodega\s+\d+/i)?.[0] || "";
-                            setLocation(`${currentBodega ? `${currentBodega}, ` : ""}${e.target.value}`);
-                          } else {
-                            const currentBodega = location.match(/Bodega\s+\d+/i)?.[0] || "";
-                            setLocation(currentBodega);
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "0.6rem 0.8rem",
-                          borderRadius: "8px",
-                          backgroundColor: "var(--ops-surface)",
-                          border: "1px solid var(--ops-border)",
-                          color: "var(--ops-text)",
-                          fontSize: "0.8rem",
-                          outline: "none"
-                        }}
-                        value={location.match(/Puesto\s+\d+/i)?.[0] || ""}
-                      >
-                        <option value="">-- Seleccionar --</option>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map(n => (
-                          <option key={n} value={`Puesto ${n}`}>Puesto {n}</option>
-                        ))}
-                      </select>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>PUESTO</span>
+                        <input
+                          list="puestos-list"
+                          value={contingencyPuesto}
+                          onChange={(e) => {
+                            setContingencyPuesto(e.target.value);
+                            const currentBodega = contingencyBodega ? `Bodega: ${contingencyBodega}` : "";
+                            const newPuesto = e.target.value ? `Puesto: ${e.target.value}` : "";
+                            setLocation([currentBodega, newPuesto].filter(Boolean).join(", "));
+                          }}
+                          placeholder="Elegir o escribir..."
+                          style={{
+                            width: "100%",
+                            padding: "0.6rem 0.8rem",
+                            borderRadius: "8px",
+                            border: "1px solid var(--ops-border)",
+                            fontSize: "0.8rem",
+                            outline: "none",
+                            backgroundColor: "var(--ops-bg)",
+                            color: "var(--ops-text)",
+                          }}
+                        />
+                        <datalist id="puestos-list">
+                          {availablePuestos.map(p => <option key={p} value={p} />)}
+                        </datalist>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div>
@@ -2867,8 +2960,11 @@ export default function ProcurementPage() {
                         alt="Preview"
                         style={{
                           width: "100%",
-                          height: "240px",
-                          objectFit: "cover",
+                          height: "100%",
+                          maxHeight: "350px",
+                          objectFit: "contain",
+                          backgroundColor: "#000",
+                          borderRadius: "10px"
                         }}
                       />
                     ) : (
