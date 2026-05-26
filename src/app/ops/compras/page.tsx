@@ -2269,12 +2269,15 @@ export default function ProcurementPage() {
                         color: "var(--ops-text)",
                       }}
                     >
-                      <option value="">Seleccionar proveedor...</option>
-                      {providers.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.location})
-                        </option>
-                      ))}
+                      <option value="" style={{ color: "var(--ops-text-muted)" }}>Seleccionar proveedor...</option>
+                      {providers
+                        .filter((p) => p.category === "PRODUCTOS")
+                        .sort((a, b) => (a.product || "").localeCompare(b.product || ""))
+                        .map((p) => (
+                          <option key={p.id} value={p.id} style={{ color: "#10B981" }}>
+                            {p.product ? p.product.toUpperCase() : "PRODUCTO"} - {p.name}
+                          </option>
+                        ))}
                     </select>
                   ) : (
                     <div
