@@ -2058,11 +2058,8 @@ export default function ProcurementPage() {
                       <span style={{ fontSize: "1.5rem" }}>⚠️</span>
                       <div>
                         <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "900", color: "#EF4444" }}>
-                          Novedades de Recogida por Resolver
+                          Novedades de Recogida — Requiere Acción
                         </h4>
-                        <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--ops-text-muted)" }}>
-                          Hay una novedad activa sobre este producto que requiere acción inmediata.
-                        </p>
                       </div>
                     </div>
 
@@ -2073,17 +2070,36 @@ export default function ProcurementPage() {
                           border: "1px solid var(--ops-border)",
                           borderRadius: "10px",
                           padding: "0.75rem",
-                          fontSize: "0.8rem"
+                          fontSize: "0.8rem",
+                          display: "grid",
+                          gridTemplateColumns: nov.evidence_url ? "1fr 80px" : "1fr",
+                          gap: "1rem",
+                          alignItems: "center"
                         }}>
-                          <div style={{ fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
-                            {nov.novelty_type === 'rejection' ? '🔴 Devolución/Rechazo' : (nov.novelty_type === 'deficit' ? '🟠 Faltante de Recogida' : '🟡 Alerta Calidad')}
+                          <div>
+                            <div style={{ fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
+                              {nov.novelty_type === 'rejection' ? '🔴 Compra Rechazada' : (nov.novelty_type === 'deficit' ? '🟠 Faltante de Recogida' : '🟡 Alerta Calidad')} ({nov.quantity} {selectedTask.unit})
+                            </div>
+                            {nov.reason && (
+                              <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "0.2rem" }}>
+                                <strong>Motivo:</strong> {nov.reason}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ marginTop: "0.25rem" }}>
-                            Cantidad afectada: <strong>{nov.quantity} {nov.unit}</strong>
-                          </div>
-                          {nov.reason && (
-                            <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "0.2rem" }}>
-                              Motivo: &quot;{nov.reason}&quot;
+                          {nov.evidence_url && (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                              <img
+                                src={nov.evidence_url}
+                                alt="Evidencia"
+                                style={{ width: "80px", height: "60px", objectFit: "cover", borderRadius: "8px", border: "1px solid var(--ops-border)", cursor: "pointer" }}
+                                onClick={() => window.open(nov.evidence_url, '_blank')}
+                              />
+                              <span
+                                style={{ fontSize: "0.65rem", color: "var(--ops-primary)", cursor: "pointer", textDecoration: "underline" }}
+                                onClick={() => window.open(nov.evidence_url, '_blank')}
+                              >
+                                Ampliar Foto 🔎
+                              </span>
                             </div>
                           )}
                         </div>
@@ -2114,12 +2130,12 @@ export default function ProcurementPage() {
                           fetchTasks();
                         }}
                         style={{
-                          padding: "0.85rem", borderRadius: "10px", border: "1px solid var(--ops-primary)",
-                          backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--ops-primary)",
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.15)",
+                          backgroundColor: "rgba(255, 255, 255, 0.05)", color: "#F8FAFC",
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        🔁 Reclamar al proveedor y programar nueva recogida
+                        📋 Reclamar al proveedor y programar nueva recogida
                       </button>
 
                       <button
@@ -2134,17 +2150,17 @@ export default function ProcurementPage() {
                           fetchTasks();
                         }}
                         style={{
-                          padding: "0.85rem", borderRadius: "10px", border: "1px solid #3B82F6",
-                          backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#3B82F6",
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(245, 158, 11, 0.3)",
+                          backgroundColor: "rgba(245, 158, 11, 0.1)", color: "#F59E0B",
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        🛒 Comprar a otro proveedor
+                        🔄 Descartar y generar nueva compra con otro proveedor
                       </button>
 
                       <button
                         onClick={async () => {
-                          if (!confirm("¿Deseas cerrar el faltante aceptando la entrega parcial? La meta se ajustará a lo ya comprado.")) return;
+                          if (!confirm("¿Deseas registrar una reclamación administrativa? La meta se ajustará a lo comprado.")) return;
                           const taskNovs = novelties.filter(n => n.task_id === selectedTask.id);
                           for (const nov of taskNovs) {
                             await resolvePurchaseNovelty({ id: nov.purchase_id, task_id: selectedTask.id, ...nov }, 'closed_with_shortfall');
@@ -2162,22 +2178,23 @@ export default function ProcurementPage() {
                             return;
                           }
 
-                          alert("🏁 Faltante cerrado correctamente. Tarea completada.");
+                          alert("💰 Reclamación administrativa registrada. Tarea completada.");
                           setSelectedTask(null);
                           resetForm();
                           fetchTasks();
                         }}
                         style={{
-                          padding: "0.85rem", borderRadius: "10px", border: "1px solid #F59E0B",
-                          backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#F59E0B",
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(239, 68, 68, 0.3)",
+                          backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#EF4444",
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        🏁 Cerrar faltante / Aceptar entrega parcial
+                        💰 Reclamación Administrativa (Nota Crédito / Saldo)
                       </button>
                     </div>
                   </div>
                 )}
+
 
                 {/* Main purchase fields (Only show if no unresolved novelties OR in reprogramming/alternative purchase mode) */}
                 {(novelties.filter(n => n.task_id === selectedTask.id).length === 0 || isReprogramming) && (
