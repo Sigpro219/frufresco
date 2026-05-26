@@ -60,6 +60,20 @@ export default function ProcurementPage() {
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [selectedProvider, setSelectedProvider] = useState("");
+  const [providerSearchText, setProviderSearchText] = useState("");
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+
+  useEffect(() => {
+    if (selectedProvider) {
+      const prov = providers.find(p => p.id === selectedProvider);
+      if (prov) {
+        setProviderSearchText(`${prov.product ? prov.product.toUpperCase() : "PRODUCTO"} - ${prov.name}`);
+      }
+    } else {
+      setProviderSearchText("");
+    }
+  }, [selectedProvider, providers]);
+
   const [location, setLocation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
@@ -2257,28 +2271,118 @@ export default function ProcurementPage() {
                   </div>
 
                   {!isQuickProvider ? (
-                    <select
-                      value={selectedProvider}
-                      onChange={(e) => setSelectedProvider(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "1rem",
-                        borderRadius: "12px",
-                        backgroundColor: "var(--ops-bg)",
-                        border: "1px solid var(--ops-border)",
-                        color: "var(--ops-text)",
-                      }}
-                    >
-                      <option value="" style={{ color: "var(--ops-text-muted)" }}>Seleccionar proveedor...</option>
-                      {providers
-                        .filter((p) => p.category === "PRODUCTOS")
-                        .sort((a, b) => (a.product || "").localeCompare(b.product || ""))
-                        .map((p) => (
-                          <option key={p.id} value={p.id} style={{ color: "#10B981" }}>
-                            {p.product ? p.product.toUpperCase() : "PRODUCTO"} - {p.name}
-                          </option>
-                        ))}
-                    </select>
+                    <div style={{ position: "relative", width: "100%" }}>
+                      <input
+                        type="text"
+                        value={providerSearchText}
+                        onChange={(e) => {
+                          setProviderSearchText(e.target.value);
+                          setShowProviderDropdown(true);
+                          if (!e.target.value) {
+                            setSelectedProvider("");
+                          }
+                        }}
+                        onFocus={() => setShowProviderDropdown(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowProviderDropdown(false), 250);
+                        }}
+                        placeholder="Buscar por producto o proveedor..."
+                        style={{
+                          width: "100%",
+                          padding: "1rem",
+                          borderRadius: "12px",
+                          backgroundColor: "var(--ops-bg)",
+                          border: "1px solid var(--ops-border)",
+                          color: "var(--ops-text)",
+                          fontSize: "0.85rem"
+                        }}
+                      />
+                      <span style={{
+                        position: "absolute",
+                        right: "1rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        pointerEvents: "none",
+                        color: "var(--ops-text-muted)",
+                        fontSize: "0.9rem"
+                      }}>
+                        🔎
+                      </span>
+
+                      {showProviderDropdown && (
+                        <div style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          marginTop: "4px",
+                          backgroundColor: "var(--ops-surface)",
+                          border: "1px solid var(--ops-border)",
+                          borderRadius: "12px",
+                          maxHeight: "220px",
+                          overflowY: "auto",
+                          zIndex: 100,
+                          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)"
+                        }}>
+                          {(() => {
+                            const filtered = providers
+                              .filter((p) => p.category === "PRODUCTOS")
+                              .filter((p) => {
+                                const text = providerSearchText.toLowerCase();
+                                const prodMatch = (p.product || "").toLowerCase().includes(text);
+                                const nameMatch = (p.name || "").toLowerCase().includes(text);
+                                return prodMatch || nameMatch;
+                              })
+                              .sort((a, b) => (a.product || "").localeCompare(b.product || ""));
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div style={{ padding: "1rem", fontSize: "0.8rem", color: "var(--ops-text-muted)", textAlign: "center" }}>
+                                  No se encontraron proveedores
+                                </div>
+                              );
+                            }
+
+                            return filtered.map((p) => (
+                              <div
+                                key={p.id}
+                                onMouseDown={() => {
+                                  setSelectedProvider(p.id);
+                                  setProviderSearchText(`${p.product ? p.product.toUpperCase() : "PRODUCTO"} - ${p.name}`);
+                                  setShowProviderDropdown(false);
+                                }}
+                                style={{
+                                  padding: "0.8rem 1rem",
+                                  cursor: "pointer",
+                                  fontSize: "0.8rem",
+                                  display: "flex",
+                                  justifyContent: "flex-start",
+                                  alignItems: "center",
+                                  borderBottom: "1px solid rgba(255,255,255,0.03)",
+                                  backgroundColor: selectedProvider === p.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                                  transition: "background-color 0.15s ease"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = selectedProvider === p.id ? "rgba(16, 185, 129, 0.15)" : "transparent";
+                                }}
+                              >
+                                <span style={{ color: "#10B981", fontWeight: "800", marginRight: "6px" }}>
+                                  {p.product ? p.product.toUpperCase() : "PRODUCTO"}
+                                </span>
+                                <span style={{ color: "#FFFFFF", opacity: 0.9 }}>
+                                  - {p.name}
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div
                       style={{
