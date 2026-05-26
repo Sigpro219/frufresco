@@ -2285,73 +2285,113 @@ export default function ProcurementPage() {
 
                   {!isQuickProvider ? (
                     <div style={{ position: "relative", width: "100%" }}>
-                      <input
-                        type="text"
-                        value={providerSearchText}
-                        onChange={(e) => {
-                          setProviderSearchText(e.target.value);
-                          setShowProviderDropdown(true);
-                          setActiveOptionIndex(-1);
-                          if (!e.target.value) {
+                      {selectedProvider ? (
+                        <div
+                          onClick={() => {
                             setSelectedProvider("");
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (!showProviderDropdown) {
-                            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                            setProviderSearchText("");
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "1rem",
+                            borderRadius: "12px",
+                            backgroundColor: "var(--ops-bg)",
+                            border: "1px solid var(--ops-border)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            minHeight: "48px"
+                          }}
+                        >
+                          {(() => {
+                            const prov = providers.find((p) => p.id === selectedProvider);
+                            if (!prov) return <span style={{ color: "var(--ops-text-muted)" }}>Seleccionar proveedor...</span>;
+                            return (
+                              <div style={{ display: "flex", alignItems: "center" }}>
+                                <span style={{ color: "#10B981", fontWeight: "800", marginRight: "6px" }}>
+                                  {prov.product ? prov.product.toUpperCase() : "PRODUCTO"}
+                                </span>
+                                <span style={{ color: "#FFFFFF", opacity: 0.9 }}>
+                                  - {prov.name}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          <span style={{ color: "var(--ops-text-muted)", fontSize: "0.9rem", fontWeight: "bold", marginLeft: "10px" }}>
+                            ✕
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            value={providerSearchText}
+                            onChange={(e) => {
+                              setProviderSearchText(e.target.value);
                               setShowProviderDropdown(true);
-                            }
-                            return;
-                          }
-
-                          const filtered = getFilteredProviders();
-                          if (filtered.length === 0) return;
-
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setActiveOptionIndex((prev) => {
-                              const next = prev + 1;
-                              return next >= filtered.length ? 0 : next;
-                            });
-                          } else if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            setActiveOptionIndex((prev) => {
-                              const next = prev - 1;
-                              return next < 0 ? filtered.length - 1 : next;
-                            });
-                          } else if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (activeOptionIndex >= 0 && activeOptionIndex < filtered.length) {
-                              const p = filtered[activeOptionIndex];
-                              setSelectedProvider(p.id);
-                              setProviderSearchText(`${p.product ? p.product.toUpperCase() : "PRODUCTO"} - ${p.name}`);
-                              setShowProviderDropdown(false);
                               setActiveOptionIndex(-1);
-                            }
-                          } else if (e.key === "Escape") {
-                            setShowProviderDropdown(false);
-                            setActiveOptionIndex(-1);
-                          }
-                        }}
-                        onFocus={() => {
-                          setShowProviderDropdown(true);
-                          setActiveOptionIndex(-1);
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => {
-                            setShowProviderDropdown(false);
-                            setActiveOptionIndex(-1);
-                          }, 250);
-                        }}
-                        placeholder="Buscar por producto o proveedor..."
-                        style={{
-                          width: "100%",
-                          padding: "1rem",
-                          borderRadius: "12px",
-                          backgroundColor: "var(--ops-bg)",
-                          border: "1px solid var(--ops-border)",
-                          color: "var(--ops-text)",
-                          fontSize: "0.85rem"
+                              if (!e.target.value) {
+                                setSelectedProvider("");
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (!showProviderDropdown) {
+                                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                                  setShowProviderDropdown(true);
+                                }
+                                return;
+                              }
+
+                              const filtered = getFilteredProviders();
+                              if (filtered.length === 0) return;
+
+                              if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setActiveOptionIndex((prev) => {
+                                  const next = prev + 1;
+                                  return next >= filtered.length ? 0 : next;
+                                });
+                              } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setActiveOptionIndex((prev) => {
+                                  const next = prev - 1;
+                                  return next < 0 ? filtered.length - 1 : next;
+                                });
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (activeOptionIndex >= 0 && activeOptionIndex < filtered.length) {
+                                  const p = filtered[activeOptionIndex];
+                                  setSelectedProvider(p.id);
+                                  setProviderSearchText(`${p.product ? p.product.toUpperCase() : "PRODUCTO"} - ${p.name}`);
+                                  setShowProviderDropdown(false);
+                                  setActiveOptionIndex(-1);
+                                }
+                              } else if (e.key === "Escape") {
+                                setShowProviderDropdown(false);
+                                setActiveOptionIndex(-1);
+                              }
+                            }}
+                            onFocus={() => {
+                              setShowProviderDropdown(true);
+                              setActiveOptionIndex(-1);
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => {
+                                setShowProviderDropdown(false);
+                                setActiveOptionIndex(-1);
+                              }, 250);
+                            }}
+                            placeholder="Buscar por producto o proveedor..."
+                            style={{
+                              width: "100%",
+                              padding: "1rem",
+                              borderRadius: "12px",
+                              backgroundColor: "var(--ops-bg)",
+                              border: "1px solid var(--ops-border)",
+                              color: "var(--ops-text)",
+                              fontSize: "0.85rem"
                         }}
                       />
                       <span style={{
@@ -2433,6 +2473,8 @@ export default function ProcurementPage() {
                             ));
                           })()}
                         </div>
+                      )}
+                        </>
                       )}
                     </div>
                   ) : (
