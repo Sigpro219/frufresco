@@ -24,7 +24,12 @@ interface SupabaseOrderItem {
         unit_of_measure: string;
     };
     orders: {
-        customer_name: string;
+        status: string;
+        profiles: {
+            role: string;
+            company_name: string | null;
+            contact_name: string | null;
+        } | null;
     };
 }
 
@@ -55,7 +60,14 @@ export default function PickingTerminal() {
                 .select(`
                     id, quantity, picked_quantity,
                     products!inner (name, unit_of_measure),
-                    orders!inner (customer_name, status)
+                    orders!inner (
+                        status,
+                        profiles:profile_id (
+                            role,
+                            company_name,
+                            contact_name
+                        )
+                    )
                 `)
                 .eq('products.category', cell)
                 .in('orders.status', ['approved', 'processing'])
@@ -70,15 +82,24 @@ export default function PickingTerminal() {
                     return picked < item.quantity;
                 });
                 
-                const mapped: PickingItem[] = pendingItems.map(item => ({
-                    id: item.id,
-                    product_name: item.products.name,
-                    quantity: item.quantity,
-                    picked_quantity: item.picked_quantity || 0,
-                    unit_of_measure: item.products.unit_of_measure,
-                    customer_name: item.orders.customer_name,
-                    zone_name: 'General'
-                }));
+                const mapped: PickingItem[] = pendingItems.map(item => {
+                    const p = item.orders.profiles;
+                    let customerName = 'Cliente';
+                    if (p) {
+                        customerName = p.role === 'b2b_client' 
+                            ? (p.company_name || 'Sin Razón Social') 
+                            : (p.contact_name || p.company_name || 'Cliente B2C');
+                    }
+                    return {
+                        id: item.id,
+                        product_name: item.products.name,
+                        quantity: item.quantity,
+                        picked_quantity: item.picked_quantity || 0,
+                        unit_of_measure: item.products.unit_of_measure,
+                        customer_name: customerName,
+                        zone_name: 'General'
+                    };
+                });
                 
                 if (isMounted.current) {
                     setTasks(mapped.sort((a, b) => a.product_name.localeCompare(b.product_name)));

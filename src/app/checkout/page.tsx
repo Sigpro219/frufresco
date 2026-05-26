@@ -243,7 +243,8 @@ export default function CheckoutPage() {
                 quantity: item.quantity,
                 unit_price: item.price,
                 unit: item.unit,
-                ...(item.variant_label && { nickname: item.variant_label }),
+                variant_label: item.variant_label || null,
+                nickname: item.variant_label || null,
             }));
 
             const createOrderPromise = fetch('/api/orders/public', {

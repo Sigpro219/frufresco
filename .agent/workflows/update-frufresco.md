@@ -15,3 +15,5 @@ Este flujo actualiza la versión oficial de FruFresco con las últimas mejoras d
 7. Confirmar resolución si hubo conflictos: `git add .; git commit -m "Sync: tenant-frufresco desde CORE"`
 8. Publicar cambios: `git push origin tenant-frufresco`
 9. Regresar al laboratorio: `git checkout CORE`
+10. Notificar fin de tarea: cmd /c "node scratch/notify.js success \"Sincronización a Frufresco completada\""
+

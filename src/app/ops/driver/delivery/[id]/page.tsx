@@ -96,9 +96,12 @@ export default function DeliveryConfirmationPage() {
                 .select(`
                     id, route_id, status,
                     orders:order_id (
-                        id, customer_name, shipping_address,
+                        id, shipping_address,
+                        profiles:profile_id (
+                            id, company_name, contact_name, role
+                        ),
                         order_items (
-                            id, product_id, quantity, picked_quantity,
+                            id, product_id, quantity, picked_quantity, nickname, variant_label,
                             products (id, name, unit_of_measure)
                         )
                     )
@@ -107,20 +110,37 @@ export default function DeliveryConfirmationPage() {
                 .single();
 
             if (error) throw error;
+
+            if (data && data.orders) {
+                const orderAny = data.orders as any;
+                const p = orderAny.profiles;
+                let name = 'Cliente';
+                if (p) {
+                    name = p.role === 'b2b_client' 
+                        ? (p.company_name || 'Sin Razón Social') 
+                        : (p.contact_name || p.company_name || 'Cliente B2C');
+                }
+                orderAny.customer_name = name;
+            }
+
             setStop(data);
             
             // Initialize items with 0 returned_qty
             const order = (data as any).orders;
             if (order?.order_items) {
-                const formattedItems = (order.order_items as any[]).map(item => ({
-                    id: item.id,
-                    product_id: item.product_id || item.products?.id,
-                    product_name: item.products?.name || 'Producto',
-                    quantity: item.quantity,
-                    picked_quantity: item.picked_quantity || item.quantity,
-                    returned_qty: 0,
-                    unit: item.products?.unit_of_measure || 'un'
-                }));
+                const formattedItems = (order.order_items as any[]).map(item => {
+                    const variant = item.variant_label || item.nickname || '';
+                    const dispName = variant ? `${item.products?.name || 'Producto'} (${variant})` : (item.products?.name || 'Producto');
+                    return {
+                        id: item.id,
+                        product_id: item.product_id || item.products?.id,
+                        product_name: dispName,
+                        quantity: item.quantity,
+                        picked_quantity: item.picked_quantity || item.quantity,
+                        returned_qty: 0,
+                        unit: item.products?.unit_of_measure || 'un'
+                    };
+                });
                 setItems(formattedItems);
             }
         } catch (err) {

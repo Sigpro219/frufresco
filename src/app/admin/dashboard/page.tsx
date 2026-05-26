@@ -71,12 +71,32 @@ export default function AdminDashboard() {
         // 5. Actividad Reciente (TODOS LOS B2C: Manual y Web)
         const { data: recOrders } = await supabase
             .from('orders')
-            .select('id, total, status, created_at, sequence_id, customer_name, profiles(company_name)')
+            .select(`
+                id, total, status, created_at, sequence_id,
+                profiles:profile_id(id, company_name, contact_name, role)
+            `)
             .in('type', ['b2c', 'b2c_wompi']) // Incluimos ambos subtipos de B2C
             .order('created_at', { ascending: false })
             .limit(5);
 
-        setRecentOrders((recOrders as unknown as RecentOrder[]) || []);
+        if (recOrders) {
+            const mappedOrders = (recOrders as any[]).map(order => {
+                const p = order.profiles;
+                let name = 'Cliente Línea Hogar';
+                if (p) {
+                    name = p.role === 'b2b_client' 
+                        ? (p.company_name || 'Sin Razón Social') 
+                        : (p.contact_name || p.company_name || 'Cliente B2C');
+                }
+                return {
+                    ...order,
+                    customer_name: name
+                };
+            });
+            setRecentOrders(mappedOrders as unknown as RecentOrder[]);
+        } else {
+            setRecentOrders([]);
+        }
     }, []); // Removed unused profile dependencies to avoid unnecessary re-creation
 
     // 1. Carga Inicial
@@ -142,10 +162,10 @@ export default function AdminDashboard() {
 
                 {/* KPIs Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-                    <KPICard title="Ventas Hoy" value={`$${stats.todaySales.toLocaleString()}`} icon="💰" color="#10B981" />
-                    <KPICard title="Pedidos Pendientes" value={stats.pendingOrders.toString()} icon="⏳" color="#F59E0B" />
-                    <KPICard title="Leads Nuevos" value={stats.newLeads.toString()} icon="📈" color="#6366F1" />
-                    <KPICard title="Ticket Promedio" value={`$${Math.round(stats.avgTicket).toLocaleString()}`} icon="🎟️" color="#4F46E5" />
+                    <KPICard title="Ventas Hoy" value={`$${stats.todaySales.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`} icon="💰" color="#10B981" />
+                    <KPICard title="Pedidos Pendientes" value={stats.pendingOrders.toLocaleString('es-CO')} icon="⏳" color="#F59E0B" />
+                    <KPICard title="Leads Nuevos" value={stats.newLeads.toLocaleString('es-CO')} icon="📈" color="#6366F1" />
+                    <KPICard title="Ticket Promedio" value={`$${stats.avgTicket.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon="🎟️" color="#4F46E5" />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 340px', gap: '2rem', marginBottom: '3rem', alignItems: 'start' }}>
@@ -293,7 +313,7 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: '800', color: '#111827' }}>${order.total?.toLocaleString()}</div>
+                                        <div style={{ fontWeight: '800', color: '#111827' }}>${order.total?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
                                         <div style={{
                                             fontSize: '0.65rem',
                                             padding: '2px 8px',

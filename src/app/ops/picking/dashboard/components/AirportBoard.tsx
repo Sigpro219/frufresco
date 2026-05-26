@@ -33,8 +33,8 @@ export default function AirportBoard() {
         const { data: orders } = await supabase
             .from('orders')
             .select(`
-                id, customer_name, status, updated_at,
-                profiles:customer_name(delivery_zone_id),
+                id, status, updated_at,
+                profiles:profile_id(id, company_name, contact_name, role, id_zr),
                 order_items(id, quantity, picked_quantity)
             `)
             .in('status', ['approved', 'processing'])
@@ -46,17 +46,25 @@ export default function AirportBoard() {
                 const picked = o.order_items.reduce((acc: number, i: any) => acc + (i.picked_quantity || 0), 0);
                 const percent = total > 0 ? (picked / total) : 0;
 
-                let status: BoardRow['status'] = 'pending';
-                if (percent > 0 && percent < 1) status = 'picking';
+                let status: BoardRow['status'] = 'picking';
+                if (percent === 0) status = 'pending';
                 if (percent === 1) status = 'ready';
                 if (percent < 1 && new Date(o.updated_at).getTime() < Date.now() - 3600000) status = 'delayed'; // 1hr no move
 
                 // Get Zone Name safely
-                const zoneId = o.profiles?.[0]?.delivery_zone_id?.toString() || '0';
+                const zoneId = o.profiles?.id_zr?.toString() || '0';
+                
+                const p = o.profiles;
+                let customerName = 'Cliente';
+                if (p) {
+                    customerName = p.role === 'b2b_client' 
+                        ? (p.company_name || 'Sin Razón Social') 
+                        : (p.contact_name || p.company_name || 'Cliente B2C');
+                }
 
                 return {
                     id: o.id,
-                    customer_name: o.customer_name,
+                    customer_name: customerName,
                     zone_name: ZONE_MAP[zoneId] || 'GEN',
                     total_items: total,
                     picked_items: picked,

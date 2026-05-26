@@ -9,3 +9,5 @@ Este comando asegura que tus cambios locales estén respaldados en GitHub bajo l
 1. Agregar todos los cambios: `git add .`
 2. Crear un punto de restauración: `git commit -m "Actualización de desarrollo en CORE"`
 3. Subir a la nube: `git push origin CORE`
+4. Notificar fin de tarea: cmd /c "node scratch/notify.js success \"Core guardado correctamente\""
+

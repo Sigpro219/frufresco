@@ -841,6 +841,42 @@ export default function MasterProductsPage() {
                         )}
                     </div>
 
+                    {/* Contador de Productos Filtrados */}
+                    <div style={{
+                        padding: '0 1.2rem',
+                        borderRadius: '14px',
+                        backgroundColor: searchQuery ? 'rgba(16, 185, 129, 0.1)' : 'white',
+                        color: searchQuery ? '#065F46' : '#6B7280',
+                        border: searchQuery ? '1.5px solid #10B981' : '1.5px solid #E5E7EB',
+                        fontSize: '0.9rem',
+                        fontWeight: '700',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        whiteSpace: 'nowrap',
+                        height: '48px',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: searchQuery ? '0 4px 12px rgba(16, 185, 129, 0.1)' : '0 4px 12px rgba(0,0,0,0.02)',
+                    }}>
+                        <span style={{ fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
+                            {searchQuery ? '🎯' : '📦'}
+                        </span>
+                        <span>
+                            {searchQuery ? (
+                                <>
+                                    <strong style={{ color: '#10B981', fontSize: '1rem' }}>{filteredProducts.length}</strong>
+                                    <span style={{ fontWeight: '500', color: '#374151', marginLeft: '4px' }}>de {products.length}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <strong style={{ color: '#111827' }}>{products.length}</strong>
+                                    <span style={{ fontWeight: '500', color: '#6B7280', marginLeft: '4px' }}>productos</span>
+                                </>
+                            )}
+                        </span>
+                    </div>
+
                     {/* Botón Informativo Estándar (Hover) */}
                     <div 
                         onMouseEnter={() => setShowHelpTooltip(true)}

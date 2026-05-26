@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
-import { Monitor, LayoutGrid, Tv } from 'lucide-react';
+import { Monitor, LayoutGrid, Tv, Bell } from 'lucide-react';
 
 // Types
 type Product = {
@@ -54,9 +54,9 @@ export default function PickingDashboard() {
             laneFontSize: '1.3rem',
             clientFontSize: '0.75rem',
             productFontSize: '0.9rem',
-            headerHeight: '70px',
+            headerHeight: '85px',
             hideExternal: false,
-            clientHeaderHeight: '95px'
+            clientHeaderHeight: '160px'
         },
         high: {
             cellWidth: '32px',
@@ -65,9 +65,9 @@ export default function PickingDashboard() {
             laneFontSize: '1.1rem',
             clientFontSize: '0.65rem',
             productFontSize: '0.8rem',
-            headerHeight: '60px',
+            headerHeight: '75px',
             hideExternal: false,
-            clientHeaderHeight: '85px'
+            clientHeaderHeight: '140px'
         },
         tv: {
             cellWidth: '22px',
@@ -76,9 +76,9 @@ export default function PickingDashboard() {
             laneFontSize: '0.85rem',
             clientFontSize: '0.55rem',
             productFontSize: '0.75rem',
-            headerHeight: '45px',
+            headerHeight: '60px',
             hideExternal: true,
-            clientHeaderHeight: '75px'
+            clientHeaderHeight: '120px'
         }
     };
 
@@ -91,11 +91,12 @@ export default function PickingDashboard() {
 
     // STATE
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
-    const [clients, setClients] = useState<{ id: string, company_name: string, zone_name: string }[]>([]);
+    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
     const [isConnected, setIsConnected] = useState(false);
+    const [showBannerModal, setShowBannerModal] = useState(false);
 
     useEffect(() => {
         // Hydration fix for time
@@ -115,7 +116,10 @@ export default function PickingDashboard() {
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, customer_name, status,
+                    id, status,
+                    profiles:profile_id (
+                        id, company_name, contact_name, role, id_zr
+                    ),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status
                     )
@@ -126,35 +130,78 @@ export default function PickingDashboard() {
 
             const { data: orders } = await ordersQuery;
 
-            const activeClientNames = Array.from(new Set((orders || []).map(o => (o as any).customer_name).filter(n => !!n))) as string[];
+            const getOrderName = (order: any): string => {
+                const p = order.profiles;
+                if (!p) return '';
+                if (p.role === 'b2b_client') return p.company_name || 'Sin Razón Social';
+                return p.contact_name || p.company_name || 'Cliente B2C';
+            };
 
-            // 2. Fetch Profiles to get zones
-            const { data: profiles } = (await supabase.from('profiles')
-                .select('id, company_name, delivery_zone_id')
-                .eq('role', 'b2b_client')
-                .abortSignal(signal as any)) as { data: { id: string; company_name: string; delivery_zone_id: string }[] | null };
-            
-            const profileMap = new Map<string, { id: string; company_name: string; delivery_zone_id: string }>((profiles || []).map(p => [p.company_name, p]));
+            const getOrderKey = (order: any): string => {
+                const baseName = getOrderName(order);
+                const shortId = order.sequence_id ? `#${order.sequence_id}` : `#${order.id.substring(0, 4)}`;
+                return `${baseName} (Ped. ${shortId})`;
+            };
 
-            // Fetch Zones for Mapping
-            const { data: zones } = (await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any)) as { data: { id: string; name: string }[] | null };
-            const zoneMap = new Map<string, string>((zones || []).map(z => [z.id, z.name]));
+            const activeOrders = (orders || []).filter(o => o.order_items && o.order_items.length > 0);
 
-            // Build clients from ORDERS (Source of Truth)
-            const formattedClients = activeClientNames
-                .map(name => {
-                    const profile = profileMap.get(name);
-                    const zoneName = (profile ? zoneMap.get(profile.delivery_zone_id) : null) || 'GENERAL';
+            // 2. Fetch routes and route_stops to get assigned vehicle
+            const orderIds = activeOrders.map(o => o.id);
+            const { data: routeStops } = await supabase
+                .from('route_stops')
+                .select(`
+                    order_id,
+                    routes (
+                        vehicle_plate
+                    )
+                `)
+                .in('order_id', orderIds)
+                .abortSignal(signal as any);
+
+            // NEW: Fetch fleet_vehicles to map plate -> driver name
+            const { data: fleet } = await supabase.from('fleet_vehicles').select('plate, collaborators:driver_id(contact_name)').abortSignal(signal as any);
+            const plateToDriver = new Map<string, string>();
+            (fleet || []).forEach(f => {
+                if (f.plate && f.collaborators && f.collaborators.contact_name) {
+                    // Extract first name and first surname for brevity
+                    const parts = f.collaborators.contact_name.split(' ').filter(Boolean);
+                    const shortName = parts.length >= 3 ? `${parts[0]} ${parts[2]}` : parts[0];
+                    plateToDriver.set(f.plate, shortName);
+                }
+            });
+
+            const orderToPlate = new Map<string, string>();
+            (routeStops || []).forEach((stop: any) => {
+                if (stop.routes && stop.routes.vehicle_plate) {
+                    const plate = stop.routes.vehicle_plate;
+                    const driverName = plateToDriver.get(plate);
+                    const displayName = driverName ? `${plate} (${driverName})` : plate;
+                    orderToPlate.set(stop.order_id, displayName);
+                }
+            });
+
+            // Build columns from individual orders, NOT merged clients
+            const formattedClients = activeOrders
+                .map(order => {
+                    const plate = orderToPlate.get(order.id) || 'SIN ASIGNAR';
+                    const baseName = getOrderName(order);
+                    const shortId = order.sequence_id ? `#${order.sequence_id}` : `#${order.id.substring(0, 4)}`;
                     return {
-                        id: profile?.id || name,
-                        company_name: name,
-                        zone_name: zoneName
+                        id: order.id, 
+                        company_name: baseName,
+                        order_short: shortId,
+                        zone_name: plate
                     };
                 })
                 .sort((a, b) => {
                     const zoneA = a.zone_name.toUpperCase();
                     const zoneB = b.zone_name.toUpperCase();
-                    if (zoneA !== zoneB) return zoneA.localeCompare(zoneB);
+                    if (zoneA !== zoneB) {
+                        // Put "SIN ASIGNAR" at the end
+                        if (zoneA === 'SIN ASIGNAR') return 1;
+                        if (zoneB === 'SIN ASIGNAR') return -1;
+                        return zoneA.localeCompare(zoneB);
+                    }
                     
                     const nameA = a.company_name.toUpperCase();
                     const nameB = b.company_name.toUpperCase();
@@ -189,20 +236,19 @@ export default function PickingDashboard() {
 
             // 4. Build Matrix
             const newMatrix: Record<string, Record<string, CellData>> = {};
-            if (orders) {
-                orders.forEach(order => {
-                    const clientName = order.customer_name;
+            if (activeOrders) {
+                activeOrders.forEach(order => {
                     if (order.order_items) {
                         order.order_items.forEach((item: { product_id: string, quantity: number, picked_quantity: number, quality_status?: string | null, id: string }) => {
                             // Unified item storage regardless of category (TV needs full context for progress)
                             if (!newMatrix[item.product_id]) newMatrix[item.product_id] = {};
-                            const currentCell = newMatrix[item.product_id][clientName] || { ordered: 0, picked: 0, hasRejection: false, hasWarning: false, items: [] };
+                            const currentCell = newMatrix[item.product_id][order.id] || { ordered: 0, picked: 0, hasRejection: false, hasWarning: false, items: [] };
                             const qty = Number(item.quantity) || 0;
                             const picked = Number(item.picked_quantity) || 0;
                             const rejected = item.quality_status === 'red';
                             const warning = item.quality_status === 'yellow';
                             
-                            newMatrix[item.product_id][clientName] = {
+                            newMatrix[item.product_id][order.id] = {
                                 ordered: currentCell.ordered + qty,
                                 picked: currentCell.picked + picked,
                                 hasRejection: currentCell.hasRejection || rejected,
@@ -255,7 +301,7 @@ export default function PickingDashboard() {
         };
     }, [loadData]);
 
-    const handleCellClick = async (product: Product, clientName: string, cellData: CellData) => {
+    const handleCellClick = async (product: Product, clientId: string, clientName: string, cellData: CellData) => {
         if (!cellData || cellData.ordered === 0) return;
 
         const newPickedStr = window.prompt(
@@ -270,7 +316,7 @@ export default function PickingDashboard() {
 
         // Optimistic UI Update
         const newMatrix = { ...matrix };
-        newMatrix[product.id][clientName] = {
+        newMatrix[product.id][clientId] = {
             ...cellData,
             picked: newPickedTotal
         };
@@ -363,12 +409,12 @@ export default function PickingDashboard() {
     });
 
     // Helper for Client Completion
-    const isClientComplete = useCallback((clientName: string) => {
+    const isClientComplete = useCallback((clientId: string) => {
         let hasOrders = false;
         let allItemsPicked = true;
 
         Object.values(matrix).forEach(prodRow => {
-            const cell = prodRow[clientName];
+            const cell = prodRow[clientId];
             if (cell && cell.ordered > 0) {
                 hasOrders = true;
                 if (cell.picked < cell.ordered) {
@@ -463,9 +509,9 @@ export default function PickingDashboard() {
     const productsWithAlerts = new Set<string>();
 
     Object.entries(matrix).forEach(([prodId, prodRow]) => {
-        Object.entries(prodRow).forEach(([clientName, cell]) => {
+        Object.entries(prodRow).forEach(([clientId, cell]) => {
             if (cell.hasRejection || cell.hasWarning) {
-                clientsWithAlerts.add(clientName);
+                clientsWithAlerts.add(clientId);
                 productsWithAlerts.add(prodId);
             }
         });
@@ -482,8 +528,53 @@ export default function PickingDashboard() {
             min: p.min_inventory_level || 0
         }));
 
+    // --- SMART BANNER LOGIC ---
+    const bannerAlerts: { type: 'critical' | 'warning' | 'info', msg: string }[] = [];
+
+    if (!isConnected) {
+        bannerAlerts.push({ type: 'critical', msg: '🔴 CONEXIÓN PERDIDA - Intentando reconectar...' });
+    }
+
+    let hasAnyRejection = false;
+    let hasAnyWarning = false;
+    
+    Object.values(matrix).forEach(prodRow => {
+        Object.values(prodRow).forEach(cell => {
+            if (cell.hasRejection) hasAnyRejection = true;
+            if (cell.hasWarning) hasAnyWarning = true;
+        });
+    });
+
+    if (hasAnyRejection) {
+        bannerAlerts.push({ type: 'critical', msg: '🚨 CALIDAD: Hay productos rechazados en piso que requieren atención.' });
+    }
+    if (hasAnyWarning) {
+        bannerAlerts.push({ type: 'warning', msg: '⚠️ NOVEDAD: Hay advertencias de calidad en productos.' });
+    }
+
+    if (inventoryAlerts && inventoryAlerts.length > 0) {
+        inventoryAlerts.slice(0, 3).forEach(p => {
+            bannerAlerts.push({ type: 'warning', msg: `⚠️ INVENTARIO: Bajo stock de ${p.name} (Actual: ${p.current})` });
+        });
+        if (inventoryAlerts.length > 3) {
+            bannerAlerts.push({ type: 'warning', msg: `⚠️ INVENTARIO: Y ${inventoryAlerts.length - 3} alertas más.` });
+        }
+    }
+
+    if (bannerAlerts.length === 0) {
+        bannerAlerts.push({ type: 'info', msg: `✅ OPERACIÓN FLUIDA - Progreso Global: ${percentComplete}%` });
+    }
+
+    const hasCritical = bannerAlerts.some(a => a.type === 'critical');
+    const hasWarningBanner = bannerAlerts.some(a => a.type === 'warning');
+    
+    const bannerBgClass = hasCritical ? 'bg-red-600/80 text-white' : (hasWarningBanner ? 'bg-yellow-500/80 text-black' : 'bg-green-700/80 text-white');
+
+    const bannerText = bannerAlerts.map(a => a.msg).join(' *** ');
+    // ----------------------------
+
     return (
-        <main style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <main style={{ backgroundColor: '#000', height: '100vh', color: '#fff', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
 
 
@@ -509,7 +600,8 @@ export default function PickingDashboard() {
                         fontSize: density === 'tv' ? '1rem' : '1.5rem', 
                         cursor: 'pointer' 
                     }}>
-                    LOGISTICS PRO <span style={{ color: '#666' }}>|</span> <span style={{ color: '#fff' }}>PICKING</span>
+                    <img src="/logo_completo_compacto.png" alt="Fru Fresco" style={{ height: density === 'tv' ? '30px' : '45px', objectFit: 'contain', borderRadius: '6px' }} />
+                    <span style={{ color: '#666', marginLeft: '8px' }}>|</span> <span style={{ color: '#fff', marginLeft: '8px' }}>PICKING</span>
                 </div>
 
                 {/* INVENTORY ALERTS BANNER - INSIDE HEADER OR BELOW? 
@@ -519,7 +611,7 @@ export default function PickingDashboard() {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '600px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '600px', marginTop: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#aaa', textTransform: 'uppercase' }}>
                             <span>PRODUCCIÓN</span>
                             <span>{totalGlobalPicked} / {totalGlobalOrdered} Und</span>
@@ -579,7 +671,7 @@ export default function PickingDashboard() {
                             {!isConnected && <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: 'bold' }}>DESCONECTADO</span>}
                         </div>
 
-                         <div style={{ fontSize: density === 'tv' ? '1.2rem' : '2rem', fontWeight: 'bold' }}>{currentTime}</div>
+                         <div style={{ fontSize: density === 'tv' ? '1.2rem' : '2rem', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', minWidth: density === 'tv' ? '90px' : '150px', textAlign: 'right' }}>{currentTime}</div>
 
                         {/* DENSITY SELECTOR */}
                         <div style={{ 
@@ -653,13 +745,13 @@ export default function PickingDashboard() {
             )}
 
             {/* SCROLLABLE GRID */}
-            <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+            <div style={{ flex: 1, overflow: 'auto', position: 'relative', paddingBottom: '32px' }}>
                 <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
                     <thead>
                         {/* ROW 1: ZONES (Sticky Top) */}
                         <tr>
                             <th style={{
-                                position: 'sticky', top: cfg.headerHeight, left: 0, zIndex: 40,
+                                position: 'sticky', top: 0, left: 0, zIndex: 40,
                                 background: '#000', minWidth: '200px',
                                 borderBottom: '1px solid #333', borderRight: '1px solid #333',
                                 height: '44px'
@@ -667,7 +759,7 @@ export default function PickingDashboard() {
 
                             {zoneHeaders.map((zone, i) => (
                                 <th key={i} colSpan={zone.count} style={{
-                                    position: 'sticky', top: cfg.headerHeight, zIndex: 30,
+                                    position: 'sticky', top: 0, zIndex: 30,
                                     background: '#0a0a0a',
                                     color: zone.percent === 100 ? '#22C55E' : zone.color,
                                     borderBottom: `4px solid ${zone.percent === 100 ? '#22C55E' : zone.color}`,
@@ -685,7 +777,7 @@ export default function PickingDashboard() {
                         {/* ROW 2: CLIENT NAMES (Vertical) */}
                         <tr>
                             <th style={{
-                                position: 'sticky', top: `calc(${cfg.headerHeight} + 44px)`, left: 0, zIndex: 40,
+                                position: 'sticky', top: '44px', left: 0, zIndex: 40,
                                 background: '#000',
                                 borderBottom: '1px solid #333', borderRight: '1px solid #333',
                                 color: '#888', textAlign: 'right', padding: '1rem',
@@ -693,11 +785,11 @@ export default function PickingDashboard() {
                             }}>PRODUCTO</th>
 
                             {clients.map((client, index) => {
-                                const complete = isClientComplete(client.company_name);
+                                const complete = isClientComplete(client.id);
                                 return (
                                     <th key={client.id} style={{
-                                        position: 'sticky', top: `calc(${cfg.headerHeight} + 44px)`, zIndex: 20,
-                                        background: complete ? '#064E3B' : (clientsWithAlerts.has(client.company_name) ? '#7F1D1D' : '#000'),
+                                        position: 'sticky', top: '44px', zIndex: 20,
+                                        background: complete ? '#064E3B' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#000'),
                                         borderBottom: '1px solid #333',
                                         borderRight: '1px solid #111',
                                         height: cfg.clientHeaderHeight,
@@ -706,7 +798,7 @@ export default function PickingDashboard() {
                                         minWidth: cfg.cellWidth,
                                         maxWidth: cfg.cellWidth,
                                         overflow: 'hidden',
-                                        animation: clientsWithAlerts.has(client.company_name) ? 'pulseAlert 1.5s infinite' : 'none'
+                                        animation: clientsWithAlerts.has(client.id) ? 'pulseAlert 1.5s infinite' : 'none'
                                     }}>
                                         <div style={{
                                             display: 'flex',
@@ -748,10 +840,13 @@ export default function PickingDashboard() {
                                                 overflow: 'hidden',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'flex-end',
-                                                paddingBottom: '8px'
+                                                justifyContent: 'flex-start'
                                             }}>
-                                                {getClientShortName(client.company_name)}
+                                                <div style={{ animation: 'slideClientName 15s linear infinite', whiteSpace: 'nowrap' }}>
+                                                    {getClientShortName(client.company_name)}
+                                                    <span style={{ opacity: 0 }}>------</span>
+                                                    {getClientShortName(client.company_name)}
+                                                </div>
                                             </div>
                                         </div>
                                     </th>
@@ -817,7 +912,7 @@ export default function PickingDashboard() {
                                                     padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
                                                     color: productsWithAlerts.has(product.id) ? '#fff' : '#ddd', 
                                                     fontSize: cfg.productFontSize,
-                                                    minWidth: density === 'tv' ? '150px' : '200px', maxWidth: '300px',
+                                                    minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
                                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                     animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
                                                 }} title={product.name}>
@@ -861,7 +956,7 @@ export default function PickingDashboard() {
 
                                                     return (
                                                         <td key={client.id}
-                                                            onClick={() => handleCellClick(product, client.company_name, cell)}
+                                                            onClick={() => handleCellClick(product, client.id, client.company_name, cell)}
                                                             style={{
                                                                 background: bg, color: fg,
                                                                 borderBottom: '1px solid #000', borderRight: '1px solid #000',
@@ -907,9 +1002,23 @@ export default function PickingDashboard() {
             </div>
 
             {/* Footer Ticker */}
-            <div className="bg-yellow-500 text-black p-1 font-bold text-sm overflow-hidden whitespace-nowrap z-50">
-                <div className="animate-marquee inline-block">
-                    *** SEGUIMIENTO EN VIVO *** OPERACIÓN FLUIDA *** RUTAS NORTE: CIERRE 14:00 *** REPORTE NOVEDADES AL SUPERVISOR ***
+            <div 
+                onClick={() => setShowBannerModal(true)}
+                className={`${bannerBgClass} p-1 font-bold text-sm overflow-hidden whitespace-nowrap cursor-pointer`}
+                style={{ 
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    borderTop: '1px solid rgba(255,255,255,0.1)',
+                    zIndex: 100 
+                }}
+                title="Clic para ver detalles de alertas"
+            >
+                <div className="animate-marquee inline-block" style={{ animationDuration: hasCritical ? '45s' : '90s' }}>
+                    *** {bannerText} ***
                 </div>
             </div>
 
@@ -944,7 +1053,48 @@ export default function PickingDashboard() {
                     50% { background-color: #78350F; }
                     100% { background-color: #EAB308; }
                 }
+                @keyframes slideClientName {
+                    0% { transform: translateY(0); }
+                    100% { transform: translateY(-50%); }
+                }
             `}</style>
+
+            {/* BANNER MODAL */}
+            {showBannerModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                    background: 'rgba(0,0,0,0.8)', zIndex: 100,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }} onClick={() => setShowBannerModal(false)}>
+                    <div style={{
+                        background: '#111', border: '1px solid #333', padding: '2rem',
+                        borderRadius: '8px', minWidth: '400px', maxWidth: '800px',
+                        color: '#fff'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', borderBottom: '1px solid #333', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Bell size={24} /> Alertas Activas
+                        </h2>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {bannerAlerts.map((a, i) => (
+                                <li key={i} style={{ 
+                                    padding: '0.75rem', 
+                                    background: a.type === 'critical' ? '#7F1D1D' : (a.type === 'warning' ? '#78350F' : '#064E3B'),
+                                    borderRadius: '4px',
+                                    fontWeight: 'bold',
+                                    borderLeft: `4px solid ${a.type === 'critical' ? '#EF4444' : (a.type === 'warning' ? '#F59E0B' : '#10B981')}`
+                                }}>
+                                    {a.msg}
+                                </li>
+                            ))}
+                        </ul>
+                        <div style={{ marginTop: '2rem', textAlign: 'right' }}>
+                            <button onClick={() => setShowBannerModal(false)} style={{
+                                background: '#333', color: '#fff', border: 'none', padding: '0.5rem 1.5rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+                            }}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MILESTONE POPUP */}
             {milestone && (

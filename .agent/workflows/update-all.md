@@ -24,5 +24,7 @@ Incluye la rama `main` que es la que Vercel usa para el despliegue automático.
 15. Commit si hubo conflictos: `git add .; git commit -m "Sync: tenant-frufresco desde CORE"`
 16. Push Frufresco: `git push origin tenant-frufresco`
 17. Regresar al CORE: `git checkout CORE`
+18. Notificar fin de tarea: cmd /c "node scratch/notify.js success \"Sincronización de todas las ramas completada\""
+
 
 **Nota:** Si existen más tenants en el futuro, agregar pasos 12-16 con el nombre de su rama.

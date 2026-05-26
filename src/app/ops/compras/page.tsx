@@ -19,12 +19,23 @@ interface ProcurementTask {
   delivery_date?: string;
   original_product_id?: string;
   created_at?: string;
+  parent_id?: string;
+  parent_name?: string;
+  min_inventory_level?: number;
+  raw_order_qty?: number;
+  applied_stock?: number;
+  meta_neteo?: number;
+  hasRejection?: boolean;
+  hasDeficit?: boolean;
+  hasWarning?: boolean;
 }
 
 export default function ProcurementPage() {
   console.log("ProcurementPage rendering...");
   const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<ProcurementTask[]>([]);
+  const [taskPurchases, setTaskPurchases] = useState<any[]>([]);
+  const [novelties, setNovelties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isConsolidating, setIsConsolidating] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ProcurementTask | null>(
@@ -35,8 +46,13 @@ export default function ProcurementPage() {
   const [showFilterGrid, setShowFilterGrid] = useState(false);
   const [conversions, setConversions] = useState<any[]>([]);
 
+  // Onboarding Guide States
+  const [showGuide, setShowGuide] = useState(false);
+  const [guideStep, setGuideStep] = useState(0);
+
   // Substitution states
   const [isSubstituting, setIsSubstituting] = useState(false);
+  const [isReprogramming, setIsReprogramming] = useState(false);
   const [searchSub, setSearchSub] = useState("");
   const [subResults, setSubResults] = useState<any[]>([]);
 
@@ -85,6 +101,56 @@ export default function ProcurementPage() {
       controller.abort();
     };
   }, [profile]);
+
+  const resolvePurchaseNovelty = async (p: any, action: string) => {
+    try {
+      const { data: existing, error: getErr } = await supabase
+        .from('provider_novelties')
+        .select('id')
+        .eq('purchase_id', p.id)
+        .maybeSingle();
+
+      if (getErr) {
+        console.error("Error checking existing novelty:", getErr);
+      }
+
+      if (existing) {
+        const { error: updErr } = await supabase
+          .from('provider_novelties')
+          .update({
+            resolved: true,
+            resolution_action: action,
+            resolved_at: new Date().toISOString()
+          })
+          .eq('purchase_id', p.id);
+        if (updErr) {
+          console.error("Error updating novelty:", updErr);
+        }
+      } else {
+        const { error: insErr } = await supabase
+          .from('provider_novelties')
+          .insert({
+            purchase_id: p.id,
+            task_id: p.task_id || selectedTask?.id,
+            provider_id: p.provider_id || null,
+            product_id: p.product_id || selectedTask?.product_id,
+            variant_label: p.variant_label || selectedTask?.variant_label || null,
+            novelty_type: p.status === 'rejected' ? 'rejection' : (((p.picked_up_quantity || 0) < p.quantity) ? 'deficit' : 'warning'),
+            quantity: p.quantity,
+            unit: p.purchase_unit || selectedTask?.unit || 'Kg',
+            reason: p.rejection_reason || 'Mala Calidad',
+            resolved: true,
+            resolution_action: action,
+            resolved_at: new Date().toISOString()
+          });
+        if (insErr) {
+          console.error("Error inserting novelty:", insErr);
+        }
+      }
+    } catch (e) {
+      console.error("resolvePurchaseNovelty error:", e);
+    }
+  };
 
   const fetchConversions = async (signal?: AbortSignal) => {
     try {
@@ -186,34 +252,84 @@ export default function ProcurementPage() {
       if (tErr) throw tErr;
 
       if (rawTasks && rawTasks.length > 0) {
-        // 2. Extraemos IDs únicos de productos para buscar sus nombres
-        const productIds = Array.from(
-          new Set(rawTasks.map((t) => t.product_id)),
-        );
+        const rawTaskIds = rawTasks.map(t => t.id);
+        const productIds = Array.from(new Set(rawTasks.map(t => t.product_id)));
 
+        // 2. Fetch products details (including parent_id, min_inventory_level)
         const { data: products, error: pErr } = await supabase
           .from("products")
-          .select("id, name, category, purchase_sublist, unit_of_measure")
+          .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure")
           .in("id", productIds);
 
-        if (pErr)
-          console.warn("No se pudieron cargar detalles de productos", pErr);
+        if (pErr) console.warn("No se pudieron cargar detalles de productos", pErr);
 
-        // 3. Cruzamos la información en memoria (Seguro y rápido)
         const productMap = (products || []).reduce((acc: any, p: any) => {
           acc[p.id] = p;
           return acc;
         }, {});
 
-        const finalCategory =
-          categoryFilter !== undefined ? categoryFilter : filterCategory;
+        // Fetch parent names if they have parent_id
+        const parentIds = Array.from(new Set((products || []).map(p => p.parent_id).filter(Boolean)));
+        let parentMap: Record<string, string> = {};
+        if (parentIds.length > 0) {
+          const { data: parentProducts } = await supabase
+            .from("products")
+            .select("id, name")
+            .in("id", parentIds);
+          (parentProducts || []).forEach(p => {
+            parentMap[p.id] = p.name;
+          });
+        }
 
-        let formatted = rawTasks.map((t: any) => {
+        // 3. Fetch available stocks
+        const { data: stocksData } = await supabase
+          .from("inventory_stocks")
+          .select("product_id, quantity")
+          .eq("status", "available");
+
+        const stockMap: Record<string, number> = {};
+        (stocksData || []).forEach(s => {
+          const q = parseFloat(s.quantity as any) || 0;
+          stockMap[s.product_id] = (stockMap[s.product_id] || 0) + q;
+        });
+
+        // 4. Fetch task purchases
+        const { data: purchasesData } = await supabase
+          .from("purchases")
+          .select(`
+            *,
+            provider:providers (
+              name
+            )
+          `)
+          .in("task_id", rawTaskIds);
+
+        const currentPurchases = purchasesData || [];
+        setTaskPurchases(currentPurchases);
+
+        // 5. Fetch unresolved provider novelties
+        const { data: noveltiesData } = await supabase
+          .from("provider_novelties")
+          .select("*")
+          .eq("resolved", false);
+
+        const unresolvedNovelties = noveltiesData || [];
+        setNovelties(unresolvedNovelties);
+
+        // Map raw tasks to tasks with details
+        let formatted: ProcurementTask[] = rawTasks.map((t: any) => {
           const prod = productMap[t.product_id];
+          const pName = prod?.parent_id ? (parentMap[prod.parent_id] || prod.name) : (prod?.name || "");
           let name = prod?.name || `Producto #${t.product_id.split("-")[0]}`;
           if (t.variant_label) {
             name = `${name} (${t.variant_label})`;
           }
+
+          // Cross novelties
+          const taskNovs = unresolvedNovelties.filter(n => n.task_id === t.id);
+          const hasRejection = taskNovs.some(n => n.novelty_type === 'rejection');
+          const hasDeficit = taskNovs.some(n => n.novelty_type === 'deficit');
+          const hasWarning = taskNovs.some(n => n.novelty_type === 'warning');
 
           return {
             id: t.id,
@@ -227,33 +343,89 @@ export default function ProcurementPage() {
             category: prod?.purchase_sublist || "S/N",
             delivery_date: t.delivery_date,
             created_at: t.created_at,
+            parent_id: prod?.parent_id || undefined,
+            parent_name: pName || undefined,
+            min_inventory_level: prod?.min_inventory_level ? parseFloat(prod.min_inventory_level) : 0,
+            hasRejection,
+            hasDeficit,
+            hasWarning,
+            // placeholders to be computed in netting
+            raw_order_qty: t.total_requested,
+            applied_stock: 0,
+            meta_neteo: t.total_requested
           };
         });
 
-        // 4. Aplicar filtro de sublista
-        if (
-          finalCategory &&
-          finalCategory !== "Ver Todo" &&
-          finalCategory !== ""
-        ) {
-          formatted = formatted.filter(
-            (t) => t.category === finalCategory
-          );
+        // 6. Apply Netting Logic (Model A and Model B combined)
+        // Group tasks by base product (parent_id if exists, otherwise product_id)
+        const groups: Record<string, ProcurementTask[]> = {};
+        formatted.forEach(t => {
+          const baseKey = t.parent_id || t.product_id;
+          if (!groups[baseKey]) groups[baseKey] = [];
+          groups[baseKey].push(t);
+        });
+
+        Object.keys(groups).forEach(baseKey => {
+          const groupTasks = groups[baseKey];
+          // Sort group: base product task first (empty variant label), then variant tasks alphabetically
+          groupTasks.sort((a, b) => {
+            const labelA = a.variant_label || "";
+            const labelB = b.variant_label || "";
+            if (labelA === "" && labelB !== "") return -1;
+            if (labelA !== "" && labelB === "") return 1;
+            return labelA.localeCompare(labelB);
+          });
+
+          // Calculate sequential netting
+          // Total stock for this base product key is sum of stocks of itself and its variants (or just itself)
+          // To be safe, we check stockMap for all product_ids represented in the groupTasks
+          let totalGroupStock = 0;
+          const processedProductIds = new Set<string>();
+          groupTasks.forEach(gt => {
+            if (!processedProductIds.has(gt.product_id)) {
+              totalGroupStock += stockMap[gt.product_id] || 0;
+              processedProductIds.add(gt.product_id);
+            }
+          });
+
+          let remainingStock = totalGroupStock;
+          groupTasks.forEach((gt, idx) => {
+            const pedido = gt.total_requested;
+            // Safety stock: only add to the first item of the sequence
+            const safety = (idx === 0) ? (gt.min_inventory_level || 0) : 0;
+            const appliedStock = Math.min(remainingStock, pedido + safety);
+            remainingStock -= appliedStock;
+            const meta = Math.max(0, pedido - appliedStock + safety);
+
+            gt.applied_stock = appliedStock;
+            gt.meta_neteo = meta;
+          });
+        });
+
+        // 7. Filter Category
+        const finalCategory = categoryFilter !== undefined ? categoryFilter : filterCategory;
+        if (finalCategory && finalCategory !== "Ver Todo" && finalCategory !== "") {
+          formatted = formatted.filter(t => t.category === finalCategory);
         }
 
-        // 5. Ordenamiento Inteligente: Parciales (En Proceso) primero, luego pendientes, al final completados
+        // 8. Sorting by Alert Severity (🔴 > 🟠 > 🟡 > partial > pending > completed)
         formatted.sort((a, b) => {
-          const statusPriority: Record<string, number> = {
-            partial: 0, // Top Priority (Lo que ya empecé)
-            pending: 1, // Middle Priority (Lo que falta)
-            completed: 2, // Bottom Priority (Lo que ya terminé)
+          // Status order priority
+          const getTaskSeverity = (t: ProcurementTask): number => {
+            if (t.hasRejection) return 0; // Red (highest)
+            if (t.hasDeficit) return 1;    // Orange
+            if (t.hasWarning) return 2;    // Yellow
+            if (t.status === "partial") return 3;
+            if (t.status === "pending") return 4;
+            return 5; // Completed (lowest)
           };
-          const pA = statusPriority[a.status] ?? 99;
-          const pB = statusPriority[b.status] ?? 99;
 
-          if (pA !== pB) return pA - pB;
+          const sevA = getTaskSeverity(a);
+          const sevB = getTaskSeverity(b);
 
-          // Desempate por Fecha: Lo más urgente (menor fecha) primero
+          if (sevA !== sevB) return sevA - sevB;
+
+          // Date Tiebreaker
           const dateA = a.delivery_date || "9999-99-99";
           const dateB = b.delivery_date || "9999-99-99";
           return dateA.localeCompare(dateB);
@@ -262,6 +434,8 @@ export default function ProcurementPage() {
         setTasks(formatted);
       } else {
         setTasks([]);
+        setTaskPurchases([]);
+        setNovelties([]);
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -650,6 +824,30 @@ export default function ProcurementPage() {
     }
   };
 
+  const handleCloseShortfall = async (item: ProcurementTask) => {
+    if (!confirm(`¿Cerrar faltante para ${item.product_name}? Se ajustará la meta a la cantidad comprada actual.`)) return;
+    try {
+      const taskNovs = novelties.filter(n => n.task_id === item.id);
+      for (const n of taskNovs) {
+        await resolvePurchaseNovelty({ id: n.purchase_id, task_id: item.id, ...n }, 'closed_with_shortfall');
+      }
+      
+      const { error } = await supabase
+        .from("procurement_tasks")
+        .update({
+          total_requested: item.total_purchased,
+          status: "completed"
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+
+      alert("🏁 Faltante cerrado con éxito!");
+      fetchTasks();
+    } catch (e: any) {
+      alert("Error cerrando faltante: " + e.message);
+    }
+  };
+
   // Helper Fecha
   const nowBogotaStr = new Date().toLocaleString("en-US", {
     timeZone: "America/Bogota",
@@ -708,6 +906,22 @@ export default function ProcurementPage() {
                     50% { opacity: 0.6; transform: scale(0.98); }
                     100% { opacity: 1; transform: scale(1); }
                 }
+
+                @keyframes pulse-red {
+                    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+                    50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+                }
+
+                @keyframes pulse-orange {
+                    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+                    50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+                }
+
+                @keyframes pulse-yellow {
+                    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.4); }
+                    50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(234, 179, 8, 0); }
+                }
+
 
                 @media print {
                     header, nav, footer, .no-print { 
@@ -794,11 +1008,11 @@ export default function ProcurementPage() {
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
-              onClick={() => window.print()}
+              onClick={() => { setShowGuide(true); setGuideStep(0); }}
               style={{
                 backgroundColor: "#1F2937",
-                color: "white",
-                border: "1px solid #374151",
+                color: "var(--ops-primary)",
+                border: "1px solid var(--ops-primary)",
                 padding: "0.5rem 0.75rem",
                 borderRadius: "8px",
                 fontSize: "0.75rem",
@@ -809,23 +1023,7 @@ export default function ProcurementPage() {
                 gap: "4px",
               }}
             >
-              🖨️ IMPRIMIR
-            </button>
-            <button
-              onClick={handleConsolidate}
-              disabled={isConsolidating}
-              style={{
-                backgroundColor: "var(--ops-primary)",
-                color: "white",
-                border: "none",
-                padding: "0.5rem 1rem",
-                borderRadius: "8px",
-                fontSize: "0.8rem",
-                fontWeight: "800",
-                boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-              }}
-            >
-              {isConsolidating ? "..." : "🔄 SINCRONIZAR"}
+              🎓 TUTOR
             </button>
           </div>
         </div>
@@ -1210,177 +1408,377 @@ export default function ProcurementPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1rem" }}>
-          {tasks.map((task) => {
-            const progress =
-              (task.total_purchased / task.total_requested) * 100;
-            const isDone = task.status === "completed";
+          {(() => {
+            const grouped: Record<string, {
+              product_id: string;
+              product_name_base: string;
+              category: string;
+              delivery_date: string;
+              total_requested: number;
+              total_purchased: number;
+              unit: string;
+              status: "pending" | "partial" | "completed";
+              items: ProcurementTask[];
+              hasRejection: boolean;
+              hasDeficit: boolean;
+              hasWarning: boolean;
+            }> = {};
 
-            return (
-              <div
-                key={task.id}
-                onClick={() => {
-                  setSelectedTask(task);
-                  // Auto-select unit from task
-                  const u = (task.unit || "").toLowerCase();
-                  if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
-                  else if (u === "bulto") setPurchaseUnit("Bulto");
-                  else if (u === "caja") setPurchaseUnit("Caja");
-                  else if (u === "canastilla") setPurchaseUnit("Canastilla");
-                  else setPurchaseUnit("Kg");
-                }}
-                className="card-op"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem",
-                  borderLeft: `6px solid ${isDone ? "var(--ops-primary)" : task.status === "partial" ? "#F59E0B" : "var(--ops-border)"}`,
-                  opacity: isDone ? 0.7 : 1,
-                  transition: "all 0.2s ease",
-                }}
-              >
+            tasks.forEach((task) => {
+              const baseKey = task.parent_id || task.product_id;
+              if (!grouped[baseKey]) {
+                let baseName = task.parent_name || task.product_name;
+                const idx = baseName.lastIndexOf(" (");
+                if (idx !== -1 && baseName.endsWith(")")) {
+                  baseName = baseName.slice(0, idx);
+                }
+                grouped[baseKey] = {
+                  product_id: baseKey,
+                  product_name_base: baseName,
+                  category: task.category,
+                  delivery_date: task.delivery_date || "",
+                  total_requested: 0,
+                  total_purchased: 0,
+                  unit: task.unit,
+                  status: "pending",
+                  items: [],
+                  hasRejection: false,
+                  hasDeficit: false,
+                  hasWarning: false
+                };
+              }
+              grouped[baseKey].total_requested += task.total_requested;
+              grouped[baseKey].total_purchased += task.total_purchased;
+              grouped[baseKey].items.push(task);
+
+              if (task.hasRejection) grouped[baseKey].hasRejection = true;
+              if (task.hasDeficit) grouped[baseKey].hasDeficit = true;
+              if (task.hasWarning) grouped[baseKey].hasWarning = true;
+            });
+
+            // Update status of groups
+            Object.values(grouped).forEach((group) => {
+              const allCompleted = group.items.every((item) => item.status === "completed");
+              const anyPartial = group.items.some((item) => item.status === "partial" || item.total_purchased > 0);
+              if (allCompleted) {
+                group.status = "completed";
+              } else if (anyPartial) {
+                group.status = "partial";
+              } else {
+                group.status = "pending";
+              }
+            });
+
+            // Sort groups by severity
+            const sortedGroups = Object.values(grouped).sort((a, b) => {
+              const getGroupSeverity = (g: typeof a): number => {
+                if (g.hasRejection) return 0;
+                if (g.hasDeficit) return 1;
+                if (g.hasWarning) return 2;
+                if (g.status === "partial") return 3;
+                if (g.status === "pending") return 4;
+                return 5;
+              };
+              const sevA = getGroupSeverity(a);
+              const sevB = getGroupSeverity(b);
+              if (sevA !== sevB) return sevA - sevB;
+
+              const dateA = a.delivery_date || "9999-99-99";
+              const dateB = b.delivery_date || "9999-99-99";
+              return dateA.localeCompare(dateB);
+            });
+
+            return sortedGroups.map((group) => {
+              const hasVariants = group.items.length > 1 || (group.items[0] && group.items[0].variant_label);
+              const isDone = group.status === "completed";
+
+              // Check group novelty severity for layout
+              let groupBorderColor = "var(--ops-border)";
+              if (group.hasRejection) groupBorderColor = "#EF4444";
+              else if (group.hasDeficit) groupBorderColor = "#F59E0B";
+              else if (group.hasWarning) groupBorderColor = "#FBBF24";
+              else if (isDone) groupBorderColor = "var(--ops-primary)";
+              else if (group.status === "partial") groupBorderColor = "#F59E0B";
+
+              return (
                 <div
+                  key={group.product_id}
+                  className="card-op"
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
+                    flexDirection: "column",
+                    gap: "0.85rem",
+                    borderLeft: `6px solid ${groupBorderColor}`,
+                    opacity: isDone ? 0.75 : 1,
+                    transition: "all 0.2s ease",
+                    padding: "1.2rem",
+                    position: "relative"
+                  }}
+                  onClick={() => {
+                    // Click on parent card opens first item if no variants
+                    if (!hasVariants && group.items[0]) {
+                      setSelectedTask(group.items[0]);
+                      const u = (group.items[0].unit || "").toLowerCase();
+                      if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
+                      else if (u === "bulto") setPurchaseUnit("Bulto");
+                      else if (u === "caja") setPurchaseUnit("Caja");
+                      else if (u === "canastilla") setPurchaseUnit("Canastilla");
+                      else setPurchaseUnit("Kg");
+                    }
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        alignItems: "center",
-                        marginBottom: "0.2rem",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          color: isDone
-                            ? "var(--ops-primary)"
-                            : "var(--ops-text-muted)",
-                          fontWeight: "900",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {task.category} •{" "}
-                        {formatDateFriendly(task.delivery_date || "")}{" "}
-                        {isDone && "✓"}
+                  {/* Card Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <span style={{ fontSize: "0.68rem", color: "var(--ops-text-muted)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        {group.category} • {formatDateFriendly(group.delivery_date)} {isDone && "✓"}
                       </span>
+                      <h2 style={{ margin: "0.2rem 0", fontSize: "1.15rem", fontWeight: "900", color: isDone ? "var(--ops-text-muted)" : "var(--ops-text)" }}>
+                        {group.product_name_base}
+                      </h2>
                     </div>
-                    <h2
-                      style={{
-                        margin: "0.1rem 0",
-                        fontSize: "1.1rem",
-                        fontWeight: "800",
-                        color: isDone
-                          ? "var(--ops-text-muted)"
-                          : "var(--ops-text)",
-                      }}
-                    >
-                      {task.product_name}
-                    </h2>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: "800",
-                        color: isDone
-                          ? "var(--ops-primary)"
-                          : "var(--ops-text-muted)",
-                      }}
-                    >
-                      {isDone
-                        ? "COMPLETADO"
-                        : task.status === "partial"
-                          ? "EN PROCESO"
-                          : "PENDIENTE"}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Barra de Progreso */}
-                <div
-                  style={{
-                    width: "100%",
-                    height: "8px",
-                    backgroundColor: "var(--ops-border)",
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                    marginTop: "4px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${progress}%`,
+                    {/* Novelty Badges */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", alignItems: "flex-end" }}>
+                      {group.hasRejection && (
+                        <span className="badge-pulse-red" style={{
+                          padding: "0.25rem 0.6rem", borderRadius: "20px", fontSize: "0.65rem", fontWeight: "900",
+                          backgroundColor: "rgba(239, 68, 68, 0.15)", color: "#EF4444", border: "1px solid #EF4444",
+                          animation: "pulse-red 2s infinite", display: "flex", alignItems: "center", gap: "3px"
+                        }}>
+                          🔴 DEVOLUCIÓN
+                        </span>
+                      )}
+                      {group.hasDeficit && (
+                        <span className="badge-pulse-orange" style={{
+                          padding: "0.25rem 0.6rem", borderRadius: "20px", fontSize: "0.65rem", fontWeight: "900",
+                          backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#F59E0B", border: "1px solid #F59E0B",
+                          animation: "pulse-orange 2s infinite", display: "flex", alignItems: "center", gap: "3px"
+                        }}>
+                          🟠 FALTANTE
+                        </span>
+                      )}
+                      {group.hasWarning && (
+                        <span className="badge-pulse-yellow" style={{
+                          padding: "0.25rem 0.6rem", borderRadius: "20px", fontSize: "0.65rem", fontWeight: "900",
+                          backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#EAB308", border: "1px solid #EAB308",
+                          animation: "pulse-yellow 2s infinite", display: "flex", alignItems: "center", gap: "3px"
+                        }}>
+                          🟡 ALERTA CALIDAD
+                        </span>
+                      )}
+                      {!group.hasRejection && !group.hasDeficit && !group.hasWarning && (
+                        <span style={{ fontSize: "0.7rem", fontWeight: "800", color: isDone ? "var(--ops-primary)" : "var(--ops-text-muted)" }}>
+                          {isDone ? "COMPLETADO" : group.status === "partial" ? "EN PROCESO" : "PENDIENTE"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Overall progress bar */}
+                  <div style={{ width: "100%", height: "6px", backgroundColor: "var(--ops-border)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{
+                      width: `${Math.min(100, (group.total_purchased / group.total_requested) * 100)}%`,
                       height: "100%",
-                      backgroundColor: isDone
-                        ? "var(--ops-primary)"
-                        : "#F59E0B",
-                      backgroundImage: isDone
-                        ? "none"
-                        : "linear-gradient(90deg, #F59E0B, #FBBF24)",
-                      transition: "width 0.5s ease-in-out",
-                    }}
-                  />
-                </div>
+                      backgroundColor: isDone ? "var(--ops-primary)" : "#F59E0B",
+                      transition: "width 0.4s ease"
+                    }} />
+                  </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "var(--ops-text-muted)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
+                  {/* Summary of quantities */}
+                  <div style={{ display: "flex", justifyContent: "flex-start", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--ops-text-muted)" }}>
                     <span>
-                      <span
-                        style={{ fontWeight: "800", color: "var(--ops-text)" }}
-                      >
-                        {task.total_purchased}
-                      </span>{" "}
-                      / {task.total_requested} {task.unit}
+                      Meta: <strong style={{ color: "var(--ops-text)" }}>{group.total_requested.toFixed(0)} {group.unit}</strong> | Comprado: <strong style={{ color: "var(--ops-text)" }}>{group.total_purchased.toFixed(0)} {group.unit}</strong> | Faltante: <strong style={{ color: isDone ? "#10B981" : "#F59E0B" }}>{Math.max(0, group.total_requested - group.total_purchased).toFixed(0)} {group.unit}</strong>
                     </span>
-                    {task.total_purchased > task.total_requested && (
-                      <span
-                        style={{
-                          backgroundColor: "rgba(239, 68, 68, 0.2)",
-                          color: "#EF4444",
-                          padding: "0.1rem 0.4rem",
-                          borderRadius: "4px",
-                          fontSize: "0.65rem",
-                          fontWeight: "800",
-                          border: "1px solid rgba(239, 68, 68, 0.4)",
-                        }}
-                      >
-                        +
-                        {Math.round(
-                          (task.total_purchased - task.total_requested) * 100,
-                        ) / 100}{" "}
-                        {task.unit} EXTRA
+                    {group.total_purchased > group.total_requested && (
+                      <span style={{
+                        color: "#3B82F6", fontWeight: "800", backgroundColor: "rgba(59, 130, 246, 0.15)",
+                        padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(59, 130, 246, 0.3)"
+                      }}>
+                        +{ (group.total_purchased - group.total_requested).toFixed(0) } {group.unit} EXCEDENTE
+                      </span>
+                    )}
+                    {group.hasRejection && (
+                      <span style={{
+                        color: "#EF4444", fontWeight: "800", backgroundColor: "rgba(239, 68, 68, 0.15)",
+                        padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(239, 68, 68, 0.3)"
+                      }}>
+                        {/* Calculate rejection sum in base unit */}
+                        {(() => {
+                          const rejQty = group.items.reduce((acc, item) => {
+                            const itemNovs = novelties.filter(n => n.task_id === item.id && n.novelty_type === 'rejection');
+                            return acc + itemNovs.reduce((nAcc, n) => nAcc + (n.quantity || 0), 0);
+                          }, 0);
+                          return `${rejQty.toFixed(0)} ${group.unit} EN DEVOLUCIÓN`;
+                        })()}
                       </span>
                     )}
                   </div>
-                  {progress > 0 && !isDone && (
-                    <div style={{ fontWeight: "700", color: "#F59E0B" }}>
-                      {Math.round(progress)}%
+
+                  {/* Variants List Section */}
+                  {hasVariants && (
+                    <div style={{
+                      marginTop: "0.5rem",
+                      display: "grid",
+                      gap: "0.6rem",
+                      borderTop: "1px solid var(--ops-border)",
+                      paddingTop: "0.75rem"
+                    }}>
+                      {group.items.map((item) => {
+                        const itemDone = item.status === "completed";
+                        
+                        let itemStatusColor = "var(--ops-text-muted)";
+                        if (item.hasRejection) itemStatusColor = "#EF4444";
+                        else if (item.hasDeficit) itemStatusColor = "#F59E0B";
+                        else if (item.hasWarning) itemStatusColor = "#EAB308";
+                        else if (itemDone) itemStatusColor = "var(--ops-primary)";
+
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr auto",
+                              alignItems: "center",
+                              padding: "0.6rem 0.8rem",
+                              borderRadius: "12px",
+                              backgroundColor: "var(--ops-bg)",
+                              border: `1px solid ${item.hasRejection || item.hasDeficit || item.hasWarning ? itemStatusColor : "var(--ops-border)"}`,
+                              cursor: "pointer",
+                              transition: "all 0.2s ease"
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Avoid triggering parent onClick
+                              setSelectedTask(item);
+                              const u = (item.unit || "").toLowerCase();
+                              if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
+                              else if (u === "bulto") setPurchaseUnit("Bulto");
+                              else if (u === "caja") setPurchaseUnit("Caja");
+                              else if (u === "canastilla") setPurchaseUnit("Canastilla");
+                              else setPurchaseUnit("Kg");
+                            }}
+                          >
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                {(item.hasRejection || item.hasDeficit || item.hasWarning) && (
+                                  <span style={{
+                                    width: "8px", height: "8px", borderRadius: "50%",
+                                    backgroundColor: itemStatusColor,
+                                    boxShadow: `0 0 6px ${itemStatusColor}`
+                                  }} />
+                                )}
+                                <span style={{ fontWeight: "700", fontSize: "0.85rem", color: "var(--ops-text)" }}>
+                                  {item.variant_label || "Base"}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "2px" }}>
+                                Meta: <strong style={{ color: "var(--ops-text)" }}>{(item.meta_neteo || 0).toFixed(0)} {item.unit}</strong> | Comprado: <strong style={{ color: "var(--ops-text)" }}>{(item.total_purchased || 0).toFixed(0)} {item.unit}</strong> | Faltante: <strong style={{ color: item.status === "completed" ? "#10B981" : "#F59E0B" }}>{Math.max(0, (item.meta_neteo || 0) - (item.total_purchased || 0)).toFixed(0)} {item.unit}</strong>
+                              </div>
+                              <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: "2px", fontFamily: "monospace" }}>
+                                Fórmula: Ped {(item.raw_order_qty || 0).toFixed(0)} - Stock {(item.applied_stock || 0).toFixed(0)} + Seg {(item.min_inventory_level || 0).toFixed(0)}
+                              </div>
+                            </div>
+
+                            {/* Variant Actions & Status Badge */}
+                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                              {itemDone && (
+                                <span style={{
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "6px",
+                                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                  color: "var(--ops-primary)",
+                                  fontSize: "0.7rem",
+                                  fontWeight: "800",
+                                  border: "1px solid rgba(16, 185, 129, 0.3)"
+                                }}>
+                                  ✓ COMPRADO
+                                </span>
+                              )}
+                              {/* Shortfall close fast action */}
+                              {item.status === "partial" && (
+                                <button
+                                  onClick={() => handleCloseShortfall(item)}
+                                  title="Cerrar faltante"
+                                  style={{
+                                    padding: "0.3rem 0.5rem", borderRadius: "6px", border: "1px solid #F59E0B",
+                                    backgroundColor: "rgba(245, 158, 11, 0.1)", color: "#F59E0B",
+                                    fontSize: "0.7rem", fontWeight: "bold", cursor: "pointer"
+                                  }}
+                                >
+                                  🏁
+                                </button>
+                              )}
+                              {/* Fast purchase action */}
+                              {!itemDone && (
+                                <button
+                                  onClick={async () => {
+                                    // Check if we have a selected/sticky provider
+                                    let provId = selectedProvider || localStorage.getItem('last_provider_id');
+                                    if (!provId && providers.length > 0) {
+                                      provId = providers[0].id; // Fallback to first provider
+                                    }
+                                    if (!provId) {
+                                      alert("Por favor selecciona un proveedor primero en el modal de compras.");
+                                      return;
+                                    }
+                                    const qtyToBuy = (item.meta_neteo || 0) - item.total_purchased;
+                                    if (qtyToBuy <= 0) return;
+                                    
+                                    // Quick purchase register
+                                    if (!confirm(`¿Registrar compra rápida de ${qtyToBuy.toFixed(1)} ${item.unit} con el último proveedor?`)) return;
+                                    
+                                    try {
+                                      const defaultPrice = 1000; // default/mock price
+                                      const cost = qtyToBuy * defaultPrice;
+                                      
+                                      const { error: pErr } = await supabase.from("purchases").insert({
+                                        task_id: item.id,
+                                        product_id: item.product_id,
+                                        variant_label: item.variant_label,
+                                        provider_id: provId,
+                                        quantity: qtyToBuy,
+                                        unit_price: defaultPrice,
+                                        total_cost: cost,
+                                        purchase_unit: item.unit || "Kg",
+                                        status: "pending_pickup",
+                                      });
+                                      if (pErr) throw pErr;
+
+                                      const { error: tErr } = await supabase
+                                        .from("procurement_tasks")
+                                        .update({
+                                          total_purchased: item.meta_neteo,
+                                          status: "completed"
+                                        })
+                                        .eq("id", item.id);
+                                      if (tErr) throw tErr;
+
+                                      alert("⚡ Compra rápida registrada con éxito!");
+                                      fetchTasks();
+                                    } catch (err: any) {
+                                      alert("Error en compra rápida: " + err.message);
+                                    }
+                                  }}
+                                  title="Compra rápida"
+                                  style={{
+                                    padding: "0.3rem 0.5rem", borderRadius: "6px", border: "1px solid var(--ops-primary)",
+                                    backgroundColor: "rgba(16, 185, 129, 0.1)", color: "var(--ops-primary)",
+                                    fontSize: "0.7rem", fontWeight: "bold", cursor: "pointer"
+                                  }}
+                                >
+                                  ⚡
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       )}
 
@@ -1473,6 +1871,20 @@ export default function ProcurementPage() {
                       </span>
                     </p>
                   )}
+                  {/* Netting formula badge */}
+                  <div style={{
+                    fontSize: "0.72rem",
+                    color: "var(--ops-text-muted)",
+                    fontFamily: "monospace",
+                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    padding: "0.15rem 0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--ops-border)",
+                    display: "flex",
+                    alignItems: "center"
+                  }}>
+                    Ped: {selectedTask.raw_order_qty} | Stock: -{selectedTask.applied_stock} | Seg: +{selectedTask.min_inventory_level} → Meta: {selectedTask.meta_neteo}
+                  </div>
                 </div>
               </div>
               <button
@@ -1550,6 +1962,61 @@ export default function ProcurementPage() {
                   Ya se compraron las {selectedTask.total_requested}{" "}
                   {selectedTask.unit} requeridas. Esta tarea está cerrada.
                 </p>
+
+                {/* Desglose de Compras Realizadas */}
+                <div style={{ marginTop: "2rem", textAlign: "left" }}>
+                  <h4 style={{ fontSize: "0.95rem", fontWeight: "900", color: "var(--ops-text)", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Desglose de Compras
+                  </h4>
+                  {taskPurchases.filter(p => p.task_id === selectedTask.id).length === 0 ? (
+                    <p style={{ fontSize: "0.8rem", color: "var(--ops-text-muted)" }}>No se encontraron registros de compras directas.</p>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {taskPurchases.filter(p => p.task_id === selectedTask.id).map((purchase: any) => (
+                        <div key={purchase.id} style={{
+                          backgroundColor: "var(--ops-bg)",
+                          border: "1px solid var(--ops-border)",
+                          borderRadius: "12px",
+                          padding: "1rem",
+                          fontSize: "0.85rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.4rem"
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
+                            <span>👤 {purchase.provider?.name || "Proveedor Desconocido"}</span>
+                            <span style={{ color: "var(--ops-primary)" }}>+{purchase.quantity} {purchase.purchase_unit || "Kg"}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ops-text-muted)", fontSize: "0.75rem" }}>
+                            <span>Precio: ${purchase.unit_price} / {purchase.purchase_unit || "Kg"}</span>
+                            <span>Total: ${purchase.total_cost}</span>
+                          </div>
+                          {purchase.estimated_pickup_time && (
+                            <div style={{ fontSize: "0.75rem", color: "#F59E0B" }}>
+                              🕒 Hora Estimada Recogida: {new Date(purchase.estimated_pickup_time).toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem", borderTop: "1px dashed var(--ops-border)", paddingTop: "0.25rem" }}>
+                            <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)" }}>
+                              Estado: <span style={{
+                                fontWeight: "bold",
+                                color: purchase.status === "completed" ? "var(--ops-primary)" : purchase.status === "rejected" ? "#EF4444" : "#F59E0B"
+                              }}>{purchase.status === "completed" ? "Recogido ✓" : purchase.status === "rejected" ? "Devuelto/Rechazado 🔴" : "Pendiente Recogida ⏳"}</span>
+                            </span>
+                            {purchase.voucher_image_url && (
+                              <a href={purchase.voucher_image_url} target="_blank" rel="noreferrer" style={{
+                                fontSize: "0.7rem", color: "var(--ops-primary)", fontWeight: "bold", textDecoration: "underline"
+                              }}>
+                                Ver Vale 🖼️
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={() => setSelectedTask(null)}
                   style={{
@@ -1574,28 +2041,169 @@ export default function ProcurementPage() {
                   gap: "1.25rem",
                 }}
               >
-                <div>
-                  <button
-                    onClick={() => setIsSubstituting(true)}
-                    style={{
-                      marginTop: "0.2rem",
-                      padding: "0.4rem 0.8rem",
-                      border: "1px solid var(--ops-border)",
-                      borderRadius: "6px",
-                      backgroundColor: "rgba(0,0,0,0.03)",
-                      color: "var(--ops-text-muted)",
-                      fontSize: "0.75rem",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      alignSelf: "flex-start",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                    }}
-                  >
-                    <span>🔁</span> Sustituir Producto
-                  </button>
-                </div>
+                {/* NOVELTY RESOLUTION PANEL */}
+                {novelties.filter(n => n.task_id === selectedTask.id).length > 0 && !isReprogramming && (
+                  <div style={{
+                    backgroundColor: "rgba(239, 68, 68, 0.08)",
+                    border: "1px solid #EF4444",
+                    borderRadius: "16px",
+                    padding: "1.25rem",
+                    marginBottom: "0.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                    textAlign: "left"
+                  }}>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      <span style={{ fontSize: "1.5rem" }}>⚠️</span>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "900", color: "#EF4444" }}>
+                          Novedades de Recogida por Resolver
+                        </h4>
+                        <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--ops-text-muted)" }}>
+                          Hay una novedad activa sobre este producto que requiere acción inmediata.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      {novelties.filter(n => n.task_id === selectedTask.id).map((nov: any) => (
+                        <div key={nov.id} style={{
+                          backgroundColor: "var(--ops-surface)",
+                          border: "1px solid var(--ops-border)",
+                          borderRadius: "10px",
+                          padding: "0.75rem",
+                          fontSize: "0.8rem"
+                        }}>
+                          <div style={{ fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
+                            {nov.novelty_type === 'rejection' ? '🔴 Devolución/Rechazo' : (nov.novelty_type === 'deficit' ? '🟠 Faltante de Recogida' : '🟡 Alerta Calidad')}
+                          </div>
+                          <div style={{ marginTop: "0.25rem" }}>
+                            Cantidad afectada: <strong>{nov.quantity} {nov.unit}</strong>
+                          </div>
+                          {nov.reason && (
+                            <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "0.2rem" }}>
+                              Motivo: &quot;{nov.reason}&quot;
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: "grid", gap: "0.6rem" }}>
+                      <button
+                        onClick={async () => {
+                          const firstNov = novelties.find(n => n.task_id === selectedTask.id);
+                          if (!firstNov) return;
+                          if (!confirm("¿Deseas reprogramar la recogida con este proveedor?")) return;
+                          
+                          // Resolve all novelties for this task
+                          const taskNovs = novelties.filter(n => n.task_id === selectedTask.id);
+                          for (const nov of taskNovs) {
+                            await resolvePurchaseNovelty({ id: nov.purchase_id, task_id: selectedTask.id, ...nov }, 'reprogrammed');
+                          }
+                          
+                          setSelectedProvider(firstNov.provider_id || "");
+                          setQty(String(firstNov.quantity || ""));
+                          setPurchaseUnit(firstNov.unit || "Kg");
+                          setIsReprogramming(true);
+                          
+                          await supabase.from("procurement_tasks").update({ status: 'pending' }).eq("id", selectedTask.id);
+                          
+                          alert("Novedad resuelta como Reprogramada. El formulario se ha prellenado para re-intentar.");
+                          fetchTasks();
+                        }}
+                        style={{
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid var(--ops-primary)",
+                          backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--ops-primary)",
+                          fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
+                        }}
+                      >
+                        🔁 Reclamar al proveedor y programar nueva recogida
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          if (!confirm("¿Deseas resolver comprando a otro proveedor?")) return;
+                          const taskNovs = novelties.filter(n => n.task_id === selectedTask.id);
+                          for (const nov of taskNovs) {
+                            await resolvePurchaseNovelty({ id: nov.purchase_id, task_id: selectedTask.id, ...nov }, 'purchased_elsewhere');
+                          }
+                          
+                          alert("Novedad resuelta. Procediendo a registrar compra con otro proveedor.");
+                          fetchTasks();
+                        }}
+                        style={{
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid #3B82F6",
+                          backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#3B82F6",
+                          fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
+                        }}
+                      >
+                        🛒 Comprar a otro proveedor
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          if (!confirm("¿Deseas cerrar el faltante aceptando la entrega parcial? La meta se ajustará a lo ya comprado.")) return;
+                          const taskNovs = novelties.filter(n => n.task_id === selectedTask.id);
+                          for (const nov of taskNovs) {
+                            await resolvePurchaseNovelty({ id: nov.purchase_id, task_id: selectedTask.id, ...nov }, 'closed_with_shortfall');
+                          }
+                          
+                          const { error } = await supabase
+                            .from("procurement_tasks")
+                            .update({
+                              total_requested: selectedTask.total_purchased,
+                              status: "completed"
+                            })
+                            .eq("id", selectedTask.id);
+                          if (error) {
+                            alert("Error actualizando la tarea: " + error.message);
+                            return;
+                          }
+
+                          alert("🏁 Faltante cerrado correctamente. Tarea completada.");
+                          setSelectedTask(null);
+                          resetForm();
+                          fetchTasks();
+                        }}
+                        style={{
+                          padding: "0.85rem", borderRadius: "10px", border: "1px solid #F59E0B",
+                          backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#F59E0B",
+                          fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
+                        }}
+                      >
+                        🏁 Cerrar faltante / Aceptar entrega parcial
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main purchase fields (Only show if no unresolved novelties OR in reprogramming/alternative purchase mode) */}
+                {(novelties.filter(n => n.task_id === selectedTask.id).length === 0 || isReprogramming) && (
+                  <>
+                  <div>
+                    <button
+                      onClick={() => setIsSubstituting(true)}
+                      style={{
+                        marginTop: "0.2rem",
+                        padding: "0.4rem 0.8rem",
+                        border: "1px solid var(--ops-border)",
+                        borderRadius: "6px",
+                        backgroundColor: "rgba(0,0,0,0.03)",
+                        color: "var(--ops-text-muted)",
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        alignSelf: "flex-start",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <span>🔁</span> Sustituir Producto
+                    </button>
+                  </div>
 
                 <div>
                   <div
@@ -2028,6 +2636,8 @@ export default function ProcurementPage() {
                       ? "GUARDANDO..."
                       : "REGISTRAR COMPRA"}
                 </button>
+                </>
+                )}
               </div>
             ) : (
               <div
@@ -2112,6 +2722,239 @@ export default function ProcurementPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding Guide Modal (Carrusel del Profesor) */}
+      {showGuide && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          zIndex: 9000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1.5rem',
+          animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes float {
+              0%, 100% { transform: translateY(0px); }
+              50% { transform: translateY(-8px); }
+            }
+            @keyframes pulse-glow {
+              0%, 100% { transform: scale(1); opacity: 0.6; }
+              50% { transform: scale(1.05); opacity: 1; }
+            }
+            @keyframes dash {
+              to {
+                stroke-dashoffset: -20;
+              }
+            }
+            @keyframes modalEntrance {
+              from { transform: scale(0.95); opacity: 0; }
+              to { transform: scale(1); opacity: 1; }
+            }
+            .animate-float { animation: float 3s ease-in-out infinite; }
+            .animate-float-delayed { animation: float 3s ease-in-out infinite; animation-delay: 1.5s; }
+            .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+            .animate-dash { stroke-dasharray: 6; animation: dash 1.5s linear infinite; }
+            .modal-content-card {
+              animation: modalEntrance 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+          `}} />
+
+          <div 
+            className="modal-content-card"
+            style={{
+              backgroundColor: 'rgba(30, 41, 59, 0.85)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderRadius: '28px',
+              width: '100%',
+              maxWidth: '460px',
+              padding: '2.2rem',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)',
+              color: '#F8FAFC',
+              position: 'relative'
+            }}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setShowGuide(false)}
+              style={{
+                position: 'absolute', top: '1.25rem', right: '1.25rem',
+                width: '32px', height: '32px', borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                border: 'none', color: '#94A3B8',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.2s ease',
+                fontWeight: 'bold'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                e.currentTarget.style.color = '#EF4444';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.color = '#94A3B8';
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Step Content */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              
+              {/* Animated Illustration Area */}
+              <div style={{ height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', width: '100%' }}>
+                {guideStep === 0 && (
+                  <svg width="120" height="120" viewBox="0 0 120 120" className="animate-float">
+                    <defs>
+                      <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+                      </radialGradient>
+                    </defs>
+                    <circle cx="60" cy="65" r="45" fill="url(#glow)" className="animate-pulse-glow" />
+                    <rect x="35" y="40" width="50" height="45" rx="8" fill="none" stroke="#10B981" strokeWidth="3" />
+                    <line x1="35" y1="52" x2="85" y2="52" stroke="#10B981" strokeWidth="2" />
+                    <circle cx="50" cy="65" r="4" fill="#3B82F6" />
+                    <circle cx="70" cy="65" r="4" fill="#3B82F6" />
+                    <path d="M 52 74 Q 60 79 68 74" stroke="#F59E0B" strokeWidth="3" fill="none" strokeLinecap="round" />
+                    <path d="M 60 20 L 60 30" stroke="#10B981" strokeWidth="3" strokeLinecap="round" />
+                    <circle cx="60" cy="16" r="3" fill="#10B981" />
+                  </svg>
+                )}
+                {guideStep === 1 && (
+                  <svg width="180" height="120" viewBox="0 0 180 120">
+                    <rect x="10" y="40" width="45" height="30" rx="6" fill="none" stroke="#64748B" strokeWidth="2" />
+                    <text x="32" y="59" fill="#94A3B8" fontSize="10" fontWeight="bold" textAnchor="middle">PED</text>
+                    <line x1="55" y1="55" x2="68" y2="55" stroke="#3B82F6" strokeWidth="2" className="animate-dash" />
+                    
+                    <rect x="68" y="40" width="45" height="30" rx="6" fill="none" stroke="#F59E0B" strokeWidth="2" />
+                    <text x="90" y="59" fill="#F59E0B" fontSize="9" fontWeight="bold" textAnchor="middle">STOCK</text>
+                    <line x1="113" y1="55" x2="125" y2="55" stroke="#3B82F6" strokeWidth="2" className="animate-dash" />
+                    
+                    <rect x="125" y="40" width="45" height="30" rx="6" fill="none" stroke="#10B981" strokeWidth="2" />
+                    <text x="147" y="59" fill="#10B981" fontSize="10" fontWeight="bold" textAnchor="middle">META</text>
+                    
+                    <path d="M 90 20 L 90 40" stroke="#EF4444" strokeWidth="2" strokeDasharray="3" />
+                    <text x="90" y="15" fill="#EF4444" fontSize="10" textAnchor="middle">Neteo</text>
+                  </svg>
+                )}
+                {guideStep === 2 && (
+                  <svg width="120" height="120" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="30" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                    <circle cx="60" cy="35" r="12" fill="rgba(239, 68, 68, 0.2)" stroke="#EF4444" strokeWidth="2" className="animate-pulse-glow" />
+                    <circle cx="60" cy="35" r="4" fill="#EF4444" />
+                    <circle cx="35" cy="75" r="12" fill="rgba(245, 158, 11, 0.2)" stroke="#F59E0B" strokeWidth="2" style={{ animation: 'pulse-glow 2s infinite', animationDelay: '0.6s' }} />
+                    <circle cx="35" cy="75" r="4" fill="#F59E0B" />
+                    <circle cx="85" cy="75" r="12" fill="rgba(234, 179, 8, 0.2)" stroke="#EAB308" strokeWidth="2" style={{ animation: 'pulse-glow 2s infinite', animationDelay: '1.2s' }} />
+                    <circle cx="85" cy="75" r="4" fill="#EAB308" />
+                  </svg>
+                )}
+                {guideStep === 3 && (
+                  <svg width="120" height="120" viewBox="0 0 120 120" className="animate-float">
+                    <path d="M 70 20 L 40 60 L 60 60 L 50 100 L 80 50 L 60 50 Z" fill="#F59E0B" className="animate-pulse-glow" style={{ transformOrigin: 'center' }} />
+                    <circle cx="60" cy="60" r="40" fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="4 8" className="animate-dash" />
+                  </svg>
+                )}
+                {guideStep === 4 && (
+                  <svg width="120" height="120" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="40" fill="none" stroke="#10B981" strokeWidth="3" />
+                    <path d="M 45 60 L 55 70 L 80 45" fill="none" stroke="#10B981" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#3B82F6" strokeWidth="1" strokeDasharray="3 6" className="animate-dash" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Title */}
+              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '900', color: '#FFFFFF' }}>
+                {guideStep === 0 && "¡Bienvenido a Compras!"}
+                {guideStep === 1 && "Fórmula de Neteo Inteligente"}
+                {guideStep === 2 && "Semáforo y Burbuja de Alertas"}
+                {guideStep === 3 && "Acciones Rápidas (⚡ / 🏁)"}
+                {guideStep === 4 && "Resolución de Novedades"}
+              </h4>
+
+              {/* Description */}
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', lineHeight: '1.5', minHeight: '60px' }}>
+                {guideStep === 0 && "Esta interfaz te permite ver qué productos comprar para mañana de acuerdo a la demanda real consolidada. Se calcula cruzando stock, pedidos y existencias de seguridad."}
+                {guideStep === 1 && "La meta neta se calcula restando el stock de bodega de forma secuencial. El stock mínimo de seguridad se añade únicamente a la primera variante del producto para no duplicar compras."}
+                {guideStep === 2 && "Las devoluciones 🔴, faltantes 🟠 y advertencias de calidad 🟡 se propagan automáticamente aquí y elevan la tarjeta al inicio para que tomes acción inmediata sin demoras."}
+                {guideStep === 3 && "Usa el botón ⚡ para comprar al instante con tu último proveedor usando memoria inteligente. Usa 🏁 para cerrar la meta si hay una entrega parcial aceptada."}
+                {guideStep === 4 && "Cuando hay una novedad, el formulario se bloquea temporalmente. Elige reprogramar la recogida, comprar a otro proveedor, o aceptar la entrega parcial cerrando la brecha."}
+              </p>
+
+              {/* Progress Dots */}
+              <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0' }}>
+                {[0, 1, 2, 3, 4].map((step) => (
+                  <div
+                    key={step}
+                    onClick={() => setGuideStep(step)}
+                    style={{
+                      width: guideStep === step ? '20px' : '8px',
+                      height: '8px',
+                      borderRadius: '4px',
+                      backgroundColor: guideStep === step ? 'var(--ops-primary)' : '#475569',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Navigation Buttons */}
+              <div style={{ display: 'flex', width: '100%', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {guideStep > 0 ? (
+                  <button
+                    onClick={() => setGuideStep(prev => prev - 1)}
+                    style={{
+                      flex: 1, padding: '0.75rem', borderRadius: '12px',
+                      backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#F8FAFC', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Atrás
+                  </button>
+                ) : (
+                  <div style={{ flex: 1 }} />
+                )}
+
+                {guideStep < 4 ? (
+                  <button
+                    onClick={() => setGuideStep(prev => prev + 1)}
+                    style={{
+                      flex: 2, padding: '0.75rem', borderRadius: '12px',
+                      backgroundColor: 'var(--ops-primary)', border: 'none',
+                      color: 'white', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                    }}
+                  >
+                    Siguiente
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowGuide(false)}
+                    style={{
+                      flex: 2, padding: '0.75rem', borderRadius: '12px',
+                      backgroundColor: 'var(--ops-primary)', border: 'none',
+                      color: 'white', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                    }}
+                  >
+                    Comenzar 🚀
+                  </button>
+                )}
+              </div>
+
+            </div>
           </div>
         </div>
       )}

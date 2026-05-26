@@ -23,6 +23,7 @@ interface Purchase {
     cost_center_id?: string;
     rejection_reason?: string;
     voucher_image_url?: string;
+    variant_label?: string;
     provider?: {
         name: string;
     };
@@ -185,7 +186,7 @@ export default function ReceptionPage() {
                         quantity: receivedQty,
                         type: 'entry',
                         status_to: statusTo,
-                        notes: `Ingreso por recepción: ${finalReason || 'OK'}`,
+                        notes: `Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'OK'}`,
                         reference_type: 'purchase_reception',
                         reference_id: selectedItem.id
                     }]);
@@ -486,6 +487,11 @@ export default function ReceptionPage() {
 
                                 <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: '0 0 0.5rem 0' }}>
                                     {item.product.name}
+                                    {item.variant_label && (
+                                        <span style={{ color: '#10B981', fontWeight: 'bold', marginLeft: '0.3rem', fontSize: '0.9rem' }}>
+                                            ({item.variant_label})
+                                        </span>
+                                    )}
                                 </h3>
 
                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6B7280', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
@@ -562,7 +568,10 @@ export default function ReceptionPage() {
                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                                 <div style={{ backgroundColor: '#F3F4F6', padding: '0.5rem 1rem', borderRadius: '8px' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#6B7280', display: 'block' }}>Producto</span>
-                                    <strong style={{ color: '#111827' }}>{selectedItem.product.name}</strong>
+                                    <strong style={{ color: '#111827' }}>
+                                        {selectedItem.product.name}
+                                        {selectedItem.variant_label && ` (${selectedItem.variant_label})`}
+                                    </strong>
                                 </div>
                                 <div style={{ backgroundColor: '#F3F4F6', padding: '0.5rem 1rem', borderRadius: '8px' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#6B7280', display: 'block' }}>Unidad</span>

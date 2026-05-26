@@ -350,62 +350,35 @@ export default function RoutePlanner() {
     const handleConfirmRoutes = async () => {
         try {
             setLoading(true);
-            const routeConfirmations = [];
+            const response = await fetch('/api/transport/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assignments,
+                    vehicles,
+                    isOptimized,
+                    theoreticalMetrics,
+                    params
+                })
+            });
 
-            for (const vehicleId of Object.keys(assignments)) {
-                const orderIds = assignments[vehicleId];
-                if (orderIds.length === 0) continue;
-
-                const vehicle = vehicles.find(v => v.id === vehicleId);
-                
-                // 1. Create Route
-                const { data: route, error: rErr } = await supabase
-                    .from('routes')
-                    .insert({
-                        vehicle_plate: vehicle?.plate,
-                        driver_id: vehicle?.driver_id,
-                        status: 'loading',
-                        is_optimized: isOptimized,
-                        theoretical_distance_km: theoreticalMetrics?.distance_km || 0,
-                        theoretical_duration_min: theoreticalMetrics?.duration_min || 0,
-                        stops_count: orderIds.length,
-                        total_orders: orderIds.length,
-                        total_kilos: getVehicleLoad(vehicleId),
-                        logic_parameters_snapshot: params
-                    })
-                    .select()
-                    .single();
-
-                if (rErr) throw rErr;
-
-                // 2. Create Route Stops & Update Orders
-                for (let i = 0; i < orderIds.length; i++) {
-                    const orderId = orderIds[i];
-                    
-                    await supabase.from('route_stops').insert({
-                        route_id: route.id,
-                        order_id: orderId,
-                        sequence_number: i + 1,
-                        status: 'pending'
-                    });
-
-                    await supabase.from('orders').update({
-                        status: 'shipped'
-                    }).eq('id', orderId);
-                }
-                
-                routeConfirmations.push(route.id);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Error al confirmar las rutas en el servidor');
             }
 
-            alert(`✅ ${routeConfirmations.length} Rutas confirmadas y despachadas exitosamente.`);
+            const result = await response.json();
+            
+            alert(`✅ ${result.routeConfirmations.length} Rutas confirmadas y enviadas a picking exitosamente.`);
+            
             // Limpiar borrador del día al confirmar
             try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
             setAssignments({});
             await fetchInitialData();
 
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error confirming routes:', err);
-            alert('Error al confirmar las rutas.');
+            alert(`⚠️ Error al confirmar las rutas:\n${err.message}`);
         } finally {
             setLoading(false);
         }

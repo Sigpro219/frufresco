@@ -21,3 +21,4 @@ El Showcase usa la rama `white-label`. Vercel también escucha `main`, que se ac
 12. Confirmar si hubo conflictos: `git add .; git commit -m "Sync: white-label desde CORE"`
 13. Push Showcase: `git push origin white-label`
 14. Regresar al laboratorio: `git checkout CORE`
+15. Notificar fin de tarea: cmd /c "node scratch/notify.js success \"Sincronización a Showcase completada\""

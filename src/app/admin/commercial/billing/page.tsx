@@ -640,46 +640,25 @@ export default function BillingDashboard() {
                                 </div>
                                 
                                 {activeTab === 'providers' && (
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedProvider({
-                                                id: 'NEW',
-                                                name: '',
-                                                location: '',
-                                                contact_phone: '',
-                                                contact_name: '',
-                                                email: '',
-                                                address: '',
-                                                category: 'Varios',
-                                                is_active: true,
-                                                is_archived: false,
-                                                tax_id: '',
-                                                payment_terms_days: 0,
-                                                bank_name: '',
-                                                bank_account_number: '',
-                                                bank_account_type: null,
-                                                notes: '',
-                                                created_at: new Date().toISOString()
-                                            });
-                                            setIsDateEditable(false);
-                                            setIsModalOpen(true);
-                                        }}
-                                        style={{ 
-                                            backgroundColor: '#0F172A', 
-                                            color: 'white', 
-                                            padding: '0.85rem 1.5rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            fontWeight: '800', 
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
-                                        }}
-                                    >
-                                        <span>➕</span> Nuevo Proveedor
-                                    </button>
+                                    <Link href="/admin/procurement/providers" style={{ textDecoration: 'none' }}>
+                                        <button 
+                                            style={{ 
+                                                backgroundColor: '#0F172A', 
+                                                color: 'white', 
+                                                padding: '0.85rem 1.5rem', 
+                                                borderRadius: '12px', 
+                                                border: 'none', 
+                                                fontWeight: '800', 
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+                                            }}
+                                        >
+                                            <span>🏢</span> Gestionar Proveedores en Compras
+                                        </button>
+                                    </Link>
                                 )}
                             </div>
 
@@ -875,7 +854,7 @@ export default function BillingDashboard() {
                 </div>
             </div>
 
-            {/* MODAL EDICIÓN PROVEEDOR */}
+            {/* MODAL EDICIÓN PROVEEDOR (VISTA DE SOLO LECTURA EN FACTURACIÓN) */}
             {isModalOpen && selectedProvider && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
                     <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
@@ -889,10 +868,10 @@ export default function BillingDashboard() {
                         }}>
                             <div>
                                 <h2 style={{ fontSize: '2rem', fontWeight: '900', margin: 0, letterSpacing: '-0.025em' }}>
-                                    {selectedProvider.id === 'NEW' ? 'Nuevo Proveedor' : 'Ficha del Proveedor'}
+                                    Ficha del Proveedor
                                 </h2>
                                 <p style={{ color: '#94A3B8', marginTop: '0.5rem', fontSize: '1.1rem' }}>
-                                    {selectedProvider.id === 'NEW' ? 'Registra un nuevo aliado comercial.' : (selectedProvider.name || 'Detalles')}
+                                    {selectedProvider.name || 'Detalles'}
                                 </p>
                             </div>
                             <button 
@@ -913,27 +892,68 @@ export default function BillingDashboard() {
                                 }}
                             >✕</button>
                         </div>
+
+                        {/* WARNING READ-ONLY BANNER */}
+                        <div style={{
+                            backgroundColor: '#FFFBEB',
+                            borderLeft: '4px solid #F59E0B',
+                            padding: '1.25rem 2.5rem',
+                            color: '#B45309',
+                            fontSize: '0.95rem',
+                            fontWeight: '600',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '1.5rem',
+                            borderBottom: '1px solid #FEF3C7'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                                <div>
+                                    <div style={{ fontWeight: '800' }}>Vista de Solo Lectura</div>
+                                    <div style={{ fontSize: '0.85rem', color: '#D97706', marginTop: '0.1rem' }}>
+                                        Este panel es informativo. Para crear, modificar o archivar proveedores, dirígete al módulo de compras.
+                                    </div>
+                                </div>
+                            </div>
+                            <Link href="/admin/procurement/providers">
+                                <button type="button" style={{
+                                    backgroundColor: '#D97706',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '8px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.2s'
+                                }}>
+                                    Ir a Compras ↗
+                                </button>
+                            </Link>
+                        </div>
                         
-                        <form onSubmit={handleSaveProvider} style={{ padding: '2rem' }}>
+                        <div style={{ padding: '2rem' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                                 {/* Info Básica */}
                                 <div style={configCard}>
                                     <h3 style={configTitle}>📋 Información Básica</h3>
                                     <div style={{ marginBottom: '1rem' }}>
                                         <label style={labelStyle}>Razon Social / Nombre</label>
-                                        <input type="text" value={selectedProvider.name} onChange={e => setSelectedProvider({...selectedProvider, name: e.target.value})} style={inputStyle} required />
+                                        <input type="text" value={selectedProvider.name} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                     </div>
                                     <div style={{ marginBottom: '1rem' }}>
                                         <label style={labelStyle}>NIT / Tax ID</label>
-                                        <input type="text" value={selectedProvider.tax_id || ''} onChange={e => setSelectedProvider({...selectedProvider, tax_id: e.target.value})} style={inputStyle} />
+                                        <input type="text" value={selectedProvider.tax_id || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem' }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Categoría</label>
                                             <select 
                                                 value={selectedProvider.category || ''} 
-                                                onChange={e => setSelectedProvider({...selectedProvider, category: e.target.value})} 
-                                                style={inputStyle}
+                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }}
+                                                disabled
                                             >
                                                 <option value="" disabled>Seleccionar categoría...</option>
                                                 <option value="Frutas">Frutas</option>
@@ -946,7 +966,7 @@ export default function BillingDashboard() {
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Estado</label>
-                                            <select value={selectedProvider.is_active ? 'true' : 'false'} onChange={e => setSelectedProvider({...selectedProvider, is_active: e.target.value === 'true'})} style={inputStyle}>
+                                            <select value={selectedProvider.is_active ? 'true' : 'false'} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} disabled>
                                                 <option value="true">Activo</option>
                                                 <option value="false">Inactivo</option>
                                             </select>
@@ -959,57 +979,36 @@ export default function BillingDashboard() {
                                     <h3 style={configTitle}>📞 Contacto y Ubicación</h3>
                                     <div style={{ marginBottom: '1rem' }}>
                                         <label style={labelStyle}>Nombre de Contacto</label>
-                                        <input type="text" value={selectedProvider.contact_name || ''} onChange={e => setSelectedProvider({...selectedProvider, contact_name: e.target.value})} style={inputStyle} />
+                                        <input type="text" value={selectedProvider.contact_name || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Teléfono</label>
-                                            <input type="text" value={selectedProvider.contact_phone || ''} onChange={e => setSelectedProvider({...selectedProvider, contact_phone: e.target.value})} style={inputStyle} />
+                                            <input type="text" value={selectedProvider.contact_phone || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Email</label>
-                                            <input type="email" value={selectedProvider.email || ''} onChange={e => setSelectedProvider({...selectedProvider, email: e.target.value})} style={inputStyle} />
+                                            <input type="email" value={selectedProvider.email || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem' }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Ubicación (Bodega/Puesto)</label>
-                                            <input type="text" value={selectedProvider.location || ''} onChange={e => setSelectedProvider({...selectedProvider, location: e.target.value})} style={inputStyle} />
+                                            <input type="text" value={selectedProvider.location || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Dirección Física</label>
-                                            <input type="text" value={selectedProvider.address || ''} onChange={e => setSelectedProvider({...selectedProvider, address: e.target.value})} style={inputStyle} />
+                                            <input type="text" value={selectedProvider.address || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                     </div>
                                     <div style={{ marginTop: '1rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                            <label style={labelStyle}>Fecha de Registro</label>
-                                            {!isDateEditable && (
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (confirm('⚠️ ADVERTENCIA: Cambiar la fecha de registro puede afectar reportes históricos y auditorías. ¿Estás seguro que deseas habilitar la edición?')) {
-                                                            if (confirm('🔒 CONFIRMACIÓN FINAL: Esta acción es sensible. ¿Confirmas que necesitas realizar este ajuste manual?')) {
-                                                                setIsDateEditable(true);
-                                                            }
-                                                        }
-                                                    }}
-                                                    style={{ background: 'none', border: 'none', color: '#6366F1', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
-                                                >
-                                                    🔓 Desbloquear para edición manual
-                                                </button>
-                                            )}
-                                        </div>
+                                        <label style={labelStyle}>Fecha de Registro</label>
                                         <input 
                                             type="datetime-local" 
                                             value={selectedProvider.created_at ? new Date(selectedProvider.created_at).toISOString().slice(0, 16) : ''} 
-                                            onChange={e => setSelectedProvider({...selectedProvider, created_at: e.target.value ? new Date(e.target.value).toISOString() : undefined})} 
-                                            style={{ ...inputStyle, backgroundColor: isDateEditable ? 'white' : '#F1F5F9', cursor: isDateEditable ? 'text' : 'not-allowed' }} 
-                                            readOnly={!isDateEditable}
+                                            style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} 
+                                            readOnly
                                         />
-                                        <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginTop: '0.25rem' }}>
-                                            {isDateEditable ? '⚠️ Estás editando una fecha sensible.' : 'Campo bloqueado para integridad de datos.'}
-                                        </span>
                                     </div>
                                 </div>
 
@@ -1019,18 +1018,18 @@ export default function BillingDashboard() {
                                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Banco</label>
-                                            <input type="text" value={selectedProvider.bank_name || ''} onChange={e => setSelectedProvider({...selectedProvider, bank_name: e.target.value})} style={inputStyle} />
+                                            <input type="text" value={selectedProvider.bank_name || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Número de Cuenta</label>
-                                            <input type="text" value={selectedProvider.bank_account_number || ''} onChange={e => setSelectedProvider({...selectedProvider, bank_account_number: e.target.value})} style={inputStyle} />
+                                            <input type="text" value={selectedProvider.bank_account_number || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <label style={labelStyle}>Tipo Cuenta</label>
                                             <select 
                                                 value={selectedProvider.bank_account_type || ''} 
-                                                onChange={e => setSelectedProvider({...selectedProvider, bank_account_type: (e.target.value || null) as any})} 
-                                                style={inputStyle}
+                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }}
+                                                disabled
                                             >
                                                 <option value="">Seleccionar...</option>
                                                 <option value="ahorros">Ahorros</option>
@@ -1042,8 +1041,8 @@ export default function BillingDashboard() {
                                             <input 
                                                 type="number" 
                                                 value={selectedProvider.payment_terms_days || 0} 
-                                                onChange={e => setSelectedProvider({...selectedProvider, payment_terms_days: parseInt(e.target.value) || 0})} 
-                                                style={inputStyle} 
+                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} 
+                                                readOnly 
                                             />
                                         </div>
                                     </div>
@@ -1052,39 +1051,16 @@ export default function BillingDashboard() {
                                 {/* Notas */}
                                 <div style={{ ...configCard, gridColumn: '1 / -1' }}>
                                     <label style={labelStyle}>Notas Internas</label>
-                                    <textarea value={selectedProvider.notes || ''} onChange={e => setSelectedProvider({...selectedProvider, notes: e.target.value})} style={{ ...inputStyle, minHeight: '80px', fontFamily: 'inherit' }} />
+                                    <textarea value={selectedProvider.notes || ''} style={{ ...inputStyle, minHeight: '80px', fontFamily: 'inherit', backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                {selectedProvider.is_archived ? (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleUnarchiveProvider}
-                                        style={{ color: '#065F46', backgroundColor: '#D1FAE5', padding: '1rem 1.5rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer' }}
-                                    >
-                                        ♻️ Restaurar Proveedor
-                                    </button>
-                                ) : (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleArchiveProvider}
-                                        style={{ color: '#991B1B', backgroundColor: '#FEE2E2', padding: '1rem 1.5rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer' }}
-                                    >
-                                        🗑️ Archivar Proveedor
-                                    </button>
-                                )}
-                                
-                                <div style={{ display: 'flex', gap: '1rem' }}>
-                                    <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '1rem 2rem', borderRadius: '14px', border: '1px solid #E2E8F0', backgroundColor: 'white', fontWeight: '800', cursor: 'pointer' }}>
-                                        Cancelar
-                                    </button>
-                                    <button type="submit" disabled={isProcessing} style={{ backgroundColor: '#111827', color: 'white', padding: '1rem 2.5rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                        {isProcessing ? 'Guardando...' : '💾 Guardar Cambios'}
-                                    </button>
-                                </div>
+                            <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '1rem 2.5rem', borderRadius: '14px', border: '1px solid #CBD5E1', backgroundColor: '#111827', color: 'white', fontWeight: '800', cursor: 'pointer' }}>
+                                    Cerrar
+                                </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}

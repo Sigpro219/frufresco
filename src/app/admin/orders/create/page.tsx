@@ -587,9 +587,10 @@ function CreateOrderContent() {
                     payment_status: 'Pendiente',
                     payment_method: paymentMethod,
                     origin: 'Admin Panel',
+                    origin_source: originSource, // Enviar canal de origen
                     delivery_date: deliveryDate,
                     delivery_slot: finalDeliverySlot,
-                    admin_notes: `[ORIGIN: ${originSource}] ${finalAdminNotes}`,
+                    admin_notes: finalAdminNotes, // Guardar notas sin redundancia de origen
                     shipping_address: shippingAddress,
                     latitude: latitude,
                     longitude: longitude,
@@ -615,7 +616,8 @@ function CreateOrderContent() {
                     product_id: item.product.id,
                     quantity: qtyNum,
                     unit_price: item.product.base_price,
-                    nickname: item.variant_label
+                    nickname: item.variant_label || null,
+                    variant_label: item.variant_label || null
                 };
             });
 
@@ -1134,7 +1136,7 @@ function CreateOrderContent() {
                                                 <option value="phone">📞 Teléfono</option>
                                                 <option value="whatsapp">💬 WhatsApp</option>
                                                 <option value="email">📧 Email</option>
-                                                <option value="flat_file">📄 Documento de compra</option>
+                                                <option value="file_upload">📄 Documento de compra</option>
                                             </select>
                                         </div>
                                         <div>
@@ -1244,7 +1246,7 @@ function CreateOrderContent() {
                         {/* PDF UPLOAD FOR SPECIFIC B2B CLIENTS */}
                         {clientType === 'B2B' && selectedClient && getSelectedClientDetails() && (
                             ['San Bartolomé', 'Hotel Estelar'].some(keyword => getSelectedClientDetails()?.company_name?.includes(keyword))
-                        ) && originSource !== 'flat_file' && (
+                        ) && originSource !== 'file_upload' && (
                             <div style={{ 
                                 marginBottom: '2rem', 
                                 padding: '1.5rem', 
@@ -1282,7 +1284,7 @@ function CreateOrderContent() {
                         )}
 
                         {/* --- MESA DE TRABAJO (STAGING AREA) --- */}
-                        {originSource === 'flat_file' && (
+                        {originSource === 'file_upload' && (
                             <div style={{ marginBottom: '2.5rem' }}>
                                 {/* Global Datalist for SKUs to improve performance */}
                                 <datalist id="all-products-list">
@@ -1534,7 +1536,7 @@ function CreateOrderContent() {
                         )}
 
                         {/* 2. PRODUCT SEARCH (Visible only if NOT importing a document) */}
-                        {originSource !== 'flat_file' && (
+                        {originSource !== 'file_upload' && (
                             <div style={{ marginBottom: '2rem', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos Manualmente</label>
                             <input

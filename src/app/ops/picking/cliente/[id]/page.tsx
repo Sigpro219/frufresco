@@ -41,9 +41,11 @@ function PickingClientContent() {
             const { data: order, error } = await supabase
                 .from('orders')
                 .select(`
-                    customer_name,
+                    profiles:profile_id (
+                        id, company_name, contact_name, role
+                    ),
                     order_items (
-                        id, quantity, picked_quantity,
+                        id, quantity, picked_quantity, nickname, variant_label,
                         products (name, category, unit_of_measure)
                     )
                 `)
@@ -52,18 +54,29 @@ function PickingClientContent() {
 
             if (error) throw error;
 
-            setClientName(order.customer_name);
+            const p = (order as any).profiles;
+            let name = 'Cliente';
+            if (p) {
+                name = p.role === 'b2b_client' 
+                    ? (p.company_name || 'Sin Razón Social') 
+                    : (p.contact_name || p.company_name || 'Cliente B2C');
+            }
+            setClientName(name);
             
             const filteredItems = (order.order_items || [])
                 .filter((item: any) => item.products?.category === category)
-                .map((item: any) => ({
-                    id: item.id,
-                    product_name: item.products?.name,
-                    category: item.products?.category,
-                    unit_of_measure: item.products?.unit_of_measure,
-                    quantity: item.quantity,
-                    picked_quantity: item.picked_quantity || 0
-                }));
+                .map((item: any) => {
+                    const variant = item.variant_label || item.nickname || '';
+                    const dispName = variant ? `${item.products?.name} (${variant})` : item.products?.name;
+                    return {
+                        id: item.id,
+                        product_name: dispName,
+                        category: item.products?.category,
+                        unit_of_measure: item.products?.unit_of_measure,
+                        quantity: item.quantity,
+                        picked_quantity: item.picked_quantity || 0
+                    };
+                });
             
             setItems(filteredItems);
         } catch (err) {

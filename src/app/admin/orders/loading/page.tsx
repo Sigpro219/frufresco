@@ -17,6 +17,25 @@ const getStatusLabel = (s: string) => {
     }
 };
 
+const getChannelBadge = (source: string) => {
+    switch (source) {
+        case 'whatsapp': 
+            return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>💬 WhatsApp</span>;
+        case 'phone': 
+            return <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📞 Teléfono</span>;
+        case 'email': 
+            return <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>✉️ Correo</span>;
+        case 'file_upload': 
+            return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📁 Carga</span>;
+        case 'web_b2c': 
+            return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🏠 Web Hogar</span>;
+        case 'web_b2b': 
+            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🏢 Web Horeca</span>;
+        default: 
+            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🌐 {source || 'Web'}</span>;
+    }
+};
+
 export default function OrderLoadingPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -53,7 +72,12 @@ export default function OrderLoadingPage() {
     const [variantQuantity, setVariantQuantity] = useState(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
+    const [selectedChannel, setSelectedChannel] = useState('');
+
     const filteredOrders = orders.filter(order => {
+        // Filtro por canal dropdown
+        if (selectedChannel && order.origin_source !== selectedChannel) return false;
+
         if (!searchTerm) return true;
         
         const term = searchTerm.toLowerCase().trim();
@@ -70,9 +94,24 @@ export default function OrderLoadingPage() {
             if (command === 'b2b') return isB2B;
             if (command === 'b2c' || command === 'hogar') return !isB2B;
             const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-            if (command === 'web' || command === '🛒' || command === 'app') return notes.includes('[origin: web]') || order.type === 'b2c_wompi';
-            if (command === 'whatsapp' || command === '💬') return notes.includes('[origin: whatsapp]');
-            if (command === 'telefono' || command === 'phone' || command === '📞') return notes.includes('[origin: phone]');
+            
+            // Actualizado para buscar en origin_source de forma estructurada con fallback
+            if (command === 'web' || command === '🛒' || command === 'app') {
+                return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
+            }
+            if (command === 'whatsapp' || command === '💬') {
+                return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+            }
+            if (command === 'telefono' || command === 'phone' || command === '📞') {
+                return order.origin_source === 'phone' || notes.includes('[origin: phone]');
+            }
+            if (command === 'email' || command === 'correo') {
+                return order.origin_source === 'email' || notes.includes('[origin: email]');
+            }
+            if (command === 'carga' || command === 'excel' || command === 'ocr') {
+                return order.origin_source === 'file_upload';
+            }
+            
             if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
             if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
             if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
@@ -730,6 +769,40 @@ export default function OrderLoadingPage() {
                             )}
                         </div>
 
+                        {/* Dropdown Filter by Channel */}
+                        <div style={{ position: 'relative', height: '40px', flexShrink: 0 }}>
+                            <select
+                                value={selectedChannel}
+                                onChange={(e) => setSelectedChannel(e.target.value)}
+                                style={{
+                                    height: '100%',
+                                    padding: '0 2.5rem 0 1rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid #E5E7EB',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    color: '#111827',
+                                    outline: 'none',
+                                    backgroundColor: '#F8FAFC',
+                                    cursor: 'pointer',
+                                    appearance: 'none',
+                                    backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
+                                    backgroundPosition: 'right 0.5rem center',
+                                    backgroundSize: '1.25rem',
+                                    backgroundRepeat: 'no-repeat',
+                                    width: '180px'
+                                }}
+                            >
+                                <option value="">🌐 Todos los canales</option>
+                                <option value="whatsapp">💬 WhatsApp</option>
+                                <option value="phone">📞 Teléfono</option>
+                                <option value="web_b2c">🏠 Web Hogar</option>
+                                <option value="web_b2b">🏢 Web Horeca</option>
+                                <option value="email">✉️ Correo</option>
+                                <option value="file_upload">📁 Carga Masiva</option>
+                            </select>
+                        </div>
+
                         {/* Info Button for Commands */}
                             <div 
                                 onMouseEnter={() => setShowHelpTooltip(true)}
@@ -967,8 +1040,8 @@ export default function OrderLoadingPage() {
                                                             <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontSize: '1.2rem' }}>
-                                                        {order.origin_source === 'web' ? '🛒' : order.origin_source === 'whatsapp' ? '💬' : '📞'}
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                                                        {getChannelBadge(order.origin_source)}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
                                                         {order.total_weight_kg?.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
@@ -1553,7 +1626,9 @@ export default function OrderLoadingPage() {
                                         <div style={{ fontSize: '2rem' }}>🌐</div>
                                         <div>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>CANAL</div>
-                                            <div style={{ fontWeight: '900', color: '#1E293B', fontSize: '1.125rem' }}>{selectedOrder.origin_source?.toUpperCase()}</div>
+                                            <div style={{ marginTop: '2px' }}>
+                                                {getChannelBadge(selectedOrder.origin_source)}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1735,8 +1810,9 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <div>
                     <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
-                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '2px' }}>
-                        {isB2B ? '🏢 CORPORATIVO' : '🏠 CONSUMIDOR'}
+                    <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '2px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span>{isB2B ? '🏢 CORPORATIVO' : '🏠 CONSUMIDOR'}</span>
+                        {getChannelBadge(order.origin_source)}
                     </div>
                 </div>
                 <div style={{

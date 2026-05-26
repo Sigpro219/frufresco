@@ -46,35 +46,62 @@ async function seed() {
     // 2. Create Products
     const newProducts = [
         // Hortalizas
-        { name: 'Brócoli Fresco', category: 'Hortalizas', base_price: 3500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1459411621453-7fb8db8f8587?auto=format&fit=crop&w=400' },
-        { name: 'Coliflor', category: 'Hortalizas', base_price: 4200, unit_of_measure: 'Unidad', image_url: 'https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?auto=format&fit=crop&w=400' },
-        { name: 'Espinaca Bogotana', category: 'Hortalizas', base_price: 2800, unit_of_measure: 'Manojo', image_url: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=400' },
-        { name: 'Acelga', category: 'Hortalizas', base_price: 2500, unit_of_measure: 'Manojo', image_url: 'https://images.unsplash.com/photo-1515471209610-dae1c92d8777?auto=format&fit=crop&w=400' },
+        { name: 'Brócoli Fresco', category: 'HO', base_price: 3500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1459411621453-7fb8db8f8587?auto=format&fit=crop&w=400' },
+        { name: 'Coliflor', category: 'HO', base_price: 4200, unit_of_measure: 'Unidad', image_url: 'https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?auto=format&fit=crop&w=400' },
+        { name: 'Espinaca Bogotana', category: 'HO', base_price: 2800, unit_of_measure: 'Manojo', image_url: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=400' },
+        { name: 'Acelga', category: 'HO', base_price: 2500, unit_of_measure: 'Manojo', image_url: 'https://images.unsplash.com/photo-1515471209610-dae1c92d8777?auto=format&fit=crop&w=400' },
 
         // Despensa
-        { name: 'Arroz Premium 5kg', category: 'Despensa', base_price: 18000, unit_of_measure: 'Bulto', image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=400' },
-        { name: 'Aceite Vegetal 3L', category: 'Despensa', base_price: 25000, unit_of_measure: 'Galón', image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcdcc41?auto=format&fit=crop&w=400' },
-        { name: 'Panela Pulverizada', category: 'Despensa', base_price: 4500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?auto=format&fit=crop&w=400' },
-        { name: 'Frijol Bola Roja', category: 'Despensa', base_price: 8900, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?auto=format&fit=crop&w=400' },
+        { name: 'Arroz Premium 5kg', category: 'DE', base_price: 18000, unit_of_measure: 'Bulto', image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=400' },
+        { name: 'Aceite Vegetal 3L', category: 'DE', base_price: 25000, unit_of_measure: 'Galón', image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcdcc41?auto=format&fit=crop&w=400' },
+        { name: 'Panela Pulverizada', category: 'DE', base_price: 4500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?auto=format&fit=crop&w=400' },
+        { name: 'Frijol Bola Roja', category: 'DE', base_price: 8900, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?auto=format&fit=crop&w=400' },
 
         // Tubérculos (Nueva Categoría)
-        { name: 'Papa Pastusa', category: 'Tubérculos', base_price: 3200, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=400' },
-        { name: 'Papa Criolla', category: 'Tubérculos', base_price: 4500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1623654641675-9e6e8c750e30?auto=format&fit=crop&w=400' },
-        { name: 'Yuca', category: 'Tubérculos', base_price: 2800, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1596706037533-333181827471?auto=format&fit=crop&w=400' },
-        { name: 'Arracacha', category: 'Tubérculos', base_price: 3800, unit_of_measure: 'Kg', image_url: 'https://media.istockphoto.com/id/1156641772/es/foto/la-arracacha.jpg?s=612x612&w=0&k=20&c=L_q7K_R0sJ4Y8r0sJ4Y8r0sJ4Y8r0sJ4Y8r0sJ4Y8r0=' } // Placeholder valid
+        { name: 'Papa Pastusa', category: 'TU', base_price: 3200, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=400' },
+        { name: 'Papa Criolla', category: 'TU', base_price: 4500, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1623654641675-9e6e8c750e30?auto=format&fit=crop&w=400' },
+        { name: 'Yuca', category: 'TU', base_price: 2800, unit_of_measure: 'Kg', image_url: 'https://images.unsplash.com/photo-1596706037533-333181827471?auto=format&fit=crop&w=400' },
+        { name: 'Arracacha', category: 'TU', base_price: 3800, unit_of_measure: 'Kg', image_url: 'https://media.istockphoto.com/id/1156641772/es/foto/la-arracacha.jpg?s=612x612&w=0&k=20&c=L_q7K_R0sJ4Y8r0sJ4Y8r0sJ4Y8r0sJ4Y8r0sJ4Y8r0=' }
     ];
+
+    const generateSKU = (name, category, unit) => {
+        if (!name) return 'UNK';
+        const catMap = {
+            'FR': 'F',
+            'HO': 'V',
+            'VE': 'V',
+            'TU': 'T',
+            'DE': 'D',
+            'LA': 'L',
+            'CO': 'C',
+            'NO': 'N'
+        };
+        const catPrefix = catMap[category] || 'X';
+        
+        const consonantes = name.toUpperCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+            .replace(/[^BCDFGHJKLMNPQRSTVWXYZ ]/g, ''); // Solo consonantes y espacios
+        
+        // Extraer 3 consonantes del nombre (ignorando espacios)
+        const rawCons = consonantes.replace(/\s/g, '');
+        const namePart = rawCons.substring(0, 3).padEnd(3, 'X');
+        const unitSuffix = (unit || 'K').substring(0, 1).toUpperCase();
+        
+        return `${catPrefix}-${namePart}-${unitSuffix}`;
+    };
 
     for (const prod of newProducts) {
         // Simple duplicate check
         const { data: existing } = await supabase.from('products').select('id').eq('name', prod.name).single();
         if (!existing) {
+            const calculatedSku = generateSKU(prod.name, prod.category, prod.unit_of_measure);
             const { error } = await supabase.from('products').insert({
-                sku: `SKU-${Math.floor(Math.random() * 10000)}`,
+                sku: calculatedSku,
                 ...prod,
                 is_active: true
             });
             if (error) console.error(`Error creating product ${prod.name}:`, error.message);
-            else console.log(`Product created: ${prod.name}`);
+            else console.log(`Product created: ${prod.name} with SKU ${calculatedSku}`);
         }
     }
 

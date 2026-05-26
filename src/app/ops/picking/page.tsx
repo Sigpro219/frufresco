@@ -64,9 +64,10 @@ export default function PickingExecutionPage() {
             let query = supabase
                 .from('orders')
                 .select(`
-                    id, customer_name, status,
+                    id, status,
+                    profiles:profiles(id, company_name, contact_name, role, id_zr),
                     order_items (
-                        id, product_id, quantity, picked_quantity, quality_status, quality_notes,
+                        id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
                         products (name, category, unit_of_measure)
                     )
                 `)
@@ -84,13 +85,12 @@ export default function PickingExecutionPage() {
             const cutoffEnabled = settings?.value !== 'false';
 
             if (cutoffEnabled) {
-                // Determine operational date (Bogota)
                 const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
                 const targetDate = now.toISOString().split('T')[0];
                 query = query.eq('delivery_date', targetDate);
                 console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
             } else {
-                 console.log("🛑 Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
+                console.log("🛑 Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
             }
 
             if (signal) query = query.abortSignal(signal);
@@ -103,31 +103,45 @@ export default function PickingExecutionPage() {
                 return;
             }
 
-            const { data: profiles } = (await supabase.from('profiles').select('id, company_name, delivery_zone_id').eq('role', 'b2b_client').abortSignal(signal as any)) as { data: { id: string; company_name: string; delivery_zone_id: string }[] | null };
-            const { data: zones } = (await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any)) as { data: { id: string; name: string }[] | null };
-            const zoneMap = new Map<string, string>((zones || []).map(z => [z.id, z.name]));
-            const profileMap = new Map<string, { id: string; company_name: string; delivery_zone_id: string }>((profiles || []).map(p => [p.company_name, p]));
+            // Helper: deriva el nombre del cliente del perfil unido
+            const getOrderName = (order: any): string => {
+                const p = order.profiles;
+                if (!p) return '';
+                if (p.role === 'b2b_client') return p.company_name || 'Sin Razón Social';
+                return p.contact_name || p.company_name || 'Cliente';
+            };
 
-            const allOrderClients = new Set<string>(
-                (activeOrders || [])
-                    .map(o => (o as any).customer_name)
-                    .filter((name): name is string => !!name)
-            );
-            
-            const clientList = Array.from(allOrderClients)
-                .map(name => {
-                    const profile = profileMap.get(name);
-                    const zone = zoneMap.get(profile?.delivery_zone_id) || 'GENERAL';
-                    return { name, zone };
-                });
+            // Local fallback map for zones (since delivery_zones table doesn't exist in DB schema cache)
+            const ZONE_NAMES: Record<string, string> = {
+                '0': 'CENTRO',
+                '1': 'NORTE',
+                '2': 'SUR',
+                '3': 'ORIENTE',
+                '4': 'OCCIDENTE'
+            };
 
-            clientList.sort((a, b) => {
-                const zoneA = a.zone.toUpperCase();
-                const zoneB = b.zone.toUpperCase();
-                if (zoneA !== zoneB) return zoneA.localeCompare(zoneB);
-                const nameA = a.name.toUpperCase();
-                const nameB = b.name.toUpperCase();
-                return nameA.localeCompare(nameB);
+            const getZoneName = (idZr: string | null | undefined): string => {
+                if (!idZr) return 'GENERAL';
+                if (ZONE_NAMES[idZr]) return ZONE_NAMES[idZr];
+                return `RUTA ${idZr}`;
+            };
+
+            // Build unique client list from orders (using joined profile data)
+            const seenClients = new Map<string, { name: string; zone: string }>();
+            (activeOrders || []).forEach(order => {
+                const name = getOrderName(order);
+                if (name && !seenClients.has(name)) {
+                    const idZr = (order as any).profiles?.id_zr;
+                    const zone = getZoneName(idZr);
+                    seenClients.set(name, { name, zone });
+                }
+            });
+
+            const clientList = Array.from(seenClients.values()).sort((a, b) => {
+                const zA = a.zone.toUpperCase();
+                const zB = b.zone.toUpperCase();
+                if (zA !== zB) return zA.localeCompare(zB);
+                return a.name.toUpperCase().localeCompare(b.name.toUpperCase());
             });
 
             const globalSpaceMap = new Map<string, number>();
@@ -137,10 +151,10 @@ export default function PickingExecutionPage() {
 
             const formattedTasks: Record<string, PickingTask> = {};
             (activeOrders || [])
-                .filter(o => !!o.customer_name)
                 .forEach(order => {
-                    const clientName = order.customer_name;
-                    // Safely type cast the order items since we know the structure of our query
+                    const clientName = getOrderName(order);
+                    if (!clientName) return;
+
                     const items = (order.order_items as unknown as any[]) || [];
                     
                     const itemsInCategory = items
@@ -150,10 +164,12 @@ export default function PickingExecutionPage() {
                         })
                         .map(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
+                            const variant = item.variant_label || item.nickname || '';
+                            const dispName = variant ? `${product?.name} (${variant})` : (product?.name || 'Producto Desconocido');
                             return {
                                 id: item.id,
                                 product_id: item.product_id,
-                                product_name: product?.name || 'Producto Desconocido',
+                                product_name: dispName,
                                 quantity: item.quantity,
                                 picked_quantity: item.picked_quantity || 0,
                                 quality_status: item.quality_status,
@@ -164,14 +180,12 @@ export default function PickingExecutionPage() {
 
                     if (itemsInCategory.length > 0) {
                         if (!formattedTasks[clientName]) {
-                            const profile = profileMap.get(clientName);
-                            const zoneName = zoneMap.get(profile?.delivery_zone_id) || 'GENERAL';
-
+                            const clientData = seenClients.get(clientName);
                             formattedTasks[clientName] = {
                                 id: order.id,
                                 company_name: clientName,
                                 assigned_space: globalSpaceMap.get(clientName) || 0,
-                                zone: zoneName,
+                                zone: clientData?.zone || 'GENERAL',
                                 items: [],
                                 status: 'pending'
                             };
@@ -208,6 +222,8 @@ export default function PickingExecutionPage() {
             console.error('Error in fetchTasks:', err);
         }
     }, [selectedCategory]);
+
+
 
     const fetchInitialData = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);

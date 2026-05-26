@@ -86,7 +86,10 @@ export default function LoadVerificationPage() {
                 .select(`
                     id, sequence_number, status,
                     orders:order_id (
-                        id, customer_name, shipping_address,
+                        id, shipping_address,
+                        profiles:profile_id (
+                            id, company_name, contact_name, role
+                        ),
                         order_items (
                             id, quantity, picked_quantity,
                             products (name, unit_of_measure)
@@ -98,7 +101,23 @@ export default function LoadVerificationPage() {
 
             if (!isMounted.current) return;
             if (error) throw error;
-            setStops((data as unknown as RouteStop[]) || []);
+
+            if (data) {
+                const mappedStops = (data as any[]).map(stop => {
+                    if (stop.orders) {
+                        const p = stop.orders.profiles;
+                        let name = 'Cliente';
+                        if (p) {
+                            name = p.role === 'b2b_client' 
+                                ? (p.company_name || 'Sin Razón Social') 
+                                : (p.contact_name || p.company_name || 'Cliente B2C');
+                        }
+                        stop.orders.customer_name = name;
+                    }
+                    return stop;
+                });
+                setStops(mappedStops as unknown as RouteStop[]);
+            }
         } catch (err: unknown) {
             if (!isMounted.current) return;
             

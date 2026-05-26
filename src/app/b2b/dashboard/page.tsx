@@ -526,7 +526,8 @@ export default function B2BDashboard() {
                 product_id: item.product_id,
                 quantity: item.quantity,
                 unit_price: 0,
-                variant_label: item.variant_label
+                variant_label: item.variant_label || null,
+                nickname: item.variant_label || null
             }));
 
             await supabase.from('order_items').insert(itemsToInsert);
@@ -1208,7 +1209,7 @@ export default function B2BDashboard() {
                                                     {new Date(inv.created_at).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </td>
                                                 <td style={{ padding: '1rem', fontWeight: '800', color: 'var(--primary)' }}>
-                                                    ${Number(inv.total_amount || 0).toLocaleString()}
+                                                    ${Number(inv.total_amount || 0).toLocaleString(locale === 'es' ? 'es-CO' : 'en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                                 </td>
                                                 <td style={{ padding: '1rem' }}>
                                                     <span style={{

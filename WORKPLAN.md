@@ -63,6 +63,13 @@ Estas tareas se ejecutarán una vez el Módulo 3.7 esté estable y probado.
 
 ---
 
+## Decisiones de Diseño Abiertas (Pendientes)
+
+### Módulo 3.2: Compras
+*   **Impacto de Sustituciones en Pedido del Cliente:** Definir si la sustitución realizada por el comprador en `/ops/compras` debe actualizar automáticamente la orden del cliente (`order_items`) y recalcular totales, o si se maneja a nivel interno de logística de bodega/despacho.
+
+---
+
 ### FASE 3: CCM & Ecosistema (SaaS)
 
 - **Objetivo:** Centralizar la gobernanza de múltiples instancias (FruFresco, Cliente B, etc.) en un solo panel maestro.

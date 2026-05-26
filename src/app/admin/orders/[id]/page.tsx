@@ -283,7 +283,8 @@ export default function OrderDetailPage() {
             unit_price: price, // Use Correct Price
             product: product, // For display
             selected_options: options, // Store options json
-            variant_label: label,
+            variant_label: label || null,
+            nickname: label || null,
         };
 
         // Append
@@ -329,7 +330,8 @@ export default function OrderDetailPage() {
                 product_id: item.product_id,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
-                nickname: item.nickname || formatVariantLabel(null) // Format placeholder or existing
+                nickname: item.nickname || item.variant_label || null,
+                variant_label: item.variant_label || item.nickname || null
             }));
 
             // Split
