@@ -69,9 +69,15 @@ export default function ProcurementPage() {
       const prov = providers.find(p => p.id === selectedProvider);
       if (prov) {
         setProviderSearchText(`${prov.product ? prov.product.toUpperCase() : "PRODUCTO"} - ${prov.name}`);
+        if (prov.location) {
+          setLocation(prov.location);
+        } else {
+          setLocation("");
+        }
       }
     } else {
       setProviderSearchText("");
+      setLocation("");
     }
   }, [selectedProvider, providers]);
 
@@ -2747,8 +2753,72 @@ export default function ProcurementPage() {
                       backgroundColor: "var(--ops-bg)",
                       border: "1px solid var(--ops-border)",
                       color: "var(--ops-text)",
+                      fontSize: "0.85rem",
                     }}
                   />
+                  <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>BODEGA</span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const currentPuesto = location.match(/Puesto\s+\d+/i)?.[0] || "";
+                            setLocation(`${e.target.value}${currentPuesto ? `, ${currentPuesto}` : ""}`);
+                          } else {
+                            const currentPuesto = location.match(/Puesto\s+\d+/i)?.[0] || "";
+                            setLocation(currentPuesto);
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.8rem",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--ops-surface)",
+                          border: "1px solid var(--ops-border)",
+                          color: "var(--ops-text)",
+                          fontSize: "0.8rem",
+                          outline: "none"
+                        }}
+                        value={location.match(/Bodega\s+\d+/i)?.[0] || ""}
+                      >
+                        <option value="">-- Seleccionar --</option>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                          <option key={n} value={`Bodega ${n}`}>Bodega {n}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>PUESTO</span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const currentBodega = location.match(/Bodega\s+\d+/i)?.[0] || "";
+                            setLocation(`${currentBodega ? `${currentBodega}, ` : ""}${e.target.value}`);
+                          } else {
+                            const currentBodega = location.match(/Bodega\s+\d+/i)?.[0] || "";
+                            setLocation(currentBodega);
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.8rem",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--ops-surface)",
+                          border: "1px solid var(--ops-border)",
+                          color: "var(--ops-text)",
+                          fontSize: "0.8rem",
+                          outline: "none"
+                        }}
+                        value={location.match(/Puesto\s+\d+/i)?.[0] || ""}
+                      >
+                        <option value="">-- Seleccionar --</option>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map(n => (
+                          <option key={n} value={`Puesto ${n}`}>Puesto {n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -2777,7 +2847,7 @@ export default function ProcurementPage() {
                     }
                     style={{
                       width: "100%",
-                      minHeight: "120px",
+                      minHeight: voucherPreview ? "240px" : "120px",
                       borderRadius: "12px",
                       backgroundColor: "var(--ops-bg)",
                       border: "2px dashed var(--ops-border)",
@@ -2788,6 +2858,7 @@ export default function ProcurementPage() {
                       color: "var(--ops-text-muted)",
                       cursor: "pointer",
                       overflow: "hidden",
+                      transition: "all 0.3s ease",
                     }}
                   >
                     {voucherPreview ? (
@@ -2796,7 +2867,7 @@ export default function ProcurementPage() {
                         alt="Preview"
                         style={{
                           width: "100%",
-                          height: "120px",
+                          height: "240px",
                           objectFit: "cover",
                         }}
                       />
