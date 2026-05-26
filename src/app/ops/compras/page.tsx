@@ -2319,7 +2319,7 @@ export default function ProcurementPage() {
                           backgroundColor: "var(--ops-surface)",
                           border: "1px solid var(--ops-border)",
                           borderRadius: "12px",
-                          maxHeight: "220px",
+                          maxHeight: "360px",
                           overflowY: "auto",
                           zIndex: 100,
                           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
