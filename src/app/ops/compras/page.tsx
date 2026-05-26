@@ -62,6 +62,7 @@ export default function ProcurementPage() {
   const [selectedProvider, setSelectedProvider] = useState("");
   const [providerSearchText, setProviderSearchText] = useState("");
   const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+  const [activeOptionIndex, setActiveOptionIndex] = useState(-1);
 
   useEffect(() => {
     if (selectedProvider) {
@@ -478,6 +479,18 @@ export default function ProcurementPage() {
       if (isAbortError(err)) return;
       console.error("Exception in fetchProviders:", err);
     }
+  };
+
+  const getFilteredProviders = () => {
+    return providers
+      .filter((p) => p.category === "PRODUCTOS")
+      .filter((p) => {
+        const text = providerSearchText.toLowerCase();
+        const prodMatch = (p.product || "").toLowerCase().includes(text);
+        const nameMatch = (p.name || "").toLowerCase().includes(text);
+        return prodMatch || nameMatch;
+      })
+      .sort((a, b) => (a.product || "").localeCompare(b.product || ""));
   };
 
   const handleConsolidate = async () => {
@@ -2278,13 +2291,57 @@ export default function ProcurementPage() {
                         onChange={(e) => {
                           setProviderSearchText(e.target.value);
                           setShowProviderDropdown(true);
+                          setActiveOptionIndex(-1);
                           if (!e.target.value) {
                             setSelectedProvider("");
                           }
                         }}
-                        onFocus={() => setShowProviderDropdown(true)}
+                        onKeyDown={(e) => {
+                          if (!showProviderDropdown) {
+                            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                              setShowProviderDropdown(true);
+                            }
+                            return;
+                          }
+
+                          const filtered = getFilteredProviders();
+                          if (filtered.length === 0) return;
+
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setActiveOptionIndex((prev) => {
+                              const next = prev + 1;
+                              return next >= filtered.length ? 0 : next;
+                            });
+                          } else if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setActiveOptionIndex((prev) => {
+                              const next = prev - 1;
+                              return next < 0 ? filtered.length - 1 : next;
+                            });
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (activeOptionIndex >= 0 && activeOptionIndex < filtered.length) {
+                              const p = filtered[activeOptionIndex];
+                              setSelectedProvider(p.id);
+                              setProviderSearchText(`${p.product ? p.product.toUpperCase() : "PRODUCTO"} - ${p.name}`);
+                              setShowProviderDropdown(false);
+                              setActiveOptionIndex(-1);
+                            }
+                          } else if (e.key === "Escape") {
+                            setShowProviderDropdown(false);
+                            setActiveOptionIndex(-1);
+                          }
+                        }}
+                        onFocus={() => {
+                          setShowProviderDropdown(true);
+                          setActiveOptionIndex(-1);
+                        }}
                         onBlur={() => {
-                          setTimeout(() => setShowProviderDropdown(false), 250);
+                          setTimeout(() => {
+                            setShowProviderDropdown(false);
+                            setActiveOptionIndex(-1);
+                          }, 250);
                         }}
                         placeholder="Buscar por producto o proveedor..."
                         style={{
@@ -2327,15 +2384,7 @@ export default function ProcurementPage() {
                           WebkitBackdropFilter: "blur(10px)"
                         }}>
                           {(() => {
-                            const filtered = providers
-                              .filter((p) => p.category === "PRODUCTOS")
-                              .filter((p) => {
-                                const text = providerSearchText.toLowerCase();
-                                const prodMatch = (p.product || "").toLowerCase().includes(text);
-                                const nameMatch = (p.name || "").toLowerCase().includes(text);
-                                return prodMatch || nameMatch;
-                              })
-                              .sort((a, b) => (a.product || "").localeCompare(b.product || ""));
+                            const filtered = getFilteredProviders();
 
                             if (filtered.length === 0) {
                               return (
@@ -2345,7 +2394,7 @@ export default function ProcurementPage() {
                               );
                             }
 
-                            return filtered.map((p) => (
+                            return filtered.map((p, idx) => (
                               <div
                                 key={p.id}
                                 onMouseDown={() => {
@@ -2361,11 +2410,14 @@ export default function ProcurementPage() {
                                   justifyContent: "flex-start",
                                   alignItems: "center",
                                   borderBottom: "1px solid rgba(255,255,255,0.03)",
-                                  backgroundColor: selectedProvider === p.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                                  backgroundColor: activeOptionIndex === idx 
+                                    ? "rgba(255, 255, 255, 0.08)" 
+                                    : (selectedProvider === p.id ? "rgba(16, 185, 129, 0.15)" : "transparent"),
                                   transition: "background-color 0.15s ease"
                                 }}
                                 onMouseEnter={(e) => {
                                   e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)";
+                                  setActiveOptionIndex(idx);
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.backgroundColor = selectedProvider === p.id ? "rgba(16, 185, 129, 0.15)" : "transparent";
