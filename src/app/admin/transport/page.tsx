@@ -211,10 +211,10 @@ export default function TransportControlTower() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 180px)', gap: '1rem' }}>
-                        <KPICard title="EN TRÁNSITO" value={stats.totalActive} icon="🚛" color="#0EA5E9" subtitle="Rutas activas hoy" />
-                        <KPICard title="ENTREGAS" value={stats.completedToday} icon="✅" color="#10B981" subtitle="Rutas finalizadas" />
-                        <KPICard title="VOLUMEN" value={`${stats.totalKilos.toFixed(0)} kg`} icon="⚖️" color="#6366F1" subtitle="Carga total gestionada" />
-                        <KPICard title="ALERTAS" value={stats.totalNovedades} icon="⚠️" color="#F43F5E" subtitle="Novedades reportadas" />
+                        <KPICard title="EN TRÁNSITO" value={formatNumber(stats.totalActive)} icon={<Truck size={18} strokeWidth={1.5} />} color="#0EA5E9" subtitle="Rutas activas hoy" />
+                        <KPICard title="ENTREGAS" value={formatNumber(stats.completedToday)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Rutas finalizadas" />
+                        <KPICard title="VOLUMEN" value={`${formatNumber(stats.totalKilos)} kg`} icon={<Scale size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Carga total gestionada" />
+                        <KPICard title="ALERTAS" value={formatNumber(stats.totalNovedades)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#F43F5E" subtitle="Novedades reportadas" />
                     </div>
                 </div>
 
@@ -232,12 +232,12 @@ export default function TransportControlTower() {
                 }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                         {[
-                            { id: 'map', label: 'Monitor Global', icon: '🌍' },
-                            { id: 'planner', label: 'Planeación', icon: '🧭' },
-                            { id: 'fleet', label: 'Flota', icon: '🚛' },
-                            { id: 'drivers_panel', label: 'Conductores', icon: '👥' },
-                            { id: 'maintenance', label: 'Mantenimiento', icon: '🛠️' },
-                            { id: 'kpis', label: 'Insights', icon: '📈' }
+                            { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={1.5} /> },
+                            { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={1.5} /> },
+                            { id: 'fleet', label: 'Flota', icon: <Truck size={14} strokeWidth={1.5} /> },
+                            { id: 'drivers_panel', label: 'Conductores', icon: <Users size={14} strokeWidth={1.5} /> },
+                            { id: 'maintenance', label: 'Mantenimiento', icon: <Wrench size={14} strokeWidth={1.5} /> },
+                            { id: 'kpis', label: 'Insights', icon: <TrendingUp size={14} strokeWidth={1.5} /> }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -407,15 +407,28 @@ export default function TransportControlTower() {
 function KPICard({ title, value, icon, color, subtitle }: any) {
     return (
         <div style={{
-            backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0',
-            borderTop: `3px solid ${color}`, display: 'flex', alignItems: 'center', gap: '12px'
+            backgroundColor: THEME.colors.surface,
+            padding: '1rem',
+            borderRadius: THEME.radius.lg,
+            border: `1px solid ${THEME.colors.border}`,
+            boxShadow: THEME.shadow.sm,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+        }} onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
+        }} onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
-            <div style={{ backgroundColor: `${color}10`, width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: color }}>
+            <div style={{ backgroundColor: `${color}10`, width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em' }}>{title}</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', lineHeight: 1, margin: '2px 0' }}>{value}</div>
+                <div style={{ fontSize: '0.6rem', fontWeight: '900', color: THEME.colors.textSecondary, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{title}</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: THEME.colors.textMain, lineHeight: 1, margin: '2px 0' }}>{value}</div>
                 <div style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '600' }}>{subtitle}</div>
             </div>
         </div>

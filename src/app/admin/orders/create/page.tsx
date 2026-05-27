@@ -997,12 +997,14 @@ function CreateOrderContent() {
                                                                 border: '1px solid #D1D5DB', 
                                                                 borderRadius: '8px', 
                                                                 cursor: 'pointer',
-                                                                fontSize: '1.2rem',
-                                                                color: '#3B82F6'
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                color: THEME.colors.primary
                                                             }}
                                                             title="Actualizar Lista de Clientes"
                                                         >
-                                                            🔄
+                                                            <RefreshCw size={16} strokeWidth={1.5} />
                                                         </button>
                                                     </div>
                                                     {filteredClientsB2C.length > 0 && (
@@ -1185,10 +1187,10 @@ function CreateOrderContent() {
                                                 value={originSource} onChange={e => setOriginSource(e.target.value)}
                                                 style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '0.9rem' }}
                                             >
-                                                <option value="phone">📞 Teléfono</option>
-                                                <option value="whatsapp">💬 WhatsApp</option>
-                                                <option value="email">📧 Email</option>
-                                                <option value="file_upload">📄 Documento de compra</option>
+                                                <option value="phone">Teléfono</option>
+                                                <option value="whatsapp">WhatsApp</option>
+                                                <option value="email">Email</option>
+                                                <option value="file_upload">Documento de compra</option>
                                             </select>
                                         </div>
                                         <div>

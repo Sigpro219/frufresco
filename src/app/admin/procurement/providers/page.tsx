@@ -514,8 +514,8 @@ export default function ProvidersPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {/* View Switcher */}
                         <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
-                            <button onClick={() => setViewMode('list')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'list' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'list' ? '#111827' : '#9CA3AF' }}>📋</button>
-                            <button onClick={() => setViewMode('grid')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'grid' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'grid' ? '#111827' : '#9CA3AF' }}>📇</button>
+                            <button onClick={() => setViewMode('list')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'list' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'list' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><List size={14} strokeWidth={1.5} /></button>
+                            <button onClick={() => setViewMode('grid')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'grid' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'grid' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><LayoutGrid size={14} strokeWidth={1.5} /></button>
                         </div>
 
                         {/* Nuevo Proveedor Button */}

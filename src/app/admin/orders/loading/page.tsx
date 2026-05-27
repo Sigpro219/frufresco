@@ -34,7 +34,8 @@ import {
     HelpCircle,
     FileText,
     Eye,
-    MapPin
+    MapPin,
+    Scale
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -53,19 +54,19 @@ const getStatusLabel = (s: string) => {
 const getChannelBadge = (source: string) => {
     switch (source) {
         case 'whatsapp': 
-            return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>💬 WhatsApp</span>;
+            return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MessageSquare size={10} strokeWidth={1.5} /> WhatsApp</span>;
         case 'phone': 
-            return <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📞 Teléfono</span>;
+            return <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={10} strokeWidth={1.5} /> Teléfono</span>;
         case 'email': 
-            return <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>✉️ Correo</span>;
+            return <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Mail size={10} strokeWidth={1.5} /> Correo</span>;
         case 'file_upload': 
-            return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📁 Carga</span>;
+            return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UploadCloud size={10} strokeWidth={1.5} /> Carga</span>;
         case 'web_b2c': 
-            return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🏠 Web Hogar</span>;
+            return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Home size={10} strokeWidth={1.5} /> Web Hogar</span>;
         case 'web_b2b': 
-            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🏢 Web Horeca</span>;
+            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Horeca</span>;
         default: 
-            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🌐 {source || 'Web'}</span>;
+            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
     }
 };
 
@@ -702,11 +703,11 @@ export default function OrderLoadingPage() {
                     gap: '1.2rem', 
                     marginBottom: '1rem'
                 }}>
-                    <KPICard title="Total Pedidos" value={totalOrders} icon="📦" color="#6366F1" subtitle="Para entrega hoy" />
-                    <KPICard title="Valor Carga" value={`$${totalSales.toLocaleString('es-CO')}`} icon="💰" color="#10B981" subtitle="Monto bruto" />
-                    <KPICard title="Peso Total" value={`${totalWeightTons.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TON`} icon="🚜" color="#F59E0B" subtitle="Logística" />
-                    <KPICard title="Efectividad" value={`${approvalRate.toFixed(0)}%`} icon="✅" color="#0891B2" subtitle="Tasa de aprobación" />
-                    <KPICard title="Alertas" value={incompleteCount} icon="⚠️" color="#EF4444" subtitle="Info incompleta" />
+                    <KPICard title="Total Pedidos" value={formatNumber(totalOrders)} icon={<Package size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Para entrega hoy" />
+                    <KPICard title="Valor Carga" value={formatMoney(totalSales)} icon={<Coins size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Monto bruto" />
+                    <KPICard title="Peso Total" value={`${formatNumber(totalWeightTons, 2)} TON`} icon={<Truck size={18} strokeWidth={1.5} />} color="#FBBF24" subtitle="Logística" />
+                    <KPICard title="Efectividad" value={`${formatNumber(approvalRate, 0)}%`} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0891B2" subtitle="Tasa de aprobación" />
+                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Info incompleta" />
                 </div>
 
                 {/* UNIFIED SLENDER CONTROL BAR */}
@@ -833,13 +834,13 @@ export default function OrderLoadingPage() {
                                     width: '180px'
                                 }}
                             >
-                                <option value="">🌐 Todos los canales</option>
-                                <option value="whatsapp">💬 WhatsApp</option>
-                                <option value="phone">📞 Teléfono</option>
-                                <option value="web_b2c">🏠 Web Hogar</option>
-                                <option value="web_b2b">🏢 Web Horeca</option>
-                                <option value="email">✉️ Correo</option>
-                                <option value="file_upload">📁 Carga Masiva</option>
+                                <option value="">Todos los canales</option>
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="phone">Teléfono</option>
+                                <option value="web_b2c">Web Hogar</option>
+                                <option value="web_b2b">Web Horeca</option>
+                                <option value="email">Correo</option>
+                                <option value="file_upload">Carga Masiva</option>
                             </select>
                         </div>
 
@@ -913,25 +914,27 @@ export default function OrderLoadingPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {/* View Switcher */}
                         <div style={{ display: 'flex', gap: '4px', backgroundColor: '#F3F4F6', padding: '2px', borderRadius: '8px' }}>
-                            <button onClick={() => setViewMode('table')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'table' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'table' ? '#111827' : '#9CA3AF' }}>📋</button>
-                            <button onClick={() => setViewMode('cards')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'cards' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'cards' ? '#111827' : '#9CA3AF' }}>📇</button>
+                            <button onClick={() => setViewMode('table')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'table' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'table' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><List size={14} strokeWidth={1.5} /></button>
+                            <button onClick={() => setViewMode('cards')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'cards' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'cards' ? '#111827' : '#9CA3AF', display: 'flex', alignItems: 'center' }}><Grid size={14} strokeWidth={1.5} /></button>
                         </div>
 
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
 
                         <Link href="/admin/orders/create" style={{ 
-                            backgroundColor: '#111827', 
+                            backgroundColor: THEME.colors.primary, 
                             color: 'white', 
                             padding: '0.5rem 1rem', 
                             borderRadius: '8px', 
                             textDecoration: 'none',
-                            fontWeight: '900', 
+                            fontWeight: '700', 
                             fontSize: '0.75rem',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px'
-                        }}>
-                            <span>➕</span> Nuevo Pedido
+                            gap: '6px',
+                            transition: 'background-color 0.2s'
+                        }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}>
+                            <Plus size={14} strokeWidth={1.5} /> Nuevo Pedido
                         </Link>
                     </div>
                 </div>
@@ -1165,45 +1168,45 @@ export default function OrderLoadingPage() {
                                 <div style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', background: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15), transparent 50%)', pointerEvents: 'none' }} />
 
                                 <div style={{ textAlign: 'center', zIndex: 1 }}>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1rem', fontSize: '3rem' }}>
-                                        🚀
-                                    </div>
+                                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1rem' }}>
+                                         <Sparkles size={32} strokeWidth={1.5} style={{ color: '#10B981' }} />
+                                     </div>
                                     <h2 style={{ margin: 0, fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #FFFFFF, #94A3B8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                        Resumen de Lanzamiento
-                                    </h2>
+                                         Resumen de Lanzamiento
+                                     </h2>
                                     <p style={{ color: '#94A3B8', marginTop: '0.8rem', fontSize: '1rem', lineHeight: '1.5', maxWidth: '85%', margin: '0.8rem auto 0' }}>
-                                        Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras y Transporte.
-                                    </p>
+                                         Revisa los indicadores críticos antes de sincronizar esta carga con las áreas de Compras y Transporte.
+                                     </p>
                                 </div>
                                 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', zIndex: 1 }}>
-                                    {/* Left Column: Logistics & Finances */}
-                                    <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                        <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA</div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>📦 Pedidos a enviar</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: 'white' }}>{selectedOrders.size}</span>
-                                        </div>
-                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>🏢 Clientes Únicos</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#38BDF8' }}>{uniqueClients}</span>
-                                        </div>
-                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>⚖️ Peso Logístico Estimado</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#FBBF24' }}>
-                                                {totalWeight.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span style={{fontSize:'0.8rem', color:'#94A3B8'}}>kg</span>
-                                            </span>
-                                        </div>
-                                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ color: '#E2E8F0', fontWeight: '600' }}>💰 Valor Bruto</span>
-                                            <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#10B981' }}>
-                                                ${totalValue.toLocaleString('es-CO')}
-                                            </span>
-                                        </div>
-                                    </div>
+                                     {/* Left Column: Logistics & Finances */}
+                                     <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '20px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>MÉTRICAS DE LA TANDA</div>
+                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Package size={14} strokeWidth={1.5} /> Pedidos a enviar</span>
+                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: 'white' }}>{selectedOrders.size}</span>
+                                         </div>
+                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2 size={14} strokeWidth={1.5} /> Clientes Únicos</span>
+                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#38BDF8' }}>{uniqueClients}</span>
+                                         </div>
+                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Scale size={14} strokeWidth={1.5} /> Peso Logístico Estimado</span>
+                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#FBBF24' }}>
+                                                 {formatNumber(totalWeight, 1)} <span style={{fontSize:'0.8rem', color:'#94A3B8'}}>kg</span>
+                                             </span>
+                                         </div>
+                                         <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <span style={{ color: '#E2E8F0', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Coins size={14} strokeWidth={1.5} /> Valor Bruto</span>
+                                             <span style={{ fontWeight: '900', fontSize: '1.3rem', color: '#10B981' }}>
+                                                 {formatMoney(totalValue)}
+                                             </span>
+                                         </div>
+                                     </div>
 
                                     {/* Right Column: Breakdown & Alerts */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -1222,22 +1225,22 @@ export default function OrderLoadingPage() {
                                         </div>
 
                                         {unselectedOrdersCount > 0 ? (
-                                            <div style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                                                <div style={{ fontSize: '1.8rem', lineHeight: '1' }}>⚠️</div>
-                                                <div>
-                                                    <div style={{ fontWeight: '900', color: '#FDA4AF', fontSize: '0.9rem' }}>Dejaste {unselectedOrdersCount} pedido(s) por fuera</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Compras.</div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                                                <div style={{ fontSize: '1.8rem', lineHeight: '1' }}>✅</div>
-                                                <div>
-                                                    <div style={{ fontWeight: '900', color: '#6EE7B7', fontSize: '0.9rem' }}>Cobertura Total</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#A7F3D0', marginTop: '4px', lineHeight: '1.4' }}>Seleccionaste el 100% de la lista. Toda la operación está cubierta.</div>
-                                                </div>
-                                            </div>
-                                        )}
+                                             <div style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                                 <div style={{ color: '#FDA4AF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={24} strokeWidth={1.5} /></div>
+                                                 <div>
+                                                     <div style={{ fontWeight: '900', color: '#FDA4AF', fontSize: '0.9rem' }}>Dejaste {unselectedOrdersCount} pedido(s) por fuera</div>
+                                                     <div style={{ fontSize: '0.75rem', color: '#FECDD3', marginTop: '4px', lineHeight: '1.4' }}>Hay pedidos en pantalla que no seleccionaste. Se quedarán congelados sin pasar a Compras.</div>
+                                                 </div>
+                                             </div>
+                                         ) : (
+                                             <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', padding: '1.2rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                                 <div style={{ color: '#6EE7B7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={24} strokeWidth={1.5} /></div>
+                                                 <div>
+                                                     <div style={{ fontWeight: '900', color: '#6EE7B7', fontSize: '0.9rem' }}>Cobertura Total</div>
+                                                     <div style={{ fontSize: '0.75rem', color: '#A7F3D0', marginTop: '4px', lineHeight: '1.4' }}>Seleccionaste el 100% de la lista. Toda la operación está cubierta.</div>
+                                                 </div>
+                                             </div>
+                                         )}
                                     </div>
                                 </div>
 
@@ -1569,10 +1572,10 @@ export default function OrderLoadingPage() {
                                                             {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
                                                         </div>
                                                         {item.variant_label && (
-                                                            <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>
-                                                                ✨ {item.variant_label}
-                                                            </div>
-                                                        )}
+                                                             <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                                                                 <Sparkles size={10} strokeWidth={1.5} /> {item.variant_label}
+                                                             </div>
+                                                         )}
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontFamily: 'monospace', marginTop: '2px' }}>
                                                             REF: {item.products?.sku}
                                                         </div>
@@ -1622,10 +1625,10 @@ export default function OrderLoadingPage() {
                                                         <td style={{ paddingRight: '1rem' }}>
                                                             <button 
                                                                 onClick={() => removeItemFromOrder(idx)}
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: '#EF4444' }}
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}
                                                                 title="Eliminar de la orden"
                                                             >
-                                                                🗑️
+                                                                <Trash2 size={16} strokeWidth={1.5} />
                                                             </button>
                                                         </td>
                                                     )}
@@ -1793,33 +1796,32 @@ export default function OrderLoadingPage() {
     );
 }
 
-function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: string, color: string, subtitle: string }) {
+function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: any, color: string, subtitle: string }) {
     return (
         <div style={{
-            backgroundColor: 'white',
+            backgroundColor: THEME.colors.surface,
             padding: '1.2rem',
-            borderRadius: '16px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+            borderRadius: THEME.radius.lg,
+            boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
-            border: '1px solid #E5E7EB',
-            borderTop: `4px solid ${color}`,
-            transition: 'all 0.2s',
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: 'pointer'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.05)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
-            <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', color: color, flexShrink: 0 }}>
+            <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: '2px 0', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '2px 0', lineHeight: 1 }}>{value}</div>
                 <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700' }}>{subtitle}</div>
             </div>
         </div>
