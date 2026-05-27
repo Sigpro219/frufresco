@@ -143,48 +143,20 @@ export default function ProcurementPage() {
 
   const resolvePurchaseNovelty = async (p: any, action: string) => {
     try {
-      const { data: existing, error: getErr } = await supabase
+      // Only mark existing novelties as resolved — never create new ones here.
+      // New novelties are created in recogida/page.tsx when the pickup is rejected.
+      const { error: updErr } = await supabase
         .from('provider_novelties')
-        .select('id')
-        .eq('purchase_id', p.id)
-        .maybeSingle();
+        .update({
+          resolved: true,
+          resolution_action: action,
+          resolved_at: new Date().toISOString()
+        })
+        .eq('task_id', p.task_id || selectedTask?.id)
+        .eq('resolved', false);
 
-      if (getErr) {
-        console.error("Error checking existing novelty:", getErr);
-      }
-
-      if (existing) {
-        const { error: updErr } = await supabase
-          .from('provider_novelties')
-          .update({
-            resolved: true,
-            resolution_action: action,
-            resolved_at: new Date().toISOString()
-          })
-          .eq('purchase_id', p.id);
-        if (updErr) {
-          console.error("Error updating novelty:", updErr);
-        }
-      } else {
-        const { error: insErr } = await supabase
-          .from('provider_novelties')
-          .insert({
-            purchase_id: p.id,
-            task_id: p.task_id || selectedTask?.id,
-            provider_id: p.provider_id || null,
-            product_id: p.product_id || selectedTask?.product_id,
-            variant_label: p.variant_label || selectedTask?.variant_label || null,
-            novelty_type: p.status === 'rejected' ? 'rejection' : (((p.picked_up_quantity || 0) < p.quantity) ? 'deficit' : 'warning'),
-            quantity: p.quantity,
-            unit: p.purchase_unit || selectedTask?.unit || 'Kg',
-            reason: p.rejection_reason || 'Mala Calidad',
-            resolved: true,
-            resolution_action: action,
-            resolved_at: new Date().toISOString()
-          });
-        if (insErr) {
-          console.error("Error inserting novelty:", insErr);
-        }
+      if (updErr) {
+        console.error("Error resolving novelty:", updErr);
       }
     } catch (e) {
       console.error("resolvePurchaseNovelty error:", e);
@@ -352,7 +324,10 @@ export default function ProcurementPage() {
           .select("*")
           .eq("resolved", false);
 
-        const unresolvedNovelties = noveltiesData || [];
+        // Filter out duplicate submissions (same task, purchase, type, and reason)
+        const unresolvedNovelties = (noveltiesData || []).filter((v, i, a) => 
+          a.findIndex((t: any) => (t.task_id === v.task_id && t.purchase_id === v.purchase_id && t.novelty_type === v.novelty_type && t.reason === v.reason)) === i
+        );
         setNovelties(unresolvedNovelties);
 
         // Map raw tasks to tasks with details
@@ -924,6 +899,8 @@ export default function ProcurementPage() {
   const pendingTasks = tasks.filter((t) => t.status === "pending").length;
   const totalProgress =
     tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+  const noveltyCount = novelties.length;
+  const rejectionCount = novelties.filter(n => n.novelty_type === 'rejection').length;
 
   // Estadísticas por Sublista de Compra
   const dynamicCategories = [
@@ -995,6 +972,11 @@ export default function ProcurementPage() {
                 @keyframes pulse-red {
                     0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
                     50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+                }
+
+                @keyframes pulse-rejection-soft {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.82; }
                 }
 
                 @keyframes pulse-orange {
@@ -1219,35 +1201,51 @@ export default function ProcurementPage() {
 
             {/* Completados (Verde) */}
             <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "900",
-                  color: "var(--ops-primary)",
-                }}
-              >
+              <div style={{ fontSize: "1.25rem", fontWeight: "900", color: "var(--ops-primary)" }}>
                 {completedTasks}
               </div>
-              <div
-                style={{
-                  fontSize: "0.65rem",
-                  fontWeight: "bold",
-                  color: "var(--ops-primary)",
-                  textTransform: "uppercase",
-                }}
-              >
+              <div style={{ fontSize: "0.65rem", fontWeight: "bold", color: "var(--ops-primary)", textTransform: "uppercase" }}>
                 Listos
               </div>
             </div>
 
-            {/* Barra Circular Pequeña (Total) - RESALTADA SEGÚN FEEDBACK */}
+            {/* Novedades (Rojo) — solo si hay */}
+            {noveltyCount > 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  borderLeft: "1px solid rgba(239,68,68,0.3)",
+                  paddingLeft: "1rem",
+                  position: "relative",
+                  animation: "pulse-red 2s infinite",
+                }}
+              >
+                <div style={{ fontSize: "1.25rem", fontWeight: "900", color: "#EF4444" }}>
+                  {noveltyCount}
+                </div>
+                <div style={{ fontSize: "0.6rem", fontWeight: "900", color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Novedad
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -4, right: -4,
+                    width: "8px", height: "8px",
+                    borderRadius: "50%",
+                    background: "#EF4444",
+                    animation: "pulse-red 1.5s infinite",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Total Avance */}
             <div
               style={{
                 textAlign: "center",
                 borderLeft: "1px solid var(--ops-border)",
                 paddingLeft: "1.2rem",
                 marginLeft: "0.2rem",
-                position: "relative",
               }}
             >
               <div
@@ -1260,27 +1258,10 @@ export default function ProcurementPage() {
                   transition: "all 0.4s ease",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: "900",
-                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
-                    lineHeight: "1",
-                  }}
-                >
+                <div style={{ fontSize: "1.5rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", lineHeight: "1" }}>
                   {Math.round(totalProgress)}%
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.6rem",
-                    fontWeight: "900",
-                    color: totalProgress === 100 ? "white" : "var(--ops-text)",
-                    opacity: 0.8,
-                    marginTop: "2px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
+                <div style={{ fontSize: "0.6rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   TOTAL AVANCE
                 </div>
               </div>
@@ -1380,11 +1361,17 @@ export default function ProcurementPage() {
                   style={{
                     padding: "0.55rem 0.75rem",
                     borderRadius: "10px",
-                    border: `1px solid ${isActive ? "var(--ops-primary)" : "var(--ops-border)"}`,
+                    border: isActive 
+                      ? "1px solid var(--ops-primary)" 
+                      : pct === 100 
+                        ? "1px solid rgba(16, 185, 129, 0.6)" 
+                        : "1px solid var(--ops-border)",
                     backgroundColor: isActive
                       ? "var(--ops-primary)"
-                      : "var(--ops-surface)",
-                    color: isActive ? "white" : "var(--ops-text-muted)",
+                      : pct === 100 
+                        ? "rgba(16, 185, 129, 0.15)"
+                        : "var(--ops-surface)",
+                    color: isActive ? "white" : pct === 100 ? "#059669" : "var(--ops-text-muted)",
                     fontSize: "0.7rem",
                     fontWeight: "700",
                     textAlign: "left",
@@ -1393,23 +1380,30 @@ export default function ProcurementPage() {
                     flexDirection: "column",
                     gap: "2px",
                     transition: "all 0.15s ease",
+                    boxShadow: pct === 100 && !isActive ? "0 0 12px rgba(16, 185, 129, 0.25)" : "none",
+                    transform: pct === 100 && !isActive ? "scale(1.02)" : "scale(1)",
                   }}
                 >
-                  <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
-                    {cat === "Ver Todo" ? "📋 Ver Todo" : cat}
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "flex", alignItems: "center", gap: "4px" }}>
+                    {cat === "Ver Todo" ? "📋 Ver Todo" : (
+                      <>
+                        {cat} {pct === 100 && <span style={{ fontSize: "0.85rem", filter: "drop-shadow(0 0 2px rgba(16,185,129,0.5))" }}>✨</span>}
+                      </>
+                    )}
                   </span>
                   {pct !== null && (
                     <span
                       style={{
                         fontSize: "0.65rem",
                         fontWeight: "900",
-                        opacity: isActive ? 0.85 : 0.6,
+                        opacity: isActive ? 0.85 : 0.9,
                         color: isActive
                           ? "white"
                           : pct === 100 ? "#10B981" : pct > 0 ? "#F59E0B" : "inherit",
+                        textShadow: pct === 100 && !isActive ? "0 0 8px rgba(16, 185, 129, 0.4)" : "none",
                       }}
                     >
-                      {pct}% listo
+                      {pct === 100 ? "✓ 100% LISTO" : `${pct}% listo`}
                     </span>
                   )}
                 </button>
@@ -1616,7 +1610,10 @@ export default function ProcurementPage() {
                     opacity: isDone ? 0.75 : 1,
                     transition: "all 0.2s ease",
                     padding: "1.2rem",
-                    position: "relative"
+                    position: "relative",
+                    backgroundColor: group.hasRejection ? "rgba(239, 68, 68, 0.07)" : undefined,
+                    boxShadow: group.hasRejection ? "0 0 12px rgba(239, 68, 68, 0.15), inset 0 0 0 1px rgba(239, 68, 68, 0.18)" : undefined,
+                    animation: group.hasRejection ? "pulse-rejection-soft 4s ease-in-out infinite" : undefined,
                   }}
                   onClick={() => {
                     // Click on parent card opens first item if no variants

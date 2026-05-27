@@ -393,10 +393,19 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 overflowY: 'auto',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
             }}>
-                <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', borderBottom: '1px solid #eee', paddingBottom: '1.5rem' }}>
+                <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.2rem', borderBottom: '1px solid #eee', paddingBottom: '0.8rem', alignItems: 'center' }}>
                     <div>
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827' }}>⚙️ Editar Maestro</h2>
-                        <p style={{ fontSize: '0.9rem', color: '#6B7280', marginTop: '4px' }}>Actualizando SKU: {product.sku}</p>
+                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <span>⚙️ Editar Maestro</span>
+                            {product.accounting_id && (
+                                <span style={{ color: '#2563EB', fontWeight: '900' }}>
+                                    #{product.accounting_id}
+                                </span>
+                            )}
+                            <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500', marginLeft: '0.4rem', backgroundColor: '#F3F4F6', padding: '4px 10px', borderRadius: '20px' }}>
+                                SKU: {product.sku}
+                            </span>
+                        </h2>
                     </div>
                     <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2rem', cursor: 'pointer', color: '#6B7280' }}>✕</button>
                 </header>
@@ -476,7 +485,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Comprador (Buying Team)</label>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Alistamiento</label>
                             <select
                                 value={formData.buying_team || ''}
                                 onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
@@ -501,37 +510,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                             </select>
                         </div>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
-                            <select
-                                value={formData.procurement_method || ''}
-                                onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
-                            >
-                                <option value="">Seleccionar método...</option>
-                                <option value="Compras Generales">Compras Generales</option>
-                                <option value="Compras Menores">Compras Menores</option>
-                                <option value="Compras Noche">Compras Noche</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
-                            <select
-                                value={formData.inventory_group || ''}
-                                onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
-                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
-                            >
-                                <option value="">Seleccionar grupo...</option>
-                                <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
-                                <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
-                                <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
-                                <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
-                                <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
-                            </select>
-                        </div>
-                        <div>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
                             <select
                                 value={formData.purchase_sublist || ''}
@@ -546,6 +524,37 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                 <option value="TOMATE">TOMATE</option>
                                 <option value="TUBERCULOS - PAPA">TUBERCULOS - PAPA</option>
                                 <option value="VERDURAS">VERDURAS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
+                            <select
+                                value={formData.procurement_method || ''}
+                                onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                            >
+                                <option value="">Seleccionar método...</option>
+                                <option value="Compras Generales">Compras Generales</option>
+                                <option value="Compras Menores">Compras Menores</option>
+                                <option value="Compras Noche">Compras Noche</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
+                            <select
+                                value={formData.inventory_group || ''}
+                                onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
+                                style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                            >
+                                <option value="">Seleccionar grupo...</option>
+                                <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
+                                <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
+                                <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
+                                <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
                             </select>
                         </div>
                     </div>

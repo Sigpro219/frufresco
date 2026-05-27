@@ -1511,45 +1511,56 @@ export default function RecogidaPage() {
                                                     onClick={() => document.getElementById("rejectionPhotoInput")?.click()}
                                                     style={{
                                                         width: '100%',
-                                                        minHeight: '100px',
+                                                        minHeight: '110px',
                                                         borderRadius: '12px',
-                                                        backgroundColor: 'var(--ops-bg)',
-                                                        border: '2px dashed var(--ops-border)',
+                                                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                                                        border: '2px dashed #EF4444',
                                                         display: 'flex',
                                                         flexDirection: 'column',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
-                                                        color: 'var(--ops-text-muted)',
+                                                        color: '#EF4444',
                                                         cursor: 'pointer',
-                                                        padding: '1.2rem'
+                                                        padding: '1.2rem',
+                                                        animation: 'pulse-red-border 2s infinite'
                                                     }}
                                                 >
                                                     <span style={{ fontSize: '2rem' }}>📸</span>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', marginTop: '0.3rem' }}>TOMAR FOTO DE EVIDENCIA (OPCIONAL)</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '900', marginTop: '0.3rem' }}>FOTO OBLIGATORIA — TAP PARA AGREGAR</span>
+                                                    <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: 0.8 }}>Sin foto no se puede rechazar</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Rejection Buttons */}
+                                        {!rejectionFile && (
+                                            <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                                <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '800' }}>📸 Agrega la foto antes de seleccionar el motivo</span>
+                                            </div>
+                                        )}
                                         <div style={{ display: 'grid', gap: '0.8rem' }}>
                                             <button
                                                 onClick={() => handlePickupSubmit('rejected', 'Sin Stock')}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 'bold', cursor: 'pointer' }}
+                                                disabled={!rejectionFile}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
                                             >
                                                 📦 Proveedor Sin Stock
                                             </button>
                                             <button
                                                 onClick={() => handlePickupSubmit('rejected', 'Mala Calidad')}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 'bold', cursor: 'pointer' }}
+                                                disabled={!rejectionFile}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
                                             >
                                                 🥀 Mala Calidad / Feo
                                             </button>
                                             <button
                                                 onClick={() => {
+                                                    if (!rejectionFile) return;
                                                     const reason = prompt("Describe el motivo:");
                                                     if (reason) handlePickupSubmit('rejected', reason);
                                                 }}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text)', border: '1px solid var(--ops-border)', fontWeight: 'bold', cursor: 'pointer' }}
+                                                disabled={!rejectionFile}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'var(--ops-bg)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? 'var(--ops-text)' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'var(--ops-border)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
                                             >
                                                 ✏️ Otro Motivo...
                                             </button>
@@ -1627,6 +1638,10 @@ export default function RecogidaPage() {
                             0% { opacity: 1; transform: scale(1); }
                             50% { opacity: 0.6; transform: scale(0.98); }
                             100% { opacity: 1; transform: scale(1); }
+                        }
+                        @keyframes pulse-red-border {
+                            0%, 100% { border-color: #EF4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+                            50% { border-color: #F87171; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
                         }
                     `
                 }}

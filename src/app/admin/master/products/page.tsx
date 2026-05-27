@@ -962,7 +962,7 @@ export default function MasterProductsPage() {
                         <thead>
                             <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '60px' }}>Foto</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>SKU Código</th>
+                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '140px' }}>SKU Código</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Nombre Técnico</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Categoría</th>
                                 <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Logística</th>
@@ -1042,7 +1042,7 @@ export default function MasterProductsPage() {
                                                 <span style={{ 
                                                     fontWeight: '900', 
                                                     color: '#2563EB', 
-                                                    fontSize: '1rem',
+                                                    fontSize: '0.82rem',
                                                     display: 'block'
                                                 }}>
                                                     {p.sku}

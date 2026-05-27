@@ -474,7 +474,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', borderTop: '1px dashed #E5E7EB', paddingTop: '0.8rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Comprador (Equipo)</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Alistamiento</label>
                                     <select
                                         value={formData.buying_team}
                                         onChange={(e) => setFormData({ ...formData, buying_team: e.target.value })}
@@ -499,36 +499,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                     </select>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
-                                    <select
-                                        value={formData.procurement_method}
-                                        onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
-                                    >
-                                        <option value="">Seleccionar método...</option>
-                                        <option value="Compras Generales">Compras Generales</option>
-                                        <option value="Compras Menores">Compras Menores</option>
-                                        <option value="Compras Noche">Compras Noche</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                                <div>
-                                    <select
-                                        value={formData.inventory_group}
-                                        onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
-                                    >
-                                        <option value="">Seleccionar grupo...</option>
-                                        <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
-                                        <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
-                                        <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
-                                        <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
-                                        <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
-                                    </select>
-                                </div>
-                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Sublista de Compra</label>
                                     <select
                                         value={formData.purchase_sublist}
                                         onChange={(e) => setFormData({ ...formData, purchase_sublist: e.target.value })}
@@ -542,6 +513,37 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                                         <option value="TOMATE">TOMATE</option>
                                         <option value="TUBERCULOS - PAPA">TUBERCULOS - PAPA</option>
                                         <option value="VERDURAS">VERDURAS</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Gestión de Compras</label>
+                                    <select
+                                        value={formData.procurement_method}
+                                        onChange={(e) => setFormData({ ...formData, procurement_method: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                                    >
+                                        <option value="">Seleccionar método...</option>
+                                        <option value="Compras Generales">Compras Generales</option>
+                                        <option value="Compras Menores">Compras Menores</option>
+                                        <option value="Compras Noche">Compras Noche</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#6B7280', marginBottom: '4px' }}>Grupo Inventario</label>
+                                    <select
+                                        value={formData.inventory_group}
+                                        onChange={(e) => setFormData({ ...formData, inventory_group: e.target.value })}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700' }}
+                                    >
+                                        <option value="">Seleccionar grupo...</option>
+                                        <option value="INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS">INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS</option>
+                                        <option value="INVENTARIO DE FRUTAS Y OTROS">INVENTARIO DE FRUTAS Y OTROS</option>
+                                        <option value="INVENTARIO DE HORTALIZAS">INVENTARIO DE HORTALIZAS</option>
+                                        <option value="INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES">INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES</option>
+                                        <option value="INVENTARIO DE VERDURAS">INVENTARIO DE VERDURAS</option>
                                     </select>
                                 </div>
                             </div>
