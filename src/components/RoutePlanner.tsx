@@ -52,7 +52,8 @@ export default function RoutePlanner() {
         base_setup_time: 4,               // X: Tiempo base alistamiento
         time_per_10_crates_unload: 4,      // Y: Descarga física de 10 canastillas
         time_per_10_crates_delivery: 10,   // Z: Recepción/Revisión de 10 canastillas
-        avg_kg_per_crate: 17,
+        avg_kg_per_crate: 12.5,
+        driver_break_mins: 45,
         fleet_start_time: '04:30',
         fleet_end_time: '19:00',
         optimization_strategy: 'balanced'
@@ -74,6 +75,7 @@ export default function RoutePlanner() {
             const { data: paramData, error: pErr } = await supabase.from('logistic_parameters').select('*');
             if (pErr) console.warn('Note: Could not fetch logistic parameters:', pErr.message);
             
+            let avgCrateWeight = 12.5; // default fallback
             if (paramData && isMounted.current) {
                 const pMap: Record<string, any> = {};
                 paramData.forEach((p: any) => {
@@ -81,6 +83,9 @@ export default function RoutePlanner() {
                     pMap[p.id] = isNaN(valFloat) || p.value.includes(':') ? p.value : valFloat;
                 });
                 setParams(prev => ({ ...prev, ...pMap }));
+                if (pMap.avg_kg_per_crate) {
+                    avgCrateWeight = pMap.avg_kg_per_crate;
+                }
             }
 
             // 2. Fetch Orders (with conditional cutoff)
@@ -189,7 +194,7 @@ export default function RoutePlanner() {
                     customer_name: name,
                     address: o.shipping_address || 'Sin Dirección',
                     address_complement: o.profiles?.address_complement || '',
-                    crates: o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / 17) : 0),
+                    crates: o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avgCrateWeight) : 0),
                     novedad: notes,
                     total_weight_kg: o.total_weight_kg || 0,
                     is_b2b: resolvedIsB2B,
@@ -239,6 +244,8 @@ export default function RoutePlanner() {
 
     const [isOptimized, setIsOptimized] = useState(false);
     const [theoreticalMetrics, setTheoreticalMetrics] = useState<{distance_km: number, duration_min: number} | null>(null);
+    const [dragOverVehicleId, setDragOverVehicleId] = useState<string | null>(null);
+    const [dragOverSidebar, setDragOverSidebar] = useState<boolean>(false);
 
     // Guardar automáticamente el borrador en localStorage cuando cambie la asignación
     useEffect(() => {
@@ -410,16 +417,55 @@ export default function RoutePlanner() {
     };
 
     // Drag and Drop Handlers
-    const handleDragStart = (e: React.DragEvent, orderId: string) => {
-        e.dataTransfer.setData('orderId', orderId);
+    const handleDragStart = (e: React.DragEvent, orderId: string, sourceVehicleId?: string, sourceIndex?: number) => {
+        e.dataTransfer.setData('text/plain', orderId);
+        if (sourceVehicleId) {
+            e.dataTransfer.setData('sourceVehicleId', sourceVehicleId);
+        }
+        if (sourceIndex !== undefined) {
+            e.dataTransfer.setData('sourceIndex', String(sourceIndex));
+        }
         e.dataTransfer.effectAllowed = 'move';
     };
 
-    const handleDrop = (e: React.DragEvent, vehicleId: string) => {
+    const handleDropOnVehicle = (e: React.DragEvent, targetVehicleId: string, targetIndex?: number) => {
         e.preventDefault();
-        const orderId = e.dataTransfer.getData('orderId');
+        const orderId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('orderId');
+        if (!orderId) return;
+
+        setAssignments(prev => {
+            const cleaned = { ...prev };
+            
+            // Remove the order from whichever vehicle it was previously assigned to
+            Object.keys(cleaned).forEach(vid => {
+                cleaned[vid] = (cleaned[vid] || []).filter(id => id !== orderId);
+            });
+
+            // Insert the order into the target vehicle's list at the target index (or append to end)
+            const targetList = [...(cleaned[targetVehicleId] || [])];
+            if (targetIndex !== undefined) {
+                targetList.splice(targetIndex, 0, orderId);
+            } else {
+                targetList.push(orderId);
+            }
+            cleaned[targetVehicleId] = targetList;
+            return cleaned;
+        });
+        setIsOptimized(false);
+    };
+
+    const handleSidebarDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const orderId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('orderId');
         if (orderId) {
-            toggleAssignment(orderId, vehicleId);
+            setAssignments(prev => {
+                const cleaned = { ...prev };
+                Object.keys(cleaned).forEach(vid => {
+                    cleaned[vid] = (cleaned[vid] || []).filter(id => id !== orderId);
+                });
+                return cleaned;
+            });
+            setIsOptimized(false);
         }
     };
 
@@ -433,15 +479,21 @@ export default function RoutePlanner() {
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '650px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
             {/* Orders Sidebar */}
-            <div style={{ 
-                backgroundColor: 'white', 
-                borderRadius: '16px', 
-                border: '1px solid #E5E7EB', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                overflow: 'hidden',
-                minHeight: 0
-            }}>
+            <div 
+                onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
+                onDragLeave={() => setDragOverSidebar(false)}
+                onDrop={(e) => { handleSidebarDrop(e); setDragOverSidebar(false); }}
+                style={{ 
+                    backgroundColor: dragOverSidebar ? '#F5F3FF' : 'white', 
+                    borderRadius: '16px', 
+                    border: dragOverSidebar ? '2px dashed #6366F1' : '1px solid #E5E7EB', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    overflow: 'hidden',
+                    minHeight: 0,
+                    transition: 'all 0.2s'
+                }}
+            >
                 <div style={{ padding: '1rem 1.2rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -882,6 +934,15 @@ export default function RoutePlanner() {
                                         <option value="minimize_time">⚡ Terminar más rápido (Velocidad)</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Descanso de Conductor (minutos)</label>
+                                    <input 
+                                        type="number" 
+                                        value={isNaN(params.driver_break_mins) ? '' : params.driver_break_mins} 
+                                        onChange={(e) => updateParameter('driver_break_mins', parseFloat(e.target.value) || 0)}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                    />
+                                </div>
                                 <div style={{ padding: '0.5rem 0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', alignItems: 'center' }}>
                                         <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0891B2' }}>kg / Canastilla Promedio</label>
@@ -900,7 +961,7 @@ export default function RoutePlanner() {
                                     />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.3rem', fontSize: '0.55rem', color: '#94A3B8', fontWeight: '700' }}>
                                         <span>10 kg</span>
-                                        <span>17 kg (Estándar)</span>
+                                        <span>12.5 kg (Estándar)</span>
                                         <span>25 kg</span>
                                     </div>
                                 </div>
@@ -934,18 +995,28 @@ export default function RoutePlanner() {
                         const isCrateOverloaded = vehicle.max_crates_capacity > 0 && cratesNeeded > vehicle.max_crates_capacity;
                         const isOverloaded = isKgOverloaded || isCrateOverloaded;
 
+                        const isDragOver = dragOverVehicleId === vehicle.id;
                         return (
                             <div 
                                 key={vehicle.id} 
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, vehicle.id)}
+                                onDragOver={(e) => { e.preventDefault(); setDragOverVehicleId(vehicle.id); }}
+                                onDragLeave={() => setDragOverVehicleId(null)}
+                                onDrop={(e) => {
+                                    handleDropOnVehicle(e, vehicle.id);
+                                    setDragOverVehicleId(null);
+                                }}
                                 style={{ 
                                     backgroundColor: 'white', 
                                     borderRadius: '20px', 
-                                    border: isOverloaded ? '2px solid #EF4444' : '1px solid #E5E7EB', 
+                                    border: isDragOver
+                                        ? '2px dashed #06B6D4'
+                                        : (isOverloaded ? '2px solid #EF4444' : '1px solid #E5E7EB'), 
                                     padding: '1rem',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                                    transition: 'border 0.3s'
+                                    boxShadow: isDragOver 
+                                        ? '0 10px 15px -3px rgba(6,182,212,0.1), 0 4px 6px -4px rgba(6,182,212,0.1)' 
+                                        : '0 4px 6px -1px rgba(0,0,0,0.05)',
+                                    transition: 'all 0.2s',
+                                    transform: isDragOver ? 'scale(1.01)' : 'scale(1)'
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', alignItems: 'flex-start' }}>
@@ -1052,7 +1123,12 @@ export default function RoutePlanner() {
                                             <div 
                                                 key={oid} 
                                                 draggable
-                                                onDragStart={(e) => handleDragStart(e, oid)}
+                                                onDragStart={(e) => handleDragStart(e, oid, vehicle.id, stopIndex)}
+                                                onDragOver={handleDragOver}
+                                                onDrop={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDropOnVehicle(e, vehicle.id, stopIndex);
+                                                }}
                                                 style={{ 
                                                     padding: '0.7rem 0.8rem', 
                                                     backgroundColor: isLifoConflict ? '#FFFBEB' : 'white', 

@@ -35,6 +35,7 @@ interface Purchase {
 }
 
 export default function ReceptionPage() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [incomingItems, setIncomingItems] = useState<Purchase[]>([]);
     const [selectedItem, setSelectedItem] = useState<Purchase | null>(null);

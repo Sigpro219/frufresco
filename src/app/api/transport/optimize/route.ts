@@ -31,17 +31,21 @@ export async function POST(request: Request) {
         let fleet_start = parameters?.fleet_start_time || '04:30';
         let fleet_end = parameters?.fleet_end_time || '19:00';
         let optimization_strategy = parameters?.optimization_strategy || 'balanced';
+        let avg_kg_per_crate = parameters?.avg_kg_per_crate || 12.5;
+        let driver_break_mins = parameters?.driver_break_mins || 45;
 
         const { data: dbParams } = await supabase.from('logistic_parameters').select('*');
         if (dbParams) {
-            b2b_kg_min = parseFloat(dbParams.find(p => p.id === 'b2b_kg_min')?.value || b2b_kg_min);
-            b2c_kg_min = parseFloat(dbParams.find(p => p.id === 'b2c_kg_min')?.value || b2c_kg_min);
-            base_setup = parseFloat(dbParams.find(p => p.id === 'base_setup_time')?.value || base_setup);
-            time_unload = parseFloat(dbParams.find(p => p.id === 'time_per_10_crates_unload')?.value || time_unload);
-            time_delivery = parseFloat(dbParams.find(p => p.id === 'time_per_10_crates_delivery')?.value || time_delivery);
+            b2b_kg_min = parseFloat(dbParams.find(p => p.id === 'b2b_kg_min')?.value || String(b2b_kg_min));
+            b2c_kg_min = parseFloat(dbParams.find(p => p.id === 'b2c_kg_min')?.value || String(b2c_kg_min));
+            base_setup = parseFloat(dbParams.find(p => p.id === 'base_setup_time')?.value || String(base_setup));
+            time_unload = parseFloat(dbParams.find(p => p.id === 'time_per_10_crates_unload')?.value || String(time_unload));
+            time_delivery = parseFloat(dbParams.find(p => p.id === 'time_per_10_crates_delivery')?.value || String(time_delivery));
             fleet_start = dbParams.find(p => p.id === 'fleet_start_time')?.value || fleet_start;
             fleet_end = dbParams.find(p => p.id === 'fleet_end_time')?.value || fleet_end;
             optimization_strategy = dbParams.find(p => p.id === 'optimization_strategy')?.value || optimization_strategy;
+            avg_kg_per_crate = parseFloat(dbParams.find(p => p.id === 'avg_kg_per_crate')?.value || String(avg_kg_per_crate));
+            driver_break_mins = parseFloat(dbParams.find(p => p.id === 'driver_break_mins')?.value || String(driver_break_mins));
         }
 
         let vehicleFixedCost = 500; // default balanced
@@ -137,15 +141,70 @@ export async function POST(request: Request) {
             }
         };
 
+        // Check refrigerated orders (for the cold chain ADN)
+        const orderIds = orders.map((o: any) => o.id);
+        const { data: orderItems } = await supabase
+            .from('order_items')
+            .select(`
+                order_id,
+                products (
+                    buying_team
+                )
+            `)
+            .in('order_id', orderIds);
+
+        const refrigeratedOrderIds = new Set(
+            (orderItems || [])
+                .filter((item: any) => {
+                    const product = Array.isArray(item.products) ? item.products[0] : item.products;
+                    return product?.buying_team?.toUpperCase().includes('REFRIGERADOS');
+                })
+                .map((item: any) => item.order_id)
+        );
+
+        // Helper to compute vehicle break schedule (mid-shift window)
+        const getVehicleBreakRule = (datePart: string, fleetStart: string, breakMins: number) => {
+            if (breakMins <= 0) return undefined;
+            const [h, m] = fleetStart.split(':').map(Number);
+            
+            // Earliest break window is 4 hours after start
+            let eh = h + 4;
+            let em = m;
+            if (eh >= 24) { eh = 23; em = 59; }
+            const earliestTimeStr = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`;
+            
+            // Latest break window is 6 hours after start
+            let lh = h + 6;
+            let lm = m;
+            if (lh >= 24) { lh = 23; lm = 59; }
+            const latestTimeStr = `${lh.toString().padStart(2, '0')}:${lm.toString().padStart(2, '0')}`;
+            
+            try {
+                return {
+                    breakRequests: [
+                        {
+                            earliestStartTime: new Date(`${datePart}T${earliestTimeStr}:00-05:00`).toISOString(),
+                            latestStartTime: new Date(`${datePart}T${latestTimeStr}:00-05:00`).toISOString(),
+                            minDuration: `${breakMins * 60}s`
+                        }
+                    ]
+                };
+            } catch (err) {
+                console.error("Error creating break rule:", err);
+                return undefined;
+            }
+        };
+
         const gcpRequest = {
             model: {
                 globalStartTime: new Date(`${targetDate}T${gStartStr}:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T${gEndStr}:00-05:00`).toISOString(),
                 shipments: orders.map((o: any) => {
-                    const cratesCount = o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / 17) : 0);
+                    const cratesCount = o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avg_kg_per_crate) : 0);
                     const unloadingTime = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount);
                     
                     const timeWindow = getOrderTimeWindow(o, targetDate);
+                    const isRefrigerated = refrigeratedOrderIds.has(o.id);
  
                     return {
                         pickups: [
@@ -163,33 +222,47 @@ export async function POST(request: Request) {
                             }
                         ],
                         loadDemands: {
-                            "weight": { "amount": String(Math.ceil(o.total_weight_kg)) }
+                            "weight": { "amount": String(Math.ceil(o.total_weight_kg)) },
+                            "crates": { "amount": String(cratesCount) },
+                            "refrigerated": { "amount": isRefrigerated ? "1" : "0" }
                         },
+                        shipmentType: isRefrigerated ? "refrigerated" : "dry",
                         label: String(o.id)
                     };
                 }),
-                vehicles: vehicles.map((v: any) => ({
-                    startLocation: { latitude: 4.633653, longitude: -74.160647 },
-                    endLocation: { latitude: 4.633653, longitude: -74.160647 },
-                    loadLimits: {
-                        "weight": { "maxLoad": String(v.capacity_kg) }
-                    },
-                    fixedCost: vehicleFixedCost,
-                    startTimeWindows: [
-                        {
-                            startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
-                            endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
-                        }
-                    ],
-                    endTimeWindows: [
-                        {
-                            startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
-                            endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
-                        }
-                    ],
-                    displayName: v.plate,
-                    label: v.id
-                }))
+                vehicles: vehicles.map((v: any) => {
+                    const breakRule = getVehicleBreakRule(targetDate, fleet_start, driver_break_mins);
+                    const vehicleObj: any = {
+                        startLocation: { latitude: 4.633653, longitude: -74.160647 },
+                        endLocation: { latitude: 4.633653, longitude: -74.160647 },
+                        loadLimits: {
+                            "weight": { "maxLoad": String(v.capacity_kg) },
+                            "crates": { "maxLoad": String(v.max_crates_capacity || 483) },
+                            "refrigerated": { "maxLoad": "0" } // All active vehicles default to dry, i.e. 0 refrigerated capacity
+                        },
+                        fixedCost: vehicleFixedCost,
+                        startTimeWindows: [
+                            {
+                                startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
+                                endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
+                            }
+                        ],
+                        endTimeWindows: [
+                            {
+                                startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
+                                endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
+                            }
+                        ],
+                        displayName: v.plate,
+                        label: v.id
+                    };
+
+                    if (breakRule) {
+                        vehicleObj.breakRule = breakRule;
+                    }
+
+                    return vehicleObj;
+                })
             },
             // Minimize active vehicles to see surplus as requested
             searchMode: "CONSUME_ALL_AVAILABLE_TIME",

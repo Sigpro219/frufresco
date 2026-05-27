@@ -34,6 +34,7 @@ export default function PickingExecutionPage() {
     const [loading, setLoading] = useState(true);
     const [categories, setCategories] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
+    const [showFilterGrid, setShowFilterGrid] = useState(false);
     const [tasks, setTasks] = useState<PickingTask[]>([]);
     
     const [exceptionItem, setExceptionItem] = useState<PickingItem | null>(null);
@@ -56,7 +57,6 @@ export default function PickingExecutionPage() {
     const [realtimeChannel, setRealtimeChannel] = useState<RealtimeChannel | null>(null);
     
     const router = useRouter();
-
     const isMounted = useRef(true);
 
     const fetchTasks = useCallback(async (signal?: AbortSignal) => {
@@ -68,11 +68,9 @@ export default function PickingExecutionPage() {
                     profiles:profiles(id, company_name, contact_name, role, id_zr),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
-                        products (name, category, unit_of_measure)
+                        products (name, category, unit_of_measure, buying_team)
                     )
                 `)
-                // Solo estados que requieren alistamiento activo
-                // Excluidos: pending_approval, shipped, delivered, cancelled
                 .in('status', ['para_compra', 'approved', 'picking']);
 
             // Check Global Cutoff Switch
@@ -111,7 +109,7 @@ export default function PickingExecutionPage() {
                 return p.contact_name || p.company_name || 'Cliente';
             };
 
-            // Local fallback map for zones (since delivery_zones table doesn't exist in DB schema cache)
+            // Local fallback map for zones
             const ZONE_NAMES: Record<string, string> = {
                 '0': 'CENTRO',
                 '1': 'NORTE',
@@ -126,7 +124,7 @@ export default function PickingExecutionPage() {
                 return `RUTA ${idZr}`;
             };
 
-            // Build unique client list from orders (using joined profile data)
+            // Build unique client list from orders
             const seenClients = new Map<string, { name: string; zone: string }>();
             (activeOrders || []).forEach(order => {
                 const name = getOrderName(order);
@@ -160,7 +158,7 @@ export default function PickingExecutionPage() {
                     const itemsInCategory = items
                         .filter(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
-                            return product?.category === selectedCategory;
+                            return product?.buying_team === selectedCategory;
                         })
                         .map(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
@@ -223,20 +221,17 @@ export default function PickingExecutionPage() {
         }
     }, [selectedCategory]);
 
-
-
     const fetchInitialData = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const { data: prods } = (await supabase.from('products').select('category').abortSignal(signal as any)) as { data: { category: string }[] | null };
-            const uniqueCats = Array.from(new Set((prods || []).map((p: { category: string }) => p.category))).filter(Boolean) as string[];
+            const { data: prods } = (await supabase.from('products').select('buying_team').abortSignal(signal as any)) as { data: { buying_team: string }[] | null };
+            const uniqueCats = Array.from(new Set((prods || []).map((p: any) => p.buying_team))).filter(Boolean).sort() as string[];
             
             if (isMounted.current) {
                 setCategories(uniqueCats);
                 if (uniqueCats.length > 0 && !selectedCategory) {
                     setSelectedCategory(uniqueCats[0]);
                 } else {
-                    // If we already have a category or none available, just fetch tasks
                     await fetchTasks(signal);
                 }
             }
@@ -251,10 +246,7 @@ export default function PickingExecutionPage() {
     useEffect(() => {
         isMounted.current = true;
         const controller = new AbortController();
-        
-        // Initial load
         fetchInitialData(controller.signal);
-        
         return () => {
             isMounted.current = false;
             controller.abort();
@@ -294,11 +286,11 @@ export default function PickingExecutionPage() {
             unit: item.unit || ''
         });
         setExceptionQty(item.quantity.toString());
-        setExceptionQuality(null);
-        setIsQuantityValidated(true); // Direct to Quality Semaphore
+        setExceptionQuality('green');
+        setIsQuantityValidated(true);
     };
 
-    // Group tasks by product for the 'product' view
+    // Group tasks by product for the 'product' view (Suministro)
     interface ProductGroup {
         name: string;
         unit: string;
@@ -322,7 +314,6 @@ export default function PickingExecutionPage() {
                 const hasAlert = item.quality_status === 'red' || item.quality_status === 'yellow';
                 const isItemDone = item.picked_quantity >= item.quantity && item.quality_status !== 'red';
                 
-                // Show if NOT done, OR if it has an alert (we need to see the glow!)
                 const shouldShow = showCompleted || !isItemDone || hasAlert;
                 if (!shouldShow) return;
 
@@ -347,21 +338,16 @@ export default function PickingExecutionPage() {
                 });
             });
         });
-        // Sort groups by name
+        
         Object.keys(tempGroups).sort().forEach(key => {
             const group = tempGroups[key];
-            // Sort clients within the group: RECHAZOS > VERIFICA > PENDIENTE > ESPACIO
             group.clients.sort((a, b) => {
-                // 1. Red alerts first
                 if (a.quality_status === 'red' && b.quality_status !== 'red') return -1;
                 if (a.quality_status !== 'red' && b.quality_status === 'red') return 1;
-                // 2. Yellow alerts second
                 if (a.quality_status === 'yellow' && b.quality_status !== 'yellow') return -1;
                 if (a.quality_status !== 'yellow' && b.quality_status === 'yellow') return 1;
-                // 3. Then pending
                 if (!a.isDone && b.isDone) return -1;
                 if (a.isDone && !b.isDone) return 1;
-                // 4. Finally by space
                 return (a.space || 0) - (b.space || 0);
             });
             productGroups.push(group);
@@ -370,16 +356,13 @@ export default function PickingExecutionPage() {
 
     const openExceptionModal = (item: PickingItem) => {
         setExceptionItem(item);
-        setExceptionQty(''); // Start empty for blind entry
+        setExceptionQty('');
         setExceptionQuality(null);
         setIsQuantityValidated(false);
     };
 
     const handleValidateQuantity = () => {
         if (!exceptionItem || !exceptionQty) return;
-        
-        // In picking, we trust the captain's input. 
-        // Any value entered moves to the quality stage.
         setIsQuantityValidated(true);
     };
 
@@ -390,7 +373,6 @@ export default function PickingExecutionPage() {
         
         setIsSaving(true);
         try {
-            // 1. Update order_items with picked_quantity and quality_status
             const { error: orderItemError } = await supabase.from('order_items').update({ 
                 picked_quantity: qty,
                 quality_status: exceptionQuality,
@@ -399,17 +381,14 @@ export default function PickingExecutionPage() {
 
             if (orderItemError) throw orderItemError;
 
-            // 2. NEW: Inventory Integration
-            // If it's a rejection (Red) or a discrepancy, record in inventory
+            // Inventory Integration
             if (exceptionQuality === 'red' || qty < exceptionItem.quantity) {
                 const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
                 
                 if (warehouseData) {
                     const diff = exceptionItem.quantity - qty;
                     
-                    // If rejected or partially missing, we need to track it
                     if (exceptionQuality === 'red') {
-                        // Entire quantity is now "In-Process" (Reproceso) because it's not apt for sale
                         await supabase.from('inventory_movements').insert([{
                             product_id: exceptionItem.product_id,
                             warehouse_id: warehouseData.id,
@@ -421,8 +400,6 @@ export default function PickingExecutionPage() {
                             reference_id: exceptionItem.id
                         }]);
                     } else if (qty < exceptionItem.quantity) {
-                        // Partial missing - subtract the difference from available
-                        // This might be "merma" or just a stock error
                         await supabase.from('inventory_movements').insert([{
                             product_id: exceptionItem.product_id,
                             warehouse_id: warehouseData.id,
@@ -437,7 +414,6 @@ export default function PickingExecutionPage() {
                 }
             }
 
-            // Send broadcast using persistent channel
             if (realtimeChannel) {
                 realtimeChannel.send({
                     type: 'broadcast',
@@ -484,53 +460,45 @@ export default function PickingExecutionPage() {
             {/* DARK DASHBOARD HEADER */}
             <div style={{
                 backgroundColor: '#1E293B',
-                padding: '1.5rem 1.5rem 2.5rem 1.5rem',
+                padding: '1.5rem 1.5rem 1.5rem 1.5rem',
                 borderBottomLeftRadius: '32px',
                 borderBottomRightRadius: '32px',
                 color: 'white',
-                marginBottom: '-1.5rem',
+                marginBottom: '1rem',
                 position: 'relative',
                 zIndex: 10,
                 boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.4)'
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <div style={{ flex: 1 }}>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, letterSpacing: '-1px' }}>
-                            Picking <span style={{ color: '#22C55E' }}>Capitán</span>
-                        </h1>
-                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
-                            <button 
-                                onClick={() => setViewMode('client')}
-                                style={{ 
-                                    padding: '0.4rem 0.6rem', fontSize: '0.65rem', fontWeight: 'bold', borderRadius: '8px', border: 'none',
-                                    backgroundColor: viewMode === 'client' ? '#22C55E' : 'rgba(255,255,255,0.05)',
-                                    color: viewMode === 'client' ? '#064E3B' : '#94A3B8'
-                                }}>📦 CUBÍCULO</button>
-                            <button 
-                                onClick={() => setViewMode('product')}
-                                style={{ 
-                                    padding: '0.4rem 0.6rem', fontSize: '0.65rem', fontWeight: 'bold', borderRadius: '8px', border: 'none',
-                                    backgroundColor: viewMode === 'product' ? '#22C55E' : 'rgba(255,255,255,0.05)',
-                                    color: viewMode === 'product' ? '#064E3B' : '#94A3B8'
-                                }}>🥦 SUMINISTRO</button>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
-                        <button 
+                        <h1 
+                            className="header-title-container"
                             onClick={() => router.push('/ops')}
-                            style={{ background: 'rgba(255,255,255,0.1)', padding: '0.5rem', borderRadius: '10px', border: 'none', color: 'white', fontSize: '1rem' }}>
-                            🚪
-                        </button>
-                        <button 
-                            onClick={() => setShowCompleted(!showCompleted)}
-                            style={{ fontSize: '0.6rem', backgroundColor: showCompleted ? '#22C55E' : 'rgba(255,255,255,0.05)', color: 'white', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold' }}>
-                            {showCompleted ? 'OCULTAR LISTOS' : 'VER LISTOS'}
+                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
+                        >
+                            <span style={{ whiteSpace: "nowrap" }}>Alistamiento <span style={{ color: '#22C55E' }}>Bodega</span></span>
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
+                                📅 {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
+                            </span>
+                        </h1>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                        <button
+                            onClick={() => router.push('/ops')}
+                            className="header-tutor-btn"
+                            style={{
+                                backgroundColor: 'rgba(255,255,255,0.05)', color: '#22C55E', border: '1px solid #22C55E',
+                                padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
+                            }}
+                        >
+                            🎓 TUTOR
                         </button>
                     </div>
                 </div>
 
                 {/* Intelligent Search Bar */}
-                <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                <div style={{ position: 'relative', marginBottom: '1.2rem' }}>
                     <input 
                         type="text"
                         placeholder={viewMode === 'client' ? "Buscar cliente o espacio..." : "Buscar producto..."}
@@ -551,9 +519,9 @@ export default function PickingExecutionPage() {
 
                 {/* Progress Bar */}
                 {totalTasks > 0 && (
-                    <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ marginBottom: '1.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', fontWeight: '700', color: '#CBD5E1' }}>
-                            <span>AVANCE DE RUTA</span>
+                            <span>AVANCE DE ALISTAMIENTO</span>
                             <span style={{ color: '#22C55E' }}>{progress}%</span>
                         </div>
                         <div style={{ width: '100%', height: '8px', backgroundColor: '#334155', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
@@ -564,80 +532,247 @@ export default function PickingExecutionPage() {
                     </div>
                 )}
 
-                {/* Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem', marginBottom: '1.5rem' }}>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.6rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#94A3B8' }}>{pendingTasks}</div>
+                {/* Metrics Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', marginBottom: '1.2rem' }}>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#94A3B8' }}>{pendingTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PENDIENTE</div>
                     </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.6rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#EAB308' }}>{partialTasks}</div>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EAB308' }}>{partialTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PARCIAL</div>
                     </div>
-                    <div style={{ backgroundColor: alertTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.6rem', textAlign: 'center', border: alertTasks > 0 ? '1px solid #EF4444' : '1px solid rgba(255,255,255,0.05)', animation: alertTasks > 0 ? 'pulseRed 2s infinite' : 'none' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#EF4444' }}>{alertTasks}</div>
+                    <div style={{ backgroundColor: alertTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: alertTasks > 0 ? '1px solid #EF4444' : '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EF4444' }}>{alertTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#EF4444' }}>ALERTAS</div>
                     </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.6rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#22C55E' }}>{readyTasks}</div>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#22C55E' }}>{readyTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>LISTO</div>
+                    </div>
+                    
+                    {/* Avance Badge */}
+                    <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid #22C55E' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#22C55E' }}>{progress}%</div>
+                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#22C55E' }}>AVANCE</div>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div style={{ 
-                    display: 'flex', gap: '0.6rem', overflowX: 'auto', 
-                    paddingBottom: '0.5rem', 
-                    paddingTop: '0px', paddingRight: '0px', paddingLeft: '0px', // Explicit properties to avoid conflict
-                    scrollbarWidth: 'none' 
-                }}>
-                    {categories.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
+                {/* Collapsible Category Filter (Buying Team) */}
+                <div style={{ marginBottom: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div
                             style={{
-                                padding: '0.5rem 1rem', borderRadius: '20px', border: 'none',
-                                backgroundColor: selectedCategory === cat ? '#22C55E' : 'rgba(255,255,255,0.1)',
-                                color: selectedCategory === cat ? '#022C22' : '#94A3B8', 
-                                fontWeight: '800', fontSize: '0.8rem', whiteSpace: 'nowrap',
-                                transition: 'all 0.2s'
+                                flex: 1,
+                                padding: "0.5rem 1rem",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(34, 197, 94, 0.12)",
+                                border: "1px solid #22C55E",
+                                color: "white",
+                                fontSize: "0.75rem",
+                                fontWeight: "800",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.05em",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
                             }}
                         >
-                            {cat.toUpperCase()}
+                            <span>
+                                📋 {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
+                            </span>
+                            <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
+                        </div>
+
+                        <button
+                            onClick={() => setShowFilterGrid(v => !v)}
+                            title={showFilterGrid ? "Ocultar filtros" : "Cambiar equipo"}
+                            style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "12px",
+                                border: `1px solid ${showFilterGrid ? "#22C55E" : "rgba(255,255,255,0.1)"}`,
+                                backgroundColor: showFilterGrid ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.05)",
+                                color: showFilterGrid ? "#22C55E" : "#94A3B8",
+                                fontSize: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                transition: "all 0.2s ease",
+                            }}
+                        >
+                            {showFilterGrid ? "✕" : "⊞"}
                         </button>
-                    ))}
+                    </div>
+
+                    {showFilterGrid && (
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "0.4rem",
+                                marginTop: "0.5rem",
+                                animation: "slideDown 0.18s ease-out",
+                            }}
+                        >
+                            {categories.map((cat) => {
+                                const isActive = selectedCategory === cat;
+                                return (
+                                    <button
+                                        key={cat}
+                                        onClick={() => {
+                                            setSelectedCategory(cat);
+                                            setShowFilterGrid(false);
+                                        }}
+                                        style={{
+                                            padding: "0.55rem 0.75rem",
+                                            borderRadius: "10px",
+                                            border: isActive 
+                                                ? "1px solid #22C55E" 
+                                                : "1px solid rgba(255,255,255,0.1)",
+                                            backgroundColor: isActive
+                                                ? "rgba(34, 197, 94, 0.12)"
+                                                : "rgba(255,255,255,0.02)",
+                                            color: isActive ? "white" : "#94A3B8",
+                                            fontSize: "0.7rem",
+                                            fontWeight: "700",
+                                            textAlign: "left",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "2px",
+                                            transition: "all 0.15s ease",
+                                        }}
+                                    >
+                                        <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
+                                            {cat}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Sub-filter row (Cubículo & Suministro) */}
+                <div style={{ 
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    padding: '4px',
+                    borderRadius: '12px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    marginTop: '0.75rem',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+                }}>
+                    <button
+                        onClick={() => setViewMode('client')}
+                        style={{
+                            padding: '0.45rem 0.2rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: viewMode === 'client' ? '#22C55E' : 'transparent',
+                            color: viewMode === 'client' ? '#022C22' : '#94A3B8',
+                            fontWeight: '900',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem',
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        }}
+                    >
+                        📦 Cubículo
+                    </button>
+                    <button
+                        onClick={() => setViewMode('product')}
+                        style={{
+                            padding: '0.45rem 0.2rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: viewMode === 'product' ? '#22C55E' : 'transparent',
+                            color: viewMode === 'product' ? '#022C22' : '#94A3B8',
+                            fontWeight: '900',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem',
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        }}
+                    >
+                        🥦 Suministro
+                    </button>
                 </div>
             </div>
 
             {/* MAIN CONTENT AREA */}
-            <div style={{ padding: '2.5rem 1rem 1rem 1rem' }}>
+            <div style={{ padding: '0.5rem 1rem' }}>
                 
                 {/* VIEW 1: BY CLIENT (CUBÍCULO) */}
-                {viewMode === 'client' && (
-                    <div style={{ display: 'grid', gap: '1rem' }}>
-                        {tasks
-                            .filter(t => (showCompleted || t.status !== 'ready'))
-                            .filter(t => !searchTerm || t.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) || t.assigned_space?.toString() === searchTerm)
-                            .map(task => (
+                {viewMode === 'client' && (() => {
+                    const hasAnyTasks = tasks.length > 0;
+                    const filteredTasks = tasks
+                        .filter(t => (showCompleted || t.status !== 'ready'))
+                        .filter(t => !searchTerm || t.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) || t.assigned_space?.toString() === searchTerm);
+                    
+                    if (filteredTasks.length === 0) {
+                        return (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '4rem 2rem',
+                                backgroundColor: '#1E293B',
+                                border: '1px solid rgba(255, 255, 255, 0.05)',
+                                borderRadius: '24px',
+                                color: '#94A3B8',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                                marginTop: '1rem'
+                            }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{hasAnyTasks ? '🏁' : '📋'}</div>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
+                                    {hasAnyTasks ? '¡Todo alistado!' : 'Sin pedidos'}
+                                </h3>
+                                <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                                    {hasAnyTasks 
+                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory?.toUpperCase()}.` 
+                                        : `No hay pedidos para la categoría ${selectedCategory?.toUpperCase()} el día de hoy.`}
+                                </p>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div style={{ display: 'grid', gap: '1rem' }}>
+                            {filteredTasks.map(task => (
                             <div key={task.company_name} style={{
                                 backgroundColor: '#1E293B', borderRadius: '20px', overflow: 'hidden',
-                                borderLeft: `8px solid ${task.status === 'ready' ? '#22C55E' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                borderLeft: `6px solid ${task.status === 'ready' ? '#22C55E' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
                                 opacity: task.status === 'ready' ? 0.6 : 1
                             }}>
                                 <div style={{ 
                                     padding: '1rem', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '1rem', 
                                     backgroundColor: task.hasAlert ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.02)',
-                                    animation: task.hasAlert ? 'pulseRedSoft 3s infinite' : 'none'
                                 }}>
                                     <div style={{ padding: '0.5rem', minWidth: '80px', height: '45px', backgroundColor: '#0F172A', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#22C55E' }}>
                                         <div style={{ fontSize: '0.6rem', opacity: 0.6, lineHeight: 1 }}>ESPACIO</div>
                                         <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{task.assigned_space}</div>
                                     </div>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '1rem', fontWeight: '800' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
-                                        {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'BOLD' }}>📍 RUTA: {task.zone.toUpperCase()}</div>}
+                                        <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F8FAFC' }}>{task.company_name?.toUpperCase() || 'CLIENTE SIN NOMBRE'}</div>
+                                        {task.zone && <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 'bold' }}>📍 RUTA: {task.zone.toUpperCase()}</div>}
                                     </div>
+                                    <button 
+                                        onClick={() => setShowCompleted(!showCompleted)}
+                                        style={{ fontSize: '0.65rem', backgroundColor: 'rgba(255,255,255,0.05)', color: '#94A3B8', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold' }}>
+                                        {showCompleted ? 'OCULTAR LISTOS' : 'VER LISTOS'}
+                                    </button>
                                 </div>
                                 <div style={{ padding: '0.5rem 1rem' }}>
                                     {task.items.map(item => {
@@ -656,7 +791,7 @@ export default function PickingExecutionPage() {
                                                     </div>
                                                 </div>
                                                 {!isDone ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#22C55E', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#22C55E', color: '#022C22', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem' }}>
                                                         LISTO
                                                     </button>
                                                 ) : <div onClick={() => openExceptionModal(item)} style={{ fontSize: '1.2rem', cursor: 'pointer' }}>✅</div>}
@@ -665,16 +800,45 @@ export default function PickingExecutionPage() {
                                     })}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
+                            ))}
+                        </div>
+                    );
+                })()}
 
                 {/* VIEW 2: BY PRODUCT (SUMINISTRO) */}
-                {viewMode === 'product' && (
-                    <div style={{ display: 'grid', gap: '1.5rem' }}>
-                        {productGroups
-                            .filter(g => !searchTerm || g.name?.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map(group => (
+                {viewMode === 'product' && (() => {
+                    const hasAnyGroups = productGroups.length > 0;
+                    const filteredProductGroups = productGroups
+                        .filter(g => !searchTerm || g.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+                    
+                    if (filteredProductGroups.length === 0) {
+                        return (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '4rem 2rem',
+                                backgroundColor: '#1E293B',
+                                border: '1px solid rgba(255, 255, 255, 0.05)',
+                                borderRadius: '24px',
+                                color: '#94A3B8',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                                marginTop: '1rem'
+                            }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{hasAnyGroups ? '🏁' : '📋'}</div>
+                                <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
+                                    {hasAnyGroups ? '¡Todo alistado!' : 'Sin pedidos'}
+                                </h3>
+                                <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                                    {hasAnyGroups 
+                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory?.toUpperCase()}.` 
+                                        : `No hay pedidos para la categoría ${selectedCategory?.toUpperCase()} el día de hoy.`}
+                                </p>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div style={{ display: 'grid', gap: '1.5rem' }}>
+                            {filteredProductGroups.map(group => (
                             <div key={group.name} style={{ backgroundColor: '#1E293B', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
                                 <div style={{ padding: '1.2rem', backgroundColor: '#22C55E', color: '#064E3B' }}>
                                     <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
@@ -692,7 +856,6 @@ export default function PickingExecutionPage() {
                                                 opacity: (target.isDone && !target.quality_status) ? 0.4 : 1,
                                                 backgroundColor: target.quality_status === 'red' ? 'rgba(239, 68, 68, 0.15)' : (target.quality_status === 'yellow' ? 'rgba(234, 179, 8, 0.15)' : 'transparent'),
                                                 border: target.quality_status === 'red' ? '2px solid rgba(239, 68, 68, 0.5)' : (target.quality_status === 'yellow' ? '2px solid rgba(234, 179, 8, 0.5)' : '1px solid transparent'),
-                                                animation: target.quality_status === 'red' ? 'pulseRedSoft 3s infinite' : (target.quality_status === 'yellow' ? 'pulseYellowSoft 3s infinite' : 'none'),
                                                 marginBottom: '5px',
                                                 transition: 'all 0.2s'
                                             }}
@@ -715,7 +878,7 @@ export default function PickingExecutionPage() {
                                             {!target.isDone ? (
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); quickComplete({ ...target, product_name: group.name, unit: group.unit }); }}
-                                                    style={{ backgroundColor: target.quality_status === 'red' ? '#EF4444' : '#22C55E', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800' }}>
+                                                    style={{ backgroundColor: target.quality_status === 'red' ? '#EF4444' : '#22C55E', color: target.quality_status === 'red' ? 'white' : '#022C22', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800' }}>
                                                     {target.quality_status === 'red' ? 'RE-ALISTAR' : 'LISTO'}
                                                 </button>
                                             ) : (
@@ -725,82 +888,111 @@ export default function PickingExecutionPage() {
                                     ))}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
+                            ))}
+                        </div>
+                    );
+                })()}
             </div>
 
-            {/* VALIDATION MODAL (MIMIC RECEPTION/UX) */}
+            {/* VALIDATION MODAL (MOBILE BOTTOM SHEET LAYOUT) */}
             {exceptionItem && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                }}>
                     <div style={{ 
-                        backgroundColor: 'white', width: '100%', maxWidth: '500px', borderRadius: '32px', 
-                        padding: '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-                        animation: 'modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                        color: '#1E293B'
+                        backgroundColor: 'white',
+                        width: '100%',
+                        maxWidth: '500px',
+                        borderTopLeftRadius: '32px',
+                        borderTopRightRadius: '32px',
+                        borderBottomLeftRadius: '0px',
+                        borderBottomRightRadius: '0px',
+                        padding: '2rem 1.5rem',
+                        position: 'relative',
+                        boxShadow: '0 -10px 25px rgba(0, 0, 0, 0.3)',
+                        color: '#1E293B',
+                        maxHeight: '90vh',
+                        overflowY: 'auto'
                     }}>
                         {/* Close Button */}
-                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: '#F1F5F9', border: 'none', width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', fontSize: '1.2rem', color: '#64748B' }}>✕</button>
+                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1rem', right: '1rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', color: '#64748B' }}>✕</button>
 
-                        <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#1E293B', margin: '0 0 1rem 0' }}>Validar Alistamiento ⚖️</h2>
-                        <button style={{ background: 'none', border: 'none', color: '#EF4444', fontWeight: 'bold', fontSize: '0.9rem', padding: 0, marginBottom: '2rem', cursor: 'pointer', textDecoration: 'underline' }}>¿Reportar Faltante Total?</button>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1E293B', margin: '0 0 0.5rem 0' }}>Validar Alistamiento ⚖️</h2>
+                        <button onClick={() => setExceptionQty('0')} style={{ background: 'none', border: 'none', color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem', padding: 0, marginBottom: '1.5rem', cursor: 'pointer', textDecoration: 'underline' }}>¿Reportar Faltante Total?</button>
 
                         {/* Product Info Chips */}
-                        <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem' }}>
-                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.8rem 1.2rem', borderRadius: '16px', flex: 1 }}>
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
+                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.8rem 1rem', borderRadius: '16px', flex: 1 }}>
                                 <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
-                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B' }}>{exceptionItem.product_name}</div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1E293B' }}>{exceptionItem.product_name}</div>
                             </div>
-                            <div style={{ backgroundColor: '#F8FAFC', border: '2px dashed #E2E8F0', padding: '0.8rem 1.2rem', borderRadius: '16px', minWidth: '100px', textAlign: 'center' }}>
+                            <div style={{ backgroundColor: '#F8FAFC', border: '2px dashed #E2E8F0', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '100px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#22C55E', fontWeight: 'bold', marginBottom: '4px' }}>A ALISTAR</div>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#166534' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem' }}>{exceptionItem.unit}</span></div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#166534' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem' }}>{exceptionItem.unit}</span></div>
                             </div>
                         </div>
 
                         {!isQuantityValidated ? (
-                            /* PHASE 1: QUANTITY VALIDATION */
-                            <div>
-                                <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                    <div style={{ 
-                                        backgroundColor: '#DCFCE7', color: '#166534', padding: '1rem', borderRadius: '16px', 
-                                        border: '2px solid #22C55E', minWidth: '150px', textAlign: 'center'
-                                    }}>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#22C55E', marginBottom: '4px' }}>
-                                            {exceptionQty || '0'} / {exceptionItem.quantity} A ALISTAR
-                                        </div>
-                                        <input 
-                                            type="number"
-                                            value={exceptionQty}
-                                            onChange={(e) => setExceptionQty(e.target.value)}
-                                            placeholder="0"
-                                            autoFocus
-                                            style={{ 
-                                                background: 'none', border: 'none', width: '100%', textAlign: 'center', 
-                                                fontSize: '1.8rem', fontWeight: '900', color: '#166534', outline: 'none' 
-                                            }}
-                                        />
+                            /* PHASE 1: QUANTITY VALIDATION - Mobile stacked layout */
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                <div style={{ 
+                                    backgroundColor: '#DCFCE7',
+                                    color: '#166534',
+                                    padding: '1.5rem 1rem',
+                                    borderRadius: '20px', 
+                                    border: '2px solid #22C55E',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#22C55E', marginBottom: '6px' }}>
+                                        CANTIDAD ALISTADA ({exceptionQty || '0'} / {exceptionItem.quantity} {exceptionItem.unit})
                                     </div>
-                                    <button 
-                                        onClick={handleValidateQuantity}
-                                        disabled={!exceptionQty}
+                                    <input 
+                                        type="number"
+                                        value={exceptionQty}
+                                        onChange={(e) => setExceptionQty(e.target.value)}
+                                        placeholder="0"
+                                        autoFocus
+                                        step="any"
                                         style={{ 
-                                            flex: 1, 
-                                            backgroundColor: (parseFloat(exceptionQty) < exceptionItem.quantity) ? '#F59E0B' : '#1E293B', 
-                                            color: 'white', padding: '1.2rem', 
-                                            borderRadius: '16px', border: 'none', fontWeight: '900', fontSize: '1rem', cursor: 'pointer',
-                                            opacity: !exceptionQty ? 0.5 : 1,
-                                            transition: 'all 0.2s'
+                                            background: 'none', border: 'none', width: '100%', textAlign: 'center', 
+                                            fontSize: '2.4rem', fontWeight: '900', color: '#166534', outline: 'none' 
                                         }}
-                                    >
-                                        {(parseFloat(exceptionQty) < exceptionItem.quantity) ? 'Confirmar Parcial' : 'Validar'}
-                                    </button>
+                                    />
                                 </div>
+                                
+                                <button 
+                                    onClick={handleValidateQuantity}
+                                    disabled={!exceptionQty}
+                                    style={{ 
+                                        width: '100%', 
+                                        backgroundColor: (parseFloat(exceptionQty) < exceptionItem.quantity) ? '#F59E0B' : '#1E293B', 
+                                        color: 'white',
+                                        padding: '1.1rem', 
+                                        borderRadius: '20px',
+                                        border: 'none',
+                                        fontWeight: '900',
+                                        fontSize: '1.1rem',
+                                        cursor: 'pointer',
+                                        opacity: !exceptionQty ? 0.5 : 1,
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                                    }}
+                                >
+                                    {(parseFloat(exceptionQty) < exceptionItem.quantity) ? 'Confirmar Parcial' : 'Validar Cantidad'}
+                                </button>
 
                                 {parseFloat(exceptionQty) < exceptionItem.quantity && (
                                     <div style={{ 
                                         padding: '1rem', borderRadius: '16px', backgroundColor: '#FFFBEB', 
-                                        color: '#B45309', fontWeight: 'bold', fontSize: '0.9rem',
-                                        marginBottom: '1rem', border: '1px solid #FCD34D'
+                                        color: '#B45309', fontWeight: 'bold', fontSize: '0.85rem',
+                                        border: '1px solid #FCD34D', textAlign: 'center'
                                     }}>
                                         ⚠️ Estás registrando una entrega parcial.
                                     </div>
@@ -808,25 +1000,25 @@ export default function PickingExecutionPage() {
                             </div>
                         ) : (
                             /* PHASE 2: QUALITY VALIDATION */
-                            <div style={{ animation: 'fadeIn 0.3s' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div style={{ 
-                                    backgroundColor: '#DCFCE7', color: '#166534', padding: '1rem', borderRadius: '16px', 
+                                    backgroundColor: '#DCFCE7', color: '#166534', padding: '0.8rem', borderRadius: '16px', 
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: '900', 
-                                    marginBottom: '2rem' 
+                                    fontSize: '0.9rem'
                                 }}>
                                     ✅ Cantidad Correcta ({exceptionQty} {exceptionItem.unit})
                                 </div>
 
-                                <h3 style={{ textAlign: 'center', fontSize: '1.1rem', color: '#475569', marginBottom: '1.5rem' }}>Validar Calidad</h3>
+                                <h3 style={{ textAlign: 'center', fontSize: '1rem', color: '#475569', margin: '0.5rem 0' }}>Validar Calidad</h3>
                                 
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '2.5rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '1rem' }}>
                                     <button 
                                         onClick={() => setExceptionQuality('green')}
                                         style={{ 
-                                            width: '70px', height: '70px', borderRadius: '50%', border: 'none', 
+                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
                                             backgroundColor: exceptionQuality === 'green' ? '#22C55E' : '#F1F5F9',
                                             color: exceptionQuality === 'green' ? 'white' : '#64748B',
-                                            fontSize: '1.5rem', cursor: 'pointer', transition: 'all 0.2s',
+                                            fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
                                             boxShadow: exceptionQuality === 'green' ? '0 10px 15px -3px rgba(34, 197, 94, 0.4)' : 'none',
                                             transform: exceptionQuality === 'green' ? 'scale(1.1)' : 'scale(1)'
                                         }}
@@ -834,10 +1026,10 @@ export default function PickingExecutionPage() {
                                     <button 
                                         onClick={() => setExceptionQuality('yellow')}
                                         style={{ 
-                                            width: '70px', height: '70px', borderRadius: '50%', border: 'none', 
+                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
                                             backgroundColor: exceptionQuality === 'yellow' ? '#EAB308' : '#F1F5F9',
                                             color: exceptionQuality === 'yellow' ? 'white' : '#64748B',
-                                            fontSize: '1.5rem', cursor: 'pointer', transition: 'all 0.2s',
+                                            fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
                                             boxShadow: exceptionQuality === 'yellow' ? '0 10px 15px -3px rgba(234, 179, 8, 0.4)' : 'none',
                                             transform: exceptionQuality === 'yellow' ? 'scale(1.1)' : 'scale(1)'
                                         }}
@@ -845,10 +1037,10 @@ export default function PickingExecutionPage() {
                                     <button 
                                         onClick={() => setExceptionQuality('red')}
                                         style={{ 
-                                            width: '70px', height: '70px', borderRadius: '50%', border: 'none', 
+                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
                                             backgroundColor: exceptionQuality === 'red' ? '#EF4444' : '#F1F5F9',
                                             color: exceptionQuality === 'red' ? 'white' : '#64748B',
-                                            fontSize: '1.5rem', cursor: 'pointer', transition: 'all 0.2s',
+                                            fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
                                             boxShadow: exceptionQuality === 'red' ? '0 10px 15px -3px rgba(239, 68, 68, 0.4)' : 'none',
                                             transform: exceptionQuality === 'red' ? 'scale(1.1)' : 'scale(1)'
                                         }}
@@ -857,18 +1049,18 @@ export default function PickingExecutionPage() {
 
                                 {/* Rejection Reasons Chips */}
                                 {exceptionQuality && exceptionQuality !== 'green' && (
-                                    <div style={{ marginBottom: '2rem', animation: 'fadeIn 0.2s' }}>
-                                        <h4 style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748B', marginBottom: '0.8rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', marginBottom: '0.6rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
                                             {REJECTION_REASONS.map(reason => (
                                                 <button
                                                     key={reason}
                                                     onClick={() => setExceptionReason(reason)}
                                                     style={{
-                                                        padding: '0.6rem 1rem', borderRadius: '12px',
+                                                        padding: '0.5rem 0.8rem', borderRadius: '12px',
                                                         backgroundColor: exceptionReason === reason ? '#1E293B' : '#F1F5F9',
                                                         color: exceptionReason === reason ? 'white' : '#64748B',
-                                                        fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer',
+                                                        fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer',
                                                         transition: 'all 0.2s',
                                                         border: exceptionReason === reason ? '2px solid #1E293B' : '2px solid transparent'
                                                     }}
@@ -884,9 +1076,9 @@ export default function PickingExecutionPage() {
                                     onClick={handleExceptionSave}
                                     disabled={!exceptionQuality || (exceptionQuality !== 'green' && !exceptionReason) || isSaving}
                                     style={{ 
-                                        width: '100%', padding: '1.5rem', borderRadius: '20px', 
-                                        backgroundColor: '#64748B', color: 'white', border: 'none', 
-                                        fontWeight: '900', fontSize: '1.2rem', cursor: 'pointer',
+                                        width: '100%', padding: '1.2rem', borderRadius: '20px', 
+                                        color: 'white', border: 'none', 
+                                        fontWeight: '900', fontSize: '1.1rem', cursor: 'pointer',
                                         background: (exceptionQuality === 'green' || (exceptionQuality && exceptionReason)) ? '#1E293B' : '#94A3B8',
                                         transition: 'all 0.2s',
                                         opacity: isSaving ? 0.7 : 1
@@ -901,34 +1093,15 @@ export default function PickingExecutionPage() {
             )}
 
             {loading && (
-                <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15,23,42,0.8)', zIndex: 100 }}>
+                <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15,23,42,0.85)', zIndex: 100, color: 'white', fontWeight: 'bold' }}>
                     BUSCANDO PEDIDOS...
                 </div>
             )}
             
             <style jsx>{`
-                @keyframes slideUp {
-                    from { transform: translateY(100%); }
-                    to { transform: translateY(0); }
-                }
-                @keyframes pulseRed {
-                    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-                    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-                }
-                @keyframes pulseRedSoft {
-                    0% { background-color: rgba(239, 68, 68, 0.02); }
-                    50% { background-color: rgba(239, 68, 68, 0.08); }
-                    100% { background-color: rgba(239, 68, 68, 0.02); }
-                }
-                @keyframes pulseYellowSoft {
-                    0% { background-color: rgba(234, 179, 8, 0.02); }
-                    50% { background-color: rgba(234, 179, 8, 0.15); }
-                    100% { background-color: rgba(234, 179, 8, 0.02); }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
+                @keyframes slideDown {
+                    from { opacity: 0; transform: translateY(-6px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
         </div>
