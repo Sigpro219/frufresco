@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function TreasuryPage() {
     const [mounted, setMounted] = useState(false);
@@ -52,56 +53,70 @@ export default function TreasuryPage() {
 
     if (!mounted) return null;
 
+    // Dynamic stats calculations
+    const todayStr = new Date().toDateString();
+    const todayBudgets = budgets.filter(b => new Date(b.created_at).toDateString() === todayStr);
+    
+    const ejecutadoHoy = todayBudgets
+        .filter(b => b.status === 'authorized')
+        .reduce((sum, b) => sum + (b.amount || 0), 0);
+        
+    const cuentasPorPagar = budgets
+        .filter(b => b.status === 'pending')
+        .reduce((sum, b) => sum + (b.amount || 0), 0);
+
+    const stats = [
+        { label: 'Disponible Bancos', value: formatMoney(120000000), icon: <Building2 size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />, color: THEME.colors.textMain },
+        { label: 'Caja Planta', value: formatMoney(5000000), icon: <Wallet size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />, color: THEME.colors.primary },
+        { label: 'Cuentas por Pagar', value: formatMoney(cuentasPorPagar), icon: <CreditCard size={18} strokeWidth={1.5} style={{ color: '#D97706' }} />, color: '#D97706' },
+        { label: 'Ejecutado Hoy', value: formatMoney(ejecutadoHoy), icon: <CheckCircle2 size={18} strokeWidth={1.5} style={{ color: '#16A34A' }} />, color: '#16A34A' }
+    ];
+
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 
-                {/* Header - Matching HR/Commercial */}
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {/* Header */}
+                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748B', fontSize: '0.9rem', fontWeight: '700', marginBottom: '0.5rem' }}>
-                            <Link href="/admin/procurement" style={{ color: '#64748B', textDecoration: 'none' }}>Compras 360</Link>
-                            <ChevronRight size={14} />
-                            <span style={{ color: '#0891B2' }}>Tesorería & Crédito</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                            <Link href="/admin/procurement" style={{ color: THEME.colors.textSecondary, textDecoration: 'none' }}>Compras 360</Link>
+                            <ChevronRight size={12} strokeWidth={1.5} />
+                            <span style={{ color: THEME.colors.primary }}>Tesorería & Crédito</span>
                         </div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.025em', margin: 0 }}>
-                            Gestión de <span style={{ color: '#0891B2' }}>Tesorería</span>
+                        <h1 style={{ fontSize: '2.2rem', fontWeight: '800', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
+                            Gestión de <span style={{ color: THEME.colors.primary }}>Tesorería</span>
                         </h1>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <button style={{ 
-                            padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: '#0891B2', 
-                            color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', 
-                            boxShadow: '0 10px 20px -5px rgba(8, 145, 178, 0.4)',
-                            display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'transform 0.2s'
+                            padding: '0.75rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primary, 
+                            color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer', 
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'background-color 0.2s',
+                            fontSize: '0.9rem'
                         }}
-                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         >
-                            <Plus size={20} /> Registrar Presupuesto
+                            <Plus size={16} strokeWidth={1.5} /> Registrar Presupuesto
                         </button>
                     </div>
                 </header>
 
-                {/* Stats Dashboard - Matching HR/Commercial */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                    {[
-                        { label: 'Disponible Bancos', value: '$0.00', icon: '🏦', color: '#0F172A' },
-                        { label: 'Caja Planta', value: '$0.00', icon: '🏪', color: '#10B981' },
-                        { label: 'Cuentas por Pagar', value: '$0.00', icon: '💳', color: '#F59E0B' },
-                        { label: 'Ejecutado Hoy', value: '$0.00', icon: '✅', color: '#0891B2' }
-                    ].map((stat, i) => (
+                {/* Stats Dashboard */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+                    {stats.map((stat, i) => (
                         <div key={i} style={{ 
-                            backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0',
-                            display: 'flex', alignItems: 'center', gap: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
+                            backgroundColor: THEME.colors.surface, padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: THEME.shadow.sm
                         }}>
-                            <div style={{ fontSize: '1.8rem', backgroundColor: '#F8FAFC', width: '55px', height: '55px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ backgroundColor: THEME.colors.background, width: '48px', height: '48px', borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {stat.icon}
                             </div>
                             <div>
-                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: stat.color }}>{stat.value}</div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '700', color: stat.color }}>{stat.value}</div>
                             </div>
                         </div>
                     ))}
@@ -110,50 +125,50 @@ export default function TreasuryPage() {
                 {/* Main Content Area */}
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
                     
-                    {/* Activity List - Matching HR List Style */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Historial de Presupuestos</h2>
+                    {/* Activity List */}
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0 }}>Historial de Presupuestos</h2>
                             <div style={{ position: 'relative' }}>
-                                <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                <input placeholder="Buscar..." style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderRadius: '12px', border: '1px solid #F1F5F9', fontSize: '0.85rem' }} />
+                                <Search size={14} strokeWidth={1.5} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                <input placeholder="Buscar..." style={{ padding: '0.4rem 0.75rem 0.4rem 2rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontSize: '0.85rem', color: THEME.colors.textMain, outline: 'none' }} />
                             </div>
                         </div>
 
                         {loading ? (
-                            <div style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8', fontWeight: '600' }}>Cargando presupuestos...</div>
+                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '500' }}>Cargando presupuestos...</div>
                         ) : budgets.length === 0 ? (
                             <div style={{ padding: '4rem', textAlign: 'center' }}>
-                                <AlertCircle size={48} color="#CBD5E1" style={{ marginBottom: '1rem' }} />
-                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#64748B' }}>No hay registros</div>
+                                <AlertCircle size={40} strokeWidth={1.5} color={THEME.colors.textSecondary} style={{ marginBottom: '1rem' }} />
+                                <div style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textSecondary }}>No hay registros</div>
                             </div>
                         ) : (
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                <thead style={{ backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}` }}>
                                     <tr>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Fecha</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Autorizador</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Monto</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Estado</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Autorizador</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Monto</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Estado</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {budgets.map((b) => (
-                                        <tr key={b.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
-                                                <div style={{ fontWeight: '800', color: '#0F172A' }}>{new Date(b.target_date).toLocaleDateString()}</div>
+                                        <tr key={b.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                            <td style={{ padding: '1rem 1.5rem' }}>
+                                                <div style={{ fontWeight: '600', color: THEME.colors.textMain }}>{new Date(b.target_date).toLocaleDateString()}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748B' }}>{b.authorized_by || 'Administrador'}</div>
+                                            <td style={{ padding: '1rem 1.5rem' }}>
+                                                <div style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{b.authorized_by || 'Administrador'}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
-                                                <div style={{ fontWeight: '900', color: '#0F172A' }}>${new Intl.NumberFormat().format(b.amount)}</div>
+                                            <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+                                                <div style={{ fontWeight: '600', color: THEME.colors.textMain }}>{formatMoney(b.amount)}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
+                                            <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                                                 <span style={{ 
-                                                    fontSize: '0.65rem', fontWeight: '900', padding: '0.3rem 0.6rem', borderRadius: '8px',
-                                                    backgroundColor: b.status === 'authorized' ? '#DCFCE7' : '#FFFBEB',
-                                                    color: b.status === 'authorized' ? '#15803D' : '#B45309'
+                                                    fontSize: '0.75rem', fontWeight: '600', padding: '0.25rem 0.5rem', borderRadius: '4px',
+                                                    backgroundColor: b.status === 'authorized' ? THEME.colors.primaryLight : THEME.colors.background,
+                                                    color: b.status === 'authorized' ? THEME.colors.primary : THEME.colors.textSecondary
                                                 }}>
                                                     {b.status.toUpperCase()}
                                                 </span>
@@ -167,31 +182,35 @@ export default function TreasuryPage() {
 
                     {/* Side Panel Actions */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        <div style={{ backgroundColor: '#1E293B', borderRadius: '24px', padding: '2rem', color: 'white', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: '900', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <Banknote size={20} color="#0891B2" /> Operaciones Rápidas
+                        <div style={{ backgroundColor: '#1E293B', borderRadius: THEME.radius.md, padding: '1.5rem', color: 'white', boxShadow: THEME.shadow.sm }}>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
+                                <Banknote size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Operaciones Rápidas
                             </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 {[
-                                    { label: 'Retiro de Banco', icon: <ArrowUpRight size={16} /> },
-                                    { label: 'Entrega a Comprador', icon: <ArrowDownLeft size={16} /> },
-                                    { label: 'Pago Gasto Operativo', icon: <Receipt size={16} /> }
+                                    { label: 'Retiro de Banco', icon: <ArrowUpRight size={16} strokeWidth={1.5} /> },
+                                    { label: 'Entrega a Comprador', icon: <ArrowDownLeft size={16} strokeWidth={1.5} /> },
+                                    { label: 'Pago Gasto Operativo', icon: <Receipt size={16} strokeWidth={1.5} /> }
                                 ].map((act, i) => (
                                     <button key={i} style={{ 
-                                        width: '100%', padding: '1rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', 
-                                        backgroundColor: 'rgba(255,255,255,0.05)', color: 'white', fontWeight: '700', 
-                                        textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' 
-                                    }}>
+                                        width: '100%', padding: '0.85rem 1rem', borderRadius: THEME.radius.sm, border: '1px solid rgba(255,255,255,0.1)', 
+                                        backgroundColor: 'rgba(255,255,255,0.05)', color: 'white', fontWeight: '600', fontSize: '0.9rem',
+                                        textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                                    onMouseOut={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                                    >
                                         {act.label} {act.icon}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', marginBottom: '1.2rem' }}>Avisos de Cartera</h3>
-                            <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '18px', border: '1px dashed #E2E8F0' }}>
-                                <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#94A3B8' }}>Sin facturas críticas hoy.</div>
+                        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, padding: '1.5rem', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '1rem', marginTop: 0 }}>Avisos de Cartera</h3>
+                            <div style={{ padding: '1.25rem', textAlign: 'center', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.sm, border: `1px dashed ${THEME.colors.border}` }}>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '500', color: THEME.colors.textSecondary }}>Sin facturas críticas hoy.</div>
                             </div>
                         </div>
                     </div>
@@ -202,3 +221,4 @@ export default function TreasuryPage() {
         </main>
     );
 }
+

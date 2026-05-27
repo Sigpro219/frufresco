@@ -8,6 +8,23 @@ import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';
 import RoutePlanner from '@/components/RoutePlanner';
 import ConductorPanel from '@/components/ConductorPanel';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { 
+    Truck, 
+    CheckCircle2, 
+    Scale, 
+    AlertTriangle, 
+    Globe, 
+    Compass, 
+    Users, 
+    Wrench, 
+    TrendingUp, 
+    RefreshCw, 
+    PackageOpen, 
+    MapPin, 
+    Activity,
+    FileText
+} from 'lucide-react';
 import ControlTowerKPIs from '@/components/ControlTowerKPIs';
 
 interface ActiveRoute {
@@ -53,7 +70,7 @@ export default function TransportControlTower() {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
     const getInitials = (name: string) => {
-        if (!name) return '👤';
+        if (!name) return '';
         return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
@@ -232,7 +249,7 @@ export default function TransportControlTower() {
                                     fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
                                 }}
                             >
-                                <span>{tab.icon}</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span>
                                 {tab.label.toUpperCase()}
                             </button>
                         ))}
@@ -246,7 +263,7 @@ export default function TransportControlTower() {
                             color: '#0F172A', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
                         }}
                     >
-                        {loading ? 'Sincronizando...' : '🔄 ACTUALIZAR'}
+                        {loading ? 'Sincronizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} strokeWidth={1.5} /> ACTUALIZAR</span>}
                     </button>
                 </div>
 
@@ -263,7 +280,7 @@ export default function TransportControlTower() {
                                 
                                 {activeRoutes.length === 0 && !loading && (
                                     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8' }}>
-                                        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📭</div>
+                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
                                         <div style={{ fontSize: '0.8rem', fontWeight: '700' }}>No hay rutas activas en este momento</div>
                                     </div>
                                 )}
@@ -310,7 +327,7 @@ export default function TransportControlTower() {
                                         <Map defaultCenter={{ lat: 4.633653, lng: -74.160647 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
                                             <AdvancedMarker position={{ lat: 4.633653, lng: -74.160647 }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                    <div style={{ backgroundColor: '#0F172A', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900', marginBottom: '4px' }}>🏠 BODEGA</div>
+                                                    <div style={{ backgroundColor: THEME.colors.textMain, color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900', marginBottom: '4px' }}>BODEGA</div>
                                                     <Pin background={'#0F172A'} glyphColor={'white'} scale={1.2} />
                                                 </div>
                                             </AdvancedMarker>
@@ -364,7 +381,7 @@ export default function TransportControlTower() {
                                         </Map>
                                     ) : (
                                     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#F1F5F9' }}>
-                                        <div style={{ fontSize: '3rem' }}>🛰️</div>
+                                        <div style={{ color: THEME.colors.textSecondary, display: 'flex', justifyContent: 'center' }}><MapPin size={48} strokeWidth={1.5} /></div>
                                         <div style={{ fontWeight: '800', color: '#64748B' }}>Google Maps no configurado</div>
                                     </div>
                                 )}

@@ -23,8 +23,22 @@ import {
     Dna,
     X,
     Info,
-    ImageOff
+    ImageOff,
+    Database,
+    CheckCircle,
+    AlertTriangle,
+    GitFork,
+    Edit3,
+    User,
+    Wrench,
+    BarChart2,
+    FileText,
+    Scale,
+    ArrowUpDown,
+    ArrowLeft,
+    RefreshCw
 } from 'lucide-react';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 
 
@@ -593,55 +607,63 @@ export default function MasterProductsPage() {
     }, [products]);
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <Toast />
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>← Volver al Dashboard</Link>
-                            <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Maestro de SKUs 🏗️</h1>
-                            <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
+                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <ArrowLeft size={14} strokeWidth={1.5} /> Volver al Dashboard
+                            </Link>
+                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Maestro de SKUs</h1>
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={sanitizeMasterData}
                                 style={{
-                                    padding: '0.6rem 1rem',
-                                    borderRadius: '10px',
-                                    backgroundColor: '#FEF3C7',
-                                    color: '#92400E',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: THEME.radius.md,
+                                    backgroundColor: '#FFFBEB',
+                                    color: '#B45309',
                                     border: '1px solid #FDE68A',
-                                    fontWeight: '700',
+                                    fontWeight: '600',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
-                                    fontSize: '0.85rem'
+                                    gap: '6px',
+                                    fontSize: '0.8rem',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEF3C7'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFBEB'}
                                 title="Generar SKUs y descripciones faltantes"
                             >
-                                <Wand2 size={16} /> Sanetizar
+                                <Wand2 size={14} strokeWidth={1.5} /> Sanetizar
                             </button>
                             <button
                                 onClick={syncWebVisibility}
                                 style={{
-                                    padding: '0.6rem 1rem',
-                                    borderRadius: '10px',
-                                    backgroundColor: '#EEF2FF',
-                                    color: '#4338CA',
-                                    border: '1px solid #C7D2FE',
-                                    fontWeight: '700',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: THEME.radius.md,
+                                    backgroundColor: THEME.colors.primaryLight,
+                                    color: THEME.colors.primary,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontWeight: '600',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
-                                    fontSize: '0.85rem'
+                                    gap: '6px',
+                                    fontSize: '0.8rem',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DFE7DF'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
                                 title="Sincronizar visibilidad web con disponibilidad de imágenes"
                             >
-                                <Globe size={16} /> Sincronizar Web
+                                <Globe size={14} strokeWidth={1.5} /> Sincronizar Web
                             </button>
 
                             <button
@@ -649,56 +671,60 @@ export default function MasterProductsPage() {
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '0.6rem 1rem',
-                                    backgroundColor: '#111827',
+                                    gap: '6px',
+                                    padding: '0.5rem 1rem',
+                                    backgroundColor: THEME.colors.primary,
                                     color: 'white',
                                     border: 'none',
-                                    borderRadius: '10px',
-                                    fontWeight: '800',
-                                    fontSize: '0.9rem',
-                                    cursor: 'pointer'
+                                    borderRadius: THEME.radius.md,
+                                    fontWeight: '700',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                             >
-                                <Plus size={20} /> Nuevo SKU
+                                <Plus size={16} strokeWidth={1.5} /> Nuevo SKU
                             </button>
                             <button
                                 onClick={downloadFullMaster}
                                 style={{
-                                    padding: '0.6rem 0.8rem',
-                                    borderRadius: '10px',
-                                    backgroundColor: '#EFF6FF',
-                                    color: '#2563EB',
-                                    border: '1px solid #BFDBFE',
-                                    fontWeight: '700',
+                                    padding: '0.5rem 0.75rem',
+                                    borderRadius: THEME.radius.md,
+                                    backgroundColor: THEME.colors.surface,
+                                    color: THEME.colors.textSecondary,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontWeight: '600',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = THEME.colors.borderActive}
+                                onMouseLeave={e => e.currentTarget.style.borderColor = THEME.colors.border}
                                 title="Exportar Todo el Maestro (Excel)"
                             >
-                                <FileDown size={18} />
+                                <FileDown size={16} strokeWidth={1.5} />
                             </button>
                             <button
                                 disabled={true}
                                 style={{
-                                    padding: '0.6rem 0.8rem',
-                                    borderRadius: '10px',
-                                    backgroundColor: '#F3F4F6',
-                                    color: '#9CA3AF',
-                                    border: '1px solid #E5E7EB',
-                                    fontWeight: '700',
+                                    padding: '0.5rem 0.75rem',
+                                    borderRadius: THEME.radius.md,
+                                    backgroundColor: THEME.colors.surface,
+                                    color: '#CBD5E1',
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontWeight: '600',
                                     cursor: 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     transition: 'all 0.2s',
-                                    position: 'relative',
                                     opacity: 0.6
                                 }}
                                 title="Carga Masiva (Deshabilitada por seguridad)"
                             >
-                                <FileUp size={18} />
+                                <FileUp size={16} strokeWidth={1.5} />
                             </button>
                         </div>
                     </div>
@@ -712,52 +738,53 @@ export default function MasterProductsPage() {
                     marginBottom: '2rem' 
                 }}>
                     {[
-                        { label: 'Total Histórico', value: kpiMetrics.total.toLocaleString('es-CO'), icon: '🗂️', color: '#6366F1', bg: '#EEF2FF' },
-                        { label: 'Catálogo Activo', value: `${((kpiMetrics.activeCount / kpiMetrics.total) * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`, icon: '✅', color: '#10B981', bg: '#ECFDF5' },
-                        { label: 'Publicados en Web', value: kpiMetrics.webCount.toLocaleString('es-CO'), icon: '🌐', color: '#3B82F6', bg: '#EFF6FF' },
-                        { label: 'Cobertura Imagen', value: `${kpiMetrics.imageCoverage.toLocaleString('es-CO')}%`, icon: '📸', color: '#F59E0B', bg: '#FFFBEB' },
-                        { label: 'Alertas Inventario', value: kpiMetrics.alerts.toLocaleString('es-CO'), icon: '📉', color: '#EF4444', bg: '#FEF2F2' },
-                        { label: 'Jerarquía (P/H)', value: `${kpiMetrics.parentCount.toLocaleString('es-CO')} P / ${kpiMetrics.childCount.toLocaleString('es-CO')} H`, icon: '💎', color: '#6D28D9', bg: '#F5F3FF' },
+                        { label: 'Total Histórico', value: formatNumber(kpiMetrics.total), icon: <Database size={16} strokeWidth={1.5} />, color: '#6366F1', bg: '#EEF2FF' },
+                        { label: 'Catálogo Activo', value: `${kpiMetrics.total > 0 ? formatNumber((kpiMetrics.activeCount / kpiMetrics.total) * 100, 1) : 0}%`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+                        { label: 'Publicados en Web', value: formatNumber(kpiMetrics.webCount), icon: <Globe size={16} strokeWidth={1.5} />, color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={16} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' }, // Replaced with Globe or Eye for styling, let's keep Globe for similarity
+                        { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={16} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
+                        { label: 'Jerarquía (P/H)', value: `${formatNumber(kpiMetrics.parentCount)} P / ${formatNumber(kpiMetrics.childCount)} H`, icon: <GitFork size={16} strokeWidth={1.5} />, color: '#6D28D9', bg: '#F5F3FF' },
                     ].map((card, i) => (
                         <div key={i} style={{
-                            backgroundColor: 'white',
-                            padding: '1rem 1.2rem',
-                            borderRadius: '16px',
-                            border: '1px solid #E5E7EB',
+                            backgroundColor: THEME.colors.surface,
+                            padding: '0.85rem 1.1rem',
+                            borderRadius: THEME.radius.lg,
+                            border: `1px solid ${THEME.colors.border}`,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '1rem',
-                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                            cursor: 'default'
+                            gap: '0.75rem',
+                            transition: 'all 0.2s ease',
+                            cursor: 'default',
+                            boxShadow: THEME.shadow.sm
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-3px)';
-                            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
-                            e.currentTarget.style.borderColor = card.color;
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.md;
+                            e.currentTarget.style.borderColor = THEME.colors.borderActive;
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = 'none';
-                            e.currentTarget.style.borderColor = '#E5E7EB';
+                            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            e.currentTarget.style.borderColor = THEME.colors.border;
                         }}
                         >
                             <div style={{ 
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '12px', 
+                                width: '36px', 
+                                height: '36px', 
+                                borderRadius: THEME.radius.md, 
                                 backgroundColor: card.bg, 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
-                                fontSize: '1.2rem' 
+                                color: card.color
                             }}>
                                 {card.icon}
                             </div>
                             <div>
-                                <p style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                <p style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                                     {card.label}
                                 </p>
-                                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                                <p style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>
                                     {card.value}
                                 </p>
                             </div>
@@ -769,27 +796,27 @@ export default function MasterProductsPage() {
 
                 {savingId && (
                     <div style={{ 
-                        backgroundColor: '#DBEAFE', 
-                        color: '#1E40AF', 
-                        padding: '1rem', 
-                        borderRadius: '12px', 
-                        fontWeight: '700', 
-                        fontSize: '0.9rem', 
+                        backgroundColor: THEME.colors.primaryLight, 
+                        color: THEME.colors.primary, 
+                        padding: '0.75rem 1rem', 
+                        borderRadius: THEME.radius.md, 
+                        fontWeight: '600', 
+                        fontSize: '0.85rem', 
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '8px', 
                         marginBottom: '1.5rem',
-                        animation: 'pulse 2s infinite'
+                        border: `1px solid ${THEME.colors.border}`
                     }}>
-                        🔄 Guardando cambios en maestro...
+                        <RefreshCw size={14} className="animate-spin" strokeWidth={1.5} style={{ marginRight: '4px' }} /> Guardando cambios en maestro...
                     </div>
                 )}
 
                 {/* Buscador Con Esteroides (X y Info) */}
-                <div style={{ marginBottom: '2rem', position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ marginBottom: '1.5rem', position: 'relative', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div style={{ flex: 1, position: 'relative' }}>
-                        <div style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
-                            <Search size={22} />
+                        <div style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                            <Search size={16} strokeWidth={1.5} />
                         </div>
                         <input
                             type="text"
@@ -798,23 +825,24 @@ export default function MasterProductsPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{
                                 width: '100%',
-                                padding: '1.2rem 3.5rem 1.2rem 3.5rem',
-                                borderRadius: '18px',
-                                border: '1px solid #E5E7EB',
-                                fontSize: '1.1rem',
+                                padding: '0.65rem 2.5rem 0.65rem 2.5rem',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${THEME.colors.border}`,
+                                fontSize: '0.9rem',
                                 fontWeight: '500',
                                 outline: 'none',
-                                transition: 'all 0.3s',
-                                backgroundColor: 'white',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                                transition: 'all 0.2s ease',
+                                backgroundColor: THEME.colors.surface,
+                                boxShadow: THEME.shadow.sm,
+                                color: THEME.colors.textMain
                             }}
                             onFocus={(e) => {
-                                e.target.style.borderColor = '#3B82F6';
-                                e.target.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.1)';
+                                e.target.style.borderColor = THEME.colors.primary;
+                                e.target.style.boxShadow = `0 0 0 2px ${THEME.colors.primaryLight}`;
                             }}
                             onBlur={(e) => {
-                                e.target.style.borderColor = '#E5E7EB';
-                                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)';
+                                e.target.style.borderColor = THEME.colors.border;
+                                e.target.style.boxShadow = THEME.shadow.sm;
                             }}
                         />
                         {searchQuery && (
@@ -823,55 +851,53 @@ export default function MasterProductsPage() {
                                 style={{
                                     background: 'none',
                                     border: 'none',
-                                    color: '#9CA3AF',
+                                    color: THEME.colors.textSecondary,
                                     cursor: 'pointer',
                                     padding: '4px',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     position: 'absolute',
-                                    right: '1.2rem',
+                                    right: '0.85rem',
                                     top: '50%',
                                     transform: 'translateY(-50%)'
                                 }}
                                 title="Limpiar búsqueda"
                             >
-                                <X size={20} />
+                                <X size={16} strokeWidth={1.5} />
                             </button>
                         )}
                     </div>
 
                     {/* Contador de Productos Filtrados */}
                     <div style={{
-                        padding: '0 1.2rem',
-                        borderRadius: '14px',
-                        backgroundColor: searchQuery ? 'rgba(16, 185, 129, 0.1)' : 'white',
-                        color: searchQuery ? '#065F46' : '#6B7280',
-                        border: searchQuery ? '1.5px solid #10B981' : '1.5px solid #E5E7EB',
-                        fontSize: '0.9rem',
-                        fontWeight: '700',
+                        padding: '0 1rem',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: searchQuery ? THEME.colors.primaryLight : THEME.colors.surface,
+                        color: searchQuery ? THEME.colors.primary : THEME.colors.textSecondary,
+                        border: `1px solid ${searchQuery ? THEME.colors.primary : THEME.colors.border}`,
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
+                        gap: '6px',
                         whiteSpace: 'nowrap',
-                        height: '48px',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: searchQuery ? '0 4px 12px rgba(16, 185, 129, 0.1)' : '0 4px 12px rgba(0,0,0,0.02)',
+                        height: '38px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: THEME.shadow.sm,
                     }}>
-                        <span style={{ fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
-                            {searchQuery ? '🎯' : '📦'}
-                        </span>
+                        {searchQuery ? <Search size={14} strokeWidth={1.5} /> : <Database size={14} strokeWidth={1.5} />}
                         <span>
                             {searchQuery ? (
                                 <>
-                                    <strong style={{ color: '#10B981', fontSize: '1rem' }}>{filteredProducts.length}</strong>
-                                    <span style={{ fontWeight: '500', color: '#374151', marginLeft: '4px' }}>de {products.length}</span>
+                                    <strong style={{ color: THEME.colors.primary, fontWeight: '700' }}>{formatNumber(filteredProducts.length)}</strong>
+                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>de {formatNumber(products.length)}</span>
                                 </>
                             ) : (
                                 <>
-                                    <strong style={{ color: '#111827' }}>{products.length}</strong>
-                                    <span style={{ fontWeight: '500', color: '#6B7280', marginLeft: '4px' }}>productos</span>
+                                    <strong style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(products.length)}</strong>
+                                    <span style={{ fontWeight: '450', color: THEME.colors.textSecondary, marginLeft: '4px' }}>productos</span>
                                 </>
                             )}
                         </span>
@@ -883,44 +909,46 @@ export default function MasterProductsPage() {
                         onMouseLeave={() => setShowHelpTooltip(false)}
                         style={{ 
                             position: 'relative',
-                            width: '48px', 
-                            height: '48px', 
-                            borderRadius: '14px', 
-                            backgroundColor: '#EFF6FF', 
-                            color: '#2563EB', 
+                            width: '38px', 
+                            height: '38px', 
+                            borderRadius: THEME.radius.md, 
+                            backgroundColor: THEME.colors.primaryLight, 
+                            color: THEME.colors.primary, 
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'center',
                             cursor: 'help',
-                            border: '1px solid #DBEAFE',
-                            fontSize: '1.2rem',
-                            fontWeight: '900',
+                            border: `1px solid ${THEME.colors.border}`,
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
                             flexShrink: 0,
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s ease',
+                            boxShadow: THEME.shadow.sm
                         }}
                     >
-                        i
+                        <Info size={16} strokeWidth={1.5} />
                         {showHelpTooltip && (
                             <div style={{
                                 position: 'absolute',
-                                top: '58px',
+                                top: '44px',
                                 right: '0',
-                                width: '300px',
-                                backgroundColor: '#1E293B',
+                                width: '320px',
+                                backgroundColor: '#1A231E',
                                 color: 'white',
-                                padding: '1.2rem',
-                                borderRadius: '16px',
-                                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                                padding: '1rem',
+                                borderRadius: THEME.radius.lg,
+                                boxShadow: THEME.shadow.lg,
                                 zIndex: 1000,
                                 fontSize: '0.75rem',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
                                 lineHeight: '1.5',
                                 pointerEvents: 'none',
                                 animation: 'fadeInDown 0.2s ease-out'
                             }}>
-                                <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                    🚀 COMANDOS MAESTROS (@)
+                                <div style={{ fontWeight: '750', color: '#10B981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
+                                    <Dna size={12} strokeWidth={1.5} /> COMANDOS MAESTROS (@)
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
                                     {[
                                         { tag: '@web', desc: 'En Tienda' },
                                         { tag: '@oculto', desc: 'No Web' },
@@ -936,70 +964,70 @@ export default function MasterProductsPage() {
                                         </div>
                                     ))}
                                 </div>
-                                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
+                                <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
                                     Tip: Puedes filtrar por Categoría escribiendo @ seguida del nombre.
                                 </div>
-                                <style>{`
-                                    @keyframes fadeInDown {
-                                        from { opacity: 0; transform: translateY(-10px); }
-                                        to { opacity: 1; transform: translateY(0); }
-                                    }
-                                `}</style>
                             </div>
                         )}
                     </div>
                 </div>
 
                 <div style={{ 
-                    backgroundColor: 'white', 
-                    borderRadius: '16px', 
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.05)', 
+                    backgroundColor: THEME.colors.surface, 
+                    borderRadius: THEME.radius.lg, 
+                    boxShadow: THEME.shadow.sm, 
                     overflowX: 'auto', 
-                    border: '1px solid #E5E7EB',
+                    border: `1px solid ${THEME.colors.border}`,
                     width: '100%'
                 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
-                            <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '2px solid #E5E7EB' }}>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '60px' }}>Foto</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '140px' }}>SKU Código</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Nombre Técnico</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Categoría</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Logística</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Unidad</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>IVA</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Mínimo</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Configuración</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Descripción</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '60px', textAlign: 'center' }}>Web</th>
-                                <th style={{ padding: '1.2rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', width: '100px' }}>Estado</th>
+                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '60px' }}>Foto</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '140px' }}>SKU Código</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Nombre Técnico</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Categoría</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Logística</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Unidad</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>IVA</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Mínimo</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Configuración</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Descripción</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '60px', textAlign: 'center' }}>Web</th>
+                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '100px' }}>Estado</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={12} style={{ textAlign: 'center', padding: '3rem' }}>Cargando maestros...</td></tr>
+                                <tr>
+                                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <RefreshCw size={16} className="animate-spin" strokeWidth={1.5} /> Cargando maestros...
+                                        </div>
+                                    </td>
+                                </tr>
                             ) : paginatedProducts.map(p => (
-                                <tr key={p.id} style={{ borderBottom: '1px solid #F3F4F6', height: '95px' }}>
+                                <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, height: '80px', transition: 'background-color 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                                     <td style={{ padding: '0.5rem 1rem' }}>
                                         <label 
                                             onClick={(e) => e.stopPropagation()}
                                             style={{ 
-                                                width: '50px', 
-                                                height: '50px', 
+                                                width: '46px', 
+                                                height: '46px', 
                                                 backgroundColor: '#F3F4F6', 
-                                                borderRadius: '8px', 
+                                                borderRadius: THEME.radius.sm, 
                                                 overflow: 'hidden', 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
                                                 justifyContent: 'center', 
-                                                border: '1px solid #E5E7EB',
+                                                border: `1px solid ${THEME.colors.border}`,
                                                 cursor: 'pointer',
                                                 position: 'relative',
                                                 transition: 'all 0.2s',
                                                 opacity: savingId === p.id ? 0.5 : 1
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = '#2563EB'}
-                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = '#E5E7EB'}
+                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
                                             title="Cambiar foto del maestro"
                                         >
                                             <input 
@@ -1016,68 +1044,68 @@ export default function MasterProductsPage() {
                                                 <Image 
                                                     src={p.image_url} 
                                                     alt={p.name} 
-                                                    width={50} 
-                                                    height={50} 
+                                                    width={46} 
+                                                    height={46} 
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                    sizes="50px"
+                                                    sizes="46px"
                                                     loading="lazy"
                                                 />
                                             ) : (
-                                                <span style={{ fontSize: '1.2rem', opacity: 0.5 }}>📷</span>
+                                                <ImageOff size={16} style={{ opacity: 0.4 }} strokeWidth={1.5} />
                                             )}
                                             {savingId === p.id && (
                                                 <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <span style={{ fontSize: '0.8rem' }}>...</span>
+                                                    <RefreshCw size={12} className="animate-spin" strokeWidth={1.5} />
                                                 </div>
                                             )}
                                         </label>
                                     </td>
                                     <td 
-                                        style={{ padding: '1rem', cursor: 'pointer' }}
+                                        style={{ padding: '0.75rem 1rem', cursor: 'pointer' }}
                                         onClick={() => setSelectedEditProduct(p)}
                                         title="Abrir panel de edición maestro"
                                     >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <span style={{ 
-                                                    fontWeight: '900', 
-                                                    color: '#2563EB', 
-                                                    fontSize: '0.82rem',
+                                                    fontWeight: '700', 
+                                                    color: THEME.colors.primary, 
+                                                    fontSize: '0.8rem',
                                                     display: 'block'
                                                 }}>
                                                     {p.sku}
                                                 </span>
-                                                <span style={{ fontSize: '0.8rem', opacity: 0.3 }}>✏️</span>
+                                                <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
                                             </div>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                 {p.accounting_id && (
                                                     <span style={{ 
-                                                        fontSize: '0.7rem', 
-                                                        fontWeight: '700', 
-                                                        color: '#6B7280',
-                                                        backgroundColor: '#F3F4F6',
+                                                        fontSize: '0.65rem', 
+                                                        fontWeight: '600', 
+                                                        color: THEME.colors.textSecondary,
+                                                        backgroundColor: '#F1F5F9',
                                                         padding: '1px 4px',
                                                         borderRadius: '4px'
                                                     }}>
-                                                        ID: {p.accounting_id}
+                                                        ID: {formatNumber(p.accounting_id)}
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                     </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.9rem' }}>{p.name}</div>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                        <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
                                     </td>
-                                        <td style={{ padding: '1rem' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                        <td style={{ padding: '0.75rem 1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                                 <span style={{ 
-                                                    padding: '0.4rem 0.8rem', 
-                                                    borderRadius: '8px', 
-                                                    backgroundColor: '#F3F4F6', 
-                                                    fontSize: '0.8rem', 
-                                                    fontWeight: '800', 
-                                                    color: '#374151',
-                                                    border: '1px solid #E5E7EB',
+                                                    padding: '0.2rem 0.5rem', 
+                                                    borderRadius: '4px', 
+                                                    backgroundColor: '#F1F5F9', 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '600', 
+                                                    color: THEME.colors.textMain,
+                                                    border: `1px solid ${THEME.colors.border}`,
                                                     display: 'inline-block',
                                                     whiteSpace: 'nowrap'
                                                 }}>
@@ -1088,67 +1116,67 @@ export default function MasterProductsPage() {
                                                 {p.parent_id && (
                                                     <div style={{
                                                         fontSize: '0.6rem',
-                                                        fontWeight: '900',
-                                                        padding: '2px 5px',
-                                                        borderRadius: '4px',
-                                                        backgroundColor: p.parent_id === p.id ? '#4F46E5' : '#10B981',
+                                                        fontWeight: '700',
+                                                        padding: '1px 4px',
+                                                        borderRadius: '3px',
+                                                        backgroundColor: p.parent_id === p.id ? '#4F46E5' : THEME.colors.primary,
                                                         color: 'white',
                                                         display: 'inline-flex',
-                                                        minWidth: '16px',
+                                                        minWidth: '14px',
                                                         justifyContent: 'center',
-                                                        lineHeight: '1',
-                                                        marginLeft: '4px'
+                                                        lineHeight: '1.2',
+                                                        marginTop: '2px'
                                                     }}>
                                                         {p.parent_id === p.id ? 'P' : 'H'}
                                                     </div>
                                                 )}
                                             </div>
                                         </td>
-                                    <td style={{ padding: '1rem' }}>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ 
-                                            backgroundColor: '#F9FAFB', 
-                                            padding: '8px 12px', 
-                                            borderRadius: '10px', 
-                                            border: '1px solid #E5E7EB',
+                                            backgroundColor: '#F8FAFC', 
+                                            padding: '6px 10px', 
+                                            borderRadius: THEME.radius.sm, 
+                                            border: `1px solid ${THEME.colors.border}`,
                                             fontSize: '0.75rem',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            gap: '4px',
-                                            minWidth: '180px'
+                                            gap: '3px',
+                                            minWidth: '160px'
                                         }}>
-                                            <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                👤 {p.buying_team || 'Sin asignar'}
+                                            <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <User size={10} strokeWidth={1.5} /> {p.buying_team || 'Sin asignar'}
                                             </div>
-                                            <div style={{ fontWeight: '600', color: '#6B7280', borderTop: '1px solid #E5E7EB', paddingTop: '4px', fontSize: '0.65rem' }}>
-                                                🛠️ {p.procurement_method || 'General'}
+                                            <div style={{ fontWeight: '500', color: THEME.colors.textSecondary, borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '3px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Wrench size={10} strokeWidth={1.5} /> {p.procurement_method || 'General'}
                                             </div>
                                             {p.inventory_group && (
-                                                <div style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: '700', lineHeight: '1.2' }}>
-                                                    📊 {p.inventory_group}
+                                                <div style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <BarChart2 size={10} strokeWidth={1.5} /> {p.inventory_group}
                                                 </div>
                                             )}
                                             {p.purchase_sublist && (
-                                                <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '700', lineHeight: '1.2' }}>
-                                                    📝 {p.purchase_sublist}
+                                                <div style={{ fontSize: '0.6rem', color: THEME.colors.primary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <FileText size={10} strokeWidth={1.5} /> {p.purchase_sublist}
                                                 </div>
                                             )}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                         <span style={{ 
-                                            backgroundColor: '#F3F4F6', 
-                                            padding: '4px 10px', 
-                                            borderRadius: '6px', 
+                                            backgroundColor: '#F1F5F9', 
+                                            padding: '2px 6px', 
+                                            borderRadius: '4px', 
                                             fontSize: '0.75rem', 
-                                            fontWeight: '800', 
-                                            color: '#4B5563',
-                                            border: '1px solid #E5E7EB',
+                                            fontWeight: '600', 
+                                            color: THEME.colors.textMain,
+                                            border: `1px solid ${THEME.colors.border}`,
                                             display: 'inline-block'
                                         }}>
                                             {p.unit_of_measure}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                         {(() => {
                                             const rate = p.iva_rate ?? 19;
                                             const colors: Record<number, { bg: string, text: string, border: string }> = {
@@ -1166,97 +1194,104 @@ export default function MasterProductsPage() {
                                                     backgroundColor: style.bg,
                                                     color: style.text,
                                                     border: `1px solid ${style.border}`,
-                                                    borderRadius: '6px',
-                                                    padding: '4px 8px',
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: '900',
-                                                    minWidth: '45px'
+                                                    borderRadius: '4px',
+                                                    padding: '2px 6px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '700',
+                                                    minWidth: '40px'
                                                 }}>
-                                                    {rate}%
+                                                    {formatNumber(rate)}%
                                                 </div>
                                             );
                                         })()}
                                     </td>
                                     <td style={{ 
-                                        padding: '1rem', 
+                                        padding: '0.75rem 1rem', 
                                         textAlign: 'center',
                                         backgroundColor: p.min_inventory_level > 0 ? '#FEF2F2' : 'transparent',
-                                        borderLeft: p.min_inventory_level > 0 ? '4px solid #EF4444' : 'none',
-                                        transition: 'all 0.3s'
+                                        borderLeft: p.min_inventory_level > 0 ? '3px solid #EF4444' : 'none',
+                                        transition: 'all 0.2s'
                                     }}>
                                         {p.min_inventory_level > 0 ? (
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                 <div style={{ 
                                                     backgroundColor: '#FEE2E2',
-                                                    padding: '4px 10px',
-                                                    borderRadius: '8px',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
                                                     border: '1px solid #FCA5A5',
                                                     display: 'flex',
                                                     alignItems: 'baseline',
-                                                    gap: '2px'
+                                                    gap: '1px'
                                                 }}>
                                                     <span style={{ 
-                                                        fontWeight: '900', 
+                                                        fontWeight: '700', 
                                                         color: '#B91C1C', 
-                                                        fontSize: '1.1rem'
+                                                        fontSize: '0.8rem'
                                                     }}>
-                                                        {p.min_inventory_level} 
+                                                        {formatNumber(p.min_inventory_level)} 
                                                     </span>
-                                                    <span style={{ fontSize: '0.7rem', color: '#B91C1C', fontWeight: '700' }}>{p.unit_of_measure}</span>
+                                                    <span style={{ fontSize: '0.65rem', color: '#B91C1C', fontWeight: '600' }}>{p.unit_of_measure}</span>
                                                 </div>
-                                                <span title="Política activa crítica" style={{ fontSize: '1rem' }}>⚠️</span>
+                                                <span title="Política activa crítica" style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <AlertTriangle size={12} strokeWidth={1.5} className="text-red-500" />
+                                                </span>
                                             </div>
                                         ) : (
                                             <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '500', opacity: 0.6 }}>—</span>
                                         )}
                                     </td>
-                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                                             <button 
                                                 onClick={() => setConversionProduct(p)}
                                                 style={{ 
-                                                    fontSize: '0.7rem', 
-                                                    color: '#2563EB', 
-                                                    background: '#EFF6FF', 
-                                                    border: '1px solid #BFDBFE', 
-                                                    borderRadius: '6px', 
+                                                    fontSize: '0.65rem', 
+                                                    color: THEME.colors.primary, 
+                                                    background: THEME.colors.primaryLight, 
+                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                    borderRadius: '4px', 
                                                     cursor: 'pointer', 
-                                                    padding: '4px 8px',
-                                                    fontWeight: '700',
+                                                    padding: '2px 6px',
+                                                    fontWeight: '600',
                                                     whiteSpace: 'nowrap',
-                                                    width: 'fit-content'
+                                                    width: 'fit-content',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
                                                 }}
                                             >
-                                                ⚖️ {conversions.filter(c => c.product_id === p.id).length} Eq.
+                                                <Scale size={10} strokeWidth={1.5} /> {formatNumber(conversions.filter(c => c.product_id === p.id).length)} Eq.
                                             </button>
                                             <div style={{ 
-                                                fontSize: '0.7rem', 
+                                                fontSize: '0.65rem', 
                                                 color: '#7C3AED', 
                                                 background: '#F5F3FF', 
                                                 border: '1px solid #DDD6FE', 
-                                                borderRadius: '6px', 
-                                                padding: '4px 8px',
-                                                fontWeight: '800',
-                                                display: 'inline-block',
+                                                borderRadius: '4px', 
+                                                padding: '2px 6px',
+                                                fontWeight: '600',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '3px',
                                                 whiteSpace: 'nowrap',
                                                 width: 'fit-content',
                                                 opacity: (p.variants?.length || 0) > 0 ? 1 : 0.4
                                             }}>
-                                                🧬 {p.variants?.length || 0} Var.
+                                                <Dna size={10} strokeWidth={1.5} /> {formatNumber(p.variants?.length || 0)} Var.
                                             </div>
                                         </div>
                                     </td>
-                                    <td style={{ padding: '1rem', width: '250px' }}>
+                                    <td style={{ padding: '0.75rem 1rem', width: '250px' }}>
                                         <div 
                                             onClick={() => setExpandedDescriptions(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                                             style={{ 
                                                 fontSize: '0.75rem', 
-                                                color: '#6B7280', 
+                                                color: THEME.colors.textSecondary, 
                                                 cursor: 'pointer',
-                                                transition: 'all 0.3s ease',
+                                                transition: 'all 0.2s ease',
                                                 display: 'flex',
                                                 flexDirection: 'column',
-                                                gap: '4px'
+                                                gap: '2px'
                                             }}
                                         >
                                             <div style={{ 
@@ -1271,24 +1306,24 @@ export default function MasterProductsPage() {
                                             </div>
                                             {(p.description?.length || 0) > 60 && (
                                                 <span style={{ 
-                                                    color: '#2563EB', 
+                                                    color: THEME.colors.primary, 
                                                     fontSize: '0.65rem', 
-                                                    fontWeight: '700', 
+                                                    fontWeight: '600', 
                                                     display: 'flex', 
                                                     alignItems: 'center', 
                                                     gap: '2px',
                                                     marginTop: '2px'
                                                 }}>
                                                     {expandedDescriptions[p.id] ? (
-                                                        <><ChevronUp size={10} /> Ver menos</>
+                                                        <><ChevronUp size={10} strokeWidth={1.5} /> Ver menos</>
                                                     ) : (
-                                                        <><ChevronDown size={10} /> Ver más</>
+                                                        <><ChevronDown size={10} strokeWidth={1.5} /> Ver más</>
                                                     )}
                                                 </span>
                                             )}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                         <div 
                                             onClick={() => updateProductField(p.id, 'show_on_web', !p.show_on_web)}
                                             title={p.show_on_web ? 'Visible en tienda (Click para ocultar)' : 'Oculto en tienda (Click para mostrar)'}
@@ -1297,28 +1332,34 @@ export default function MasterProductsPage() {
                                                 justifyContent: 'center',
                                                 alignItems: 'center',
                                                 opacity: p.show_on_web ? 1 : 0.3,
-                                                color: p.show_on_web ? '#2563EB' : '#9CA3AF',
+                                                color: p.show_on_web ? THEME.colors.primary : THEME.colors.textSecondary,
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s'
                                             }}
                                         >
-                                            {p.show_on_web ? <Globe size={20} /> : <EyeOff size={20} />}
+                                            {p.show_on_web ? <Globe size={18} strokeWidth={1.5} /> : <EyeOff size={18} strokeWidth={1.5} />}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center',
-                                            gap: '0.4rem', 
-                                            background: p.is_active ? '#ECFDF5' : '#FEF2F2',
-                                            border: `1px solid ${p.is_active ? '#A7F3D0' : '#FECACA'}`,
-                                            padding: '5px 8px',
-                                            borderRadius: '20px',
-                                            width: '100%'
-                                        }}>
-                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: p.is_active ? '#10B981' : '#EF4444' }}></div>
-                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: p.is_active ? '#065F46' : '#991B1B' }}>
+                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                        <div 
+                                            onClick={() => updateProductField(p.id, 'is_active', !p.is_active)}
+                                            style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center',
+                                                gap: '4px', 
+                                                background: p.is_active ? '#ECFDF5' : '#FEF2F2',
+                                                border: `1px solid ${p.is_active ? '#A7F3D0' : '#FECACA'}`,
+                                                padding: '4px 8px',
+                                                borderRadius: '20px',
+                                                width: '100%',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            title="Click para cambiar estado"
+                                        >
+                                            <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: p.is_active ? '#10B981' : '#EF4444' }}></div>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '700', color: p.is_active ? '#065F46' : '#991B1B' }}>
                                                 {p.is_active ? 'ON' : 'OFF'}
                                             </span>
                                         </div>
@@ -1332,36 +1373,60 @@ export default function MasterProductsPage() {
                 {/* PAGINACIÓN FOOTER */}
                 {!loading && totalPages > 1 && (
                     <div style={{ 
-                        marginTop: '2rem', 
+                        marginTop: '1.5rem', 
                         display: 'flex', 
                         justifyContent: 'center', 
                         alignItems: 'center', 
                         gap: '1rem',
-                        padding: '1.5rem',
-                        backgroundColor: 'white',
-                        borderRadius: '12px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                        border: '1px solid #E5E7EB'
+                        padding: '1rem',
+                        backgroundColor: THEME.colors.surface,
+                        borderRadius: THEME.radius.lg,
+                        boxShadow: THEME.shadow.sm,
+                        border: `1px solid ${THEME.colors.border}`
                     }}>
                         <button 
                             disabled={currentPage === 1}
                             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: currentPage === 1 ? '#F3F4F6' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontWeight: '700' }}
+                            style={{ 
+                                padding: '0.4rem 0.8rem', 
+                                borderRadius: THEME.radius.sm, 
+                                border: `1px solid ${THEME.colors.border}`, 
+                                backgroundColor: currentPage === 1 ? '#F1F5F9' : 'white', 
+                                color: currentPage === 1 ? THEME.colors.textSecondary : THEME.colors.textMain,
+                                cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
+                                fontWeight: '600',
+                                fontSize: '0.8rem',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.borderActive; }}
+                            onMouseLeave={e => { if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.border; }}
                         >
                             Anterior
                         </button>
                         
-                        <div style={{ fontWeight: '800', color: '#374151' }}>
-                            Página {currentPage} de {totalPages} 
-                            <span style={{ fontWeight: '400', color: '#6B7280', marginLeft: '8px' }}>
-                                (Mostrando {paginatedProducts.length} de {filteredProducts.length} productos)
+                        <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.8rem' }}>
+                            Página {formatNumber(currentPage)} de {formatNumber(totalPages)} 
+                            <span style={{ fontWeight: '400', color: THEME.colors.textSecondary, marginLeft: '6px' }}>
+                                (Mostrando {formatNumber(paginatedProducts.length)} de {formatNumber(filteredProducts.length)} productos)
                             </span>
                         </div>
 
                         <button 
                             disabled={currentPage === totalPages}
                             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: currentPage === totalPages ? '#F3F4F6' : 'white', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', fontWeight: '700' }}
+                            style={{ 
+                                padding: '0.4rem 0.8rem', 
+                                borderRadius: THEME.radius.sm, 
+                                border: `1px solid ${THEME.colors.border}`, 
+                                backgroundColor: currentPage === totalPages ? '#F1F5F9' : 'white', 
+                                color: currentPage === totalPages ? THEME.colors.textSecondary : THEME.colors.textMain,
+                                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', 
+                                fontWeight: '600',
+                                fontSize: '0.8rem',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { if (currentPage !== totalPages) e.currentTarget.style.borderColor = THEME.colors.borderActive; }}
+                            onMouseLeave={e => { if (currentPage !== totalPages) e.currentTarget.style.borderColor = THEME.colors.border; }}
                         >
                             Siguiente
                         </button>
@@ -1388,64 +1453,69 @@ export default function MasterProductsPage() {
 
             {/* MODAL DE GESTIÓN DE CONVERSIONES */}
             {conversionProduct && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', width: '450px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                        <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, width: '450px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.lg }}>
+                        <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.25rem', alignItems: 'center' }}>
                             <div>
-                                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900' }}>📦 Unidades y Logística</h2>
-                                <span style={{ fontSize: '0.9rem', color: '#6B7280' }}>{conversionProduct.name}</span>
+                                <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Scale size={18} strokeWidth={1.5} /> Unidades y Logística
+                                </h2>
+                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>{conversionProduct.name}</span>
                             </div>
-                            <button onClick={() => setConversionProduct(null)} style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF' }}>✕</button>
+                            <button onClick={() => setConversionProduct(null)} style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', color: THEME.colors.textSecondary }}>✕</button>
                         </header>
 
-                        <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ marginBottom: '1rem' }}>
                             {/* SECCIÓN DE UNIDAD BASE (LA RAÍZ) */}
-                            <div style={{ backgroundColor: '#F3F4F6', padding: '1.2rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid #E5E7EB' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '8px', textTransform: 'uppercase' }}>Unidad de Inventario (Base)</label>
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: THEME.radius.md, marginBottom: '1.25rem', border: `1px solid ${THEME.colors.border}` }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unidad de Inventario (Base)</label>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <select
                                         value={conversionProduct.unit_of_measure}
                                         onChange={(e) => updateProductField(conversionProduct.id, 'unit_of_measure', e.target.value)}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: '2px solid #2563EB', fontSize: '1.1rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF', cursor: 'pointer', appearance: 'none' }}
+                                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, cursor: 'pointer' }}
                                     >
                                         {dynamicUnits.map(u => (
                                             <option key={u} value={u}>{u}</option>
                                         ))}
                                     </select>
-                                    <div style={{ flex: 1.5, fontSize: '0.75rem', color: '#6B7280', lineHeight: '1.2' }}>
-                                        💡 <strong>Recomendación:</strong> Usa la unidad más pequeña en la que vayas a mover el inventario (ej: Kg).
+                                    <div style={{ flex: 1.5, fontSize: '0.7rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
+                                        <Info size={12} strokeWidth={1.5} style={{ display: 'inline', marginRight: '3px' }} /> Usa la unidad más pequeña en la que vayas a mover el inventario (ej: Kg).
                                     </div>
                                 </div>
                             </div>
 
-                            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', padding: '0px', marginBottom: '2rem' }}>
-                                <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>Equivalencias de Compra</h4>
+                            <div style={{ backgroundColor: '#FFFFFF', borderRadius: THEME.radius.md, padding: '0px', marginBottom: '1.25rem' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '700' }}>Equivalencias de Compra</h4>
                                 {conversions.filter(c => c.product_id === conversionProduct.id).length === 0 ? (
-                                    <div style={{ fontSize: '0.85rem', color: '#9CA3AF', textAlign: 'center', padding: '1rem', border: '1px dashed #D1D5DB', borderRadius: '12px' }}>Solo se opera en {conversionProduct.unit_of_measure}.</div>
+                                    <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, textAlign: 'center', padding: '0.75rem', border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.sm }}>
+                                        Solo se opera en {conversionProduct.unit_of_measure}.
+                                    </div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                         {conversions.filter(c => c.product_id === conversionProduct.id).map(c => {
                                             return (
-                                                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: '10px', border: '1px solid #E5E7EB' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ fontWeight: '800', color: '#111827' }}>1 {c.from_unit}</span>
-                                                        <span style={{ color: '#6B7280' }}>=</span>
-                                                        <span style={{ fontWeight: '800', color: '#2563EB' }}>{c.conversion_factor} {conversionProduct.unit_of_measure}</span>
+                                                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: '0.6rem 0.8rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}` }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
+                                                        <span style={{ fontWeight: '600', color: THEME.colors.textMain }}>1 {c.from_unit}</span>
+                                                        <span style={{ color: THEME.colors.textSecondary }}>=</span>
+                                                        <span style={{ fontWeight: '600', color: THEME.colors.primary }}>{formatNumber(c.conversion_factor, 2)} {conversionProduct.unit_of_measure}</span>
                                                         <span 
                                                             onClick={() => {
-                                                                // Solo un aviso visual de que se puede leer al revés
-                                                                const inverted = (1 / c.conversion_factor).toFixed(2);
+                                                                const inverted = formatNumber(1 / c.conversion_factor, 2);
                                                                 showToast(`También se lee como: 1 ${conversionProduct.unit_of_measure} = ${inverted} ${c.from_unit}`, 'info');
                                                             }}
-                                                            style={{ cursor: 'pointer', fontSize: '0.9rem', marginLeft: '5px' }}
+                                                            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: THEME.colors.textSecondary }}
                                                             title="Ver equivalente"
                                                         >
-                                                            ⇅
+                                                            <ArrowUpDown size={12} strokeWidth={1.5} />
                                                         </span>
                                                     </div>
                                                     <button 
                                                         onClick={() => deleteConversion(c.id)} 
-                                                        style={{ color: '#EF4444', background: '#FEF2F2', border: 'none', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.75rem' }}
+                                                        style={{ color: '#EF4444', background: '#FEF2F2', border: `1px solid #FECACA`, padding: '2px 6px', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', fontSize: '0.7rem', transition: 'all 0.15s' }}
+                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
                                                     >
                                                         Eliminar
                                                     </button>
@@ -1456,25 +1526,27 @@ export default function MasterProductsPage() {
                                 )}
                             </div>
 
-                            <div style={{ borderTop: '2px dashed #E5E7EB', paddingTop: '1.5rem' }}>
-                                <h4 style={{ margin: '0 0 1.2rem 0', fontSize: '0.85rem', color: '#111827', textAlign: 'center', fontWeight: '800' }}>➕ DEFINIR NUEVA RELACIÓN</h4>
+                            <div style={{ borderTop: `1px dashed ${THEME.colors.border}`, paddingTop: '1rem' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: THEME.colors.textMain, textAlign: 'center', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                    <Plus size={12} strokeWidth={1.5} /> DEFINIR NUEVA RELACIÓN
+                                </h4>
                                 
                                 <div style={{ 
                                     display: 'flex', 
                                     flexDirection: 'column',
-                                    gap: '4px', 
-                                    backgroundColor: '#EFF6FF', 
-                                    padding: '1.2rem', 
-                                    borderRadius: '16px',
-                                    border: '1px solid #BFDBFE'
+                                    gap: '6px', 
+                                    backgroundColor: THEME.colors.primaryLight, 
+                                    padding: '1rem', 
+                                    borderRadius: THEME.radius.md,
+                                    border: `1px solid ${THEME.colors.border}`
                                 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="raw-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '800', textAlign: 'center' }} />
+                                            <input id="raw-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', textAlign: 'center', fontSize: '0.85rem' }} />
                                         </div>
                                         <div style={{ flex: 2 }}>
-                                            <select id="raw-unit-1" style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white' }}>
-                                                <option value="">Seleccionar Unidad</option>
+                                            <select id="raw-unit-1" style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', backgroundColor: 'white', fontSize: '0.85rem' }}>
+                                                <option value="">Unidad</option>
                                                 {dynamicUnits.map(u => (
                                                     <option key={u} value={u}>{u}</option>
                                                 ))}
@@ -1482,14 +1554,14 @@ export default function MasterProductsPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ textAlign: 'center', color: '#2563EB', fontWeight: '900', fontSize: '1.2rem' }}>EQUIVALE A</div>
+                                    <div style={{ textAlign: 'center', color: THEME.colors.primary, fontWeight: '700', fontSize: '0.75rem' }}>EQUIVALE A</div>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ flex: 1 }}>
-                                            <input id="raw-qty-2" type="number" placeholder="Ej: 50" style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '800', textAlign: 'center' }} />
+                                            <input id="raw-qty-2" type="number" placeholder="Ej: 50" style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', textAlign: 'center', fontSize: '0.85rem' }} />
                                         </div>
                                         <div style={{ flex: 2 }}>
-                                            <div style={{ width: '100%', padding: '0.6rem', backgroundColor: '#DBEAFE', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#1E40AF' }}>
+                                            <div style={{ width: '100%', padding: '0.4rem', backgroundColor: '#FFFFFF', border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', fontWeight: '700', textAlign: 'center', color: THEME.colors.primary, fontSize: '0.85rem' }}>
                                                 {conversionProduct.unit_of_measure}
                                             </div>
                                         </div>
@@ -1506,7 +1578,6 @@ export default function MasterProductsPage() {
                                             const factor = qty2 / qty1;
                                             addConversion(conversionProduct.id, unit1, conversionProduct.unit_of_measure, factor);
                                             
-                                            // Limpiar
                                             (document.getElementById('raw-qty-1') as HTMLInputElement).value = '1';
                                             (document.getElementById('raw-unit-1') as HTMLInputElement).value = '';
                                             (document.getElementById('raw-qty-2') as HTMLInputElement).value = '';
@@ -1514,17 +1585,19 @@ export default function MasterProductsPage() {
                                     }}
                                     style={{ 
                                         width: '100%',
-                                        padding: '1.2rem', 
-                                        backgroundColor: '#111827', 
+                                        padding: '0.6rem', 
+                                        backgroundColor: THEME.colors.primary, 
                                         color: 'white', 
                                         border: 'none', 
-                                        borderRadius: '12px', 
-                                        fontWeight: '900', 
+                                        borderRadius: THEME.radius.sm, 
+                                        fontWeight: '700', 
                                         cursor: 'pointer',
-                                        fontSize: '1rem',
-                                        marginTop: '1.2rem',
-                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                                        fontSize: '0.85rem',
+                                        marginTop: '0.75rem',
+                                        transition: 'all 0.15s'
                                     }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                 >
                                     Vincular Unidades
                                 </button>
@@ -1536,20 +1609,20 @@ export default function MasterProductsPage() {
             {/* MODAL CARGA MASIVA PREMIUM */}
             {isBulkModalOpen && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-                    <div style={{ backgroundColor: 'white', padding: 0, borderRadius: '28px', width: '90%', maxWidth: '540px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: 0, borderRadius: THEME.radius.lg, width: '90%', maxWidth: '500px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.lg, overflow: 'hidden' }}>
                         {/* Header */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem 2rem', borderBottom: '1px solid #F3F4F6' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ backgroundColor: '#EFF6FF', color: '#2563EB', padding: '8px', borderRadius: '10px' }}>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '6px', borderRadius: THEME.radius.sm }}>
+                                    <FileUp size={16} strokeWidth={1.5} />
                                 </div>
-                                <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#111827', margin: 0 }}>Cargue Masivo (Productos)</h2>
+                                <h2 style={{ fontSize: '0.95rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0 }}>Cargue Masivo (Productos)</h2>
                             </div>
-                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: '1.5rem', fontWeight: '300' }}>×</button>
+                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: THEME.colors.textSecondary, cursor: 'pointer', fontSize: '1.25rem', fontWeight: '300' }}>✕</button>
                         </div>
 
-                        <div style={{ padding: '2rem' }}>
-                            <p style={{ color: '#6B7280', fontSize: '0.9rem', textAlign: 'center', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                        <div style={{ padding: '1.5rem' }}>
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.8rem', textAlign: 'center', marginBottom: '1rem', lineHeight: '1.4' }}>
                                 Sube un archivo con el maestro de materiales (SKU, Nombre, Unidad, Categoría y Precio).
                             </p>
 
@@ -1565,17 +1638,17 @@ export default function MasterProductsPage() {
                                     }
                                 }}
                                 style={{ 
-                                    border: dragging ? '2px solid #2563EB' : '2px dashed #E5E7EB',
-                                    backgroundColor: dragging ? '#EFF6FF' : '#F9FAFB',
-                                    borderRadius: '20px',
-                                    height: '220px',
+                                    border: dragging ? `2px solid ${THEME.colors.primary}` : `2px dashed ${THEME.colors.border}`,
+                                    backgroundColor: dragging ? THEME.colors.primaryLight : '#F8FAFC',
+                                    borderRadius: THEME.radius.md,
+                                    height: '180px',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '1rem',
+                                    gap: '0.75rem',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    transition: 'all 0.2s ease',
                                     position: 'relative'
                                 }}
                                 onClick={() => document.getElementById('bulk-file-input')?.click()}
@@ -1584,56 +1657,57 @@ export default function MasterProductsPage() {
                                 
                                 <div style={{ 
                                     backgroundColor: 'white', 
-                                    padding: '12px', 
+                                    padding: '8px', 
                                     borderRadius: '50%', 
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                                    color: selectedFile ? '#10B981' : '#9CA3AF'
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    color: selectedFile ? '#10B981' : THEME.colors.textSecondary
                                 }}>
                                     {selectedFile ? (
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <CheckCircle size={24} strokeWidth={1.5} />
                                     ) : (
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        <FileUp size={24} strokeWidth={1.5} />
                                     )}
                                 </div>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontWeight: '700', color: '#374151', fontSize: '0.95rem' }}>
+                                <div style={{ textAlign: 'center', padding: '0 1rem' }}>
+                                    <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
                                         {selectedFile ? selectedFile.name : 'Haz clic para seleccionar o arrastra un archivo'}
                                     </div>
-                                    {!selectedFile && <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>Archivos .xlsx o .xls oficiales de Excel</div>}
+                                    {!selectedFile && <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>Archivos .xlsx o .xls oficiales de Excel</div>}
                                 </div>
                             </div>
 
                             {/* Opción de Purga */}
-                            <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#FEF2F2', borderRadius: '14px', border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#FEF2F2', borderRadius: THEME.radius.sm, border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <input 
                                     type="checkbox" 
                                     id="wipe-data" 
                                     checked={wipeExistingData} 
                                     onChange={(e) => setWipeExistingData(e.target.checked)}
-                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                 />
-                                <label htmlFor="wipe-data" style={{ fontSize: '0.85rem', color: '#B91C1C', fontWeight: '700', cursor: 'pointer' }}>
+                                <label htmlFor="wipe-data" style={{ fontSize: '0.75rem', color: '#B91C1C', fontWeight: '600', cursor: 'pointer' }}>
                                     Borrar todos los productos existentes antes de cargar (Limpieza total)
                                 </label>
                             </div>
 
-                            <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <button 
                                     disabled={!selectedFile || loading}
                                     onClick={processFile}
                                     style={{ 
                                         width: '100%', 
-                                        padding: '1rem', 
-                                        backgroundColor: selectedFile ? '#2563EB' : '#A5C1F9', 
+                                        padding: '0.6rem', 
+                                        backgroundColor: selectedFile ? THEME.colors.primary : '#A7F3D0', 
                                         color: 'white', 
                                         border: 'none', 
-                                        borderRadius: '14px', 
-                                        fontWeight: '800', 
+                                        borderRadius: THEME.radius.sm, 
+                                        fontWeight: '700', 
                                         cursor: selectedFile ? 'pointer' : 'not-allowed',
-                                        fontSize: '0.95rem',
-                                        transition: 'all 0.2s',
-                                        boxShadow: selectedFile ? '0 4px 12px rgba(37, 99, 235, 0.2)' : 'none'
+                                        fontSize: '0.85rem',
+                                        transition: 'all 0.15s'
                                     }}
+                                    onMouseEnter={e => { if (selectedFile) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                    onMouseLeave={e => { if (selectedFile) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                                 >
                                     {loading ? 'Procesando...' : 'Procesar Excel'}
                                 </button>
@@ -1642,24 +1716,26 @@ export default function MasterProductsPage() {
                                     onClick={downloadTemplate}
                                     style={{ 
                                         width: '100%', 
-                                        padding: '1rem', 
-                                        backgroundColor: '#F3F4F6', 
-                                        color: '#374151', 
-                                        border: 'none', 
-                                        borderRadius: '14px', 
-                                        fontWeight: '700', 
+                                        padding: '0.6rem', 
+                                        backgroundColor: '#F1F5F9', 
+                                        color: THEME.colors.textMain, 
+                                        border: `1px solid ${THEME.colors.border}`, 
+                                        borderRadius: THEME.radius.sm, 
+                                        fontWeight: '600', 
                                         cursor: 'pointer',
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.8rem',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '8px'
+                                        gap: '6px',
+                                        transition: 'all 0.15s'
                                     }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E2E8F0'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F1F5F9'}
                                 >
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <FileDown size={14} strokeWidth={1.5} />
                                     Descargar Plantilla (.xlsx)
                                 </button>
-
                             </div>
                         </div>
                     </div>

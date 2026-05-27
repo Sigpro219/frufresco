@@ -5,6 +5,22 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { 
+    RefreshCw, 
+    Coins, 
+    Clock, 
+    TrendingUp, 
+    Tag, 
+    ShoppingBag, 
+    ShieldCheck, 
+    Layers, 
+    Users, 
+    Store, 
+    Settings, 
+    Radio, 
+    ArrowRight 
+} from 'lucide-react';
 
 export default function AdminDashboard() {
     const { profile } = useAuth();
@@ -127,196 +143,272 @@ export default function AdminDashboard() {
     }, [fetchDashboardData]);
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
-
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '2rem' }}>
-                <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>Centro de Comando</h1>
-                        <p style={{ color: '#6B7280', fontSize: '1.05rem', marginTop: '0.4rem', fontWeight: '500' }}>Resumen operativo de <strong style={{ color: 'var(--primary)' }}>FruFresco</strong> en tiempo real.</p>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>
+                            Centro de Comando
+                        </h1>
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: '500' }}>
+                            Resumen operativo de <span style={{ color: THEME.colors.primary, fontWeight: '600' }}>FruFresco</span> en tiempo real.
+                        </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
+                    <div>
                         <button
                             onClick={fetchDashboardData}
                             style={{ 
-                                padding: '0.75rem 1.4rem', 
-                                borderRadius: '12px', 
-                                backgroundColor: 'white', 
-                                border: '1px solid #E5E7EB', 
-                                fontWeight: '700', 
-                                color: '#374151',
+                                padding: '0.6rem 1.2rem', 
+                                borderRadius: THEME.radius.md, 
+                                backgroundColor: THEME.colors.surface, 
+                                border: `1px solid ${THEME.colors.border}`, 
+                                fontWeight: '600', 
+                                color: THEME.colors.textMain,
                                 cursor: 'pointer', 
                                 display: 'flex', 
                                 alignItems: 'center', 
-                                gap: '8px',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                transition: 'all 0.2s'
+                                gap: '6px',
+                                fontSize: '0.85rem',
+                                boxShadow: THEME.shadow.sm,
+                                transition: 'all 0.2s ease'
                             }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.surface;
+                                e.currentTarget.style.borderColor = THEME.colors.border;
+                            }}
                         >
-                            🔄 Sincronizar
+                            <RefreshCw size={14} strokeWidth={1.5} /> Sincronizar
                         </button>
                     </div>
                 </header>
 
                 {/* KPIs Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-                    <KPICard title="Ventas Hoy" value={`$${stats.todaySales.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`} icon="💰" color="#10B981" />
-                    <KPICard title="Pedidos Pendientes" value={stats.pendingOrders.toLocaleString('es-CO')} icon="⏳" color="#F59E0B" />
-                    <KPICard title="Leads Nuevos" value={stats.newLeads.toLocaleString('es-CO')} icon="📈" color="#6366F1" />
-                    <KPICard title="Ticket Promedio" value={`$${stats.avgTicket.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon="🎟️" color="#4F46E5" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+                    <KPICard 
+                        title="Ventas Hoy" 
+                        value={formatMoney(stats.todaySales)} 
+                        icon={<Coins size={20} strokeWidth={1.5} />} 
+                        color={THEME.colors.primary} 
+                    />
+                    <KPICard 
+                        title="Pedidos Pendientes" 
+                        value={formatNumber(stats.pendingOrders)} 
+                        icon={<Clock size={20} strokeWidth={1.5} />} 
+                        color="#F59E0B" 
+                    />
+                    <KPICard 
+                        title="Leads Nuevos" 
+                        value={formatNumber(stats.newLeads)} 
+                        icon={<TrendingUp size={20} strokeWidth={1.5} />} 
+                        color="#6366F1" 
+                    />
+                    <KPICard 
+                        title="Ticket Promedio" 
+                        value={formatMoney(stats.avgTicket)} 
+                        icon={<Tag size={20} strokeWidth={1.5} />} 
+                        color="#4F46E5" 
+                    />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 340px', gap: '2rem', marginBottom: '3rem', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 340px', gap: '1.5rem', marginBottom: '2rem', alignItems: 'start' }}>
                     {/* COLUMNA 1: OPERACIONES CLAVE */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ 
-                            background: 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 100%)', 
-                            borderRadius: '24px', 
-                            padding: '2.5rem 2rem', 
+                            background: 'linear-gradient(135deg, #111827 0%, #1E2B25 100%)', // Deep organic slate
+                            borderRadius: THEME.radius.lg, 
+                            padding: '2rem', 
                             display: 'flex', 
                             flexDirection: 'column', 
-                            gap: '1.5rem', 
-                            boxShadow: '0 20px 25px -5px rgba(124, 58, 237, 0.2)',
+                            gap: '1.25rem', 
+                            boxShadow: THEME.shadow.md,
                             position: 'relative',
-                            overflow: 'hidden'
+                            overflow: 'hidden',
+                            border: `1px solid ${THEME.colors.border}`
                         }}>
-                            <div style={{ position: 'absolute', top: '-10%', right: '-5%', fontSize: '8rem', opacity: 0.1, color: 'white' }}>🛒</div>
+                            <div style={{ position: 'absolute', bottom: '-10px', right: '-10px', opacity: 0.04, color: 'white' }}>
+                                <ShoppingBag size={140} strokeWidth={1} />
+                            </div>
                             <div style={{ position: 'relative', zIndex: 1 }}>
-                                <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white', margin: 0 }}>Portal de Compras</h2>
-                                <p style={{ fontSize: '0.95rem', color: '#DDD6FE', margin: '0.4rem 0 0 0', fontWeight: '500' }}>Canal exclusivo para Clientes Institucionales</p>
+                                <h2 style={{ fontSize: '1.35rem', fontWeight: '800', color: 'white', margin: 0 }}>Portal de Compras</h2>
+                                <p style={{ fontSize: '0.85rem', color: '#A3B899', margin: '0.25rem 0 0 0', fontWeight: '500' }}>Canal exclusivo para Clientes Institucionales</p>
                             </div>
                             <Link href="/b2b/dashboard" style={{ textDecoration: 'none', position: 'relative', zIndex: 1 }}>
                                 <button style={{ 
                                     width: '100%', 
-                                    padding: '1.1rem', 
-                                    borderRadius: '14px', 
-                                    backgroundColor: 'white', 
-                                    color: '#7C3AED', 
+                                    padding: '0.85rem', 
+                                    borderRadius: THEME.radius.md, 
+                                    backgroundColor: THEME.colors.primary, 
+                                    color: 'white', 
                                     border: 'none', 
-                                    fontWeight: '900', 
-                                    fontSize: '1rem',
+                                    fontWeight: '700', 
+                                    fontSize: '0.9rem',
                                     cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                    boxShadow: '0 10px 15px rgba(0,0,0,0.1)'
+                                    transition: 'all 0.2s ease-in-out',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)'
                                 }}
                                 onMouseEnter={e => {
-                                    e.currentTarget.style.transform = 'scale(1.02) translateY(-2px)';
-                                    e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,0,0,0.2)';
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
                                 }}
                                 onMouseLeave={e => {
-                                    e.currentTarget.style.transform = 'scale(1) translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 10px 15px rgba(0,0,0,0.1)';
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                    e.currentTarget.style.transform = 'translateY(0)';
                                 }}
                                 >
-                                    ABRIR PORTAL B2B →
+                                    ABRIR PORTAL B2B <ArrowRight size={16} strokeWidth={1.5} />
                                 </button>
                             </Link>
                         </div>
 
-                        <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)' }}>
-                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                <div style={{ width: '45px', height: '45px', backgroundColor: '#F3F4F6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🕵️‍♂️</div>
+                        <div style={{ 
+                            backgroundColor: THEME.colors.surface, 
+                            borderRadius: THEME.radius.lg, 
+                            padding: '1.25rem', 
+                            border: `1px solid ${THEME.colors.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            boxShadow: THEME.shadow.sm 
+                        }}>
+                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ 
+                                    width: '40px', 
+                                    height: '40px', 
+                                    backgroundColor: THEME.colors.primaryLight, 
+                                    borderRadius: THEME.radius.md, 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    color: THEME.colors.primary
+                                }}>
+                                    <ShieldCheck size={20} strokeWidth={1.5} />
+                                </div>
                                 <div>
-                                    <h2 style={{ fontSize: '1.05rem', fontWeight: '900', color: '#111827', margin: 0 }}>Gobernanza</h2>
-                                    <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0, fontWeight: '600' }}>Auditoría y Trazabilidad</p>
+                                    <h2 style={{ fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Gobernanza</h2>
+                                    <p style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, margin: 0, fontWeight: '500' }}>Auditoría y Trazabilidad</p>
                                 </div>
                             </div>
                             <Link href="/admin/audit" style={{ textDecoration: 'none' }}>
                                 <button style={{ 
-                                    padding: '0.6rem 1rem', 
-                                    borderRadius: '10px', 
-                                    backgroundColor: '#111827', 
+                                    padding: '0.5rem 1rem', 
+                                    borderRadius: THEME.radius.md, 
+                                    backgroundColor: THEME.colors.textMain, 
                                     color: 'white', 
                                     border: 'none', 
-                                    fontWeight: '800', 
+                                    fontWeight: '700', 
                                     fontSize: '0.75rem',
-                                    cursor: 'pointer'
-                                }}>GESTIONAR</button>
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#2D3748'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.textMain}
+                                >GESTIONAR</button>
                             </Link>
                         </div>
                     </div>
 
                     {/* COLUMNA 2: GESTIÓN DE MAESTROS */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <AdminCard title="Catálogo Web" href="/admin/products" icon="🛍️" color="white" textColor="#1E3A8A" desc="Precios B2C" />
-                        <AdminCard title="Maestro SKU" href="/admin/master/products" icon="🏗️" color="white" textColor="#4F46E5" desc="Definición Técnica" />
-                        <AdminCard title="Clientes" href="/admin/clients" icon="👥" color="white" textColor="#475569" desc="CRM Base" />
-                        <AdminCard title="Proveedores" href="/admin/procurement/providers" icon="🏬" color="white" textColor="#0891B2" desc="Maestro Compras" />
-                        <AdminCard title="Ajustes" href="/admin/settings" icon="⚙️" color="white" textColor="#64748B" desc="Configuración" />
+                        <AdminCard title="Catálogo Web" href="/admin/products" icon={<ShoppingBag size={22} strokeWidth={1.5} />} desc="Precios B2C" />
+                        <AdminCard title="Maestro SKU" href="/admin/master/products" icon={<Layers size={22} strokeWidth={1.5} />} desc="Definición Técnica" />
+                        <AdminCard title="Clientes" href="/admin/clients" icon={<Users size={22} strokeWidth={1.5} />} desc="CRM Base" />
+                        <AdminCard title="Proveedores" href="/admin/procurement/providers" icon={<Store size={22} strokeWidth={1.5} />} desc="Maestro Compras" />
+                        <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" style={{ gridColumn: profile?.role === 'sys_admin' ? 'auto' : 'span 2' }} />
                         
                         {profile?.role === 'sys_admin' && (
                             <Link href="/admin/command-center" style={{ gridColumn: 'span 2', textDecoration: 'none' }}>
                                 <div style={{ 
                                     backgroundColor: '#0F172A', 
-                                    padding: '1.5rem', 
-                                    borderRadius: '20px', 
+                                    padding: '1.25rem', 
+                                    borderRadius: THEME.radius.lg, 
                                     display: 'flex', 
                                     alignItems: 'center', 
                                     justifyContent: 'space-between',
                                     border: '1px solid #1E293B',
-                                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
-                                    backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px)',
-                                    backgroundSize: '20px 20px',
-                                    transition: 'all 0.3s'
+                                    boxShadow: THEME.shadow.sm,
+                                    backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.01) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.01) 1px, transparent 1px)',
+                                    backgroundSize: '16px 16px',
+                                    transition: 'all 0.2s ease-in-out'
                                 }}
                                 onMouseEnter={e => {
-                                    e.currentTarget.style.transform = 'translateY(-3px)';
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
                                     e.currentTarget.style.borderColor = '#334155';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.md;
                                 }}
                                 onMouseLeave={e => {
                                     e.currentTarget.style.transform = 'translateY(0)';
                                     e.currentTarget.style.borderColor = '#1E293B';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
                                 }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{ fontSize: '2rem' }}>🛰️</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ color: '#D4AF37' }}>
+                                            <Radio size={24} strokeWidth={1.5} />
+                                        </div>
                                         <div>
-                                            <div style={{ fontWeight: '900', color: '#D4AF37', fontSize: '1rem', letterSpacing: '0.05em' }}>DELTA COMMAND CENTER</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Infraestructura & Datos</div>
+                                            <div style={{ fontWeight: '800', color: '#D4AF37', fontSize: '0.9rem', letterSpacing: '0.05em' }}>DELTA COMMAND CENTER</div>
+                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Infraestructura & Datos</div>
                                         </div>
                                     </div>
-                                    <div style={{ color: '#D4AF37', fontWeight: '900' }}>→</div>
+                                    <div style={{ color: '#D4AF37', fontWeight: '800' }}>
+                                        <ArrowRight size={16} strokeWidth={1.5} />
+                                    </div>
                                 </div>
                             </Link>
                         )}
                     </div>
 
                     {/* COLUMNA 3: RADAR (Fija a la derecha) */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', padding: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', height: '100%' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>🛍️ Radar de Ventas Hogar</h2>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#10B981', fontWeight: '700' }}>
-                                <span className="pulse-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
+                    <div style={{ 
+                        backgroundColor: THEME.colors.surface, 
+                        borderRadius: THEME.radius.lg, 
+                        border: `1px solid ${THEME.colors.border}`, 
+                        padding: '1.25rem', 
+                        boxShadow: THEME.shadow.sm, 
+                        height: '100%' 
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <h2 style={{ fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Radio size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Radar de Ventas Hogar
+                            </h2>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#10B981', fontWeight: '700' }}>
+                                <span className="pulse-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
                                 VIVO
                             </div>
                         </div>
                         <style>{`
                             @keyframes pulse {
                                 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-                                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+                                70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
                                 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
                             }
                             .pulse-dot {
                                 animation: pulse 2s infinite;
                             }
                         `}</style>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {recentOrders.length === 0 && <p style={{ color: '#6B7280', fontSize: '0.9rem' }}>No hay ventas B2C recientes.</p>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {recentOrders.length === 0 && <p style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>No hay ventas B2C recientes.</p>}
                             {recentOrders.map(order => (
-                                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #F3F4F6' }}>
-                                    <div>
-                                        <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>Pedido #{getFriendlyOrderId(order)}</div>
-                                         <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                            {order.profiles?.company_name || order.customer_name || 'Cliente Línea Hogar'} • {new Date(order.created_at).toLocaleTimeString()}
-                                        </div>
+                                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ minWidth: 0, paddingRight: '0.5rem' }}>
+                                        <div style={{ fontWeight: '700', fontSize: '0.85rem', color: THEME.colors.textMain }}>Pedido #{getFriendlyOrderId(order)}</div>
+                                         <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {order.profiles?.company_name || order.customer_name || 'Cliente Línea Hogar'} • {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: '800', color: '#111827' }}>${order.total?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                        <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.9rem' }}>{formatMoney(order.total)}</div>
                                         <div style={{
-                                            fontSize: '0.65rem',
-                                            padding: '2px 8px',
+                                            fontSize: '0.6rem',
+                                            padding: '1px 6px',
                                             borderRadius: '9999px',
                                             backgroundColor: order.status === 'delivered' ? '#DCFCE7' :
                                                 order.status === 'cancelled' ? '#FEE2E2' :
@@ -353,77 +445,103 @@ export default function AdminDashboard() {
     );
 }
 
-function KPICard({ title, value, icon, color }: { title: string, value: string, icon: string, color: string }) {
+interface KPICardProps {
+    title: string;
+    value: string;
+    icon: React.ReactNode;
+    color: string;
+}
+
+function KPICard({ title, value, icon, color }: KPICardProps) {
     return (
         <div style={{ 
-            backgroundColor: 'white', 
-            padding: '1.5rem', 
-            borderRadius: '20px', 
-            border: '1px solid #E5E7EB', 
-            borderTop: `4px solid ${color}`,
+            backgroundColor: THEME.colors.surface, 
+            padding: '1.25rem', 
+            borderRadius: THEME.radius.lg, 
+            border: `1px solid ${THEME.colors.border}`, 
             display: 'flex', 
             alignItems: 'center', 
             gap: '1rem', 
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-            transition: 'transform 0.2s',
+            boxShadow: THEME.shadow.sm,
+            transition: 'all 0.2s ease',
             minWidth: 0
         }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+        onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.md;
+            e.currentTarget.style.borderColor = THEME.colors.borderActive;
+        }}
+        onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+            e.currentTarget.style.borderColor = THEME.colors.border;
+        }}
         >
             <div style={{ 
-                fontSize: '1.8rem', 
-                backgroundColor: `${color}10`, 
-                width: '54px', 
-                height: '54px', 
-                borderRadius: '14px', 
+                fontSize: '1.25rem', 
+                backgroundColor: `${color}15`, 
+                width: '42px', 
+                height: '42px', 
+                borderRadius: THEME.radius.md, 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                color: color
+                color: color,
+                flexShrink: 0
             }}>
                 {icon}
             </div>
-            <div>
-                <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', whiteSpace: 'nowrap' }}>{title}</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', lineHeight: '1', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>{value}</div>
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', whiteSpace: 'nowrap' }}>{title}</div>
+                <div style={{ fontSize: '1.35rem', fontWeight: '800', color: THEME.colors.textMain, lineHeight: '1.2', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
             </div>
         </div>
     );
 }
 
-function AdminCard({ title, href, icon, color, textColor, desc }: { title: string, href: string, icon: string, color: string, textColor: string, desc?: string }) {
+interface AdminCardProps {
+    title: string;
+    href: string;
+    icon: React.ReactNode;
+    desc?: string;
+    style?: React.CSSProperties;
+}
+
+function AdminCard({ title, href, icon, desc, style }: AdminCardProps) {
     return (
-        <Link href={href} style={{ textDecoration: 'none' }}>
+        <Link href={href} style={{ textDecoration: 'none', ...style }}>
             <div style={{
-                backgroundColor: color,
-                padding: '1.5rem',
-                borderRadius: '20px',
+                backgroundColor: THEME.colors.surface,
+                padding: '1.25rem',
+                borderRadius: THEME.radius.lg,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.6rem',
-                border: '1px solid #E5E7EB',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                textAlign: 'center'
+                gap: '0.4rem',
+                border: `1px solid ${THEME.colors.border}`,
+                transition: 'all 0.2s ease',
+                boxShadow: THEME.shadow.sm,
+                textAlign: 'center',
+                height: '100%'
             }}
                 onMouseEnter={e => {
-                    e.currentTarget.style.transform = 'translateY(-5px)';
-                    e.currentTarget.style.boxShadow = '0 12px 20px rgba(0,0,0,0.06)';
-                    e.currentTarget.style.borderColor = textColor + '40';
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = THEME.shadow.md;
+                    e.currentTarget.style.borderColor = THEME.colors.primary;
                 }}
                 onMouseLeave={e => {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
-                    e.currentTarget.style.borderColor = '#E5E7EB';
+                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                    e.currentTarget.style.borderColor = THEME.colors.border;
                 }}
             >
-                <div style={{ fontSize: '2.2rem', marginBottom: '4px' }}>{icon}</div>
+                <div style={{ color: THEME.colors.primary, marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {icon}
+                </div>
                 <div>
-                    <div style={{ fontWeight: '900', color: '#111827', fontSize: '0.95rem', letterSpacing: '-0.01em' }}>{title}</div>
-                    {desc && <div style={{ fontSize: '0.7rem', color: '#9CA3AF', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>{desc}</div>}
+                    <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.9rem', letterSpacing: '-0.01em' }}>{title}</div>
+                    {desc && <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginTop: '2px' }}>{desc}</div>}
                 </div>
             </div>
         </Link>

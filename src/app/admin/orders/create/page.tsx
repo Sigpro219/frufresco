@@ -8,7 +8,35 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
 import { Map, Marker } from '@vis.gl/react-google-maps';
-import { MapPin, X, CheckCircle2, Map as MapIcon, Loader2 } from 'lucide-react';
+import { 
+    MapPin, 
+    X, 
+    CheckCircle2, 
+    Map as MapIcon, 
+    Loader2,
+    FileText,
+    Building2,
+    Home,
+    RefreshCw,
+    AlertTriangle,
+    FolderOpen,
+    Sparkles,
+    Settings,
+    ChevronLeft,
+    ArrowLeft,
+    Trash2,
+    Plus,
+    Check,
+    MessageSquare,
+    Phone,
+    Mail,
+    Globe,
+    Coins,
+    Scale,
+    User,
+    UploadCloud
+} from 'lucide-react';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 function CreateOrderContent() {
     const router = useRouter();
@@ -659,45 +687,69 @@ function CreateOrderContent() {
     const getSelectedClientDetails = () => clients.find(c => c.id === selectedClient);
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Inter, sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
-                    <Link href="/admin/orders/loading" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
+                    <Link href="/admin/orders/loading" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        textDecoration: 'none',
+                        color: THEME.colors.textSecondary,
+                        fontWeight: '600',
+                        fontSize: '0.85rem',
+                        transition: 'color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.color = THEME.colors.primary}
+                    onMouseOut={(e) => e.currentTarget.style.color = THEME.colors.textSecondary}
+                    >
+                        <ArrowLeft size={16} strokeWidth={1.5} />
+                        <span>Volver a Órdenes</span>
+                    </Link>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 350px', gap: '1.5rem', alignItems: 'start' }}>
 
                     {/* LEFT COLUMN: FORM */}
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                            <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#111827', margin: 0 }}>📝 Nuevo Pedido Manual</h1>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+                                    <FileText size={18} strokeWidth={1.5} />
+                                </div>
+                                <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Nuevo Pedido Manual</h1>
+                            </div>
                             
                             {/* CLIENT SEGMENTATION (SLIMMER) */}
-                            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.2rem', backgroundColor: '#F3F4F6', borderRadius: '10px', width: '400px' }}>
+                            <div style={{ display: 'flex', gap: '4px', padding: '3px', backgroundColor: THEME.colors.primaryLight, borderRadius: '12px', width: '320px' }}>
                                 <button
                                     onClick={() => setClientType('B2B')}
                                     style={{
                                         flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
-                                        backgroundColor: clientType === 'B2B' ? 'white' : 'transparent',
-                                        color: clientType === 'B2B' ? '#111827' : '#6B7280',
-                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.2s', fontSize: '0.85rem'
+                                        backgroundColor: clientType === 'B2B' ? THEME.colors.primary : 'transparent',
+                                        color: clientType === 'B2B' ? '#ffffff' : THEME.colors.textSecondary,
+                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2B' ? THEME.shadow.sm : 'none',
+                                        transition: 'all 0.2s', fontSize: '0.8rem',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                                     }}
                                 >
-                                    🏢 Institucional
+                                    <Building2 size={14} strokeWidth={1.5} />
+                                    <span>Institucional</span>
                                 </button>
                                 <button
                                     onClick={() => setClientType('B2C')}
                                     style={{
                                         flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
-                                        backgroundColor: clientType === 'B2C' ? 'white' : 'transparent',
-                                        color: clientType === 'B2C' ? '#111827' : '#6B7280',
-                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.2s', fontSize: '0.85rem'
+                                        backgroundColor: clientType === 'B2C' ? THEME.colors.primary : 'transparent',
+                                        color: clientType === 'B2C' ? '#ffffff' : THEME.colors.textSecondary,
+                                        fontWeight: '700', cursor: 'pointer', boxShadow: clientType === 'B2C' ? THEME.shadow.sm : 'none',
+                                        transition: 'all 0.2s', fontSize: '0.8rem',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                                     }}
                                 >
-                                    🏠 Hogar
+                                    <Home size={14} strokeWidth={1.5} />
+                                    <span>Hogar</span>
                                 </button>
                             </div>
                         </div>
@@ -726,7 +778,7 @@ function CreateOrderContent() {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
-                                                        🏢 SUCURSAL SELECCIONADA
+                                                        SUCURSAL SELECCIONADA
                                                     </div>
                                                     <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1.2rem', lineHeight: '1.2' }}>
                                                         {getSelectedClientDetails()?.company_name}
@@ -761,7 +813,7 @@ function CreateOrderContent() {
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px solid #DCFCE7', paddingTop: '0.8rem' }}>
                                                 {/* Fila 1: Dirección Full Width */}
                                                 <div>
-                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>📍 DIRECCIÓN DE ENTREGA</div>
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} strokeWidth={1.5} /> DIRECCIÓN DE ENTREGA</span></div>
                                                     <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532D' }}>
                                                         {getSelectedClientDetails()?.address}
                                                         <span style={{ fontSize: '0.8rem', fontWeight: '500', marginLeft: '6px', opacity: 0.8 }}>
@@ -773,14 +825,14 @@ function CreateOrderContent() {
                                                 {/* Fila 2: Grid para Encargado y GPS */}
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(22, 101, 52, 0.1)', paddingTop: '0.8rem' }}>
                                                     <div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>👤 Encargado</div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><User size={12} strokeWidth={1.5} /> Encargado</span></div>
                                                         <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534' }}>{getSelectedClientDetails()?.contact_name || 'No asignado'}</div>
                                                         <div style={{ fontSize: '0.75rem', color: '#15803D' }}>{getSelectedClientDetails()?.contact_phone || 'Sin teléfono'}</div>
                                                     </div>
                                                     <div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}>🛰️ Estado GPS</div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#15803D', textTransform: 'uppercase', marginBottom: '2px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={12} strokeWidth={1.5} /> Estado GPS</span></div>
                                                         <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            {getSelectedClientDetails()?.latitude ? '✅ Confirmado' : '⚠️ Pendiente'}
+                                                            {getSelectedClientDetails()?.latitude ? 'Confirmado' : 'Pendiente'}
                                                         </div>
                                                         {getSelectedClientDetails()?.latitude && (
                                                             <div style={{ fontSize: '0.7rem', color: '#15803D', opacity: 0.8 }}>
@@ -839,7 +891,7 @@ function CreateOrderContent() {
                                                             <div>
                                                                 <div style={{ fontWeight: '600', color: '#1F2937' }}>{c.company_name}</div>
                                                                 <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                                    NIT: {c.nit} • 📍 {c.address}
+                                                                    NIT: {c.nit} • {c.address}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -866,7 +918,7 @@ function CreateOrderContent() {
                                                 fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem'
                                             }}
                                         >
-                                            🔍 Buscar Cliente Existente
+                                            Buscar Cliente Existente
                                         </button>
                                         <button
                                             onClick={() => setB2CMode('new')}
@@ -877,7 +929,7 @@ function CreateOrderContent() {
                                                 fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem'
                                             }}
                                         >
-                                            ➕ Cliente Nuevo
+                                            Cliente Nuevo
                                         </button>
                                     </div>
 
@@ -896,25 +948,25 @@ function CreateOrderContent() {
                                                         </div>
                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
                                                             <div style={{ color: '#1E3A8A' }}>
-                                                                <span style={{ fontWeight: '600' }}>📞 Tel:</span> {getSelectedB2CDetails()?.contact_phone || 'N/A'}
+                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> Tel:</span> {getSelectedB2CDetails()?.contact_phone || 'N/A'}
                                                             </div>
                                                             <div style={{ color: '#1E3A8A' }}>
-                                                                <span style={{ fontWeight: '600' }}>🆔 CC/NIT:</span> {getSelectedB2CDetails()?.nit || 'N/A'}
+                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><FileText size={12} strokeWidth={1.5} /> CC/NIT:</span> {getSelectedB2CDetails()?.nit || 'N/A'}
                                                             </div>
                                                             <div style={{ color: '#1E3A8A', gridColumn: '1 / -1' }}>
-                                                                <span style={{ fontWeight: '600' }}>📧 Email:</span> {getSelectedB2CDetails()?.email || 'N/A'}
+                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Mail size={12} strokeWidth={1.5} /> Email:</span> {getSelectedB2CDetails()?.email || 'N/A'}
                                                             </div>
                                                             <div style={{ color: '#1E3A8A', gridColumn: '1 / -1' }}>
-                                                                <span style={{ fontWeight: '600' }}>📍 Dir:</span> {getSelectedB2CDetails()?.address || 'Sin dirección'} ({getSelectedB2CDetails()?.city || '?'})
+                                                                <span style={{ fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} strokeWidth={1.5} /> Dir:</span> {getSelectedB2CDetails()?.address || 'Sin dirección'} ({getSelectedB2CDetails()?.city || '?'})
                                                             </div>
                                                             <div style={{ gridColumn: '1 / -1', marginTop: '4px' }}>
                                                                 {(getSelectedB2CDetails()?.latitude && getSelectedB2CDetails()?.longitude) ? (
                                                                     <div style={{ color: '#059669', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        ✅ Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16A34A' }}><CheckCircle2 size={12} strokeWidth={1.5} /> Georeferenciado ({getSelectedB2CDetails()?.latitude?.toFixed(4)}, {getSelectedB2CDetails()?.longitude?.toFixed(4)})</span>
                                                                     </div>
                                                                 ) : (
                                                                     <div style={{ color: '#DC2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        ⚠️ Sin Georeferenciación
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={12} strokeWidth={1.5} /> Sin Georeferenciación</span>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -973,7 +1025,7 @@ function CreateOrderContent() {
                                                                     <div>
                                                                         <div style={{ fontWeight: '600', color: '#1F2937' }}>{c.contact_name || c.company_name}</div>
                                                                         <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                                            📞 {c.contact_phone} • 📍 {c.address}
+                                                                            {c.contact_phone} • {c.address}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1083,21 +1135,21 @@ function CreateOrderContent() {
                                                                 <>
                                                                     <X size={18} color="#DC2626" />
                                                                     <span style={{ fontSize: '0.8rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                        ⚠️ Fuera de Cobertura ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={14} strokeWidth={1.5} /> Fuera de Cobertura ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             ) : (outOfZone && hasCoverageOverride) ? (
                                                                 <>
                                                                     <CheckCircle2 size={18} color="#D97706" />
                                                                     <span style={{ fontSize: '0.8rem', color: '#D97706', fontWeight: '700' }}>
-                                                                        🌟 Excepción Autorizada: {coverageOverrideReason || 'Sin motivo'} ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><Sparkles size={14} strokeWidth={1.5} /> Excepción Autorizada: {coverageOverrideReason || 'Sin motivo'} ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     <CheckCircle2 size={18} color="#166534" />
                                                                     <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>
-                                                                        ✅ Ubicación Confirmada ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16A34A' }}><CheckCircle2 size={14} strokeWidth={1.5} /> Ubicación Confirmada ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             )}
@@ -1161,7 +1213,7 @@ function CreateOrderContent() {
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                                 <div style={{ fontSize: '0.65rem', fontWeight: '900', color: isManualDelivery ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                                    {isManualDelivery ? '⚠️ OVERRIDE MANUAL ACTIVO' : 'FRANJA DE ENTREGA'}
+                                                    {isManualDelivery ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><AlertTriangle size={12} strokeWidth={1.5} /> OVERRIDE MANUAL ACTIVO</span> : 'FRANJA DE ENTREGA'}
                                                 </div>
                                                 {isManualDelivery && (
                                                     <span style={{ fontSize: '0.6rem', backgroundColor: '#10B981', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
@@ -1257,7 +1309,7 @@ function CreateOrderContent() {
                                 alignItems: 'center', 
                                 gap: '1rem'
                             }}>
-                                <div style={{ fontSize: '2rem' }}>📄</div>
+                                <div style={{ color: THEME.colors.textSecondary }}><FileText size={36} strokeWidth={1.5} /></div>
                                 <div style={{ flex: 1 }}>
                                     <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#5B21B6', marginBottom: '0.2rem' }}>
                                         Carga Rápida de Orden de Compra (PDF)
@@ -1338,7 +1390,7 @@ function CreateOrderContent() {
                                         </div>
                                     ) : (
                                         <>
-                                            <div style={{ fontSize: '3.5rem', marginBottom: '1rem', opacity: 0.8 }}>📁</div>
+                                            <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }}><UploadCloud size={48} strokeWidth={1.5} /></div>
                                             <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#1E293B', marginBottom: '0.5rem' }}>
                                                 Mesa de Trabajo Inteligente
                                             </h3>
@@ -1367,7 +1419,7 @@ function CreateOrderContent() {
                                         alignItems: 'center'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                            <div style={{ fontSize: '1.8rem' }}>{importValidation.isMatch ? '✅' : '⚠️'}</div>
+                                            <div style={{ color: importValidation.isMatch ? '#16A34A' : '#D97706' }}>{importValidation.isMatch ? <CheckCircle2 size={24} strokeWidth={1.5} /> : <AlertTriangle size={24} strokeWidth={1.5} />}</div>
                                             <div>
                                                 <div style={{ fontSize: '0.7rem', fontWeight: '900', color: importValidation.isMatch ? '#166534' : '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                     Validación de Cliente (Auditoría)
@@ -1424,7 +1476,7 @@ function CreateOrderContent() {
                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
                                                             <input 
                                                                 type="text"
-                                                                placeholder="🔍 Buscar SKU..."
+                                                                placeholder="Buscar SKU..."
                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.sku})` : ''}
                                                                 list="all-products-list"
                                                                 onFocus={(e) => e.target.select()}
@@ -1526,7 +1578,7 @@ function CreateOrderContent() {
                                                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
                                                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                                             >
-                                                Confirmar e Inyectar al Pedido ✨
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={14} strokeWidth={1.5} /> Confirmar e Inyectar al Pedido</span>
                                             </button>
                                         </div>
                                     </div>
@@ -1567,7 +1619,7 @@ function CreateOrderContent() {
                                         >
                                             <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
-                                                ${p.base_price.toLocaleString('es-CO')}/{p.unit_of_measure}
+                                                {formatMoney(p.base_price)}/{p.unit_of_measure}
                                                 {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
                                             </span>
                                         </div>
@@ -1655,11 +1707,11 @@ function CreateOrderContent() {
                                             </div>
 
                                             <div style={{ textAlign: 'right', fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>
-                                                ${item.product.base_price.toLocaleString('es-CO')}
+                                                {formatMoney(item.product.base_price)}
                                             </div>
 
                                             <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
-                                                ${(item.product.base_price * parseFloat(item.qty.toString().replace(',', '.') || '0')).toLocaleString('es-CO')}
+                                                {formatMoney(item.product.base_price * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
                                             </div>
 
                                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1702,7 +1754,7 @@ function CreateOrderContent() {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.2rem', fontWeight: '900', color: '#111827' }}>
                                 <span>TOTAL:</span>
-                                <span>${calculateTotal().toLocaleString('es-CO')}</span>
+                                <span>{formatMoney(calculateTotal())}</span>
                             </div>
 
                             <button
@@ -2076,7 +2128,7 @@ function CreateOrderContent() {
                                                 boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)'
                                             }}
                                         >
-                                            ⚠️ Autorizar Excepción
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} strokeWidth={1.5} /> Autorizar Excepción</span>
                                         </button>
                                     </>
                                 )}

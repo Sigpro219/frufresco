@@ -6,6 +6,27 @@ import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { 
+    ArrowLeft, 
+    Calendar, 
+    Clock, 
+    MapPin, 
+    Phone, 
+    User, 
+    Save, 
+    Edit2, 
+    Trash2, 
+    Plus, 
+    Search, 
+    Lock, 
+    ShieldCheck, 
+    CheckCircle2, 
+    AlertTriangle,
+    Sparkles,
+    Truck,
+    PackageOpen
+} from 'lucide-react';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -387,10 +408,10 @@ export default function OrderDetailPage() {
         : order.total;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Inter, sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                    ← Volver al Listado
+                    <ArrowLeft size={16} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Volver al Listado
                 </Link>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
@@ -415,7 +436,7 @@ export default function OrderDetailPage() {
                                         padding: '0.5rem 1rem', fontWeight: 'bold', cursor: 'pointer'
                                     }}
                                 >
-                                    {isEditing ? 'Cancelar Edición' : '✏️ Editar Pedido'}
+                                    {isEditing ? 'Cancelar Edición' : <span style={{ display: 'inline-flex', alignItems: 'center' }}><Edit2 size={14} strokeWidth={1.5} style={{ marginRight: '4.5px' }} /> Editar Pedido</span>}
                                 </button>
                             ) : (
                                 <div style={{
@@ -424,7 +445,7 @@ export default function OrderDetailPage() {
                                     fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem',
                                     border: '1px solid #D1D5DB'
                                 }} title="La ventana de edición (8 PM) ha cerrado para este pedido.">
-                                    🔒 Edición Cerrada
+                                    <Lock size={14} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Edición Cerrada
                                 </div>
                             )}
 
@@ -437,7 +458,7 @@ export default function OrderDetailPage() {
 
                         {!isEditing && getDisplayStatus(order.status) === 'En Transporte' && (
                             <button onClick={() => updateStatus('delivered')} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', backgroundColor: '#10B981', color: 'white', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                                ✅ Marcar Entregado
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={14} strokeWidth={1.5} /> Marcar Entregado</span>
                             </button>
                         )}
                         {isEditing && (
@@ -459,7 +480,7 @@ export default function OrderDetailPage() {
 
                 {isEditing && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #FCD34D', color: '#92400E', fontWeight: 'bold' }}>
-                        ⚠️ Modo Edición Activo. Recuerda guardar los cambios.
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><AlertTriangle size={16} strokeWidth={1.5} /> Modo Edición Activo. Recuerda guardar los cambios.</span>
                     </div>
                 )}
 
@@ -467,7 +488,7 @@ export default function OrderDetailPage() {
 
                     {/* LEFT: ITEMS */}
                     <div>
-                        <div style={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden' }}>
+                        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
                             <div style={{ padding: '1rem', borderBottom: '1px solid #F3F4F6', fontWeight: '800', backgroundColor: '#F9FAFB' }}>
                                 Productos
                             </div>
@@ -494,7 +515,7 @@ export default function OrderDetailPage() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>${item.unit_price} / {item.product?.unit_of_measure}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{formatMoney(item.unit_price)} / {item.product?.unit_of_measure}</div>
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'right' }}>
                                                     {isEditing ? (
@@ -502,18 +523,18 @@ export default function OrderDetailPage() {
                                                             <input
                                                                 type="number"
                                                                 min="0"
-                                                                value={item.quantity}
+                                                                value={formatNumber(item.quantity, 1)}
                                                                 onChange={(e) => handleItemChange(i, 'quantity', parseFloat(e.target.value))}
                                                                 style={{ width: '60px', padding: '0.3rem', border: '1px solid #D1D5DB', borderRadius: '4px' }}
                                                             />
-                                                            <button onClick={() => handleRemoveItem(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>🗑️</button>
+                                                            <button onClick={() => handleRemoveItem(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem' }}><Trash2 size={16} strokeWidth={1.5} /></button>
                                                         </div>
                                                     ) : (
                                                         <div style={{ fontWeight: '700' }}>{item.quantity} {item.product?.unit_of_measure}</div>
                                                     )}
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                    ${(item.unit_price * item.quantity).toLocaleString()}
+                                                    {formatMoney(item.unit_price * item.quantity)}
                                                 </td>
                                             </tr>
                                         );
@@ -523,7 +544,7 @@ export default function OrderDetailPage() {
                                     <tr>
                                         <td colSpan={3} style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold' }}>TOTAL</td>
                                         <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', fontSize: '1.2rem' }}>
-                                            ${totalToDisplay?.toLocaleString()}
+                                            {formatMoney(totalToDisplay)}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -549,7 +570,7 @@ export default function OrderDetailPage() {
                                                 >
                                                     <div>
                                                         <div style={{ fontWeight: '600' }}>{p.name}</div>
-                                                        {p.options_config && p.options_config.length > 0 && <span style={{ fontSize: '0.7rem', color: '#D97706' }}>⚙️ Variantes</span>}
+                                                        {p.options_config && p.options_config.length > 0 && <span style={{ fontSize: '0.7rem', color: '#D97706' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Sparkles size={12} strokeWidth={1.5} /> Variantes</span></span>}
                                                     </div>
                                                     <span style={{ fontWeight: 'bold' }}>+</span>
                                                 </div>
@@ -572,7 +593,7 @@ export default function OrderDetailPage() {
                                         cursor: saving ? 'not-allowed' : 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                                     }}
                                 >
-                                    {saving ? 'Guardando...' : '💾 Guardar Cambios'}
+                                    {saving ? 'Guardando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Save size={14} strokeWidth={1.5} /> Guardar Cambios</span>}
                                 </button>
                             </div>
                         )}
@@ -582,8 +603,8 @@ export default function OrderDetailPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
                         {/* DELIVERY INFO */}
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
-                            <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '1rem' }}>Entrega {isEditing && '✏️'}</h3>
+                        <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                            <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '1rem' }}>Entrega {isEditing && '<Edit2 size={12} strokeWidth={1.5} />'}</h3>
 
                             <div style={{ marginBottom: '1rem' }}>
                                 <div style={{ fontSize: '0.8rem', color: '#6B7280', marginBottom: '0.2rem' }}>Fecha Programada</div>
@@ -612,7 +633,7 @@ export default function OrderDetailPage() {
                                     </select>
                                 ) : (
                                     <div style={{ fontWeight: '700' }}>
-                                        {order.delivery_slot === 'AM' ? '☀️ Mañana' : order.delivery_slot === 'PM' ? '🌙 Tarde' : order.delivery_slot}
+                                        {order.delivery_slot === 'AM' ? 'Mañana' : order.delivery_slot === 'PM' ? 'Tarde' : order.delivery_slot}
                                     </div>
                                 )}
                             </div>
@@ -655,14 +676,14 @@ export default function OrderDetailPage() {
 
                             <div style={{ marginTop: '1rem' }}>
                                 <div style={{ fontSize: '0.8rem', color: '#6B7280', marginBottom: '0.4rem', fontWeight: '800', textTransform: 'uppercase' }}>
-                                    ⚖️ Peso de Carga
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={14} strokeWidth={1.5} /> Peso de Carga</span>
                                 </div>
                                 {isEditing ? (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <input
                                             type="number"
                                             step="0.01"
-                                            value={editForm.total_weight_kg || 0}
+                                            value={formatNumber(editForm.total_weight_kg, 1)}
                                             onChange={e => setEditForm({ ...editForm, total_weight_kg: parseFloat(e.target.value) || 0 })}
                                             style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '900', color: '#0D9488' }}
                                         />
@@ -674,7 +695,7 @@ export default function OrderDetailPage() {
                                         backgroundColor: '#F0FDFA', padding: '0.8rem', borderRadius: '10px',
                                         border: '1px solid #CCFBF1', display: 'flex', alignItems: 'center', gap: '8px'
                                     }}>
-                                        <span>{order.total_weight_kg || 0}</span>
+                                        <span>{formatNumber(order.total_weight_kg, 1)}</span>
                                         <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>kg</span>
                                     </div>
                                 )}
@@ -686,13 +707,13 @@ export default function OrderDetailPage() {
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', opacity: isEditing ? 0.7 : 1 }}>
+                        <div style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, opacity: isEditing ? 0.7 : 1 }}>
                             <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '1rem' }}>Cliente</h3>
                             {order.profile ? (
                                 <>
                                     <div style={{ fontWeight: '800', fontSize: '1.1rem', marginBottom: '0.2rem' }}>{order.profile.company_name}</div>
                                     <div style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '0.5rem' }}>{order.profile.contact_name}</div>
-                                    <div style={{ fontSize: '0.9rem' }}>📞 {order.profile.contact_phone || 'Sin teléfono'}</div>
+                                    <div style={{ fontSize: '0.9rem' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> {order.profile.contact_phone || 'Sin teléfono'}</span></div>
                                 </>
                             ) : (
                                 <div style={{ color: '#6B7280', fontStyle: 'italic' }}>Invitado / Sin Perfil</div>

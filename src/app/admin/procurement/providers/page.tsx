@@ -30,15 +30,17 @@ import {
     User,
     Calendar,
     Tag,
+    Save,
     X,
     HelpCircle,
-    Save,
     Upload,
     Loader2,
-    Mail
+    Mail,
+    Coins
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function ProvidersPage() {
     const [mounted, setMounted] = useState(false);
@@ -332,11 +334,11 @@ export default function ProvidersPage() {
                     gap: '1.2rem', 
                     marginBottom: '1rem'
                 }}>
-                    <KPICard title="Total Proveedores" value={stats.total.toLocaleString('es-CO')} icon="🏬" color="#6366F1" subtitle="Proveedores registrados" />
-                    <KPICard title="Proveedores Crédito" value={stats.credit.toLocaleString('es-CO')} icon="💳" color="#10B981" subtitle="Facturación a plazo" />
-                    <KPICard title="Proveedores Contado" value={stats.cash.toLocaleString('es-CO')} icon="💵" color="#F59E0B" subtitle="Pago inmediato" />
-                    <KPICard title="Habilitados" value={stats.active.toLocaleString('es-CO')} icon="✅" color="#0891B2" subtitle="Activos para compra" />
-                    <KPICard title="Alertas" value={incompleteCount.toLocaleString('es-CO')} icon="⚠️" color="#EF4444" subtitle="Sin RUT o Teléfono" />
+                    <KPICard title="Total Proveedores" value={formatNumber(stats.total)} icon={<Building2 size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Proveedores registrados" />
+                    <KPICard title="Proveedores Crédito" value={formatNumber(stats.credit)} icon={<Wallet size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Facturación a plazo" />
+                    <KPICard title="Proveedores Contado" value={formatNumber(stats.cash)} icon={<Coins size={18} strokeWidth={1.5} />} color="#F59E0B" subtitle="Pago inmediato" />
+                    <KPICard title="Habilitados" value={formatNumber(stats.active)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color={THEME.colors.primary} subtitle="Activos para compra" />
+                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertCircle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Sin RUT o Teléfono" />
                 </div>
 
                 {/* UNIFIED SLENDER CONTROL BAR */}
@@ -374,8 +376,8 @@ export default function ProvidersPage() {
                                 }}
                                 onFocus={(e) => {
                                     e.target.style.backgroundColor = 'white';
-                                    e.target.style.borderColor = '#0891B2';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                    e.target.style.borderColor = THEME.colors.primary;
+                                    e.target.style.boxShadow = `0 0 0 3px ${THEME.colors.primary}15`;
                                 }}
                                 onBlur={(e) => {
                                     e.target.style.backgroundColor = '#F8FAFC';
@@ -496,12 +498,12 @@ export default function ProvidersPage() {
                             <span>
                                 {searchTerm ? (
                                     <>
-                                        <strong style={{ color: '#10B981', fontSize: '0.8rem' }}>{filteredProviders.length.toLocaleString('es-CO')}</strong>
-                                        <span style={{ fontWeight: '600', color: '#475569', marginLeft: '3px' }}>de {baseProvidersCount.toLocaleString('es-CO')}</span>
+                                        <strong style={{ color: '#10B981', fontSize: '0.8rem' }}>{formatNumber(filteredProviders.length)}</strong>
+                                        <span style={{ fontWeight: '600', color: '#475569', marginLeft: '3px' }}>de {formatNumber(baseProvidersCount)}</span>
                                     </>
                                 ) : (
                                     <>
-                                        <strong style={{ color: '#1F2937' }}>{baseProvidersCount.toLocaleString('es-CO')}</strong>
+                                        <strong style={{ color: '#1F2937' }}>{formatNumber(baseProvidersCount)}</strong>
                                         <span style={{ fontWeight: '600', color: '#64748B', marginLeft: '3px' }}>proveedores</span>
                                     </>
                                 )}
@@ -515,25 +517,6 @@ export default function ProvidersPage() {
                             <button onClick={() => setViewMode('list')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'list' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'list' ? '#111827' : '#9CA3AF' }}>📋</button>
                             <button onClick={() => setViewMode('grid')} style={{ padding: '0.4rem 0.6rem', border: 'none', borderRadius: '6px', background: viewMode === 'grid' ? 'white' : 'transparent', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', color: viewMode === 'grid' ? '#111827' : '#9CA3AF' }}>📇</button>
                         </div>
-
-                        {/* Toggle Archive button */}
-                        <button 
-                            onClick={() => setShowArchived(!showArchived)}
-                            style={{ 
-                                padding: '0.4rem 0.8rem', borderRadius: '8px', 
-                                backgroundColor: showArchived ? '#1E293B' : 'white', 
-                                color: showArchived ? 'white' : '#64748B', 
-                                border: '1px solid #E5E7EB', fontWeight: '800', cursor: 'pointer',
-                                fontSize: '0.75rem',
-                                display: 'flex', alignItems: 'center', gap: '4px',
-                                height: '32px'
-                            }}
-                        >
-                            {showArchived ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {showArchived ? 'Ver Activos' : 'Ver Archivados'}
-                        </button>
-
-                        <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
 
                         {/* Nuevo Proveedor Button */}
                         <button 
@@ -552,20 +535,23 @@ export default function ProvidersPage() {
                                 setShowCreateModal(true);
                             }}
                             style={{ 
-                                backgroundColor: '#111827', 
+                                backgroundColor: THEME.colors.primary, 
                                 color: 'white', 
                                 padding: '0.5rem 1rem', 
-                                borderRadius: '8px', 
+                                borderRadius: THEME.radius.sm, 
                                 border: 'none',
-                                fontWeight: '900', 
-                                fontSize: '0.75rem',
+                                fontWeight: '600', 
+                                fontSize: '0.8rem',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s'
                             }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                            onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         >
-                            <span>➕</span> Nuevo Proveedor
+                            <Plus size={14} strokeWidth={1.5} /> Nuevo Proveedor
                         </button>
                     </div>
                 </div>
@@ -585,13 +571,13 @@ export default function ProvidersPage() {
                                 style={{
                                     padding: '0.5rem 1.2rem',
                                     borderRadius: '10px',
-                                    border: '1px solid' + (isActive ? ' transparent' : ' #E2E8F0'),
-                                    backgroundColor: isActive ? '#0891B2' : 'white',
-                                    color: isActive ? 'white' : '#64748B',
-                                    fontWeight: '700',
+                                    border: '1px solid' + (isActive ? ' transparent' : ` ${THEME.colors.border}`),
+                                    backgroundColor: isActive ? THEME.colors.primary : 'white',
+                                    color: isActive ? 'white' : THEME.colors.textSecondary,
+                                    fontWeight: '600',
                                     fontSize: '0.8rem',
                                     cursor: 'pointer',
-                                    boxShadow: isActive ? '0 4px 10px rgba(8, 145, 178, 0.15)' : 'none',
+                                    boxShadow: isActive ? `0 4px 10px ${THEME.colors.primary}25` : 'none',
                                     transition: 'all 0.2s ease-in-out'
                                 }}
                             >
@@ -627,42 +613,42 @@ export default function ProvidersPage() {
                                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
                                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                                     >
-                                        <td style={{ padding: '0.8rem 1rem' }}>
-                                            <div style={{ fontWeight: '900', color: '#111827', fontSize: '0.85rem' }}>{p.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '800', marginTop: '0.2rem' }}>{p.product || 'Sin producto'}</div>
+                                                                        <td style={{ padding: '0.8rem 1rem' }}>
+                                            <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '0.2rem' }}>{p.product || 'Sin producto'}</div>
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', backgroundColor: '#F1F5F9', padding: '0.2rem 0.4rem', borderRadius: '6px' }}>{p.document_type || 'NIT'}</span>
-                                                <span style={{ fontWeight: '800', color: '#334155', fontSize: '0.85rem' }}>{p.tax_id}</span>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '0.2rem 0.4rem', borderRadius: '6px' }}>{p.document_type || 'NIT'}</span>
+                                                <span style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.tax_id}</span>
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                                 {(p.phone || p.contact_phone) ? (
-                                                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>📞 {p.phone || p.contact_phone}</span>
-                                                ) : <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>—</span>}
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: '500', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Smartphone size={12} strokeWidth={1.5} /> {p.phone || p.contact_phone}</span>
+                                                ) : <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>—</span>}
                                                 {p.email && (
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: '600', color: '#64748B', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>✉ {p.email}</span>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: '500', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Mail size={12} strokeWidth={1.5} /> {p.email}</span>
                                                 )}
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem' }}>
                                             <div style={{ 
                                                 fontSize: '0.7rem', 
-                                                fontWeight: '900', 
-                                                color: (p.category || '').toUpperCase() === 'PRODUCTOS' ? '#0891B2' : '#64748B', 
-                                                backgroundColor: (p.category || '').toUpperCase() === 'PRODUCTOS' ? '#ECFEFF' : '#F8FAFC', 
+                                                fontWeight: '600', 
+                                                color: (p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primary : THEME.colors.textSecondary, 
+                                                backgroundColor: (p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primaryLight : THEME.colors.background, 
                                                 padding: '0.25rem 0.5rem', 
                                                 borderRadius: '6px', 
-                                                border: '1px solid ' + ((p.category || '').toUpperCase() === 'PRODUCTOS' ? '#CFFAFE' : '#E2E8F0'), 
+                                                border: '1px solid ' + ((p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primaryLight : THEME.colors.border), 
                                                 display: 'inline-block' 
                                             }}>
                                                 {p.category || 'GENERAL'}
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem' }}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: p.type === 'credito' ? '#10B981' : '#0EA5E9' }}>{p.type?.toUpperCase()}</span>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: p.type === 'credito' ? '#10B981' : THEME.colors.primary }}>{p.type?.toUpperCase()}</span>
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
@@ -712,7 +698,7 @@ export default function ProvidersPage() {
                                     onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-2px)';
                                         e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05)';
-                                        e.currentTarget.style.borderColor = '#0891B2';
+                                        e.currentTarget.style.borderColor = THEME.colors.primary;
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0px)';
@@ -726,22 +712,22 @@ export default function ProvidersPage() {
                                             width: '40px', 
                                             height: '40px', 
                                             borderRadius: '12px', 
-                                            background: 'linear-gradient(135deg, #0891B2 0%, #06B6D4 100%)', 
+                                            background: THEME.colors.primary, 
                                             color: 'white', 
                                             display: 'flex', 
                                             alignItems: 'center', 
                                             justifyContent: 'center', 
-                                            fontWeight: '900', 
-                                            fontSize: '1rem' 
+                                            fontWeight: '700', 
+                                            fontSize: '1.1rem' 
                                         }}>
                                             {initials}
                                         </div>
                                         <div style={{ display: 'flex', gap: '0.4rem' }}>
                                             <span style={{ 
                                                 fontSize: '0.65rem', 
-                                                fontWeight: '900', 
-                                                color: p.type === 'credito' ? '#10B981' : '#0EA5E9', 
-                                                backgroundColor: p.type === 'credito' ? '#ECFDF5' : '#F0F9FF', 
+                                                fontWeight: '600', 
+                                                color: p.type === 'credito' ? '#10B981' : THEME.colors.primary, 
+                                                backgroundColor: p.type === 'credito' ? '#ECFDF5' : THEME.colors.primaryLight, 
                                                 padding: '0.2rem 0.5rem', 
                                                 borderRadius: '6px' 
                                             }}>
@@ -809,30 +795,29 @@ export default function ProvidersPage() {
                                             flexWrap: 'wrap'
                                         }}>
                                             {p.warehouse_location !== null && p.warehouse_location !== undefined && (
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    📦 <span style={{ color: '#64748B' }}>Bod:</span> <strong style={{ color: '#0F172A' }}>#{p.warehouse_location}</strong>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                    <Package size={12} strokeWidth={1.5} /> <span style={{ color: THEME.colors.textSecondary }}>Bod:</span> <strong style={{ color: THEME.colors.textMain }}>#{p.warehouse_location}</strong>
                                                 </div>
                                             )}
                                             {p.puesto && (
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                    🎪 <span style={{ color: '#64748B' }}>Puesto:</span> <strong style={{ color: '#0F172A' }}>{p.puesto}</strong>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                    <Building size={12} strokeWidth={1.5} /> <span style={{ color: THEME.colors.textSecondary }}>Puesto:</span> <strong style={{ color: THEME.colors.textMain }}>{p.puesto}</strong>
                                                 </div>
                                             )}
                                         </div>
                                     )}
 
-                                    {/* Contact Section */}
-                                    <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
-                                        <div style={{ color: '#64748B', fontWeight: '600' }}>
-                                            👤 {p.contact_name || 'Sin contacto'}
+                                    <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
+                                        <div style={{ color: THEME.colors.textSecondary, fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                            <User size={12} strokeWidth={1.5} /> {p.contact_name || 'Sin contacto'}
                                         </div>
                                         {p.phone && (
                                             <a 
                                                 href={`tel:${p.phone}`} 
                                                 onClick={(e) => e.stopPropagation()} 
-                                                style={{ color: '#0891B2', fontWeight: '800', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                                                style={{ color: THEME.colors.primary, fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
                                             >
-                                                📞 {p.phone}
+                                                <Phone size={12} strokeWidth={1.5} /> {p.phone}
                                             </a>
                                         )}
                                     </div>
@@ -848,14 +833,14 @@ export default function ProvidersPage() {
                         <div style={{ backgroundColor: 'white', borderRadius: '40px', width: '100%', maxWidth: '1000px', maxHeight: '95vh', overflowY: 'auto', padding: '3.5rem', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => setShowCreateModal(false)} style={{ position: 'absolute', top: '2rem', right: '2.5rem', border: 'none', backgroundColor: '#F1F5F9', padding: '0.8rem', borderRadius: '50%', cursor: 'pointer' }}><X size={24} /></button>
                             
-                            <h2 style={{ fontSize: '2.2rem', fontWeight: '950', color: '#0F172A', marginBottom: '2rem', letterSpacing: '-0.02em' }}>
-                                {editingId ? 'Editar' : 'Crear Nuevo'} <span style={{ color: '#0891B2' }}>Proveedor</span>
+                            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '1.5rem', letterSpacing: '-0.02em' }}>
+                                {editingId ? 'Editar' : 'Crear Nuevo'} <span style={{ color: THEME.colors.primary }}>Proveedor</span>
                             </h2>
                             
                             <form onSubmit={handleSaveProvider} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                                 {/* Basic Info */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ borderBottom: '2px solid #F1F5F9', paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '900', color: '#0891B2', fontSize: '0.8rem', textTransform: 'uppercase' }}>Identidad de Empresa</div>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Identidad de Empresa</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                         <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Nombre / Razón Social *</label>
                                         <input required style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value.toUpperCase()})} />
@@ -910,7 +895,7 @@ export default function ProvidersPage() {
                                             });
                                         }} />
                                     </div>
-                                    <div style={{ borderBottom: '2px solid #F1F5F9', paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '900', color: '#0891B2', fontSize: '0.8rem', textTransform: 'uppercase' }}>Contacto Directo</div>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Contacto Directo</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                         <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Nombre de Contacto</label>
                                         <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
@@ -933,7 +918,7 @@ export default function ProvidersPage() {
 
                                 {/* Financial Info */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ borderBottom: '2px solid #F1F5F9', paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '900', color: '#0891B2', fontSize: '0.8rem', textTransform: 'uppercase' }}>Información Financiera</div>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Información Financiera</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                             <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Banco</label>
@@ -974,7 +959,7 @@ export default function ProvidersPage() {
                                     </div>
 
                                     {/* FILES SECTION */}
-                                    <div style={{ borderBottom: '2px solid #F1F5F9', paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '900', color: '#0891B2', fontSize: '0.8rem', textTransform: 'uppercase' }}>Bóveda de Documentos (PDF)</div>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Bóveda de Documentos (PDF)</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         {/* RUT UPLOAD */}
                                         <div style={{ position: 'relative' }}>
@@ -996,8 +981,11 @@ export default function ProvidersPage() {
                                         </div>
                                     </div>
                                     
-                                    <button type="submit" style={{ marginTop: '1rem', padding: '1.2rem', borderRadius: '20px', backgroundColor: '#0F172A', color: 'white', fontWeight: '900', fontSize: '1.1rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem', boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.4)' }}>
-                                        <Save size={24} /> Guardar Proveedor Maestro
+                                    <button type="submit" style={{ marginTop: '1.5rem', padding: '0.85rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', fontSize: '1rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', transition: 'background-color 0.2s' }}
+                                    onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                    onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                    >
+                                        <Save size={18} strokeWidth={1.5} /> Guardar Proveedor Maestro
                                     </button>
                                 </div>
                             </form>
@@ -1047,7 +1035,7 @@ export default function ProvidersPage() {
                                         width: '64px', height: '64px', borderRadius: '20px',
                                         backgroundColor: '#F8FAFC',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '1.6rem', fontWeight: '900', color: '#0891B2', flexShrink: 0,
+                                        fontSize: '1.6rem', fontWeight: '900', color: THEME.colors.primary, flexShrink: 0,
                                         border: '1px solid #E2E8F0',
                                     }}>
                                         {selectedProvider.name?.split(' ').slice(0,2).map((n: string) => n[0]).join('') || '?'}
@@ -1101,8 +1089,8 @@ export default function ProvidersPage() {
                                                 setSelectedProvider(null);
                                                 setShowCreateModal(true);
                                             }}
-                                            style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', backgroundColor: 'white', color: '#0891B2', border: '1.5px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#0891B2'; }}
+                                            style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', backgroundColor: 'white', color: THEME.colors.primary, border: '1.5px solid #E2E8F0', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.primary; }}
                                             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
                                         >
                                             <Edit2 size={14} /> Editar
@@ -1133,28 +1121,28 @@ export default function ProvidersPage() {
                                         </div>
                                         {/* Teléfono */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Smartphone size={10} /> Teléfono
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Smartphone size={10} strokeWidth={1.5} /> Teléfono
                                             </div>
                                             {(selectedProvider.phone || selectedProvider.contact_phone) ? (
-                                                <a href={`tel:${selectedProvider.phone || selectedProvider.contact_phone}`} style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0891B2', textDecoration: 'none' }}>
+                                                <a href={`tel:${selectedProvider.phone || selectedProvider.contact_phone}`} style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.primary, textDecoration: 'none' }}>
                                                     {selectedProvider.phone || selectedProvider.contact_phone}
                                                 </a>
                                             ) : (
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#CBD5E1' }}>—</div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
                                             )}
                                         </div>
                                         {/* Email */}
                                         <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Mail size={10} /> Correo
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Mail size={10} strokeWidth={1.5} /> Correo
                                             </div>
                                             {selectedProvider.email ? (
-                                                <a href={`mailto:${selectedProvider.email}`} style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0891B2', textDecoration: 'none', wordBreak: 'break-all' }}>
+                                                <a href={`mailto:${selectedProvider.email}`} style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.primary, textDecoration: 'none', wordBreak: 'break-all' }}>
                                                     {selectedProvider.email}
                                                 </a>
                                             ) : (
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#CBD5E1' }}>—</div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
                                             )}
                                         </div>
                                     </div>
@@ -1264,8 +1252,8 @@ export default function ProvidersPage() {
                                         <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                        <span style={{ backgroundColor: '#0891B2', padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '900', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                            <Tag size={14} /> {selectedProvider.category?.toUpperCase() || 'GENERAL'}
+                                        <span style={{ backgroundColor: THEME.colors.primary, padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '600', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <Tag size={14} strokeWidth={1.5} /> {selectedProvider.category?.toUpperCase() || 'GENERAL'}
                                         </span>
                                         {/* Líneas de producto */}
                                         {selectedProvider.product && selectedProvider.product.split(/[,\/]/).filter((s: string) => s.trim()).map((prod: string, idx: number) => (
@@ -1332,34 +1320,34 @@ export default function ProvidersPage() {
     );
 }
 
-function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: string, color: string, subtitle: string }) {
+function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, subtitle: string }) {
     return (
         <div style={{
             backgroundColor: 'white',
             padding: '1.2rem',
-            borderRadius: '16px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+            borderRadius: THEME.radius.md,
+            boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
-            border: '1px solid #E5E7EB',
+            border: `1px solid ${THEME.colors.border}`,
             borderTop: `4px solid ${color}`,
             transition: 'all 0.2s',
             cursor: 'pointer'
         }} onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.05)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
             <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: '2px 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: '750', color: THEME.colors.textMain, margin: '2px 0', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>{subtitle}</div>
             </div>
         </div>
     );

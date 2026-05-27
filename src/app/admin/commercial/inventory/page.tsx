@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
 
 interface InventoryItem {
@@ -62,57 +62,104 @@ interface RandomTask {
     }[];
 }
 
+// --- NUMBER FORMATTING HELPERS ---
+function formatNumber(num: number | string | null | undefined, maxDecimals = 2): string {
+    if (num === null || num === undefined || isNaN(Number(num))) return '0';
+    const parsed = Number(num);
+    
+    // Check if it's an integer
+    if (parsed % 1 === 0) {
+        return parsed.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+    
+    // Format to maxDecimals
+    const formatted = parsed.toFixed(maxDecimals);
+    const parts = formatted.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    // Remove trailing zeros in the decimal part
+    let decimalPart = parts[1] || '';
+    while (decimalPart.endsWith('0')) {
+        decimalPart = decimalPart.slice(0, -1);
+    }
+    
+    if (decimalPart.length > 0) {
+        return `${parts[0]},${decimalPart}`;
+    }
+    return parts[0];
+}
+
+function formatMoney(num: number | string | null | undefined): string {
+    if (num === null || num === undefined || isNaN(Number(num))) return '$0';
+    const parsed = Number(num);
+    const rounded = Math.round(parsed);
+    const formatted = rounded.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `$${formatted}`;
+}
+
 // --- UI THEME & STYLES ---
 const THEME = {
     colors: {
-        bg: '#F9FAFB',
-        surface: 'white',
-        border: '#E5E7EB',
-        textMain: '#111827',
-        textSecondary: '#64748B',
-        primary: '#2563EB',
-        primaryHover: '#1D4ED8',
-        accent: '#111827',
+        bg: '#F4F7F6', // Refined slate/sage organic bg
+        surface: '#FFFFFF',
+        border: '#E2E7E4', // Fine border color matching the organic theme
+        textMain: '#1A231E', // Deep charcoal/green text
+        textSecondary: '#62726B', // Elegant slate/sage secondary text
+        primary: '#0D7A57', // Forest/albahaca green
+        primaryHover: '#0A5E43',
+        primaryLight: '#EDF5F1',
+        accent: '#111C17', // Deep slate green/dark accent
         success: '#10B981',
-        error: '#EF4444'
+        successBg: '#E8FDF5',
+        successText: '#047857',
+        error: '#B91C1C',
+        errorBg: '#FEE2E2',
+        errorText: '#991B1B',
+        warning: '#F59E0B',
+        warningBg: '#FEF3C7',
+        warningText: '#B45309',
+        blueBg: '#EFF6FF',
+        blueText: '#1D4ED8',
+        purpleBg: '#F3E8FF',
+        purpleText: '#6D28D9'
     },
     radius: {
         sm: '8px',
-        md: '12px',
-        lg: '16px',
-        xl: '24px'
+        md: '10px',
+        lg: '12px',
+        xl: '16px'
     },
     shadow: {
-        sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-        md: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-        lg: '0 10px 15px -3px rgb(37, 99, 235, 0.2)',
-        xl: '0 20px 25px -5px rgb(0 0 0 / 0.1)'
+        sm: '0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04)',
+        md: '0 4px 12px -2px rgba(11, 28, 23, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
+        lg: '0 12px 24px -4px rgba(13, 122, 87, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
+        xl: '0 20px 32px -6px rgba(11, 28, 23, 0.15)'
     }
 };
 
 const styles = {
-    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain },
-    container: { maxWidth: '1440px', margin: '0 auto', padding: '0.75rem' },
-    header: { display: 'flex' as const, justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1rem' },
+    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain, fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif' },
+    container: { maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' },
+    header: { display: 'flex' as const, justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
     titleArea: { flex: 1 },
-    title: { fontSize: '1.5rem', fontWeight: '900', letterSpacing: '-0.025em', margin: 0, color: THEME.colors.textMain },
-    subtitle: { color: THEME.colors.textSecondary, fontSize: '0.85rem', marginTop: '0.1rem' },
+    title: { fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.03em', margin: 0, color: THEME.colors.textMain },
+    subtitle: { color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.3rem', fontWeight: '400' },
     actions: { display: 'flex' as const, gap: '0.5rem' },
-    kpiGrid: { display: 'grid' as const, gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' },
+    kpiGrid: { display: 'grid' as const, gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' },
     controlBar: { 
         display: 'flex' as const, 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginBottom: '1rem', 
+        marginBottom: '1.5rem', 
         backgroundColor: THEME.colors.surface, 
-        padding: '0.5rem 0.75rem', 
+        padding: '0.65rem 1.25rem', 
         borderRadius: THEME.radius.lg, 
         border: `1px solid ${THEME.colors.border}`,
         boxShadow: THEME.shadow.sm
     },
     tableContainer: { 
         backgroundColor: THEME.colors.surface, 
-        borderRadius: THEME.radius.xl, 
+        borderRadius: THEME.radius.lg, 
         border: `1px solid ${THEME.colors.border}`, 
         boxShadow: THEME.shadow.md, 
         overflow: 'hidden',
@@ -121,16 +168,61 @@ const styles = {
     table: { width: '100%', borderCollapse: 'collapse' as const },
     stickyHeader: { 
         position: 'sticky' as const, 
-        top: '-1px', // Slight offset to ensure no gap
-        backgroundColor: '#F8FAFC', 
+        top: '-1px', 
+        backgroundColor: '#F9FAFB', 
         zIndex: 10,
-        boxShadow: '0 2px 4px -2px rgba(0,0,0,0.1)'
+        borderBottom: `1px solid #E5E7EB`
     },
-    th: { padding: '0.6rem 0.75rem', textAlign: 'left' as const, fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '900', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
-    td: { padding: '0.6rem 0.75rem', fontSize: '0.8rem', borderBottom: `1px solid #F1F5F9` },
-    input: { width: '100%', padding: '0.7rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, fontSize: '0.85rem', fontWeight: '700', boxSizing: 'border-box' as const },
-    label: { display: 'block', fontSize: '0.65rem', fontWeight: '900', color: THEME.colors.textSecondary, textTransform: 'uppercase' as const, marginBottom: '0.3rem' },
-    badge: (bg: string, color: string) => ({ backgroundColor: bg, color, padding: '0.2rem 0.6rem', borderRadius: '100px', fontSize: '0.7rem', fontWeight: '800' })
+    th: { 
+        padding: '0.65rem 1.25rem', 
+        textAlign: 'left' as const, 
+        fontSize: '0.65rem', 
+        color: THEME.colors.textSecondary, 
+        fontWeight: '700', 
+        textTransform: 'uppercase' as const, 
+        letterSpacing: '0.05em' 
+    },
+    td: { 
+        padding: '0.65rem 1.25rem', 
+        fontSize: '0.85rem', 
+        borderBottom: `1px solid #E2E7E4`,
+        verticalAlign: 'middle' as const,
+        color: THEME.colors.textMain
+    },
+    input: { 
+        width: '100%', 
+        padding: '0.6rem 0.85rem', 
+        borderRadius: THEME.radius.sm, 
+        border: `1px solid ${THEME.colors.border}`, 
+        fontSize: '0.85rem', 
+        fontWeight: '500', 
+        boxSizing: 'border-box' as const,
+        outline: 'none',
+        transition: 'all 0.2s',
+        color: '#1A231E'
+    },
+    label: { 
+        display: 'block', 
+        fontSize: '0.65rem', 
+        fontWeight: '700', 
+        color: THEME.colors.textSecondary, 
+        textTransform: 'uppercase' as const, 
+        marginBottom: '0.35rem',
+        letterSpacing: '0.05em'
+    },
+    badge: (bg: string, color: string) => ({ 
+        backgroundColor: bg, 
+        color, 
+        padding: '0.25rem 0.65rem', 
+        borderRadius: '6px', 
+        fontSize: '0.7rem', 
+        fontWeight: '700' as const,
+        letterSpacing: '0.03em',
+        display: 'inline-flex' as const,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        width: 'fit-content' as const
+    })
 };
 
 export default function InventoryAdminPage() {
@@ -146,7 +238,7 @@ export default function InventoryAdminPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [avgCosts, setAvgCosts] = useState<Record<string, number>>({});
     interface ScoredItem {
-        item: any; // Using any for the complex Supabase nested join object for now, but typed at usage
+        item: any;
         score: number;
     }
     const [auditPolicy, setAuditPolicy] = useState({
@@ -384,7 +476,7 @@ export default function InventoryAdminPage() {
                 .insert([{
                     status: 'pending',
                     scheduled_date: today,
-                    notes: `Snapshot Automático 09:30 AM - Cobertura ${auditPolicy.coveragePercent}%`
+                    notes: `Snapshot Automático 09:30 AM - Cobertura ${formatNumber(auditPolicy.coveragePercent, 0)}%`
                 }])
                 .select()
                 .single();
@@ -575,23 +667,31 @@ export default function InventoryAdminPage() {
                         <h1 style={styles.title}>Control Maestro de Inventarios</h1>
                         <p style={styles.subtitle}>Consolidación multi-estado, trazabilidad total y auditoría inteligente.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         <Link href="/admin/master/products" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    padding: '0.6rem 1.4rem', 
-                                    borderRadius: '100px', 
+                                    padding: '0.55rem 1.25rem', 
+                                    borderRadius: '8px', 
                                     border: 'none', 
-                                    background: `linear-gradient(135deg, ${THEME.colors.primary}, #3B82F6)`, 
+                                    background: THEME.colors.primary, 
                                     color: 'white', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.85rem', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.8rem', 
                                     cursor: 'pointer', 
-                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
-                                    transition: 'all 0.2s'
+                                    boxShadow: '0 4px 10px rgba(13, 122, 87, 0.2)',
+                                    transition: 'all 0.2s ease-in-out'
                                 }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 99, 235, 0.3)'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.2)'; }}
+                                onMouseEnter={(e) => { 
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                    e.currentTarget.style.transform = 'translateY(-1px)'; 
+                                    e.currentTarget.style.boxShadow = '0 6px 14px rgba(13, 122, 87, 0.3)'; 
+                                }}
+                                onMouseLeave={(e) => { 
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                    e.currentTarget.style.transform = 'translateY(0)'; 
+                                    e.currentTarget.style.boxShadow = '0 4px 10px rgba(13, 122, 87, 0.2)'; 
+                                }}
                             >
                                 Catálogo Maestro
                             </button>
@@ -599,18 +699,25 @@ export default function InventoryAdminPage() {
                         <Link href="/admin/commercial/inventory/tasks" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
-                                    padding: '0.6rem 1.4rem', 
-                                    borderRadius: '100px', 
+                                    padding: '0.55rem 1.25rem', 
+                                    borderRadius: '8px', 
                                     border: `1.5px solid ${THEME.colors.border}`, 
                                     background: 'white', 
                                     color: THEME.colors.textMain, 
-                                    fontWeight: '800', 
-                                    fontSize: '0.85rem', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.8rem', 
                                     cursor: 'pointer', 
-                                    transition: 'all 0.2s'
+                                    boxShadow: THEME.shadow.sm,
+                                    transition: 'all 0.2s ease-in-out'
                                 }}
-                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
+                                onMouseEnter={(e) => { 
+                                    e.currentTarget.style.backgroundColor = '#F4F7F6'; 
+                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                }}
+                                onMouseLeave={(e) => { 
+                                    e.currentTarget.style.backgroundColor = 'white'; 
+                                    e.currentTarget.style.borderColor = THEME.colors.border; 
+                                }}
                             >
                                 Tareas Administrativas
                             </button>
@@ -619,19 +726,25 @@ export default function InventoryAdminPage() {
                             <button 
                                 onClick={generateRandomTask}
                                 style={{ 
-                                    padding: '0.6rem 1.4rem', 
-                                    borderRadius: '100px', 
+                                    padding: '0.55rem 1.25rem', 
+                                    borderRadius: '8px', 
                                     border: 'none', 
                                     background: THEME.colors.accent, 
                                     color: 'white', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.85rem', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.8rem', 
                                     cursor: 'pointer', 
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                    transition: 'all 0.2s'
+                                    boxShadow: THEME.shadow.sm,
+                                    transition: 'all 0.2s ease-in-out'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.md;
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                                }}
                             >
                                 Generar Tarea
                             </button>
@@ -639,36 +752,93 @@ export default function InventoryAdminPage() {
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                    <KPICard title="Items Monitoreados" value={stats.totalItems} color="#E0F2FE" subtitle="Cruzado con catálogo" />
-                    <KPICard title="Alertas de Stock" value={stats.lowStock} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
-                    <KPICard title="Valor en Libros" value={`$${Math.round(stats.totalValue).toLocaleString()}`} color="#DCFCE7" subtitle="Costo base total" />
-                    <KPICard title="Tareas Pendientes" value={stats.pendingTasks} color="#FEF3C7" subtitle="Auditoría de piso" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <KPICard title="Items Monitoreados" value={formatNumber(stats.totalItems, 0)} color="#E0F2FE" subtitle="Cruzado con catálogo" />
+                    <KPICard title="Alertas de Stock" value={formatNumber(stats.lowStock, 0)} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
+                    <KPICard title="Valor en Libros" value={formatMoney(stats.totalValue)} color="#DCFCE7" subtitle="Costo base total" />
+                    <KPICard title="Tareas Pendientes" value={formatNumber(stats.pendingTasks, 0)} color="#FEF3C7" subtitle="Auditoría de piso" />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', backgroundColor: 'white', padding: '0.6rem 1rem', borderRadius: '16px', border: '1px solid #E5E7EB', gap: '1rem' }}>
-                    <div style={{ display: 'flex', gap: '0.1rem', flexShrink: 0 }}>
-                        <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} label="Consolidado" icon="" />
-                        <TabButton active={activeTab === 'movements'} onClick={() => setActiveTab('movements')} label="Movimientos" icon="" />
-                        <TabButton active={activeTab === 'random_tasks'} onClick={() => setActiveTab('random_tasks')} label="Auditoría" icon="" />
-                        <TabButton active={activeTab === 'novedades'} onClick={() => setActiveTab('novedades')} label="Novedades" icon="" />
-                        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Políticas" icon="" />
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginBottom: '1.5rem', 
+                    backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+                    padding: '0.5rem 1rem', 
+                    borderRadius: '16px', 
+                    border: `1px solid ${THEME.colors.border}`, 
+                    gap: '1rem',
+                    boxShadow: THEME.shadow.sm
+                }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '0.25rem', 
+                        flexShrink: 0,
+                        backgroundColor: '#EDF1EE',
+                        padding: '3px',
+                        borderRadius: '10px'
+                    }}>
+                        <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} label="Consolidado" />
+                        <TabButton active={activeTab === 'movements'} onClick={() => setActiveTab('movements')} label="Movimientos" />
+                        <TabButton active={activeTab === 'random_tasks'} onClick={() => setActiveTab('random_tasks')} label="Auditoría" />
+                        <TabButton active={activeTab === 'novedades'} onClick={() => setActiveTab('novedades')} label="Novedades" />
+                        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Políticas" />
                     </div>
                     
-                    <div style={{ position: 'relative', flex: 1, maxWidth: '600px' }}>
+                    <div style={{ position: 'relative', flex: 1, maxWidth: '500px' }}>
+                        <div style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                            <Search size={16} />
+                        </div>
                         <input 
                             type="text" 
                             placeholder="Buscar por nombre, SKU o categoría..." 
                             value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                            style={{ width: '100%', padding: '0.7rem 2.8rem 0.7rem 2.5rem', borderRadius: '12px', border: '1px solid #D1D5DB', fontSize: '0.9rem', fontWeight: '600' }}
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.65rem 2.8rem 0.65rem 2.5rem', 
+                                borderRadius: '12px', 
+                                border: `1px solid ${THEME.colors.border}`, 
+                                fontSize: '0.85rem', 
+                                fontWeight: '500',
+                                backgroundColor: '#F8FAF9',
+                                color: THEME.colors.textMain,
+                                outline: 'none',
+                                transition: 'all 0.2s ease-in-out'
+                            }}
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = THEME.colors.border;
+                                e.currentTarget.style.backgroundColor = '#F8FAF9';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }}
                         />
-                        <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '1rem' }}>🔍</span>
                         
                         {searchQuery && (
                             <button 
                                 onClick={() => setSearchQuery('')}
-                                style={{ position: 'absolute', right: '2.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#94A3B8' }}
+                                style={{ 
+                                    position: 'absolute', 
+                                    right: '2.6rem', 
+                                    top: '50%', 
+                                    transform: 'translateY(-50%)', 
+                                    background: 'none', 
+                                    border: 'none', 
+                                    cursor: 'pointer', 
+                                    fontSize: '0.85rem', 
+                                    color: THEME.colors.textSecondary,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '2px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#EAEFEA'
+                                }}
                             >
                                 ✕
                             </button>
@@ -676,29 +846,59 @@ export default function InventoryAdminPage() {
                         
                         <button 
                             onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
-                            style={{ position: 'absolute', right: '0.8rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#3B82F6' }}
+                            style={{ 
+                                position: 'absolute', 
+                                right: '0.8rem', 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                background: 'none', 
+                                border: 'none', 
+                                cursor: 'pointer', 
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: THEME.colors.primary,
+                                padding: '4px',
+                                borderRadius: '6px',
+                                transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EAEFEA'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                         >
-                            ℹ️
+                            <Sparkles size={16} />
                         </button>
 
                         {isInfoGuideOpen && (
-                            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.8rem', width: '300px', backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', zIndex: 100, border: '1px solid #E5E7EB' }}>
-                                <h4 style={{ margin: '0 0 1rem 0', fontWeight: '900', color: '#111827' }}>Guía de Búsqueda Inteligente</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                    <div style={{ fontSize: '0.8rem' }}>
-                                        <code style={{ color: '#2563EB', fontWeight: '800', backgroundColor: '#EFF6FF', padding: '2px 4px', borderRadius: '4px' }}>@bajo</code>
-                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Bajo stock mín.</span>
+                            <div style={{ 
+                                position: 'absolute', 
+                                top: '100%', 
+                                right: 0, 
+                                marginTop: '0.8rem', 
+                                width: '300px', 
+                                backgroundColor: 'white', 
+                                padding: '1.25rem', 
+                                borderRadius: '12px', 
+                                boxShadow: THEME.shadow.lg, 
+                                zIndex: 100, 
+                                border: `1px solid ${THEME.colors.border}` 
+                            }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontWeight: '800', fontSize: '0.9rem', color: THEME.colors.textMain }}>Guía de Búsqueda Inteligente</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
+                                        <code style={{ color: '#2563EB', fontWeight: '700', backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>@bajo</code>
+                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Bajo stock mín.</span>
                                     </div>
-                                    <div style={{ fontSize: '0.8rem' }}>
-                                        <code style={{ color: '#059669', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '2px 4px', borderRadius: '4px' }}>@disponible</code>
-                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Solo stock venta</span>
+                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
+                                        <code style={{ color: '#059669', fontWeight: '700', backgroundColor: '#ECFDF5', padding: '2px 6px', borderRadius: '4px' }}>@disponible</code>
+                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Solo stock venta</span>
                                     </div>
-                                    <div style={{ fontSize: '0.8rem' }}>
-                                        <code style={{ color: '#D97706', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 4px', borderRadius: '4px' }}>@regreso</code>
-                                        <span style={{ marginLeft: '8px', color: '#64748B' }}>Devoluciones</span>
+                                    <div style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center' }}>
+                                        <code style={{ color: '#D97706', fontWeight: '700', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>@regreso</code>
+                                        <span style={{ marginLeft: '8px', color: THEME.colors.textSecondary }}>Devoluciones</span>
                                     </div>
-                                    <div style={{ padding: '0.6rem', backgroundColor: '#F8FAFC', borderRadius: '10px', fontSize: '0.7rem', color: '#64748B' }}>
-                                        💡 Ej: <strong>Tomate @bajo</strong>
+                                    <div style={{ padding: '0.5rem', backgroundColor: '#F4F7F6', borderRadius: '8px', fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <Sparkles size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                        <span>Ej: <strong>Tomate @bajo</strong></span>
                                     </div>
                                 </div>
                             </div>
@@ -708,23 +908,27 @@ export default function InventoryAdminPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
                         {activeTab === 'stock' && (
                             <>
-                                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary }}>
-                                    {filteredStocks.length} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>items</span>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
+                                    {formatNumber(filteredStocks.length, 0)} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>items</span>
                                 </div>
                                 <select 
                                     value={stockStatusFilter}
                                     onChange={(e) => { setStockStatusFilter(e.target.value as any); setCurrentPage(1); }}
                                     style={{ 
-                                        padding: '0.6rem 1.2rem', 
+                                        padding: '0.55rem 1.25rem', 
                                         borderRadius: '10px', 
-                                        border: '1px solid #E2E8F0', 
-                                        backgroundColor: '#F8FAFC',
-                                        color: '#1E293B',
-                                        fontWeight: '800',
+                                        border: `1px solid ${THEME.colors.border}`, 
+                                        backgroundColor: '#FFFFFF',
+                                        color: THEME.colors.textMain,
+                                        fontWeight: '600',
                                         fontSize: '0.8rem',
                                         cursor: 'pointer',
-                                        outline: 'none'
+                                        outline: 'none',
+                                        boxShadow: THEME.shadow.sm,
+                                        transition: 'all 0.2s'
                                     }}
+                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                    onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
                                 >
                                     <option value="all">Ver Todos</option>
                                     <option value="available">Disponible</option>
@@ -734,20 +938,20 @@ export default function InventoryAdminPage() {
                             </>
                         )}
                         {activeTab === 'movements' && (
-                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary }}>
-                                {movements.length} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>registros</span>
+                            <div style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
+                                {formatNumber(movements.length, 0)} <span style={{ fontWeight: '400', fontSize: '0.75rem' }}>registros</span>
                             </div>
                         )}
                     </div>
                 </div>
 
-
-
                 <div style={styles.tableContainer}>
                     {loading ? (
                         <div style={{ padding: '10rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-                            <div style={{ fontSize: '2.5rem', animation: 'spin 2s linear infinite' }}>🔄</div>
-                            <div style={{ fontWeight: '800', color: THEME.colors.textSecondary, fontSize: '1.1rem' }}>Sincronizando inventarios maestros...</div>
+                            <div style={{ color: THEME.colors.primary, animation: 'spin 2s linear infinite', display: 'flex', justifyContent: 'center' }}>
+                                <RefreshCw size={36} strokeWidth={1.5} />
+                            </div>
+                            <div style={{ fontWeight: '700', color: THEME.colors.textSecondary, fontSize: '1.1rem' }}>Sincronizando inventarios maestros...</div>
                         </div>
                     ) : (
                         <>
@@ -768,10 +972,15 @@ export default function InventoryAdminPage() {
                                         </thead>
                                         <tbody>
                                             {paginatedStocks.map((item) => (
-                                                <tr key={item.id || `stock-${item.product_id}-${item.status}`} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                <tr 
+                                                    key={item.id || `stock-${item.product_id}-${item.status}`} 
+                                                    style={{ transition: 'background-color 0.2s' }} 
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} 
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                >
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                            <div style={{ width: '48px', height: '48px', backgroundColor: '#F3F4F6', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E5E7EB' }}>
+                                                            <div style={{ width: '44px', height: '44px', backgroundColor: '#EDF1EE', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}` }}>
                                                                 {item.products?.image_url ? (
                                                                     <img 
                                                                         src={item.products.image_url} 
@@ -779,17 +988,17 @@ export default function InventoryAdminPage() {
                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                                     />
                                                                 ) : (
-                                                                    <span style={{ fontSize: '1.4rem' }}>📦</span>
+                                                                    <Package size={20} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
                                                                 )}
                                                             </div>
                                                             <div>
-                                                                <div style={{ fontWeight: '800', fontSize: '1rem', color: THEME.colors.textMain }}>{item.products?.name || 'Desconocido'}</div>
+                                                                <div style={{ fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>{item.products?.name || 'Desconocido'}</div>
                                                                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
-                                                                    <code style={{ fontSize: '0.7rem', color: THEME.colors.primary, backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                    <code style={{ fontSize: '0.7rem', color: '#0A5C36', backgroundColor: '#EDF5F1', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.03em' }}>
                                                                         {item.products?.sku || 'S/N'}
                                                                     </code>
                                                                     {item.products?.accounting_id && (
-                                                                        <code style={{ fontSize: '0.7rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                                                                        <code style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, backgroundColor: '#EDF1EE', padding: '2.5px 6px', borderRadius: '4px', fontWeight: '700' }}>
                                                                             ID: {item.products.accounting_id}
                                                                         </code>
                                                                     )}
@@ -798,84 +1007,99 @@ export default function InventoryAdminPage() {
                                                         </div>
                                                     </td>
                                                     <td style={styles.td}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                             <span style={styles.badge(
-                                                                item.status === 'available' ? '#DCFCE7' : item.status === 'returned' ? '#E0F2FE' : '#F3E8FF',
-                                                                item.status === 'available' ? '#166534' : item.status === 'returned' ? '#0369A1' : '#7E22CE'
+                                                                item.status === 'available' ? THEME.colors.successBg : item.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
+                                                                item.status === 'available' ? THEME.colors.successText : item.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
                                                             )}>
                                                                 {item.status.toUpperCase()}
                                                             </span>
                                                             {item.products?.is_active === false && (
                                                                 <span style={{
-                                                                    fontSize: '0.65rem',
+                                                                    fontSize: '0.6rem',
                                                                     backgroundColor: '#FEF2F2',
                                                                     color: '#991B1B',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: '10px',
-                                                                    fontWeight: '900',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    fontWeight: '700',
                                                                     border: '1px solid #FECACA',
                                                                     textAlign: 'center',
-                                                                    letterSpacing: '0.05em'
+                                                                    letterSpacing: '0.04em',
+                                                                    width: 'fit-content'
                                                                 }}>
-                                                                    🚩 MASTER OFF
+                                                                    MASTER OFF
                                                                 </span>
                                                             )}
                                                         </div>
                                                     </td>
                                                     <td style={{ 
                                                         ...styles.td, 
-                                                        textAlign: 'center',
-                                                        backgroundColor: item.products?.min_inventory_level > 0 ? '#FFF1F2' : 'transparent',
+                                                        textAlign: 'center' as const,
+                                                        backgroundColor: item.products?.min_inventory_level > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
                                                     }}>
                                                         {item.products?.min_inventory_level > 0 ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                <span style={{ fontWeight: '900', color: THEME.colors.error, fontSize: '1.1rem' }}>
-                                                                    {item.products.min_inventory_level}
+                                                                <span style={{ fontWeight: '700', color: '#B91C1C', fontSize: '0.9rem' }}>
+                                                                    {formatNumber(item.products.min_inventory_level, 0)}
                                                                 </span>
                                                                 {item.quantity <= item.products.min_inventory_level && (
-                                                                    <span title="Bajo el mínimo crítico">🚩</span>
+                                                                    <span title="Bajo el mínimo crítico" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                                                        <AlertTriangle size={14} strokeWidth={2} style={{ color: '#B91C1C' }} />
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         ) : (
                                                             <span style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>—</span>
                                                         )}
                                                     </td>
-                                                    <td style={{ ...styles.td, textAlign: 'center' }}>
-                                                        <div style={{ fontWeight: '800', color: '#059669', fontSize: '0.95rem' }}>
-                                                            {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id]).toLocaleString()}` : '—'}
+                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                        <div style={{ fontWeight: '600', color: THEME.colors.primary, fontSize: '0.85rem' }}>
+                                                            {avgCosts[item.product_id] ? formatMoney(avgCosts[item.product_id]) : '—'}
                                                         </div>
                                                     </td>
-                                                    <td style={{ ...styles.td, textAlign: 'center' }}>
-                                                        <div style={{ fontWeight: '900', color: THEME.colors.textMain, fontSize: '1.05rem' }}>
-                                                            {avgCosts[item.product_id] ? `$${Math.round(avgCosts[item.product_id] * item.quantity).toLocaleString()}` : '—'}
+                                                    <td style={{ ...styles.td, textAlign: 'center' as const }}>
+                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>
+                                                            {avgCosts[item.product_id] ? formatMoney(avgCosts[item.product_id] * item.quantity) : '—'}
                                                         </div>
                                                     </td>
                                                     <td style={styles.td}>
-                                                        <span style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
                                                             {item.products.unit_of_measure}
                                                         </span>
                                                     </td>
                                                     <td style={styles.td}>
-                                                        <div style={{ fontSize: '1.25rem', fontWeight: '900', color: item.quantity <= (item.products?.min_inventory_level || 0) ? THEME.colors.error : THEME.colors.textMain }}>
-                                                            {item.quantity}
+                                                        <div style={{ 
+                                                            fontSize: '0.95rem', 
+                                                            fontWeight: '700', 
+                                                            color: item.quantity <= (item.products?.min_inventory_level || 0) ? '#B91C1C' : THEME.colors.textMain 
+                                                        }}>
+                                                            {formatNumber(item.quantity)}
                                                         </div>
                                                     </td>
-                                                    <td style={{ ...styles.td, textAlign: 'right' }}>
+                                                    <td style={{ ...styles.td, textAlign: 'right' as const }}>
                                                         <button 
                                                             onClick={() => { setSelectedProduct({id: item.product_id, name: item.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
                                                             style={{ 
-                                                                backgroundColor: THEME.colors.accent, 
-                                                                color: 'white',
-                                                                border: 'none', 
-                                                                padding: '0.6rem 1.2rem', 
-                                                                borderRadius: THEME.radius.md, 
-                                                                fontWeight: '800', 
+                                                                backgroundColor: 'transparent', 
+                                                                color: '#4B5563',
+                                                                border: '1px solid #D1D5DB', 
+                                                                padding: '0.35rem 0.75rem', 
+                                                                borderRadius: '6px', 
+                                                                fontWeight: '500', 
                                                                 cursor: 'pointer',
-                                                                transition: 'transform 0.1s, opacity 0.2s',
-                                                                fontSize: '0.85rem'
+                                                                transition: 'all 0.2s ease-in-out',
+                                                                fontSize: '0.75rem'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                                                            onMouseEnter={(e) => {
+                                                                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                                                e.currentTarget.style.borderColor = '#9CA3AF';
+                                                                e.currentTarget.style.color = '#111827';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                e.currentTarget.style.borderColor = '#D1D5DB';
+                                                                e.currentTarget.style.color = '#4B5563';
+                                                            }}
                                                         >
                                                             Ajustar
                                                         </button>
@@ -888,302 +1112,493 @@ export default function InventoryAdminPage() {
                             )}
 
                             {activeTab === 'movements' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ backgroundColor: '#F8FAFC' }}>
-                                        <tr>
-                                            <th style={styles.th}>Fecha</th>
-                                            <th style={styles.th}>Producto</th>
-                                            <th style={styles.th}>Tipo</th>
-                                            <th style={styles.th}>Estado Destino</th>
-                                            <th style={styles.th}>Cantidad</th>
-                                            <th style={styles.th}>Notas</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {movements.filter(m => (m.products?.name || 'Desconocido').toLowerCase().includes(searchQuery.toLowerCase())).map((m) => (
-                                            <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                <td style={styles.td}>{new Date(m.created_at).toLocaleString()}</td>
-                                                <td style={styles.td}><strong>{m.products?.name || 'Producto Desconocido'}</strong></td>
-                                                <td style={styles.td}>
-                                                    <span style={styles.badge(m.quantity > 0 ? '#DCFCE7' : '#FEE2E2', m.quantity > 0 ? '#166534' : '#991B1B')}>
-                                                        {m.type.toUpperCase()}
-                                                    </span>
-                                                </td>
-                                                <td style={styles.td}>{m.status_to || 'available'}</td>
-                                                <td style={{ ...styles.td, fontWeight: '900', color: m.quantity > 0 ? '#10B981' : '#EF4444' }}>
-                                                    {m.quantity > 0 ? '+' : ''}{m.quantity}
-                                                </td>
-                                                <td style={styles.td}>{m.notes || '-'}</td>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={styles.table}>
+                                        <thead style={styles.stickyHeader}>
+                                            <tr>
+                                                <th style={styles.th}>Fecha</th>
+                                                <th style={styles.th}>Producto</th>
+                                                <th style={styles.th}>Tipo</th>
+                                                <th style={styles.th}>Estado Destino</th>
+                                                <th style={styles.th}>Cantidad</th>
+                                                <th style={styles.th}>Notas</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {movements.filter(m => (m.products?.name || 'Desconocido').toLowerCase().includes(searchQuery.toLowerCase())).map((m) => (
+                                                <tr key={m.id} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <td style={styles.td}>{new Date(m.created_at).toLocaleString()}</td>
+                                                    <td style={styles.td}><strong>{m.products?.name || 'Producto Desconocido'}</strong></td>
+                                                    <td style={styles.td}>
+                                                        <span style={styles.badge(
+                                                            m.quantity > 0 ? THEME.colors.successBg : '#FEE2E2', 
+                                                            m.quantity > 0 ? THEME.colors.successText : '#B91C1C'
+                                                        )}>
+                                                            {m.type.toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <span style={styles.badge(
+                                                            m.status_to === 'available' ? THEME.colors.successBg : m.status_to === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
+                                                            m.status_to === 'available' ? THEME.colors.successText : m.status_to === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                        )}>
+                                                            {(m.status_to || 'available').toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...styles.td, fontWeight: '700', color: m.quantity > 0 ? '#059669' : '#B91C1C' }}>
+                                                        {m.quantity > 0 ? '+' : ''}{formatNumber(m.quantity)}
+                                                     </td>
+                                                    <td style={styles.td}>{m.notes || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
 
-                             {activeTab === 'random_tasks' && (
+                            {activeTab === 'random_tasks' && (
                                 <div style={{ padding: '1.5rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                        <div>
-                                            <h2 style={{ margin: 0, fontWeight: '900' }}>Auditorías Recientes</h2>
-                                            <p style={{ color: '#64748B', margin: 0 }}>Gestione los conteos ciegos aleatorios del día.</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleGenerateAudit()}
-                                            disabled={generatingAudit}
-                                            style={{ 
-                                                backgroundColor: '#111827', color: 'white', padding: '0.8rem 1.5rem', 
-                                                borderRadius: '12px', border: 'none', fontWeight: '800', cursor: 'pointer',
-                                                opacity: generatingAudit ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem'
-                                            }}
-                                        >
-                                            {generatingAudit ? 'Generando...' : '✚ Generar Auditoría de Hoy'}
-                                        </button>
-                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                                         <div>
+                                             <h2 style={{ margin: 0, fontWeight: '800', fontSize: '1.25rem', color: THEME.colors.textMain }}>Auditorías Recientes</h2>
+                                             <p style={{ color: THEME.colors.textSecondary, margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>Gestione los conteos ciegos aleatorios del día.</p>
+                                         </div>
+                                         <button 
+                                             onClick={() => handleGenerateAudit()}
+                                             disabled={generatingAudit}
+                                             style={{ 
+                                                 backgroundColor: THEME.colors.primary, 
+                                                 color: 'white', 
+                                                 padding: '0.55rem 1.15rem', 
+                                                 borderRadius: '8px', 
+                                                 border: 'none', 
+                                                 fontWeight: '600', 
+                                                 cursor: 'pointer',
+                                                 opacity: generatingAudit ? 0.7 : 1, 
+                                                 display: 'flex', 
+                                                 alignItems: 'center', 
+                                                 gap: '0.5rem',
+                                                 fontSize: '0.8rem',
+                                                 boxShadow: '0 4px 12px rgba(13, 122, 87, 0.15)',
+                                                 transition: 'all 0.2s'
+                                             }}
+                                             onMouseEnter={(e) => {
+                                                 if (!generatingAudit) {
+                                                     e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                                     e.currentTarget.style.transform = 'translateY(-1px)';
+                                                 }
+                                             }}
+                                             onMouseLeave={(e) => {
+                                                 if (!generatingAudit) {
+                                                     e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                                     e.currentTarget.style.transform = 'translateY(0)';
+                                                 }
+                                             }}
+                                         >
+                                             {generatingAudit ? (
+                                                 <>
+                                                     <RefreshCw size={14} className="animate-spin" strokeWidth={2} style={{ animation: 'spin 2s linear infinite' }} />
+                                                     <span>Generando...</span>
+                                                 </>
+                                             ) : (
+                                                 <>
+                                                     <Plus size={14} strokeWidth={2} />
+                                                     <span>Generar Auditoría de Hoy</span>
+                                                 </>
+                                             )}
+                                         </button>
+                                     </div>
 
                                     {randomTasks.length === 0 ? (
-                                        <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#F8FAFC', borderRadius: '24px', border: '2px dashed #E2E8F0' }}>
-                                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
-                                            <h3 style={{ fontWeight: '900', color: '#1E293B' }}>Sin auditorías generadas</h3>
-                                            <p style={{ color: '#64748B', maxWidth: '300px', margin: '0.5rem auto 1.5rem' }}>
+                                        <div style={{ textAlign: 'center', padding: '4rem', backgroundColor: '#F4F7F6', borderRadius: '12px', border: `2px dashed ${THEME.colors.border}` }}>
+                                            <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                                                <ClipboardList size={48} strokeWidth={1.5} />
+                                            </div>
+                                            <h3 style={{ fontWeight: '800', color: THEME.colors.textMain }}>Sin auditorías generadas</h3>
+                                            <p style={{ color: THEME.colors.textSecondary, maxWidth: '300px', margin: '0.5rem auto 1.5rem', fontSize: '0.85rem' }}>
                                                 Haga clic en el botón superior para generar una lista aleatoria de productos para auditar hoy.
                                             </p>
                                         </div>
                                     ) : (
                                         randomTasks.map(task => (
-                                            <div key={task.id} style={{ marginBottom: '2rem', border: '1px solid #E5E7EB', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
-                                                <div style={{ backgroundColor: '#F8FAFC', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
-                                                    <div>
-                                                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B' }}>FECHA PLANIFICADA: {task.scheduled_date}</span>
-                                                        <div style={{ fontWeight: '900', color: '#111827', fontSize: '1.1rem' }}>Auditoría Aleatoria #{task.id.split('-')[0]}</div>
-                                                    </div>
-                                                    <span style={styles.badge(task.status === 'completed' ? '#DCFCE7' : '#FEF3C7', task.status === 'completed' ? '#166534' : '#92400E')}>
-                                                        {task.status.toUpperCase()}
-                                                    </span>
-                                                </div>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                                    <thead>
-                                                        <tr style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'white' }}>
-                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Producto</th>
-                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Stock Sistema</th>
-                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Físico (Conteo Ciego)</th>
-                                                            <th style={{ ...styles.th, fontSize: '0.7rem' }}>Diferencia %</th>
-                                                            <th style={{ ...styles.th, fontSize: '0.7rem', textAlign: 'right' }}>Estado</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {task.items.map(item => (
-                                                            <tr key={item.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'white' }}>
-                                                                <td style={styles.td}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
-                                                                <td style={styles.td}>{item.expected_qty}</td>
-                                                                <td style={styles.td}>
-                                                                    {item.actual_qty !== null ? (
-                                                                        <span style={{ fontWeight: '900' }}>{item.actual_qty}</span>
-                                                                    ) : (
-                                                                        <button style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer' }}>Ingresar Conteo</button>
-                                                                    )}
-                                                                </td>
-                                                                <td style={{ ...styles.td, color: item.difference_percent > auditPolicy.alertThreshold ? '#EF4444' : '#10B981', fontWeight: '800' }}>
-                                                                    {item.actual_qty !== null ? `${item.difference_percent.toFixed(1)}%` : '-'}
-                                                                </td>
-                                                                <td style={{ ...styles.td, textAlign: 'right' }}>
-                                                                    <span style={{ 
-                                                                        display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.6rem', borderRadius: '8px', 
-                                                                        fontSize: '0.7rem', fontWeight: '800',
-                                                                        backgroundColor: item.difference_percent > auditPolicy.alertThreshold ? '#FEE2E2' : item.actual_qty !== null ? '#DCFCE7' : '#F1F5F9',
-                                                                        color: item.difference_percent > auditPolicy.alertThreshold ? '#991B1B' : item.actual_qty !== null ? '#166534' : '#475569'
-                                                                    }}>
-                                                                        {item.difference_percent > auditPolicy.alertThreshold ? '🚨 DESCUADRE' : item.actual_qty !== null ? '✅ OK' : '⏳ PENDIENTE'}
-                                                                    </span>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            <div key={task.id} style={{ 
+                                                 marginBottom: '2rem', 
+                                                 border: `1px solid ${THEME.colors.border}`, 
+                                                 borderRadius: '12px', 
+                                                 overflow: 'hidden', 
+                                                 boxShadow: THEME.shadow.md,
+                                                 backgroundColor: THEME.colors.surface 
+                                             }}>
+                                                 <div style={{ 
+                                                     backgroundColor: '#F4F7F6', 
+                                                     padding: '1rem 1.5rem', 
+                                                     display: 'flex', 
+                                                     justifyContent: 'space-between', 
+                                                     alignItems: 'center', 
+                                                     borderBottom: `1px solid ${THEME.colors.border}` 
+                                                 }}>
+                                                     <div>
+                                                         <span style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, letterSpacing: '0.04em' }}>FECHA PLANIFICADA: {task.scheduled_date}</span>
+                                                         <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.05rem', marginTop: '0.15rem' }}>Auditoría Aleatoria #{task.id.split('-')[0]}</div>
+                                                     </div>
+                                                     <span style={styles.badge(
+                                                         task.status === 'completed' ? THEME.colors.successBg : THEME.colors.warningBg, 
+                                                         task.status === 'completed' ? THEME.colors.successText : THEME.colors.warningText
+                                                     )}>
+                                                         {task.status.toUpperCase()}
+                                                     </span>
+                                                 </div>
+                                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                     <thead>
+                                                         <tr style={{ borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: '#F9FAFB' }}>
+                                                             <th style={{ ...styles.th, fontSize: '0.65rem' }}>Producto</th>
+                                                             <th style={{ ...styles.th, fontSize: '0.65rem', textAlign: 'center' }}>Stock Sistema</th>
+                                                             <th style={{ ...styles.th, fontSize: '0.65rem', textAlign: 'center' }}>Físico (Conteo Ciego)</th>
+                                                             <th style={{ ...styles.th, fontSize: '0.65rem', textAlign: 'center' }}>Diferencia %</th>
+                                                             <th style={{ ...styles.th, fontSize: '0.65rem', textAlign: 'right' }}>Estado</th>
+                                                         </tr>
+                                                     </thead>
+                                                     <tbody>
+                                                         {task.items.map(item => (
+                                                             <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                                 <td style={styles.td}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
+                                                                 <td style={{ ...styles.td, textAlign: 'center' }}>{formatNumber(item.expected_qty)}</td>
+                                                                 <td style={{ ...styles.td, textAlign: 'center' }}>
+                                                                     {item.actual_qty !== null ? (
+                                                                         <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{formatNumber(item.actual_qty)}</span>
+                                                                     ) : (
+                                                                         <button style={{ 
+                                                                             padding: '0.35rem 0.75rem', 
+                                                                             borderRadius: '6px', 
+                                                                             border: '1px solid #D1D5DB', 
+                                                                             background: 'transparent', 
+                                                                             fontSize: '0.75rem', 
+                                                                             fontWeight: '500', 
+                                                                             color: '#4B5563',
+                                                                             cursor: 'pointer',
+                                                                             transition: 'all 0.2s'
+                                                                         }}
+                                                                         onMouseEnter={(e) => {
+                                                                             e.currentTarget.style.backgroundColor = '#F9FAFB';
+                                                                             e.currentTarget.style.borderColor = '#9CA3AF';
+                                                                             e.currentTarget.style.color = '#111827';
+                                                                         }}
+                                                                         onMouseLeave={(e) => {
+                                                                             e.currentTarget.style.backgroundColor = 'transparent';
+                                                                             e.currentTarget.style.borderColor = '#D1D5DB';
+                                                                             e.currentTarget.style.color = '#4B5563';
+                                                                         }}>
+                                                                             Ingresar Conteo
+                                                                         </button>
+                                                                     )}
+                                                                 </td>
+                                                                 <td style={{ 
+                                                                     ...styles.td, 
+                                                                     textAlign: 'center',
+                                                                     color: item.difference_percent > auditPolicy.alertThreshold ? '#B91C1C' : '#059669', 
+                                                                     fontWeight: '700' 
+                                                                 }}>
+                                                                     {item.actual_qty !== null ? `${formatNumber(item.difference_percent, 1)}%` : '-'}
+                                                                 </td>
+                                                                 <td style={{ ...styles.td, textAlign: 'right' }}>
+                                                                     <span style={{ 
+                                                                         display: 'inline-flex', 
+                                                                         alignItems: 'center', 
+                                                                         gap: '0.4rem', 
+                                                                         padding: '0.25rem 0.6rem', 
+                                                                         borderRadius: '6px', 
+                                                                         fontSize: '0.7rem', 
+                                                                         fontWeight: '700',
+                                                                         backgroundColor: item.difference_percent > auditPolicy.alertThreshold ? '#FEE2E2' : item.actual_qty !== null ? THEME.colors.successBg : '#EDF1EE',
+                                                                         color: item.difference_percent > auditPolicy.alertThreshold ? '#991B1B' : item.actual_qty !== null ? THEME.colors.successText : THEME.colors.textSecondary
+                                                                     }}>
+                                                                         {item.difference_percent > auditPolicy.alertThreshold ? 'DESCUADRE' : item.actual_qty !== null ? 'OK' : 'PENDIENTE'}
+                                                                     </span>
+                                                                 </td>
+                                                             </tr>
+                                                         ))}
+                                                     </tbody>
+                                                 </table>
+                                             </div>
                                         ))
                                     )}
                                 </div>
                             )}
 
-                             {activeTab === 'settings' && (
+                            {activeTab === 'settings' && (
                                 <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-                                    <h2 style={{ fontWeight: '900', marginBottom: '0.5rem' }}>Políticas de Auditoría</h2>
-                                    <p style={{ color: '#64748B', marginBottom: '2rem' }}>Configure los criterios inteligentes para la selección automática de productos a auditar.</p>
-                                    
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E5E7EB' }}>
-                                            <h3 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#111827', marginTop: 0 }}>Parámetros y Automatización</h3>
-                                            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
-                                                    <div>
-                                                        <div style={{ fontWeight: '900', fontSize: '0.85rem' }}>🤖 Generación Automática</div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Ciclo diario sin intervención manual</div>
-                                                    </div>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={auditPolicy.autoEnabled}
-                                                        onChange={(e) => setAuditPolicy({...auditPolicy, autoEnabled: e.target.checked})}
-                                                        style={{ width: '40px', height: '20px', cursor: 'pointer' }}
-                                                    />
-                                                </div>
-                                                
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={styles.label}>% COBERTURA SKUS ACTIVOS</label>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <input 
-                                                                type="number" 
-                                                                value={auditPolicy.coveragePercent} 
-                                                                onChange={(e) => setAuditPolicy({...auditPolicy, coveragePercent: parseInt(e.target.value)})}
-                                                                style={styles.input} 
-                                                            />
-                                                            <span style={{ fontWeight: '900' }}>%</span>
-                                                        </div>
-                                                        <p style={{ fontSize: '0.65rem', color: '#64748B', marginTop: '0.3rem' }}>Usa el 100% para conteo total de SKUs con movimiento.</p>
-                                                    </div>
-                                                    <div>
-                                                        <label style={styles.label}>Hora de Corte (Snapshot)</label>
-                                                        <input 
-                                                            type="time" 
-                                                            value={auditPolicy.generationTime} 
-                                                            onChange={(e) => setAuditPolicy({...auditPolicy, generationTime: e.target.value})}
-                                                            style={styles.input} 
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <label style={styles.label}>Umbral de Alerta (%)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={auditPolicy.alertThreshold} 
-                                                        onChange={(e) => setAuditPolicy({...auditPolicy, alertThreshold: parseInt(e.target.value)})}
-                                                        style={styles.input} 
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E5E7EB' }}>
-                                            <h3 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#111827', marginTop: 0 }}>Criterios de Selección</h3>
-                                            <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                {[
-                                                    { id: 'prioritizeHighValue', label: 'Priorizar Productos de Alto Valor (Clase A)', icon: '💎' },
-                                                    { id: 'prioritizeHighRotation', label: 'Priorizar Alta Rotación (Velocidad)', icon: '⚡' },
-                                                    { id: 'prioritizePerishables', label: 'Priorizar Perecederos (Frutas/Verduras)', icon: '🍎' },
-                                                    { id: 'prioritizeCriticalStock', label: 'Enfocarse en Stock Crítico / Quiebre', icon: '📉' },
-                                                    { id: 'excludeAuditedRecently', label: 'Excluir auditados recientemente (< 7 días)', icon: '📅' }
-                                                ].map(policy => (
-                                                    <label key={policy.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', padding: '0.5rem', borderRadius: '8px' }}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={(auditPolicy as any)[policy.id]} 
-                                                            onChange={(e) => setAuditPolicy({...auditPolicy, [policy.id]: e.target.checked})}
-                                                            style={{ width: '20px', height: '20px', accentColor: '#111827' }} 
-                                                        />
-                                                        <div>
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: '800' }}>{policy.icon} {policy.label}</div>
-                                                        </div>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ marginTop: '3rem', borderTop: '1px solid #E5E7EB', paddingTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                        <button 
-                                            onClick={() => alert('Políticas guardadas correctamente.')}
-                                            style={{ backgroundColor: '#111827', color: 'white', padding: '1rem 3rem', borderRadius: '12px', border: 'none', fontWeight: '800', cursor: 'pointer' }}
-                                        >
-                                            Guardar Configuración
-                                        </button>
-                                    </div>
-                                </div>
+                                     <h2 style={{ fontWeight: '800', fontSize: '1.25rem', color: THEME.colors.textMain, marginBottom: '0.25rem' }}>Políticas de Auditoría</h2>
+                                     <p style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', marginBottom: '2rem' }}>Configure los criterios inteligentes para la selección automática de productos a auditar.</p>
+                                     
+                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                         <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md }}>
+                                             <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: 0, borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.75rem' }}>Parámetros y Automatización</h3>
+                                             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem', backgroundColor: '#F4F7F6', borderRadius: '10px', border: `1px solid ${THEME.colors.border}` }}>
+                                                     <div>
+                                                         <div style={{ fontWeight: '700', fontSize: '0.8rem', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                              <Sparkles size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Generación Automática
+                                                          </div>
+                                                         <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>Ciclo diario sin intervención manual</div>
+                                                     </div>
+                                                     <input 
+                                                         type="checkbox" 
+                                                         checked={auditPolicy.autoEnabled}
+                                                         onChange={(e) => setAuditPolicy({...auditPolicy, autoEnabled: e.target.checked})}
+                                                         style={{ width: '36px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                                                     />
+                                                 </div>
+                                                 
+                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                     <div>
+                                                         <label style={styles.label}>% COBERTURA SKUS ACTIVOS</label>
+                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                             <input 
+                                                                 type="number" 
+                                                                 value={auditPolicy.coveragePercent} 
+                                                                 onChange={(e) => setAuditPolicy({...auditPolicy, coveragePercent: parseInt(e.target.value)})}
+                                                                 style={{
+                                                                     ...styles.input,
+                                                                     padding: '0.5rem',
+                                                                     fontSize: '0.8rem',
+                                                                     fontWeight: '600'
+                                                                 }} 
+                                                             />
+                                                             <span style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>%</span>
+                                                         </div>
+                                                         <p style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, marginTop: '0.3rem' }}>Usa el 100% para conteo total de SKUs con movimiento.</p>
+                                                     </div>
+                                                     <div>
+                                                         <label style={styles.label}>Hora de Corte (Snapshot)</label>
+                                                         <input 
+                                                             type="time" 
+                                                             value={auditPolicy.generationTime} 
+                                                             onChange={(e) => setAuditPolicy({...auditPolicy, generationTime: e.target.value})}
+                                                             style={{
+                                                                 ...styles.input,
+                                                                 padding: '0.5rem',
+                                                                 fontSize: '0.8rem',
+                                                                 fontWeight: '600'
+                                                             }} 
+                                                         />
+                                                     </div>
+                                                 </div>
+ 
+                                                 <div>
+                                                     <label style={styles.label}>Umbral de Alerta (%)</label>
+                                                     <input 
+                                                         type="number" 
+                                                         value={auditPolicy.alertThreshold} 
+                                                         onChange={(e) => setAuditPolicy({...auditPolicy, alertThreshold: parseInt(e.target.value)})}
+                                                         style={{
+                                                             ...styles.input,
+                                                             padding: '0.5rem',
+                                                             fontSize: '0.8rem',
+                                                             fontWeight: '600'
+                                                         }} 
+                                                     />
+                                                 </div>
+                                             </div>
+                                         </div>
+ 
+                                         <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md }}>
+                                             <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, marginTop: 0, borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.75rem' }}>Criterios de Selección</h3>
+                                             <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                                  {[
+                                                      { id: 'prioritizeHighValue', label: 'Priorizar Productos de Alto Valor (Clase A)', icon: Scale },
+                                                      { id: 'prioritizeHighRotation', label: 'Priorizar Alta Rotación (Velocidad)', icon: TrendingUp },
+                                                      { id: 'prioritizePerishables', label: 'Priorizar Perecederos (Frutas/Verduras)', icon: Package },
+                                                      { id: 'prioritizeCriticalStock', label: 'Enfocarse en Stock Crítico / Quiebre', icon: AlertTriangle },
+                                                      { id: 'excludeAuditedRecently', label: 'Excluir auditados recientemente (< 7 días)', icon: Calendar }
+                                                  ].map(policy => {
+                                                      const PolicyIcon = policy.icon;
+                                                      return (
+                                                          <label key={policy.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.4rem', borderRadius: '6px', transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F4F7F6'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                              <input 
+                                                                  type="checkbox" 
+                                                                  checked={(auditPolicy as any)[policy.id]} 
+                                                                  onChange={(e) => setAuditPolicy({...auditPolicy, [policy.id]: e.target.checked})}
+                                                                  style={{ width: '18px', height: '18px', accentColor: THEME.colors.primary }} 
+                                                              />
+                                                              <div>
+                                                                  <div style={{ fontSize: '0.8rem', fontWeight: '600', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                      <PolicyIcon size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} /> {policy.label}
+                                                                  </div>
+                                                              </div>
+                                                          </label>
+                                                      );
+                                                  })}
+                                             </div>
+                                         </div>
+                                     </div>
+ 
+                                     <div style={{ marginTop: '2.5rem', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                                         <button 
+                                             onClick={() => alert('Políticas guardadas correctamente.')}
+                                             style={{ 
+                                                 backgroundColor: THEME.colors.primary, 
+                                                 color: 'white', 
+                                                 padding: '0.75rem 2rem', 
+                                                 borderRadius: '10px', 
+                                                 border: 'none', 
+                                                 fontWeight: '700', 
+                                                 cursor: 'pointer',
+                                                 fontSize: '0.85rem',
+                                                 boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                                                 transition: 'all 0.2s'
+                                             }}
+                                             onMouseEnter={(e) => {
+                                                 e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                                 e.currentTarget.style.transform = 'translateY(-1px)';
+                                             }}
+                                             onMouseLeave={(e) => {
+                                                 e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                                 e.currentTarget.style.transform = 'translateY(0)';
+                                             }}
+                                         >
+                                             Guardar Configuración
+                                         </button>
+                                     </div>
+                                 </div>
                             )}
 
                             {activeTab === 'novedades' && (
-                                <div style={{ padding: '0' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead style={styles.stickyHeader}>
-                                            <tr>
-                                                <th style={styles.th}>Fecha</th>
-                                                <th style={styles.th}>Producto / SKU</th>
-                                                <th style={styles.th}>Evidencia (Ruta)</th>
-                                                <th style={styles.th}>Decisión Bodega</th>
-                                                <th style={styles.th}>Cant.</th>
-                                                <th style={styles.th}>Notas</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {movements
-                                                .filter(m => m.status_to === 'returned' || m.admin_decision)
-                                                .filter(m => (m.products?.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
-                                                .map((m) => (
-                                                <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                    <td style={styles.td}>{new Date(m.created_at).toLocaleDateString()}</td>
-                                                    <td style={styles.td}>
-                                                        <div style={{ fontWeight: '800' }}>{m.products?.name}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{m.products?.sku}</div>
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        {m.evidence_url ? (
-                                                            <div style={{ position: 'relative', width: '80px', height: '60px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0', cursor: 'zoom-in' }} onClick={() => window.open(m.evidence_url, '_blank')}>
-                                                                <img src={m.evidence_url} alt="Evidencia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                                <div style={{ position: 'absolute', bottom: 0, right: 0, padding: '2px 4px', background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '0.6rem' }}>🔍</div>
-                                                            </div>
-                                                        ) : (
-                                                            <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontStyle: 'italic' }}>Sin foto</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={styles.td}>
-                                                        {m.admin_decision ? (
-                                                            <span style={styles.badge(
-                                                                m.admin_decision === 'inventory' ? '#DCFCE7' : m.admin_decision === 'waste' ? '#FEE2E2' : '#DBEAFE',
-                                                                m.admin_decision === 'inventory' ? '#166534' : m.admin_decision === 'waste' ? '#991B1B' : '#1E40AF'
-                                                            )}>
-                                                                {m.admin_decision.toUpperCase()}
-                                                            </span>
-                                                        ) : (
-                                                            <span style={{ ...styles.badge('#FEF3C7', '#92400E'), animation: 'pulse 2s infinite' }}>PENDIENTE</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ ...styles.td, fontWeight: '900' }}>{Math.abs(m.quantity)}</td>
-                                                    <td style={{ ...styles.td, fontSize: '0.8rem', color: '#64748B', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={m.notes}>
-                                                        {m.notes || '-'}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {movements.filter(m => m.status_to === 'returned' || m.admin_decision).length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
-                                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍃</div>
-                                            <h3 style={{ fontWeight: '900', color: '#1E293B' }}>Sin novedades registradas</h3>
-                                            <p style={{ color: '#64748B' }}>Los retornos marcados por conductores aparecerán aquí.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                <div style={{ overflowX: 'auto' }}>
+                                     <table style={styles.table}>
+                                         <thead style={styles.stickyHeader}>
+                                             <tr>
+                                                 <th style={styles.th}>Fecha</th>
+                                                 <th style={styles.th}>Producto / SKU</th>
+                                                 <th style={styles.th}>Evidencia (Ruta)</th>
+                                                 <th style={styles.th}>Decisión Bodega</th>
+                                                 <th style={{ ...styles.th, textAlign: 'center' }}>Cant.</th>
+                                                 <th style={styles.th}>Notas</th>
+                                             </tr>
+                                         </thead>
+                                         <tbody>
+                                             {movements
+                                                 .filter(m => m.status_to === 'returned' || m.admin_decision)
+                                                 .filter(m => (m.products?.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                                                 .map((m) => (
+                                                 <tr key={m.id} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                     <td style={styles.td}>{new Date(m.created_at).toLocaleDateString()}</td>
+                                                     <td style={styles.td}>
+                                                         <div style={{ fontWeight: '700', color: THEME.colors.textMain }}>{m.products?.name}</div>
+                                                         <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginTop: '2px' }}>{m.products?.sku}</div>
+                                                     </td>
+                                                     <td style={styles.td}>
+                                                         {m.evidence_url ? (
+                                                             <div style={{ 
+                                                                 position: 'relative', 
+                                                                 width: '80px', 
+                                                                 height: '55px', 
+                                                                 borderRadius: '8px', 
+                                                                 overflow: 'hidden', 
+                                                                 border: `1px solid ${THEME.colors.border}`, 
+                                                                 cursor: 'zoom-in',
+                                                                 boxShadow: THEME.shadow.sm 
+                                                             }} onClick={() => window.open(m.evidence_url, '_blank')}>
+                                                                 <img src={m.evidence_url} alt="Evidencia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                 <div style={{ position: 'absolute', bottom: 0, right: 0, padding: '2px 4px', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.6rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                    <Search size={10} strokeWidth={2} /> VER
+                                                                </div>
+                                                             </div>
+                                                         ) : (
+                                                             <span style={{ color: THEME.colors.textSecondary, fontSize: '0.8rem', fontStyle: 'italic' }}>Sin foto</span>
+                                                         )}
+                                                     </td>
+                                                     <td style={styles.td}>
+                                                         {m.admin_decision ? (
+                                                             <span style={styles.badge(
+                                                                 m.admin_decision === 'inventory' ? THEME.colors.successBg : m.admin_decision === 'waste' ? '#FEE2E2' : THEME.colors.blueBg,
+                                                                 m.admin_decision === 'inventory' ? THEME.colors.successText : m.admin_decision === 'waste' ? '#991B1B' : m.admin_decision === 'reprocess' ? THEME.colors.blueText : THEME.colors.textSecondary
+                                                             )}>
+                                                                 {m.admin_decision.toUpperCase()}
+                                                             </span>
+                                                         ) : (
+                                                             <span style={{ ...styles.badge('#FEF3C7', '#B45309'), animation: 'pulse 2s infinite' }}>PENDIENTE</span>
+                                                         )}
+                                                     </td>
+                                                     <td style={{ ...styles.td, textAlign: 'center' as const, fontWeight: '700', color: THEME.colors.textMain }}>{formatNumber(Math.abs(m.quantity))}</td>
+                                                     <td style={{ ...styles.td, fontSize: '0.8rem', color: THEME.colors.textSecondary, maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={m.notes}>
+                                                         {m.notes || '-'}
+                                                     </td>
+                                                 </tr>
+                                             ))}
+                                         </tbody>
+                                     </table>
+                                     {movements.filter(m => m.status_to === 'returned' || m.admin_decision).length === 0 && (
+                                         <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
+                                             <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                                                 <Package size={48} strokeWidth={1.5} />
+                                             </div>
+                                             <h3 style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.05rem' }}>Sin novedades registradas</h3>
+                                             <p style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', marginTop: '0.25rem' }}>Los retornos marcados por conductores aparecerán aquí.</p>
+                                         </div>
+                                     )}
+                                 </div>
+                             )}
                         </>
                     )}
                 </div>
                 {activeTab === 'stock' && (
-                    <div style={{ padding: '2.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.25rem', backgroundColor: '#F8FAFC' }}>
-                        <div style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary, fontWeight: '800' }}>
-                            Página <span style={{ color: THEME.colors.textMain }}>{currentPage}</span> de <span style={{ color: THEME.colors.textMain }}>{totalPages || 1}</span>
+                    <div style={{ 
+                        padding: '1.5rem 2.5rem', 
+                        borderTop: `1px solid ${THEME.colors.border}`, 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        backgroundColor: '#F4F7F6' 
+                    }}>
+                        <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                            Página <span style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(currentPage, 0)}</span> de <span style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{formatNumber(totalPages || 1, 0)}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                             <button 
                                 disabled={currentPage === 1} 
                                 onClick={() => setCurrentPage(p => p - 1)} 
-                                style={{ padding: '0.8rem 1.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: currentPage === 1 ? '#F9FAFB' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontWeight: '800', color: currentPage === 1 ? '#94A3B8' : THEME.colors.textMain, transition: 'all 0.2s' }}
+                                style={{ 
+                                    padding: '0.5rem 1.1rem', 
+                                    borderRadius: '8px', 
+                                    border: `1px solid ${currentPage === 1 ? '#E2E8F0' : THEME.colors.border}`, 
+                                    backgroundColor: currentPage === 1 ? 'transparent' : '#FFFFFF', 
+                                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
+                                    fontWeight: '600', 
+                                    fontSize: '0.8rem',
+                                    color: currentPage === 1 ? '#A0AEC0' : THEME.colors.textMain, 
+                                    transition: 'all 0.2s',
+                                    boxShadow: currentPage === 1 ? 'none' : THEME.shadow.sm
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.primary;
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (currentPage !== 1) e.currentTarget.style.borderColor = THEME.colors.border;
+                                }}
                             >
                                 Anterior
                             </button>
                             <button 
                                 disabled={currentPage === totalPages || totalPages === 0} 
                                 onClick={() => setCurrentPage(p => p + 1)} 
-                                style={{ padding: '0.8rem 1.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F9FAFB' : 'white', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', fontWeight: '800', color: (currentPage === totalPages || totalPages === 0) ? '#94A3B8' : THEME.colors.textMain, transition: 'all 0.2s' }}
+                                style={{ 
+                                    padding: '0.5rem 1.1rem', 
+                                    borderRadius: '8px', 
+                                    border: `1px solid ${(currentPage === totalPages || totalPages === 0) ? '#E2E8F0' : THEME.colors.border}`, 
+                                    backgroundColor: (currentPage === totalPages || totalPages === 0) ? 'transparent' : '#FFFFFF', 
+                                    cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', 
+                                    fontWeight: '600', 
+                                    fontSize: '0.8rem',
+                                    color: (currentPage === totalPages || totalPages === 0) ? '#A0AEC0' : THEME.colors.textMain, 
+                                    transition: 'all 0.2s',
+                                    boxShadow: (currentPage === totalPages || totalPages === 0) ? 'none' : THEME.shadow.sm
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (currentPage !== totalPages && totalPages !== 0) e.currentTarget.style.borderColor = THEME.colors.primary;
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (currentPage !== totalPages && totalPages !== 0) e.currentTarget.style.borderColor = THEME.colors.border;
+                                }}
                             >
                                 Siguiente
                             </button>
@@ -1192,47 +1607,82 @@ export default function InventoryAdminPage() {
                 )}
             </div>
 
-                           {/* Adjustment Modal */}
+            {/* Adjustment Modal */}
             {isMovementModalOpen && selectedProduct && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, width: '100%', maxWidth: '480px', padding: '2.5rem', boxShadow: THEME.shadow.xl }}>
-                        <h2 style={{ margin: 0, fontWeight: '900', fontSize: '1.75rem', color: THEME.colors.textMain }}>Ajuste de Inventario</h2>
-                        <p style={{ color: THEME.colors.textSecondary, marginBottom: '2rem', fontSize: '1rem', fontWeight: '600' }}>{selectedProduct.name}</p>
+                <div style={{ 
+                    position: 'fixed', 
+                    inset: 0, 
+                    backgroundColor: 'rgba(11, 15, 25, 0.4)', 
+                    backdropFilter: 'blur(8px)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    zIndex: 1000, 
+                    padding: '1rem' 
+                }}>
+                    <div style={{ 
+                        backgroundColor: THEME.colors.surface, 
+                        borderRadius: '16px', 
+                        width: '100%', 
+                        maxWidth: '460px', 
+                        padding: '2rem', 
+                        boxShadow: THEME.shadow.xl,
+                        border: `1px solid ${THEME.colors.border}`
+                    }}>
+                        <h2 style={{ margin: 0, fontWeight: '800', fontSize: '1.4rem', color: THEME.colors.textMain, letterSpacing: '-0.02em' }}>Ajuste de Inventario</h2>
+                        <p style={{ color: THEME.colors.textSecondary, marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: '500', marginTop: '0.25rem' }}>{selectedProduct.name}</p>
                         
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
                             <div>
                                 <label style={styles.label}>TIPO DE MOVIMIENTO</label>
-                                <select id="adj_type" style={styles.input}>
-                                    <option value="adjustment">⚙️ Ajuste Manual (Inventario físico)</option>
-                                    <option value="entry">✚ Entrada por Devolución/Compra</option>
-                                    <option value="exit">➖ Salida por Merma/Daño</option>
+                                <select id="adj_type" style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem' }}>
+                                    <option value="adjustment">Ajuste Manual (Inventario físico)</option>
+                                    <option value="entry">Entrada por Devolución/Compra</option>
+                                    <option value="exit">Salida por Merma/Daño</option>
                                 </select>
                             </div>
-
+ 
                             <div>
                                 <label style={styles.label}>ESTADO DESTINO</label>
-                                <select id="adj_status" style={styles.input}>
-                                    <option value="available">✅ Disponible para venta</option>
-                                    <option value="returned">🚛 En camión (Devuelto)</option>
-                                    <option value="in_process">⚙️ En Reproceso</option>
+                                <select id="adj_status" style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem' }}>
+                                    <option value="available">Disponible para venta</option>
+                                    <option value="returned">En camión (Devuelto)</option>
+                                    <option value="in_process">En Reproceso</option>
                                 </select>
                             </div>
-
+ 
                             <div>
                                 <label style={styles.label}>CANTIDAD</label>
-                                <input id="adj_qty" type="number" placeholder="0.00" style={styles.input} />
+                                <input id="adj_qty" type="number" placeholder="0,00" style={{ ...styles.input, fontWeight: '600', fontSize: '0.85rem', padding: '0.55rem' }} />
                             </div>
-
+ 
                             <div>
                                 <label style={styles.label}>MOTIVO / OBSERVACIONES</label>
-                                <textarea id="adj_notes" placeholder="Describa el motivo del ajuste..." style={{ ...styles.input, minHeight: '100px', resize: 'none' }} />
+                                <textarea id="adj_notes" placeholder="Describa el motivo del ajuste..." style={{ ...styles.input, fontWeight: '500', fontSize: '0.85rem', padding: '0.55rem', minHeight: '80px', resize: 'none' }} />
                             </div>
                         </div>
-
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '2.5rem' }}>
+ 
+                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem' }}>
                             <button 
                                 onClick={() => setIsMovementModalOpen(false)} 
-                                style={{ flex: 1, padding: '1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '800', cursor: 'pointer' }}
+                                style={{ 
+                                    flex: 1, 
+                                    padding: '0.65rem', 
+                                    borderRadius: '8px', 
+                                    border: `1.5px solid ${THEME.colors.border}`, 
+                                    background: 'white', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.85rem',
+                                    color: THEME.colors.textSecondary,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#F4F7F6';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'white';
+                                }}
                             >
                                 Cancelar
                             </button>
@@ -1251,7 +1701,27 @@ export default function InventoryAdminPage() {
                                     if(qty) handleApplyMovement(selectedProduct.id, qty, type, status, notes);
                                     else alert('Por favor ingrese una cantidad válida');
                                 }}
-                                style={{ flex: 1.5, padding: '1rem', borderRadius: THEME.radius.md, border: 'none', background: THEME.colors.accent, color: 'white', fontWeight: '800', cursor: 'pointer' }}
+                                style={{ 
+                                    flex: 1.5, 
+                                    padding: '0.65rem', 
+                                    borderRadius: '8px', 
+                                    border: 'none', 
+                                    background: THEME.colors.primary, 
+                                    color: 'white', 
+                                    fontWeight: '700', 
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.2)',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
                             >
                                 Guardar Ajuste
                             </button>
@@ -1271,29 +1741,87 @@ export default function InventoryAdminPage() {
 }
 
 function KPICard({ title, value, color, subtitle }: { title: string, value: string | number, color: string, subtitle: string }) {
+    let badgeColor = THEME.colors.primary;
+    let badgeBg = THEME.colors.primaryLight;
+    let IconComponent = Package;
+
+    if (title.toLowerCase().includes("alerta")) {
+        badgeColor = "#DC2626";
+        badgeBg = "#FEE2E2";
+        IconComponent = AlertTriangle;
+    } else if (title.toLowerCase().includes("valor")) {
+        badgeColor = "#059669";
+        badgeBg = "#ECFDF5";
+        IconComponent = Scale;
+    } else if (title.toLowerCase().includes("tarea")) {
+        badgeColor = "#D97706";
+        badgeBg = "#FEF3C7";
+        IconComponent = History;
+    } else {
+        badgeColor = "#2563EB";
+        badgeBg = "#EFF6FF";
+        IconComponent = Package;
+    }
+
     return (
         <div style={{ 
-            backgroundColor: 'white', 
-            padding: '0.85rem', 
-            borderRadius: THEME.radius.xl, 
-            border: `1px solid ${THEME.colors.border}`,
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+            backgroundColor: THEME.colors.surface, 
+            padding: '0.75rem 1rem', 
+            borderRadius: '12px', 
+            border: `1px solid #E5E7EB`,
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.25rem',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             position: 'relative',
             overflow: 'hidden'
-        }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = THEME.shadow.md; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)'; }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', backgroundColor: color }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ color: THEME.colors.textSecondary, fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
+        }} onMouseEnter={(e) => { 
+            e.currentTarget.style.transform = 'translateY(-1px)'; 
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.06)';
+        }} onMouseLeave={(e) => { 
+            e.currentTarget.style.transform = 'translateY(0)'; 
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ 
+                    color: THEME.colors.textSecondary, 
+                    fontSize: '0.65rem', 
+                    fontWeight: '700', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.05em' 
+                }}>{title}</span>
+                <span style={{ 
+                    padding: '0.25rem', 
+                    borderRadius: '50%', 
+                    backgroundColor: badgeBg,
+                    color: badgeColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px'
+                }}>
+                    <IconComponent size={18} strokeWidth={1.5} />
+                </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain }}>{value}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.15rem' }}>
+                <span style={{ 
+                    fontSize: '1.3rem', 
+                    fontWeight: '700', 
+                    color: THEME.colors.textMain,
+                    letterSpacing: '-0.02em'
+                }}>{value}</span>
             </div>
-            <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
-                {subtitle}
+            <div style={{ 
+                fontSize: '0.7rem', 
+                color: THEME.colors.textSecondary, 
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+            }}>
+                <span style={{ color: badgeColor, fontWeight: '700' }}>•</span> {subtitle}
             </div>
         </div>
     );
@@ -1306,19 +1834,30 @@ function TabButton({ active, onClick, label, icon }: { active: boolean, onClick:
             style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                padding: '0.4rem 0.6rem', 
-                borderRadius: THEME.radius.md, 
+                padding: '0.5rem 1rem', 
+                borderRadius: '8px', 
                 border: 'none', 
-                backgroundColor: active ? THEME.colors.accent : 'transparent', 
-                color: active ? 'white' : THEME.colors.textSecondary, 
-                fontWeight: '800', 
+                backgroundColor: active ? THEME.colors.primary : 'transparent', 
+                color: active ? '#FFFFFF' : THEME.colors.textSecondary, 
+                fontWeight: '700', 
                 cursor: 'pointer', 
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap'
+                transition: 'all 0.2s ease-in-out',
+                fontSize: '0.8rem',
+                whiteSpace: 'nowrap',
+                boxShadow: active ? '0 4px 10px rgba(13, 122, 87, 0.2)' : 'none'
             }}
-            onMouseEnter={(e) => { if(!active) e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
-            onMouseLeave={(e) => { if(!active) e.currentTarget.style.backgroundColor = 'transparent'; }}
+            onMouseEnter={(e) => { 
+                if(!active) {
+                    e.currentTarget.style.backgroundColor = '#EAEFEA'; 
+                    e.currentTarget.style.color = THEME.colors.textMain;
+                }
+            }}
+            onMouseLeave={(e) => { 
+                if(!active) {
+                    e.currentTarget.style.backgroundColor = 'transparent'; 
+                    e.currentTarget.style.color = THEME.colors.textSecondary;
+                }
+            }}
         >
             {icon && <span style={{ fontSize: '1rem', marginRight: '0.4rem' }}>{icon}</span>}
             {label}

@@ -21,8 +21,13 @@ import {
     Globe,
     CheckCircle,
     Package,
-    AlertCircle
+    AlertCircle,
+    DollarSign,
+    Scale,
+    ShoppingBag,
+    Sparkles
 } from 'lucide-react';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function AdminProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -414,10 +419,10 @@ export default function AdminProductsPage() {
 
         return {
             total,
-            activeCoverage: (active / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-            imageCoverage: (withImg / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-            variantsCoverage: (withVariants / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-            pricingStatus: (withPrice / total * 100).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            activeCoverage: formatNumber(active / total * 100, 1),
+            imageCoverage: formatNumber(withImg / total * 100, 1),
+            variantsCoverage: formatNumber(withVariants / total * 100, 1),
+            pricingStatus: formatNumber(withPrice / total * 100, 1)
         };
     }, [products]);
 
@@ -520,7 +525,7 @@ export default function AdminProductsPage() {
 
     // Renderizado principal
     return (
-        <div style={{ backgroundColor: '#F9FAFB', minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
+        <div style={{ backgroundColor: THEME.colors.background, minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
             <Toast />
 
 
@@ -537,8 +542,8 @@ export default function AdminProductsPage() {
                     flexDirection: 'column',
                     gap: '1rem'
                 }}>
-                    <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #4F46E5', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                    <div style={{ fontWeight: '700', color: '#4F46E5' }}>Cargando catálogo...</div>
+                    <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: `4px solid ${THEME.colors.primary}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                    <div style={{ fontWeight: '600', color: THEME.colors.primary }}>Cargando catálogo...</div>
                 </div>
             )}
 
@@ -553,36 +558,47 @@ export default function AdminProductsPage() {
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600', fontSize: '0.85rem' }}>← Volver al Dashboard</Link>
-                            <h1 style={{ fontSize: '2.3rem', fontWeight: '900', color: '#111827', margin: '0.2rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Comercial B2C 🛍️</h1>
-                            <p style={{ color: '#6B7280', fontSize: '0.95rem' }}>Gestión de precios públicos, visibilidad y branding de productos.</p>
+                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span>← Volver al Dashboard</span>
+                            </Link>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '0.4rem' }}>
+                                <ShoppingBag size={26} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Catálogo Comercial B2C</h1>
+                            </div>
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', margin: '0.2rem 0 0 0' }}>Gestión de precios públicos, visibilidad y branding de productos.</p>
                         </div>
                         <div style={{ 
                             display: 'flex', 
                             gap: '12px', 
                             alignItems: 'center',
                             padding: '0.4rem',
-                            borderRadius: '16px',
+                            borderRadius: THEME.radius.lg,
                         }}>
                             <Link href="/admin/master/products" style={{ 
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '8px',
-                                color: '#111827', 
-                                fontWeight: '800', 
+                                gap: '6px',
+                                color: THEME.colors.textMain, 
+                                fontWeight: '500', 
                                 textDecoration: 'none', 
                                 fontSize: '0.8rem',
-                                backgroundColor: 'white',
-                                padding: '0.65rem 1.2rem',
-                                borderRadius: '12px',
-                                border: '1px solid #E5E7EB',
+                                backgroundColor: THEME.colors.surface,
+                                padding: '0.5rem 1rem',
+                                borderRadius: THEME.radius.md,
+                                border: `1px solid ${THEME.colors.border}`,
                                 transition: 'all 0.2s',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                boxShadow: THEME.shadow.sm
                             }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.background;
+                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.surface;
+                                e.currentTarget.style.borderColor = THEME.colors.border;
+                            }}
                             >
-                                <Info size={16} /> Panel Maestro
+                                <Info size={14} strokeWidth={1.5} /> Panel Maestro
                             </Link>
 
                             <button
@@ -591,60 +607,70 @@ export default function AdminProductsPage() {
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '10px',
+                                    gap: '8px',
                                     color: 'white',
-                                    backgroundColor: isSyncingPrices ? '#9CA3AF' : 'var(--primary)',
-                                    padding: '0.65rem 1.4rem',
-                                    borderRadius: '12px',
+                                    backgroundColor: isSyncingPrices ? THEME.colors.textSecondary : THEME.colors.primary,
+                                    padding: '0.5rem 1.1rem',
+                                    borderRadius: THEME.radius.md,
                                     border: 'none',
-                                    fontWeight: '900',
-                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    fontSize: '0.8rem',
                                     cursor: isSyncingPrices ? 'not-allowed' : 'pointer',
-                                    boxShadow: '0 4px 12px rgba(26, 77, 46, 0.2)',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: THEME.shadow.sm,
+                                    transition: 'all 0.2s ease',
                                 }}
-                                onMouseEnter={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                onMouseLeave={(e) => !isSyncingPrices && (e.currentTarget.style.transform = 'translateY(0)')}
+                                onMouseEnter={(e) => {
+                                    if (!isSyncingPrices) {
+                                        e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isSyncingPrices) {
+                                        e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                        e.currentTarget.style.transform = 'none';
+                                    }
+                                }}
                             >
-                                <Globe size={18} />
+                                <Globe size={14} strokeWidth={1.5} />
                                 {isSyncingPrices ? 'Publicando...' : 'Publicar Precios en Tienda'}
                             </button>
 
                             {/* SEPARADOR SUTIL */}
-                            <div style={{ height: '20px', width: '1px', backgroundColor: 'rgba(0,0,0,0.1)', marginLeft: '8px' }}></div>
+                            <div style={{ height: '20px', width: '1px', backgroundColor: THEME.colors.border, marginLeft: '4px' }}></div>
 
                             {/* SELECTOR AUTO-SYNC PEGADO A LA DERECHA */}
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '10px',
-                                paddingLeft: '8px'
+                                gap: '8px',
+                                paddingLeft: '4px'
                             }}>
-                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Auto
                                 </span>
                                 <div 
                                     onClick={toggleAutosync}
                                     style={{
-                                        width: '40px',
-                                        height: '21px',
-                                        backgroundColor: autosyncEnabled ? '#10B981' : '#D1D5DB',
+                                        width: '36px',
+                                        height: '18px',
+                                        backgroundColor: autosyncEnabled ? THEME.colors.primary : '#CBD5E1',
                                         borderRadius: '20px',
                                         position: 'relative',
                                         cursor: 'pointer',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        transition: 'all 0.2s ease',
                                     }}
                                 >
                                     <div style={{
-                                        width: '15px',
-                                        height: '15px',
+                                        width: '12px',
+                                        height: '12px',
                                         backgroundColor: 'white',
                                         borderRadius: '50%',
                                         position: 'absolute',
                                         top: '3px',
-                                        left: autosyncEnabled ? '22px' : '3px',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                        left: autosyncEnabled ? '21px' : '3px',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
                                     }} />
                                 </div>
                             </div>
@@ -653,12 +679,12 @@ export default function AdminProductsPage() {
                 </header>
 
                 {/* KPI DASHBOARD PREMIUM */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
-                    <KPIMiniCard label="Total Catálogo" value={kpiMetrics.total.toLocaleString('es-CO')} icon="📦" color="#6366F1" />
-                    <KPIMiniCard label="Stock Activo" value={`${kpiMetrics.activeCoverage}%`} icon="✅" color="#10B981" />
-                    <KPIMiniCard label="Visualización" value={`${kpiMetrics.imageCoverage}%`} icon="📸" color="#3B82F6" />
-                    <KPIMiniCard label="Precios Web" value={`${kpiMetrics.pricingStatus}%`} icon="💰" color="#F59E0B" />
-                    <KPIMiniCard label="Mix Variantes" value={`${kpiMetrics.variantsCoverage}%`} icon="⚖️" color="#8B5CF6" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                    <KPIMiniCard label="Total Catálogo" value={formatNumber(kpiMetrics.total)} icon={<Package size={18} strokeWidth={1.5} />} />
+                    <KPIMiniCard label="Stock Activo" value={`${kpiMetrics.activeCoverage}%`} icon={<CheckCircle size={18} strokeWidth={1.5} />} />
+                    <KPIMiniCard label="Visualización" value={`${kpiMetrics.imageCoverage}%`} icon={<ImageIcon size={18} strokeWidth={1.5} />} />
+                    <KPIMiniCard label="Precios Web" value={`${kpiMetrics.pricingStatus}%`} icon={<DollarSign size={18} strokeWidth={1.5} />} />
+                    <KPIMiniCard label="Mix Variantes" value={`${kpiMetrics.variantsCoverage}%`} icon={<Scale size={18} strokeWidth={1.5} />} />
                 </div>
 
 
@@ -669,22 +695,22 @@ export default function AdminProductsPage() {
                         bottom: '2rem',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        backgroundColor: '#111827',
+                        backgroundColor: THEME.colors.textMain,
                         color: 'white',
-                        padding: '1rem 2rem',
-                        borderRadius: '100px',
-                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
+                        padding: '0.8rem 1.5rem',
+                        borderRadius: THEME.radius.xl,
+                        boxShadow: THEME.shadow.lg,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '2rem',
+                        gap: '1.5rem',
                         zIndex: 1000,
                         border: '1px solid rgba(255,255,255,0.1)'
                     }}>
-                        <span style={{ fontWeight: '600' }}>{selectedIds.length} seleccionados</span>
-                        <div style={{ display: 'flex', gap: '0.8rem' }}>
-                            <button onClick={() => handleBulkToggle(true)} style={{ backgroundColor: '#10B981', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '50px', fontWeight: '700', cursor: 'pointer' }}>👁️ Mostrar</button>
-                            <button onClick={() => handleBulkToggle(false)} style={{ backgroundColor: '#EF4444', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '50px', fontWeight: '700', cursor: 'pointer' }}>🚫 Ocultar</button>
-                            <button onClick={() => setSelectedIds([])} style={{ backgroundColor: 'transparent', color: 'rgba(255,255,255,0.6)', border: 'none', padding: '0.5rem', fontWeight: '600', cursor: 'pointer' }}>Cancelar</button>
+                        <span style={{ fontWeight: '500', fontSize: '0.85rem' }}>{formatNumber(selectedIds.length)} seleccionados</span>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => handleBulkToggle(true)} style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: THEME.radius.md, fontWeight: '600', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Eye size={14} strokeWidth={1.5} /> Mostrar</button>
+                            <button onClick={() => handleBulkToggle(false)} style={{ backgroundColor: '#EF4444', color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: THEME.radius.md, fontWeight: '600', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeOff size={14} strokeWidth={1.5} /> Ocultar</button>
+                            <button onClick={() => setSelectedIds([])} style={{ backgroundColor: 'transparent', color: 'rgba(255,255,255,0.6)', border: 'none', padding: '0.4rem 0.8rem', fontWeight: '500', fontSize: '0.8rem', cursor: 'pointer' }}>Cancelar</button>
                         </div>
                     </div>
                 )}
@@ -698,12 +724,19 @@ export default function AdminProductsPage() {
                     <div style={{ 
                         display: 'flex', 
                         gap: '1rem', 
-                        borderBottom: '1px solid var(--border)', 
+                        borderBottom: `1px solid ${THEME.colors.border}`, 
                         paddingBottom: '0.8rem', 
                         flexWrap: 'wrap', 
                         alignItems: 'center' 
                     }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ 
+                            display: 'inline-flex', 
+                            gap: '2px', 
+                            backgroundColor: '#F1F5F9', 
+                            padding: '3px', 
+                            borderRadius: '10px',
+                            border: `1px solid ${THEME.colors.border}`
+                        }}>
                             {[
                                 { id: 'all', label: 'Todos' },
                                 { id: 'active', label: 'Activos' },
@@ -713,15 +746,15 @@ export default function AdminProductsPage() {
                                     key={tab.id}
                                     onClick={() => setStatusFilter(tab.id as any)}
                                     style={{
-                                        padding: '0.5rem 1.2rem',
-                                        borderRadius: '12px',
+                                        padding: '0.4rem 1.1rem',
+                                        borderRadius: '8px',
                                         border: 'none',
-                                        backgroundColor: statusFilter === tab.id ? '#111827' : 'transparent',
-                                        color: statusFilter === tab.id ? 'white' : '#6B7280',
-                                        fontWeight: statusFilter === tab.id ? '800' : '600',
+                                        backgroundColor: statusFilter === tab.id ? THEME.colors.primary : 'transparent',
+                                        color: statusFilter === tab.id ? '#FFFFFF' : THEME.colors.textSecondary,
+                                        fontWeight: statusFilter === tab.id ? '600' : '500',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        fontSize: '0.9rem'
+                                        transition: 'all 0.15s ease',
+                                        fontSize: '0.85rem'
                                     }}
                                 >
                                     {tab.label}
@@ -729,38 +762,53 @@ export default function AdminProductsPage() {
                             ))}
                         </div>
 
-                        <div style={{ width: '1px', height: '24px', backgroundColor: '#E5E7EB', margin: '0 0.5rem' }}></div>
+                        <div style={{ width: '1px', height: '20px', backgroundColor: THEME.colors.border, margin: '0 0.5rem' }}></div>
 
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {Object.entries(CATEGORY_MAP).map(([id, label]) => (
-                                <button
-                                    key={id}
-                                    onClick={() => setCategoryFilter(categoryFilter === id ? 'all' : id)}
-                                    style={{
-                                        padding: '0.4rem 1rem',
-                                        borderRadius: '20px',
-                                        border: categoryFilter === id ? '2px solid #111827' : '1px solid #E5E7EB',
-                                        backgroundColor: categoryFilter === id ? '#EEF2FF' : 'white',
-                                        color: categoryFilter === id ? '#111827' : '#6B7280',
-                                        fontWeight: categoryFilter === id ? '800' : '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        fontSize: '0.85rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {Object.entries(CATEGORY_MAP).map(([id, label]) => {
+                                const isActive = categoryFilter === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        onClick={() => setCategoryFilter(categoryFilter === id ? 'all' : id)}
+                                        style={{
+                                            padding: '0.35rem 0.85rem',
+                                            borderRadius: THEME.radius.lg,
+                                            border: `1px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                            backgroundColor: isActive ? THEME.colors.primaryLight : THEME.colors.surface,
+                                            color: isActive ? THEME.colors.primary : THEME.colors.textSecondary,
+                                            fontWeight: isActive ? '600' : '450',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            fontSize: '0.8rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (!isActive) {
+                                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                e.currentTarget.style.color = THEME.colors.textMain;
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (!isActive) {
+                                                e.currentTarget.style.borderColor = THEME.colors.border;
+                                                e.currentTarget.style.color = THEME.colors.textSecondary;
+                                            }
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
-                                <Search size={22} />
+                            <div style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                                <Search size={18} strokeWidth={1.5} />
                             </div>
                             <input
                                 type="text"
@@ -769,13 +817,24 @@ export default function AdminProductsPage() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '1.1rem 3.5rem 1.1rem 3.5rem',
-                                    borderRadius: '16px',
-                                    border: '1px solid #E5E7EB',
-                                    fontSize: '1rem',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                    transition: 'all 0.2s',
+                                    padding: '0.75rem 2.8rem 0.75rem 2.8rem',
+                                    borderRadius: THEME.radius.lg,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontSize: '0.95rem',
+                                    color: THEME.colors.textMain,
+                                    backgroundColor: THEME.colors.surface,
+                                    boxShadow: THEME.shadow.sm,
+                                    transition: 'all 0.15s ease',
+                                    outline: 'none',
                                     fontFamily: 'inherit'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                    e.currentTarget.style.boxShadow = `0 0 0 2px ${THEME.colors.primaryLight}`;
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = THEME.colors.border;
+                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
                                 }}
                             />
                             {searchQuery && (
@@ -783,19 +842,19 @@ export default function AdminProductsPage() {
                                     onClick={() => setSearchQuery('')}
                                     style={{
                                         position: 'absolute',
-                                        right: '1.2rem',
+                                        right: '1rem',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
                                         border: 'none',
                                         background: 'none',
-                                        color: '#9CA3AF',
+                                        color: THEME.colors.textSecondary,
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
                                         padding: '4px'
                                     }}
                                 >
-                                    <X size={20} />
+                                    <X size={16} strokeWidth={1.5} />
                                 </button>
                             )}
                         </div>
@@ -804,37 +863,37 @@ export default function AdminProductsPage() {
                             <div 
                                 onClick={() => setIsInfoGuideOpen(!isInfoGuideOpen)}
                                 style={{ 
-                                    color: isInfoGuideOpen ? 'white' : '#2563EB', 
+                                    color: isInfoGuideOpen ? 'white' : THEME.colors.primary, 
                                     cursor: 'pointer',
-                                    backgroundColor: isInfoGuideOpen ? '#2563EB' : '#EFF6FF',
-                                    padding: '1rem',
-                                    borderRadius: '12px',
-                                    border: '1px solid #BFDBFE',
+                                    backgroundColor: isInfoGuideOpen ? THEME.colors.primary : THEME.colors.primaryLight,
+                                    padding: '0.75rem',
+                                    borderRadius: THEME.radius.lg,
+                                    border: `1px solid ${isInfoGuideOpen ? THEME.colors.primary : '#C2DFD6'}`,
                                     display: 'flex',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                <Info size={24} />
+                                <Info size={18} strokeWidth={1.5} />
                             </div>
                             {isInfoGuideOpen && (
                                 <div style={{
                                     position: 'absolute',
                                     right: 0,
-                                    top: '120%',
-                                    width: '320px',
-                                    backgroundColor: 'white',
-                                    borderRadius: '20px',
-                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                                    border: '1px solid #E5E7EB',
-                                    padding: '1.8rem',
-                                    zIndex: 100,
-                                    animation: 'fadeInDown 0.2s ease-out'
+                                    top: '125%',
+                                    width: '300px',
+                                    backgroundColor: THEME.colors.surface,
+                                    borderRadius: THEME.radius.lg,
+                                    boxShadow: THEME.shadow.lg,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    padding: '1.2rem',
+                                    zIndex: 100
                                 }}>
-                                    <h4 style={{ margin: '0 0 1.2rem 0', color: '#111827', fontSize: '1.1rem', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        🚀 Power Search Tips
+                                    <h4 style={{ margin: '0 0 0.8rem 0', color: THEME.colors.textMain, fontSize: '0.95rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Sparkles size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Power Search Tips
                                     </h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                         {[
                                             { tag: '@web', desc: 'Productos activos en tienda' },
                                             { tag: '@oculto', desc: 'Items en mantenimiento' },
@@ -842,13 +901,13 @@ export default function AdminProductsPage() {
                                             { tag: '@fruta', desc: 'Búsqueda por categoría' },
                                             { tag: '@on', desc: 'SKUs habilitados' }
                                         ].map((item, i) => (
-                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                                                <code style={{ backgroundColor: '#EEF2FF', padding: '3px 8px', borderRadius: '6px', color: '#4F46E5', fontWeight: '800' }}>{item.tag}</code>
-                                                <span style={{ color: '#6B7280', fontWeight: '600' }}>{item.desc}</span>
+                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                                <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', color: THEME.colors.primary, fontWeight: '600', fontSize: '0.75rem' }}>{item.tag}</code>
+                                                <span style={{ color: THEME.colors.textSecondary, fontWeight: '400' }}>{item.desc}</span>
                                             </div>
                                         ))}
                                     </div>
-                                    <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #F3F4F6', fontSize: '0.75rem', color: '#9CA3AF', fontStyle: 'italic', textAlign: 'center' }}>
+                                    <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: `1px solid ${THEME.colors.border}`, fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', textAlign: 'center' }}>
                                         Combinar: &quot;Papa @web @fresco&quot;
                                     </div>
                                 </div>
@@ -857,16 +916,16 @@ export default function AdminProductsPage() {
                     </div>
 
                     <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: 'var(--radius-lg)',
-                        boxShadow: 'var(--shadow-md)',
+                        backgroundColor: THEME.colors.surface,
+                        borderRadius: THEME.radius.lg,
+                        boxShadow: THEME.shadow.sm,
                         overflow: 'hidden',
-                        border: '1px solid var(--border)'
+                        border: `1px solid ${THEME.colors.border}`
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
                             <thead>
-                                <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #E5E7EB' }}>
-                                    <th style={{ padding: '1.2rem 1rem', width: '50px', textAlign: 'center' }}>
+                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <th style={{ padding: '0.75rem 1rem', width: '50px', textAlign: 'center' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
@@ -874,22 +933,22 @@ export default function AdminProductsPage() {
                                                     if (e.target.checked) setSelectedIds(paginatedProducts.map(p => p.id));
                                                     else setSelectedIds([]);
                                                 }}
-                                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                             />
                                     </th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem' }}>Producto</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Categoría</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Atributos & Tags</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Precio</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Oferta / Var.</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Presencia</th>
-                                    <th style={{ padding: '1.2rem 1rem', color: '#111827', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem', textAlign: 'center' }}>Acción</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Producto</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Categoría</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Atributos & Tags</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Precio</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Oferta / Var.</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Presencia</th>
+                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {paginatedProducts.map((product) => (
-                                    <tr key={product.id} style={{ borderBottom: '1px solid var(--border)', height: '110px', backgroundColor: selectedIds.includes(product.id) ? '#F9FAFB' : 'transparent', transition: 'background-color 0.2s' }}>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                    <tr key={product.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, height: '90px', backgroundColor: selectedIds.includes(product.id) ? THEME.colors.background : 'transparent', transition: 'background-color 0.2s' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.includes(product.id)}
@@ -897,48 +956,54 @@ export default function AdminProductsPage() {
                                                     if (e.target.checked) setSelectedIds([...selectedIds, product.id]);
                                                     else setSelectedIds(selectedIds.filter(id => id !== product.id));
                                                 }}
-                                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                             />
                                         </td>
-                                        <td style={{ padding: '1.5rem 1rem', display: 'flex', alignItems: 'center', gap: '1.5rem', position: 'relative' }}>
+                                        <td style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
                                             {savingId === product.id && (
-                                                <div style={{ position: 'absolute', left: '-10px', top: '50%', transform: 'translateY(-50%)', width: '4px', height: '40px', backgroundColor: 'var(--primary)', borderRadius: '2px', animation: 'pulse 1s infinite' }}></div>
+                                                <div style={{ position: 'absolute', left: '-10px', top: '50%', transform: 'translateY(-50%)', width: '4px', height: '30px', backgroundColor: THEME.colors.primary, borderRadius: '2px', animation: 'pulse 1s infinite' }}></div>
                                             )}
                                             <div
                                                 onClick={() => document.getElementById(`file-${product.id}`)?.click()}
                                                 style={{
-                                                    width: '80px',
-                                                    height: '80px',
-                                                    borderRadius: '12px',
+                                                    width: '64px',
+                                                    height: '64px',
+                                                    borderRadius: THEME.radius.md,
                                                     overflow: 'hidden',
-                                                    backgroundColor: '#eee',
+                                                    backgroundColor: '#F8FAFC',
                                                     flexShrink: 0,
-                                                    boxShadow: 'var(--shadow-sm)',
+                                                    boxShadow: THEME.shadow.sm,
                                                     cursor: 'pointer',
                                                     position: 'relative',
-                                                    transition: 'all 0.2s',
-                                                    border: '1px solid #E5E7EB'
+                                                    transition: 'all 0.2s ease',
+                                                    border: `1px solid ${THEME.colors.border}`
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.border;
                                                 }}
                                             >
                                                 {product.image_url ? (
                                                     <Image 
                                                         src={product.image_url} 
                                                         alt={product.name} 
-                                                        width={80} 
-                                                        height={80} 
+                                                        width={64} 
+                                                        height={64} 
                                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                        sizes="80px"
+                                                        sizes="64px"
                                                         loading="lazy"
                                                     />
                                                 ) : (
-                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                                                        <ImageIcon size={30} />
+                                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary }}>
+                                                        <ImageIcon size={20} strokeWidth={1.5} />
                                                     </div>
                                                 )}
                                                 <div style={{
                                                     position: 'absolute',
                                                     inset: 0,
-                                                    backgroundColor: 'rgba(0,0,0,0.4)',
+                                                    backgroundColor: 'rgba(0,0,0,0.3)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -949,7 +1014,7 @@ export default function AdminProductsPage() {
                                                     onMouseOver={(e) => (e.currentTarget as HTMLElement).style.opacity = '1'}
                                                     onMouseOut={(e) => (e.currentTarget as HTMLElement).style.opacity = '0'}
                                                 >
-                                                    <ImageIcon size={24} />
+                                                    <ImageIcon size={18} strokeWidth={1.5} />
                                                 </div>
                                                 <input
                                                     id={`file-${product.id}`}
@@ -963,39 +1028,40 @@ export default function AdminProductsPage() {
                                                     }}
                                                 />
                                             </div>
-                                            <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#111827' }}>
+                                            <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                <div style={{ fontWeight: '600', fontSize: '1rem', color: THEME.colors.textMain }}>
                                                     {product.name}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '700' }}>{product.sku}</span>
+                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>{product.sku}</span>
                                                     {product.iva_rate !== undefined && (
                                                         <span style={{ 
-                                                            fontSize: '0.7rem', 
-                                                            padding: '2px 6px', 
-                                                            borderRadius: '6px',
-                                                            backgroundColor: product.iva_rate === 0 ? '#DCFCE7' : product.iva_rate === 5 ? '#DBEAFE' : '#FFEDD5',
-                                                            color: product.iva_rate === 0 ? '#166534' : product.iva_rate === 5 ? '#1E40AF' : '#9A3412',
-                                                            fontWeight: '800'
+                                                            fontSize: '0.65rem', 
+                                                            padding: '1px 5px', 
+                                                            borderRadius: '4px',
+                                                            backgroundColor: product.iva_rate === 0 ? '#E8F5E9' : product.iva_rate === 5 ? '#E3F2FD' : '#FFF3E0',
+                                                            color: product.iva_rate === 0 ? '#2E7D32' : product.iva_rate === 5 ? '#1565C0' : '#E65100',
+                                                            fontWeight: '600'
                                                         }}>
-                                                            IVA {product.iva_rate}%
+                                                            IVA {formatNumber(product.iva_rate)}%
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: '0.85rem', color: '#6B7280', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, display: '-webkit-box', WebkitLineClamp: '1', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                                                     {product.description || 'Sin descripción técnica.'}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                                                 <span style={{ 
-                                                    fontSize: '0.85rem', 
-                                                    fontWeight: '800', 
-                                                    padding: '4px 12px', 
-                                                    backgroundColor: '#F3F4F6', 
-                                                    borderRadius: '20px',
-                                                    color: '#374151'
+                                                    fontSize: '0.8rem', 
+                                                    fontWeight: '500', 
+                                                    padding: '2px 8px', 
+                                                    backgroundColor: THEME.colors.background, 
+                                                    borderRadius: THEME.radius.lg,
+                                                    color: THEME.colors.textMain,
+                                                    border: `1px solid ${THEME.colors.border}`
                                                 }}>
                                                     {CATEGORY_MAP[product.category] || product.category}
                                                 </span>
@@ -1003,42 +1069,42 @@ export default function AdminProductsPage() {
                                                 {/* Cápsula de Jerarquía Minimalista */}
                                                 {product.parent_id && (
                                                     <div style={{
-                                                        fontSize: '0.65rem',
-                                                        fontWeight: '900',
-                                                        padding: '2px 5px',
-                                                        borderRadius: '4px',
-                                                        backgroundColor: product.parent_id === product.id ? '#4F46E5' : '#10B981',
+                                                        fontSize: '0.6rem',
+                                                        fontWeight: '600',
+                                                        padding: '2px 4px',
+                                                        borderRadius: '3px',
+                                                        backgroundColor: product.parent_id === product.id ? THEME.colors.primary : '#0EA5E9',
                                                         color: 'white',
                                                         display: 'inline-flex',
-                                                        minWidth: '16px',
+                                                        minWidth: '14px',
                                                         justifyContent: 'center',
                                                         lineHeight: '1',
-                                                        marginTop: '4px'
+                                                        marginTop: '2px'
                                                     }} title={product.parent_id === product.id ? 'Producto Padre' : 'Producto Hijo'}>
                                                         {product.parent_id === product.id ? 'P' : 'H'}
                                                     </div>
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center', minWidth: '240px' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', minWidth: '220px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                 {/* Tags Input */}
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px', justifyContent: 'center' }}>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '2px', justifyContent: 'center' }}>
                                                     {product.tags?.map((tag, i) => (
                                                         <span key={i} style={{ 
                                                             fontSize: '0.65rem', 
-                                                            padding: '2px 8px', 
-                                                            backgroundColor: '#F3F4F6', 
-                                                            color: '#374151', 
-                                                            borderRadius: '6px',
-                                                            fontWeight: '800',
-                                                            display: 'flex',
+                                                            padding: '1px 6px', 
+                                                            backgroundColor: THEME.colors.background, 
+                                                            color: THEME.colors.textMain, 
+                                                            borderRadius: '4px',
+                                                            fontWeight: '500',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            gap: '4px',
-                                                            border: '1px solid #E5E7EB'
+                                                            gap: '3px',
+                                                            border: `1px solid ${THEME.colors.border}`
                                                         }}>
                                                             {tag}
-                                                            <X size={10} style={{ cursor: 'pointer' }} onClick={() => {
+                                                            <X size={10} strokeWidth={1.5} style={{ cursor: 'pointer', color: THEME.colors.textSecondary }} onClick={() => {
                                                                 const newTags = product.tags?.filter(t => t !== tag) || [];
                                                                 updateProductField(product.id, 'tags', newTags);
                                                             }} />
@@ -1051,19 +1117,19 @@ export default function AdminProductsPage() {
                                                         placeholder="+ tag estratégico"
                                                         style={{ 
                                                             fontSize: '0.75rem', 
-                                                            padding: '6px 12px', 
-                                                            borderRadius: '8px', 
-                                                            border: '1px solid #E5E7EB', 
+                                                            padding: '4px 8px', 
+                                                            borderRadius: THEME.radius.sm, 
+                                                            border: `1px solid ${THEME.colors.border}`, 
                                                             width: '100%',
-                                                            backgroundColor: '#F9FAFB',
-                                                            fontWeight: '600'
+                                                            backgroundColor: THEME.colors.surface,
+                                                            fontWeight: '500',
+                                                            outline: 'none'
                                                         }}
                                                         onFocus={(e) => {
                                                             const box = e.currentTarget.nextElementSibling as HTMLElement;
                                                             if (box) box.style.display = 'flex';
                                                         }}
                                                         onBlur={(e) => {
-                                                            // Delay to allow clicking suggestions
                                                             setTimeout(() => {
                                                                 const box = e.target.nextElementSibling as HTMLElement;
                                                                 if (box) box.style.display = 'none';
@@ -1088,16 +1154,16 @@ export default function AdminProductsPage() {
                                                         bottom: '100%', 
                                                         left: 0, 
                                                         right: 0, 
-                                                        backgroundColor: 'white', 
-                                                        border: '1px solid #E5E7EB', 
-                                                        borderRadius: '12px', 
-                                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)', 
+                                                        backgroundColor: THEME.colors.surface, 
+                                                        border: `1px solid ${THEME.colors.border}`, 
+                                                        borderRadius: THEME.radius.md, 
+                                                        boxShadow: THEME.shadow.md, 
                                                         zIndex: 20,
-                                                        padding: '10px',
+                                                        padding: '8px',
                                                         flexDirection: 'column',
-                                                        gap: '6px'
+                                                        gap: '4px'
                                                     }}>
-                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>Sugerencias</div>
+                                                        <div style={{ fontSize: '0.6rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: '2px', letterSpacing: '0.05em' }}>Sugerencias</div>
                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                             {(categorySuggestions[product.category] || []).filter(t => !product.tags?.includes(t)).length > 0 ? (
                                                                 (categorySuggestions[product.category] || [])
@@ -1109,7 +1175,7 @@ export default function AdminProductsPage() {
                                                                                 const newTags = Array.from(new Set([...(product.tags || []), tag]));
                                                                                 updateProductField(product.id, 'tags', newTags);
                                                                             }}
-                                                                            style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E0E7FF', backgroundColor: '#F0F4FF', cursor: 'pointer', fontWeight: '700', color: '#4F46E5' }}
+                                                                            style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${THEME.colors.primary}30`, backgroundColor: THEME.colors.primaryLight, cursor: 'pointer', fontWeight: '500', color: THEME.colors.primary }}
                                                                         >
                                                                             + {tag}
                                                                         </button>
@@ -1122,7 +1188,7 @@ export default function AdminProductsPage() {
                                                                             const newTags = Array.from(new Set([...(product.tags || []), tag]));
                                                                             updateProductField(product.id, 'tags', newTags);
                                                                         }}
-                                                                        style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '6px', border: '1px solid #F3F4F6', backgroundColor: '#F9FAFB', cursor: 'pointer', fontWeight: '700', color: '#374151' }}
+                                                                        style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, cursor: 'pointer', fontWeight: '500', color: THEME.colors.textMain }}
                                                                     >
                                                                         + {tag}
                                                                     </button>
@@ -1136,7 +1202,16 @@ export default function AdminProductsPage() {
                                                     type="text"
                                                     placeholder="Keywords de búsqueda..."
                                                     defaultValue={product.keywords || ''}
-                                                    style={{ fontSize: '0.75rem', padding: '6px 12px', borderRadius: '8px', border: '1px solid #E5E7EB', width: '100%', fontStyle: 'italic', backgroundColor: 'transparent' }}
+                                                    style={{ 
+                                                        fontSize: '0.75rem', 
+                                                        padding: '4px 8px', 
+                                                        borderRadius: THEME.radius.sm, 
+                                                        border: `1px solid ${THEME.colors.border}`, 
+                                                        width: '100%', 
+                                                        fontStyle: 'italic', 
+                                                        backgroundColor: 'transparent',
+                                                        outline: 'none'
+                                                    }}
                                                     onBlur={(e) => {
                                                         if (e.target.value !== (product.keywords || '')) {
                                                             updateProductField(product.id, 'keywords', e.target.value);
@@ -1145,71 +1220,88 @@ export default function AdminProductsPage() {
                                                 />
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                            <div style={{ fontWeight: '900', fontSize: '1.25rem', color: '#111827' }}>
-                                                ${product.base_price?.toLocaleString()}
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                            <div style={{ fontWeight: '700', fontSize: '1.1rem', color: THEME.colors.textMain }}>
+                                                {formatMoney(product.base_price)}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <button
                                                 onClick={() => setSelectedProduct(product)}
                                                 style={{
-                                                    padding: '0.6rem 1rem',
-                                                    borderRadius: '10px',
-                                                    border: '1px solid #E5E7EB',
-                                                    backgroundColor: 'white',
-                                                    color: '#111827',
+                                                    padding: '0.4rem 0.8rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: `1px solid ${THEME.colors.border}`,
+                                                    backgroundColor: THEME.colors.surface,
+                                                    color: THEME.colors.textMain,
                                                     cursor: 'pointer',
-                                                    fontSize: '0.9rem',
-                                                    fontWeight: '700',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '500',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '0.5rem'
+                                                    gap: '0.4rem',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                    e.currentTarget.style.backgroundColor = THEME.colors.background;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.border;
+                                                    e.currentTarget.style.backgroundColor = THEME.colors.surface;
                                                 }}
                                             >
-                                                <Filter size={16} /> 
+                                                <Filter size={14} strokeWidth={1.5} /> 
                                                 <span>Ver Variantes</span>
                                                 {product.variants && (product.variants as any[]).length > 0 && (
                                                     <span style={{
                                                         marginLeft: '4px',
-                                                        backgroundColor: '#4F46E5',
+                                                        backgroundColor: THEME.colors.primary,
                                                         color: 'white',
-                                                        fontSize: '0.75rem',
-                                                        padding: '2px 6px',
-                                                        borderRadius: '12px',
-                                                        fontWeight: '800'
+                                                        fontSize: '0.7rem',
+                                                        padding: '1px 5px',
+                                                        borderRadius: '10px',
+                                                        fontWeight: '600'
                                                     }}>
                                                         {(product.variants as any[]).length}
                                                     </span>
                                                 )}
                                             </button>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <span style={{
-                                                color: product.is_active ? '#059669' : '#DC2626',
-                                                fontWeight: '800',
-                                                fontSize: '0.9rem',
+                                                color: product.is_active ? THEME.colors.primary : '#DC2626',
+                                                fontWeight: '600',
+                                                fontSize: '0.85rem',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
-                                                gap: '6px'
+                                                gap: '4px'
                                             }}>
-                                                {product.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
+                                                {product.is_active ? <Eye size={14} strokeWidth={1.5} /> : <EyeOff size={14} strokeWidth={1.5} />}
                                                 {product.is_active ? 'Visible' : 'Oculto'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <button
                                                 onClick={() => toggleActive(product.id, product.is_active)}
                                                 style={{
-                                                    padding: '0.6rem 1.2rem',
-                                                    borderRadius: '10px',
-                                                    border: 'none',
-                                                    backgroundColor: product.is_active ? '#F3F4F6' : '#DCFCE7',
-                                                    color: product.is_active ? '#4B5563' : '#166534',
+                                                    padding: '0.4rem 0.8rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: `1px solid ${product.is_active ? '#E2E8F0' : '#A7F3D0'}`,
+                                                    backgroundColor: product.is_active ? '#F8FAFC' : '#ECFDF5',
+                                                    color: product.is_active ? THEME.colors.textSecondary : THEME.colors.primary,
                                                     cursor: 'pointer',
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: '800',
-                                                    transition: 'all 0.2s'
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '500',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = product.is_active ? '#F1F5F9' : '#D1FAE5';
+                                                    e.currentTarget.style.borderColor = product.is_active ? '#CBD5E1' : '#6EE7B7';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = product.is_active ? '#F8FAFC' : '#ECFDF5';
+                                                    e.currentTarget.style.borderColor = product.is_active ? '#E2E8F0' : '#A7F3D0';
                                                 }}
                                             >
                                                 {product.is_active ? 'Ocultar' : 'Activar'}
@@ -1221,55 +1313,57 @@ export default function AdminProductsPage() {
                         </table>
                         {/* PAGINACIÓN */}
                         <div style={{ 
-                            padding: '1.5rem', 
-                            borderTop: '1px solid #E5E7EB', 
+                            padding: '1.2rem 1.5rem', 
+                            borderTop: `1px solid ${THEME.colors.border}`, 
                             display: 'flex', 
                             justifyContent: 'space-between', 
                             alignItems: 'center',
-                            backgroundColor: '#F9FAFB'
+                            backgroundColor: '#F8FAFC'
                         }}>
-                            <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: '600' }}>
-                                Mostrando <span style={{ color: '#111827' }}>{paginatedProducts.length}</span> de <span style={{ color: '#111827' }}>{filteredProducts.length}</span> resultados
+                            <span style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                                Mostrando <span style={{ color: THEME.colors.textMain, fontWeight: '600' }}>{formatNumber(paginatedProducts.length)}</span> de <span style={{ color: THEME.colors.textMain, fontWeight: '600' }}>{formatNumber(filteredProducts.length)}</span> resultados
                             </span>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <button
                                     disabled={currentPage === 1}
                                     onClick={() => setCurrentPage(prev => prev - 1)}
                                     style={{
-                                        padding: '0.6rem 1rem',
-                                        borderRadius: '10px',
-                                        border: '1px solid #E5E7EB',
-                                        backgroundColor: currentPage === 1 ? '#F3F4F6' : 'white',
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        backgroundColor: currentPage === 1 ? '#F1F5F9' : THEME.colors.surface,
                                         cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '0.5rem',
-                                        fontWeight: '700',
-                                        color: currentPage === 1 ? '#9CA3AF' : '#374151'
+                                        gap: '0.4rem',
+                                        fontWeight: '500',
+                                        fontSize: '0.8rem',
+                                        color: currentPage === 1 ? THEME.colors.textSecondary : THEME.colors.textMain
                                     }}
                                 >
-                                    <ChevronLeft size={18} /> Anterior
+                                    <ChevronLeft size={16} strokeWidth={1.5} /> Anterior
                                 </button>
-                                <div style={{ display: 'flex', alignItems: 'center', color: '#6B7280', fontWeight: '700', fontSize: '0.9rem', padding: '0 1rem' }}>
-                                    Página {currentPage} de {totalPages || 1}
+                                <div style={{ display: 'flex', alignItems: 'center', color: THEME.colors.textSecondary, fontWeight: '500', fontSize: '0.85rem', padding: '0 0.8rem' }}>
+                                    Página {formatNumber(currentPage)} de {formatNumber(totalPages || 1)}
                                 </div>
                                 <button
                                     disabled={currentPage === totalPages || totalPages === 0}
                                     onClick={() => setCurrentPage(prev => prev + 1)}
                                     style={{
-                                        padding: '0.6rem 1rem',
-                                        borderRadius: '10px',
-                                        border: '1px solid #E5E7EB',
-                                        backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F3F4F6' : 'white',
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: THEME.radius.md,
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        backgroundColor: (currentPage === totalPages || totalPages === 0) ? '#F1F5F9' : THEME.colors.surface,
                                         cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '0.5rem',
-                                        fontWeight: '700',
-                                        color: (currentPage === totalPages || totalPages === 0) ? '#9CA3AF' : '#374151'
+                                        gap: '0.4rem',
+                                        fontWeight: '500',
+                                        fontSize: '0.8rem',
+                                        color: (currentPage === totalPages || totalPages === 0) ? THEME.colors.textSecondary : THEME.colors.textMain
                                     }}
                                 >
-                                    Siguiente <ChevronRight size={18} />
+                                    Siguiente <ChevronRight size={16} strokeWidth={1.5} />
                                 </button>
                             </div>
                         </div>
@@ -1301,47 +1395,47 @@ export default function AdminProductsPage() {
     );
 }
 
-function KPIMiniCard({ label, value, icon, color }: { label: string, value: string | number, icon: string, color: string }) {
+function KPIMiniCard({ label, value, icon }: { label: string, value: string | number, icon: React.ReactNode }) {
     return (
         <div style={{
-            backgroundColor: 'white',
-            padding: '1.2rem',
-            borderRadius: '20px',
-            border: '1px solid #E5E7EB',
-            borderTop: `4px solid ${color}`,
+            backgroundColor: THEME.colors.surface,
+            padding: '1rem 1.2rem',
+            borderRadius: THEME.radius.lg,
+            border: `1px solid ${THEME.colors.border}`,
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+            transition: 'all 0.2s ease',
+            boxShadow: THEME.shadow.sm
         }}
         onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-3px)';
-            e.currentTarget.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.md;
+            e.currentTarget.style.borderColor = THEME.colors.borderActive;
         }}
         onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+            e.currentTarget.style.borderColor = THEME.colors.border;
         }}
         >
             <div style={{ 
-                width: '42px', 
-                height: '42px', 
-                borderRadius: '12px', 
-                backgroundColor: `${color}10`, 
+                width: '36px', 
+                height: '36px', 
+                borderRadius: THEME.radius.md, 
+                backgroundColor: THEME.colors.primaryLight, 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                fontSize: '1.3rem',
-                color: color
+                color: THEME.colors.primary
             }}>
                 {icon}
             </div>
             <div>
-                <p style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                <p style={{ fontSize: '0.75rem', fontWeight: '500', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                     {label}
                 </p>
-                <p style={{ fontSize: '1.4rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                <p style={{ fontSize: '1.25rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', lineHeight: '1.2' }}>
                     {value}
                 </p>
             </div>

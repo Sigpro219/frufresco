@@ -19,6 +19,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { THEME } from '@/lib/adminTheme';
 
 export default function WorldOfficeExportPage() {
     const [mounted, setMounted] = useState(false);
@@ -101,10 +102,8 @@ export default function WorldOfficeExportPage() {
 
             // --- WORLD OFFICE 50-COLUMN MAPPING ---
             const woData = data.map((item, index) => {
-                // Base structure (Standard WorldOffice Flat File)
                 const row: any = {};
                 
-                // We create 50 columns (mapped or empty)
                 const columns = [
                     'TipoDocumento', 'Prefijo', 'Numero', 'Fecha', 'NitTercero', 'NombreTercero', 
                     'CodigoProducto', 'NombreProducto', 'Cantidad', 'ValorUnitario', 'ValorTotal', 
@@ -118,7 +117,7 @@ export default function WorldOfficeExportPage() {
                 ];
 
                 if (exportType === 'cuts') {
-                    row['TipoDocumento'] = 'FV'; // Factura Venta
+                    row['TipoDocumento'] = 'FV'; 
                     row['Prefijo'] = 'FF';
                     row['Numero'] = item.orders?.sequence_id || index + 1;
                     row['Fecha'] = dateRange.start;
@@ -132,7 +131,7 @@ export default function WorldOfficeExportPage() {
                     row['CentroCostos'] = 'VENTAS';
                     row['UnidadMedida'] = 'UND';
                 } else {
-                    row['TipoDocumento'] = 'CP'; // Comprobante Pago / Compra
+                    row['TipoDocumento'] = 'CP'; 
                     row['Prefijo'] = 'CONT';
                     row['Numero'] = item.external_doc_number || index + 1;
                     row['Fecha'] = item.created_at?.split('T')[0] || dateRange.start;
@@ -146,7 +145,6 @@ export default function WorldOfficeExportPage() {
                     row['CentroCostos'] = 'COMPRAS';
                 }
 
-                // Fill rest of columns with empty strings
                 columns.forEach(col => {
                     if (row[col] === undefined) row[col] = '';
                 });
@@ -174,27 +172,27 @@ export default function WorldOfficeExportPage() {
     if (!mounted) return null;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '3rem 2rem' }}>
                 
                 {/* Header */}
-                <div style={{ marginBottom: '3rem' }}>
+                <div style={{ marginBottom: '2.5rem' }}>
                     <Link href="/admin/procurement" style={{ 
                         textDecoration: 'none', 
-                        color: '#64748B', 
-                        fontWeight: '700', 
-                        fontSize: '0.9rem',
+                        color: THEME.colors.textSecondary, 
+                        fontWeight: '600', 
+                        fontSize: '0.85rem',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.4rem',
-                        marginBottom: '1rem'
+                        marginBottom: '0.75rem'
                     }}>
-                        <ArrowLeft size={16} /> Volver a Compras 360
+                        <ArrowLeft size={14} strokeWidth={1.5} /> Volver a Compras 360
                     </Link>
-                    <h1 style={{ fontSize: '2.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03em' }}>
-                        Exportador <span style={{ color: '#0EA5E9' }}>WorldOffice</span>
+                    <h1 style={{ fontSize: '2.4rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.03em' }}>
+                        Exportador <span style={{ color: THEME.colors.primary }}>WorldOffice</span>
                     </h1>
-                    <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '1rem', marginTop: '0.5rem', fontWeight: '400' }}>
                         Utilidad avanzada de integración contable con formato de 50 columnas.
                     </p>
                 </div>
@@ -202,38 +200,39 @@ export default function WorldOfficeExportPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2.5rem' }}>
                     
                     {/* Configuration Card */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '32px', border: '1px solid #E2E8F0', padding: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-                        <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
-                            <Layers size={24} color="#0EA5E9" /> Configuración de Carga
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '2rem', boxShadow: THEME.shadow.sm }}>
+                        <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
+                            <Layers size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Configuración de Carga
                         </h2>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.8rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Tipo de Información</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.8rem' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.6rem', textTransform: 'uppercase' }}>Tipo de Información</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                                     {[
-                                        { id: 'cuts', label: 'Cortes Fact.', icon: <Database size={18} /> },
-                                        { id: 'cash', label: 'Compras Cont.', icon: <FileSpreadsheet size={18} /> },
-                                        { id: 'expenses', label: 'Gastos Fijos', icon: <Clock size={18} /> },
-                                        { id: 'providers', label: 'Proveedores', icon: <Users size={18} /> }
+                                        { id: 'cuts', label: 'Cortes Fact.', icon: <Database size={16} strokeWidth={1.5} /> },
+                                        { id: 'cash', label: 'Compras Cont.', icon: <FileSpreadsheet size={16} strokeWidth={1.5} /> },
+                                        { id: 'expenses', label: 'Gastos Fijos', icon: <Clock size={16} strokeWidth={1.5} /> },
+                                        { id: 'providers', label: 'Proveedores', icon: <Users size={16} strokeWidth={1.5} /> }
                                     ].map(type => (
                                         <button 
                                             key={type.id}
                                             onClick={() => setExportType(type.id as any)}
                                             style={{
-                                                padding: '1rem 0.5rem',
-                                                borderRadius: '16px',
-                                                border: '2px solid',
-                                                borderColor: exportType === type.id ? '#0EA5E9' : '#F1F5F9',
-                                                backgroundColor: exportType === type.id ? '#F0F9FF' : 'white',
-                                                color: exportType === type.id ? '#0EA5E9' : '#64748B',
-                                                fontWeight: '800',
-                                                fontSize: '0.8rem',
+                                                padding: '0.75rem 0.5rem',
+                                                borderRadius: THEME.radius.sm,
+                                                border: '1px solid',
+                                                borderColor: exportType === type.id ? THEME.colors.primary : THEME.colors.border,
+                                                backgroundColor: exportType === type.id ? THEME.colors.primaryLight : 'white',
+                                                color: exportType === type.id ? THEME.colors.primary : THEME.colors.textSecondary,
+                                                fontWeight: '600',
+                                                fontSize: '0.85rem',
                                                 cursor: 'pointer',
                                                 display: 'flex',
-                                                flexDirection: 'column',
+                                                flexDirection: 'row',
                                                 alignItems: 'center',
-                                                gap: '0.5rem',
+                                                justifyContent: 'center',
+                                                gap: '0.4rem',
                                                 transition: 'all 0.2s'
                                             }}
                                         >
@@ -246,21 +245,21 @@ export default function WorldOfficeExportPage() {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Fecha Inicial</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase' }}>Fecha Inicial</label>
                                     <input 
                                         type="date" 
                                         value={dateRange.start}
                                         onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontWeight: '700', outline: 'none' }} 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none', backgroundColor: 'white' }} 
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Fecha Final</label>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase' }}>Fecha Final</label>
                                     <input 
                                         type="date" 
                                         value={dateRange.end}
                                         onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))}
-                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontWeight: '700', outline: 'none' }} 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none', backgroundColor: 'white' }} 
                                     />
                                 </div>
                             </div>
@@ -269,50 +268,51 @@ export default function WorldOfficeExportPage() {
                                 onClick={handleExport}
                                 disabled={loading}
                                 style={{
-                                    marginTop: '1rem',
-                                    padding: '1.2rem',
-                                    borderRadius: '18px',
+                                    marginTop: '0.5rem',
+                                    padding: '0.85rem',
+                                    borderRadius: THEME.radius.sm,
                                     border: 'none',
-                                    backgroundColor: loading ? '#94A3B8' : '#0F172A',
+                                    backgroundColor: loading ? THEME.colors.textSecondary : THEME.colors.primary,
                                     color: 'white',
-                                    fontWeight: '900',
-                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    fontSize: '0.95rem',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '0.8rem',
+                                    gap: '0.5rem',
                                     cursor: loading ? 'not-allowed' : 'pointer',
-                                    boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.2)',
-                                    transition: 'all 0.2s'
+                                    transition: 'background-color 0.2s'
                                 }}
+                                onMouseOver={e => { if (!loading) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseOut={e => { if (!loading) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                {loading ? <Clock className="animate-spin" /> : <Download size={22} />}
+                                {loading ? <Clock className="animate-spin" size={18} /> : <Download size={18} strokeWidth={1.5} />}
                                 {loading ? 'PROCESANDO...' : 'GENERAR ARCHIVO PLANO'}
                             </button>
                         </div>
                     </div>
 
                     {/* Log Console */}
-                    <div style={{ backgroundColor: '#0F172A', borderRadius: '32px', padding: '2rem', color: '#E2E8F0', display: 'flex', flexDirection: 'column', border: '1px solid #1E293B', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                            <h3 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                                <Cpu size={18} /> Terminal de Exportación
+                    <div style={{ backgroundColor: '#0F172A', borderRadius: THEME.radius.md, padding: '1.5rem', color: '#E2E8F0', display: 'flex', flexDirection: 'column', border: '1px solid #1E293B', boxShadow: THEME.shadow.sm }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <h3 style={{ fontSize: '0.8rem', fontWeight: '600', color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                <Cpu size={16} strokeWidth={1.5} /> Terminal de Exportación
                             </h3>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: loading ? '#F59E0B' : '#10B981' }}></div>
                         </div>
 
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '350px', paddingRight: '0.5rem' }} className="custom-scrollbar">
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '300px', minHeight: '200px', paddingRight: '0.5rem' }} className="custom-scrollbar">
                             {logs.length === 0 ? (
-                                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: '0.9rem', fontWeight: '600', fontStyle: 'italic' }}>
+                                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: '0.85rem', fontWeight: '500', fontStyle: 'italic' }}>
                                     Esperando ejecución...
                                 </div>
                             ) : (
                                 logs.map((log, i) => (
-                                    <div key={i} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.85rem', lineHeight: '1.4' }}>
-                                        <span style={{ color: '#475569', fontWeight: '700', userSelect: 'none' }}>[{i+1}]</span>
+                                    <div key={i} style={{ display: 'flex', gap: '0.6rem', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                        <span style={{ color: '#475569', fontWeight: '600', userSelect: 'none' }}>[{i+1}]</span>
                                         <span style={{ 
                                             color: log.type === 'success' ? '#4ADE80' : log.type === 'error' ? '#F87171' : '#E2E8F0',
-                                            fontWeight: log.type !== 'info' ? '700' : '500'
+                                            fontWeight: log.type !== 'info' ? '600' : '400'
                                         }}>
                                             {log.msg}
                                         </span>
@@ -321,7 +321,7 @@ export default function WorldOfficeExportPage() {
                             )}
                         </div>
 
-                        <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #1E293B', fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>
+                        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #1E293B', fontSize: '0.7rem', color: '#475569', fontWeight: '600' }}>
                             READY FOR WORLD OFFICE V12.0.4
                         </div>
                     </div>
@@ -329,9 +329,9 @@ export default function WorldOfficeExportPage() {
                 </div>
 
                 {/* Footer Info */}
-                <div style={{ marginTop: '3rem', backgroundColor: 'rgba(14, 165, 233, 0.05)', borderRadius: '24px', padding: '1.5rem 2rem', border: '1px dashed #BAE6FD', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <AlertCircle size={24} color="#0EA5E9" />
-                    <p style={{ color: '#0369A1', fontSize: '0.9rem', fontWeight: '600', margin: 0 }}>
+                <div style={{ marginTop: '2.5rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, padding: '1rem 1.5rem', border: `1px dashed ${THEME.colors.primary}`, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <AlertCircle size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary, flexShrink: 0 }} />
+                    <p style={{ color: THEME.colors.primary, fontSize: '0.85rem', fontWeight: '500', margin: 0 }}>
                         Este exportador cumple con la estructura de mapeo dinámico para WorldOffice. Asegúrese de que los NITs de los terceros coincidan con su base de datos contable.
                     </p>
                 </div>
@@ -360,3 +360,4 @@ export default function WorldOfficeExportPage() {
         </main>
     );
 }
+

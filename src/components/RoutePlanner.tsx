@@ -2,6 +2,24 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { 
+    Calendar, 
+    Scale, 
+    MapPin, 
+    Building2, 
+    Clock, 
+    AlertTriangle, 
+    Sparkles, 
+    Check, 
+    Trash2, 
+    X, 
+    Truck, 
+    Settings, 
+    Activity,
+    FileText,
+    Users
+} from 'lucide-react';
 
 interface Order {
     id: string;
@@ -310,7 +328,7 @@ export default function RoutePlanner() {
     };
 
     const getInitials = (name: string) => {
-        if (!name || name === 'Sin Asignar') return '👤';
+        if (!name || name === 'Sin Asignar') return '';
         return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
@@ -499,7 +517,7 @@ export default function RoutePlanner() {
                         <div>
                             <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#1F2937', letterSpacing: '-0.02em' }}>PEDIDOS PICKING</h3>
                             <div style={{ fontSize: '0.62rem', color: '#6B7280', fontWeight: '800', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span>📅 Despacho: {(() => {
+                                <span><Calendar size={12} strokeWidth={1.5} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Despacho: {(() => {
                                     const dateStr = debugInfo.targetDate;
                                     if (!dateStr || dateStr === 'TODOS') return 'Todos';
                                     try {
@@ -518,7 +536,7 @@ export default function RoutePlanner() {
                             </div>
                             <div style={{ fontSize: '0.62rem', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#F1F5F9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #E2E8F0', fontWeight: '800' }}>
-                                    ⚖️ Carga: {orders.reduce((acc, curr) => acc + curr.total_weight_kg, 0).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Scale size={12} strokeWidth={1.5} /> Carga:</span> {formatNumber(orders.reduce((acc, curr) => acc + curr.total_weight_kg, 0), 1)} kg
                                 </span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#E6FFFA', color: '#0D9488', padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #CCFBF1', fontWeight: '800' }}>
                                     🧺 Canastillas: {orders.reduce((acc, curr) => acc + curr.crates, 0)} und
@@ -529,7 +547,7 @@ export default function RoutePlanner() {
                                         const unassignedWeight = unassignedOrders.reduce((acc, curr) => acc + curr.total_weight_kg, 0);
                                         return (
                                             <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '700' }}>
-                                                ({unassignedWeight.toLocaleString('es-CO', { maximumFractionDigits: 1 })} kg sin asignar)
+                                                ({formatNumber(unassignedWeight, 1)} kg sin asignar)
                                             </span>
                                         );
                                     }
@@ -594,16 +612,16 @@ export default function RoutePlanner() {
                                                 {order.customer_name}
                                             </div>
                                             <div style={{ fontSize: '0.6rem', color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }}>
-                                                📍 {order.address}
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={10} strokeWidth={1.5} /> {order.address}</span>
                                             </div>
                                             {order.address_complement && (
                                                 <div style={{ fontSize: '0.55rem', color: '#0891B2', fontWeight: '800', marginTop: '1px' }}>
-                                                    🏢 {order.address_complement}
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> {order.address_complement}</span>
                                                 </div>
                                             )}
                                         </td>
                                         <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
-                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{order.total_weight_kg.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
+                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
                                             <div style={{ fontSize: '0.6rem', color: '#0D9488', fontWeight: '800', marginTop: '2px' }}>🧺 {order.crates} und</div>
                                         </td>
                                         <td style={{ padding: '0.6rem 1rem', textAlign: 'left', maxWidth: '150px' }}>
@@ -626,7 +644,7 @@ export default function RoutePlanner() {
                                                         order.slot_type === 'b2c_slot' ? '#FDE68A' : '#E5E7EB'
                                                     }`
                                                 }}>
-                                                    🕒 {order.display_slot} {order.slot_type === 'manual' ? ' (Manual)' : order.slot_type === 'profile' ? ' (Ficha)' : ''}
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={10} strokeWidth={1.5} /> {order.display_slot}</span> {order.slot_type === 'manual' ? ' (Manual)' : order.slot_type === 'profile' ? ' (Ficha)' : ''}
                                                 </div>
                                             </div>
                                             {order.novedad && (
@@ -645,7 +663,7 @@ export default function RoutePlanner() {
                                                     lineHeight: '1.2',
                                                     marginTop: '4px'
                                                 }} title={order.novedad}>
-                                                    ⚠️ {order.novedad}
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={10} strokeWidth={1.5} /> {order.novedad}</span>
                                                 </div>
                                             )}
                                         </td>
@@ -719,7 +737,7 @@ export default function RoutePlanner() {
                                 }
                             }}
                         >
-                            ✨ {optimizing ? 'Optimizando...' : 'Auto-Asignar'}
+                            {optimizing ? 'Optimizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} strokeWidth={1.5} /> Auto-Asignar</span>}
                         </button>
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button 
@@ -748,7 +766,7 @@ export default function RoutePlanner() {
                                     e.currentTarget.style.backgroundColor = '#10B981';
                                 }}
                             >
-                                ✅ Confirmar
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Check size={12} strokeWidth={1.5} /> Confirmar</span>
                             </button>
                         )}
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
@@ -779,7 +797,7 @@ export default function RoutePlanner() {
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                🗑️ Limpiar
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2 size={12} strokeWidth={1.5} /> Limpiar</span>
                             </button>
                         )}
                     </div>
@@ -929,8 +947,8 @@ export default function RoutePlanner() {
                                         onChange={(e) => updateParameter('optimization_strategy', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.8rem', backgroundColor: 'white', cursor: 'pointer' }}
                                     >
-                                        <option value="balanced">⚖️ Balanceada (Recomendado)</option>
-                                        <option value="minimize_vehicles">🚚 Usar menos camiones (Ahorro)</option>
+                                        <option value="balanced">Balanceada (Recomendado)</option>
+                                        <option value="minimize_vehicles">Usar menos camiones (Ahorro)</option>
                                         <option value="minimize_time">⚡ Terminar más rápido (Velocidad)</option>
                                     </select>
                                 </div>
@@ -967,7 +985,7 @@ export default function RoutePlanner() {
                                 </div>
                             </div>
                             <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', fontSize: '0.65rem', color: '#64748B', lineHeight: '1.4' }}>
-                                💡 Estos valores afectan el cálculo de `service_duration` enviado a Google Maps.
+                                Estos valores afectan el cálculo de `service_duration` enviado a Google Maps.
                             </div>
                         </div>
                     </div>
@@ -1021,7 +1039,7 @@ export default function RoutePlanner() {
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', alignItems: 'flex-start' }}>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>🚛 {vehicle.plate}</div>
+                                        <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={14} strokeWidth={1.5} /> {vehicle.plate}</span></div>
                                         <div style={{
                                             fontSize: '0.75rem',
                                             color: vehicle.driver_name !== 'Sin Asignar' ? '#0891B2' : '#94A3B8',
@@ -1178,7 +1196,7 @@ export default function RoutePlanner() {
                                                         </span>
                                                         {isLifoConflict && (
                                                             <span style={{ fontSize: '0.55rem', color: '#B45309', fontWeight: '900', backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '4px' }}>
-                                                                ⚠️ Carga primero
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><AlertTriangle size={12} strokeWidth={1.5} /> Carga primero</span>
                                                             </span>
                                                         )}
                                                     </div>

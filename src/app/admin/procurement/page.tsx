@@ -19,9 +19,13 @@ import {
     Truck,
     Building2,
     Coins,
-    UserSquare2
+    UserSquare2,
+    Store,
+    Handshake,
+    TrendingDown
 } from 'lucide-react';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function ProcurementHub() {
     const [mounted, setMounted] = useState(false);
@@ -54,17 +58,17 @@ export default function ProcurementHub() {
     ];
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif', color: '#1E293B' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif', color: THEME.colors.textMain }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 
                 {/* Header */}
                 <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.025em', margin: 0 }}>
-                            Módulo de <span style={{ color: '#0891B2' }}>Compras 360</span>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
+                            Módulo de <span style={{ color: THEME.colors.primary }}>Compras 360</span>
                         </h1>
-                        <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
                             Control financiero integral, abastecimiento y gestión de tesorería.
                         </p>
                     </div>
@@ -72,19 +76,19 @@ export default function ProcurementHub() {
                         <Link href="/admin/procurement/providers" style={{ textDecoration: 'none' }}>
                             <button style={{ 
                                 padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: 'white', 
-                                color: '#0F172A', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', 
+                                color: THEME.colors.textMain, border: `1px solid ${THEME.colors.border}`, fontWeight: '800', cursor: 'pointer', 
                                 display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'all 0.2s',
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                boxShadow: THEME.shadow.sm
                             }}>
-                                <UserSquare2 size={18} color="#0891B2" /> Maestro de Proveedores
+                                <UserSquare2 size={18} color={THEME.colors.primary} /> Maestro de Proveedores
                             </button>
                         </Link>
                         <Link href="/admin/procurement/export" style={{ textDecoration: 'none' }}>
                             <button style={{ 
                                 padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: 'white', 
-                                color: '#475569', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', 
+                                color: THEME.colors.textSecondary, border: `1px solid ${THEME.colors.border}`, fontWeight: '800', cursor: 'pointer', 
                                 display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'all 0.2s',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                boxShadow: THEME.shadow.sm
                             }}>
                                 <FileSpreadsheet size={18} color="#10B981" /> Exportar WorldOffice
                             </button>
@@ -95,21 +99,33 @@ export default function ProcurementHub() {
                 {/* Stats Dashboard */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
                     {[
-                        { label: 'Presupuesto Total', value: '$0.00', icon: '💰', color: '#0F172A' },
-                        { label: 'Egresos Hoy', value: '$0.00', icon: '📉', color: '#EF4444' },
-                        { label: 'Cajas Activas', value: '3', icon: '🏪', color: '#10B981' },
-                        { label: 'Proveedores', value: '124', icon: '🤝', color: '#0891B2' }
+                        { label: 'Presupuesto Total', value: formatMoney(0), icon: <Coins size={22} strokeWidth={1.5} />, color: THEME.colors.textMain },
+                        { label: 'Egresos Hoy', value: formatMoney(0), icon: <TrendingDown size={22} strokeWidth={1.5} />, color: '#EF4444' },
+                        { label: 'Cajas Activas', value: formatNumber(3), icon: <Store size={22} strokeWidth={1.5} />, color: '#10B981' },
+                        { label: 'Proveedores', value: formatNumber(124), icon: <Handshake size={22} strokeWidth={1.5} />, color: THEME.colors.primary }
                     ].map((stat, i) => (
                         <div key={i} style={{ 
-                            backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0',
-                            display: 'flex', alignItems: 'center', gap: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
-                        }}>
-                            <div style={{ fontSize: '1.8rem', backgroundColor: '#F8FAFC', width: '55px', height: '55px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            backgroundColor: THEME.colors.surface, padding: '1.2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: THEME.shadow.sm,
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.md;
+                            e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            e.currentTarget.style.borderColor = THEME.colors.border;
+                        }}
+                        >
+                            <div style={{ backgroundColor: THEME.colors.background, width: '44px', height: '44px', borderRadius: THEME.radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', color: stat.color, flexShrink: 0 }}>
                                 {stat.icon}
                             </div>
                             <div>
-                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: stat.color }}>{stat.value}</div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: THEME.colors.textMain }}>{stat.value}</div>
                             </div>
                         </div>
                     ))}
@@ -121,40 +137,42 @@ export default function ProcurementHub() {
                         <Link key={module.id} href={module.link} style={{ textDecoration: 'none', color: 'inherit' }}>
                             <div 
                                 style={{ 
-                                    backgroundColor: 'white', borderRadius: '28px', padding: '2.5rem', border: '1px solid #E2E8F0',
-                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.03)', 
+                                    backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, padding: '2rem', border: `1px solid ${THEME.colors.border}`,
+                                    boxShadow: THEME.shadow.sm, 
                                     display: 'flex', flexDirection: 'column', height: '100%',
-                                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                     position: 'relative', overflow: 'hidden', cursor: 'pointer'
                                 }}
                                 onMouseOver={e => {
-                                    e.currentTarget.style.transform = 'translateY(-5px)';
-                                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.08)';
+                                    e.currentTarget.style.transform = 'translateY(-3px)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.lg;
+                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
                                 }}
                                 onMouseOut={e => {
                                     e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.03)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                                    e.currentTarget.style.borderColor = THEME.colors.border;
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
                                     <div style={{ 
-                                        width: '64px', height: '64px', borderRadius: '18px', 
-                                        backgroundColor: '#F0F9FF', color: '#0891B2', 
+                                        width: '64px', height: '64px', borderRadius: THEME.radius.lg, 
+                                        backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, 
                                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                                     }}>
                                         {module.icon}
                                     </div>
-                                    <ArrowRight size={24} color="#CBD5E1" />
+                                    <ArrowRight size={20} color={THEME.colors.textSecondary} />
                                 </div>
                                 
-                                <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.8rem', marginBottom: '0.8rem' }}>{module.title}</h2>
-                                <p style={{ color: '#64748B', fontSize: '1.1rem', lineHeight: '1.6', fontWeight: '500', marginBottom: '1.5rem', flex: 1 }}>{module.description}</p>
+                                <h2 style={{ margin: 0, fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.5rem', marginBottom: '0.8rem', letterSpacing: '-0.02em' }}>{module.title}</h2>
+                                <p style={{ color: THEME.colors.textSecondary, fontSize: '1rem', lineHeight: '1.6', fontWeight: '500', marginBottom: '1.5rem', flex: 1 }}>{module.description}</p>
                                 
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', padding: '1.2rem', backgroundColor: '#F8FAFC', borderRadius: '18px' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', padding: '1rem', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md }}>
                                     {module.features.map((f, idx) => (
                                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <ShieldCheck size={14} color="#0891B2" />
-                                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569' }}>{f}</span>
+                                            <ShieldCheck size={14} color={THEME.colors.primary} />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textSecondary }}>{f}</span>
                                         </div>
                                     ))}
                                 </div>

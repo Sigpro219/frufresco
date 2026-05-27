@@ -1,19 +1,29 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
+import { 
+    MapPin, 
+    TrendingUp, 
+    ShieldCheck, 
+    Layers, 
+    AlertCircle, 
+    Users, 
+    Building2, 
+    Wrench, 
+    Clock, 
+    ChevronRight,
+    ArrowRight,
+    X,
+    Cpu
+} from 'lucide-react';
+import { THEME, formatNumber } from '@/lib/adminTheme';
 
 type Tab = 'geofencing' | 'seo' | 'it' | 'hierarchy';
-
-
-interface Point {
-    lat: number;
-    lng: number;
-}
 
 interface AppSetting {
     key: string;
@@ -37,7 +47,6 @@ interface SEOStrategy {
     meta_description: string;
     last_generated_at: string;
 }
-
 
 export default function AdminStrategyPage() {
     const [activeTab, setActiveTab] = useState<Tab>('geofencing');
@@ -135,36 +144,44 @@ export default function AdminStrategyPage() {
     const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
             <Toast />
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Inteligencia & Estrategia</h1>
+                        <h1 style={{ fontSize: '2.2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Inteligencia & Estrategia</h1>
                     </div>
-                    <div style={{ backgroundColor: '#F1F5F9', padding: '0.5rem', borderRadius: '12px', display: 'flex', gap: '4px' }}>
+                    <div style={{ backgroundColor: '#E5E7EB', padding: '0.25rem', borderRadius: THEME.radius.md, display: 'flex', gap: '4px' }}>
                         {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => (
                             <button 
                                 key={t}
                                 onClick={() => setActiveTab(t)}
                                 style={{
-                                    padding: '0.6rem 1.2rem',
-                                    borderRadius: '8px',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: THEME.radius.sm,
                                     border: 'none',
                                     backgroundColor: activeTab === t ? 'white' : 'transparent',
-                                    boxShadow: activeTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                    color: activeTab === t ? '#0F172A' : '#64748B',
-                                    fontWeight: '700',
-                                    cursor: 'pointer'
+                                    boxShadow: activeTab === t ? THEME.shadow.sm : 'none',
+                                    color: activeTab === t ? THEME.colors.textMain : THEME.colors.textSecondary,
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem',
+                                    fontSize: '0.85rem'
                                 }}
                             >
-                                {t === 'geofencing' ? '📍 Geocercas' : t === 'seo' ? '🚀 SEO' : t === 'it' ? '🛡️ IT' : '🧬 Jerarquía'}
+                                {t === 'geofencing' && <MapPin size={14} strokeWidth={1.5} />}
+                                {t === 'seo' && <TrendingUp size={14} strokeWidth={1.5} />}
+                                {t === 'it' && <ShieldCheck size={14} strokeWidth={1.5} />}
+                                {t === 'hierarchy' && <Layers size={14} strokeWidth={1.5} />}
+                                {t === 'geofencing' ? 'Geocercas' : t === 'seo' ? 'SEO' : t === 'it' ? 'IT' : 'Jerarquía'}
                             </button>
                         ))}
                     </div>
                 </header>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem', minHeight: '600px' }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '2rem', minHeight: '600px', boxShadow: THEME.shadow.sm }}>
                     {activeTab === 'geofencing' && (
                         <APIProvider apiKey={MAPS_KEY}>
                             <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
@@ -187,51 +204,55 @@ function HierarchyView({ products, onFix }: { products: any[], onFix: () => void
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: 'white', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05rem' }}>TOTAL HIJOS</p>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '2.5rem', fontWeight: '900', color: '#0F172A' }}>{hijos.length}</p>
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Total Hijos</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: THEME.colors.textMain }}>{formatNumber(hijos.length)}</p>
                 </div>
-                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: criticalIssues.length > 0 ? '#FEF2F2' : 'white', border: criticalIssues.length > 0 ? '#FECACA 1px solid' : '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '900', color: criticalIssues.length > 0 ? '#DC2626' : '#64748B', letterSpacing: '0.05rem' }}>FACTORES CRÍTICOS (1.0)</p>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '2.5rem', fontWeight: '900', color: criticalIssues.length > 0 ? '#DC2626' : '#0F172A' }}>{criticalIssues.length}</p>
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: criticalIssues.length > 0 ? '#FEF2F2' : THEME.colors.surface, border: criticalIssues.length > 0 ? '#FECACA 1px solid' : `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Factores Críticos (1.0)</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textMain }}>{formatNumber(criticalIssues.length)}</p>
                 </div>
-                <div style={{ padding: '2rem', borderRadius: '24px', backgroundColor: 'white', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <button 
                         onClick={() => window.open('/admin/master/products', '_blank')}
-                        style={{ padding: '1rem 2rem', borderRadius: '12px', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', border: 'none', cursor: 'pointer' }}
+                        style={{ padding: '0.65rem 1.25rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', transition: 'background-color 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                     >
-                        Gestionar Maestros ↗
+                        Gestionar Maestros <ArrowRight size={14} strokeWidth={1.5} />
                     </button>
                 </div>
             </div>
 
             {criticalIssues.length > 0 && (
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', padding: '2rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                        <h3 style={{ margin: 0, fontWeight: '900' }}>⚠️ Alerta de Inventario: Factores de Conversión Genéricos</h3>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Estos productos restan 1:1 del padre, lo cual suele ser incorrecto para fraccionados.</p>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                        <h3 style={{ margin: 0, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#DC2626', fontSize: '1.1rem' }}>
+                            <AlertCircle size={18} strokeWidth={1.5} /> Alerta de Inventario: Factores de Conversión Genéricos
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: THEME.colors.textSecondary }}>Estos productos restan 1:1 del padre, lo cual suele ser incorrecto para fraccionados.</p>
                     </div>
-                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #F1F5F9', borderRadius: '16px' }}>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead style={{ backgroundColor: '#F8FAFC', position: 'sticky', top: 0 }}>
+                            <thead style={{ backgroundColor: THEME.colors.background, position: 'sticky', top: 0 }}>
                                 <tr>
-                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>SKU</th>
-                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Nombre</th>
-                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Unidad Web</th>
-                                    <th style={{ padding: '1rem', borderBottom: '1px solid #E2E8F0' }}>Factor</th>
+                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>SKU</th>
+                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Nombre</th>
+                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Unidad Web</th>
+                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Factor</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {criticalIssues.map(p => (
-                                    <tr key={p.id}>
-                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '800', color: '#2563EB' }}>{p.sku}</td>
-                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>{p.name}</td>
-                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>
-                                            <span style={{ backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '4px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '700' }}>
+                                    <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                        <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: THEME.colors.primary }}>{p.sku}</td>
+                                        <td style={{ padding: '0.85rem 1rem', color: THEME.colors.textMain }}>{p.name}</td>
+                                        <td style={{ padding: '0.85rem 1rem' }}>
+                                            <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
                                                 {p.web_unit || 'N/A'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '900', color: '#DC2626' }}>{p.web_conversion_factor}</td>
+                                        <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: '#DC2626' }}>{formatNumber(p.web_conversion_factor, 2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -250,45 +271,49 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
     const b2bCount = b2bPolyStr ? JSON.parse(b2bPolyStr).length : 0;
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontWeight: '900' }}>Estrategias SEO Activas</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem' }}>Estrategias SEO Activas</h3>
                 {strategies.length === 0 ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '20px', border: '1px dashed #CBD5E1' }}>
-                        <p style={{ color: '#64748B' }}>No hay estrategias generadas.</p>
+                    <div style={{ padding: '3rem', textAlign: 'center', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px dashed ${THEME.colors.border}` }}>
+                        <p style={{ color: THEME.colors.textSecondary, margin: 0, fontSize: '0.9rem' }}>No hay estrategias generadas.</p>
                     </div>
                 ) : (
                     strategies.map(s => (
-                        <div key={s.id} style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                                <span style={{ fontWeight: '900', color: '#2563EB' }}>{s.municipality_name}</span>
-                                <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: '#DCFCE7', color: '#166534', padding: '4px 8px', borderRadius: '6px' }}>ACTIVO</span>
+                        <div key={s.id} style={{ padding: '1.25rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', alignItems: 'center' }}>
+                                <span style={{ fontWeight: '600', color: THEME.colors.primary }}>{s.municipality_name}</span>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '600', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px' }}>ACTIVO</span>
                             </div>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', fontWeight: '700' }}>{s.meta_title}</p>
-                            <p style={{ margin: '0 0 15px 0', fontSize: '0.8rem', color: '#64748B' }}>{s.meta_description}</p>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {s.keywords.map(kw => <span key={kw} style={{ fontSize: '0.7rem', backgroundColor: 'white', border: '1px solid #E2E8F0', padding: '2px 8px', borderRadius: '6px' }}>{kw}</span>)}
+                            <p style={{ margin: '0 0 8px 0', fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain }}>{s.meta_title}</p>
+                            <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{s.meta_description}</p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {s.keywords.map(kw => <span key={kw} style={{ fontSize: '0.75rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, padding: '2px 8px', borderRadius: '4px', color: THEME.colors.textSecondary }}>{kw}</span>)}
                             </div>
                         </div>
                     ))
                 )}
             </div>
-            <div style={{ backgroundColor: '#0F172A', color: 'white', borderRadius: '24px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <h4 style={{ margin: 0, fontWeight: '900', fontSize: '1.2rem' }}>Sugerente AI</h4>
-                <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.5' }}>Genera metadatos optimizados usando Gemini analizando el contexto geográfico de tus geocercas.</p>
+            <div style={{ backgroundColor: '#1E293B', color: 'white', borderRadius: THEME.radius.md, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignSelf: 'start' }}>
+                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Cpu size={18} strokeWidth={1.5} style={{ color: THEME.colors.primaryLight }} /> Sugerente AI
+                </h4>
+                <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.5', margin: 0 }}>Genera metadatos optimizados usando Gemini analizando el contexto geográfico de tus geocercas.</p>
                 <button 
                     onClick={() => onGenerate('geofence_b2c_poly')} 
                     disabled={loading || b2cCount === 0}
-                    style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#7C3AED', color: 'white', fontWeight: '800', border: 'none', cursor: 'pointer', opacity: (loading || b2cCount === 0) ? 0.6 : 1 }}
+                    style={{ padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', opacity: (loading || b2cCount === 0) ? 0.6 : 1, transition: 'background-color 0.2s', fontSize: '0.9rem' }}
+                    onMouseOver={e => { if (!loading && b2cCount > 0) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                    onMouseOut={e => { if (!loading && b2cCount > 0) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                 >
-                    {loading ? 'Generando...' : '⚡ Inyectar B2C'}
+                    {loading ? 'Generando...' : 'Inyectar B2C'}
                 </button>
                 <button 
                     onClick={() => onGenerate('geofence_b2b_poly')} 
                     disabled={loading || b2bCount === 0}
-                    style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'transparent', color: 'white', fontWeight: '800', border: '2px solid #7C3AED', cursor: 'pointer', opacity: (loading || b2bCount === 0) ? 0.6 : 1 }}
+                    style={{ padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: 'transparent', color: 'white', fontWeight: '600', border: `1.5px solid ${THEME.colors.primary}`, cursor: 'pointer', opacity: (loading || b2bCount === 0) ? 0.6 : 1, fontSize: '0.9rem' }}
                 >
-                    {loading ? 'Generando...' : '🏢 Inyectar B2B'}
+                    {loading ? 'Generando...' : 'Inyectar B2B'}
                 </button>
             </div>
         </div>
@@ -297,37 +322,55 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
 
 function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (type: string) => void }) {
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontWeight: '900' }}>Auditoría de Solicitudes</h3>
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: '20px', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem' }}>Auditoría de Solicitudes</h3>
+                <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead style={{ backgroundColor: '#F8FAFC' }}>
+                        <thead style={{ backgroundColor: THEME.colors.background }}>
                             <tr>
-                                <th style={{ padding: '1rem', textAlign: 'left' }}>Tipo</th>
-                                <th style={{ padding: '1rem', textAlign: 'left' }}>Estado</th>
-                                <th style={{ padding: '1rem', textAlign: 'left' }}>Fecha</th>
+                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Tipo</th>
+                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Estado</th>
+                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Fecha</th>
                             </tr>
                         </thead>
                         <tbody>
                             {requests.map(r => (
-                                <tr key={r.id}>
-                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontWeight: '700' }}>{r.type}</td>
-                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9' }}>
-                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: r.status === 'pending' ? '#FEF3C7' : '#DCFCE7', color: r.status === 'pending' ? '#92400E' : '#166534', padding: '4px 8px', borderRadius: '6px' }}>{r.status.toUpperCase()}</span>
+                                <tr key={r.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: THEME.colors.textMain }}>{r.type}</td>
+                                    <td style={{ padding: '0.85rem 1rem' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '600', backgroundColor: r.status === 'pending' ? '#FEF3C7' : THEME.colors.primaryLight, color: r.status === 'pending' ? '#92400E' : THEME.colors.primary, padding: '4px 8px', borderRadius: '4px' }}>{r.status.toUpperCase()}</span>
                                     </td>
-                                    <td style={{ padding: '1rem', borderBottom: '1px solid #F1F5F9', fontSize: '0.8rem', color: '#64748B' }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                    <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(r.created_at).toLocaleDateString()}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <h4 style={{ margin: 0, fontWeight: '900' }}>Acciones Disponibles</h4>
-                <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>👥 Nuevo Colaborador</button>
-                <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>🏢 Cliente B2B Especial</button>
-                <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'white', border: '1px solid #E2E8F0', fontWeight: '800', cursor: 'pointer', textAlign: 'left' }}>🔧 Soporte Técnico</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', color: THEME.colors.textMain }}>Acciones Disponibles</h4>
+                
+                <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                >
+                    <Users size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Nuevo Colaborador
+                </button>
+                
+                <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                >
+                    <Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Cliente B2B Especial
+                </button>
+                
+                <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                >
+                    <Wrench size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Soporte Técnico
+                </button>
             </div>
         </div>
     );
@@ -349,27 +392,27 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
     const isTicket = type === 'Ticket Infraestructura';
 
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.md, width: '100%', maxWidth: '480px', padding: '2rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#0F172A' }}>{type}</h3>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>&times;</button>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: THEME.colors.textMain }}>{type}</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: THEME.colors.textSecondary }}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {isColaborador && (
                         <>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Nombre Completo</label>
-                                <input required onChange={e => setFormData({...formData, name: e.target.value})} type="text" placeholder="Ej: Juan Pérez" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Nombre Completo</label>
+                                <input required onChange={e => setFormData({...formData, name: e.target.value})} type="text" placeholder="Ej: Juan Pérez" style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none' }} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Correo Electrónico</label>
-                                <input required onChange={e => setFormData({...formData, email: e.target.value})} type="email" placeholder="usuario@frufresco.com" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Correo Electrónico</label>
+                                <input required onChange={e => setFormData({...formData, email: e.target.value})} type="email" placeholder="usuario@frufresco.com" style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none' }} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Cargo / Rol</label>
-                                <select required onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Cargo / Rol</label>
+                                <select required onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none', backgroundColor: 'white' }}>
                                     <option value="">Seleccionar...</option>
                                     <option value="admin">Administrador</option>
                                     <option value="operario">Operario de Planta</option>
@@ -382,12 +425,12 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
                     {isB2B && (
                         <>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Nombre de la Empresa</label>
-                                <input required onChange={e => setFormData({...formData, company: e.target.value})} type="text" placeholder="Ej: Restaurante El Gourmet" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Nombre de la Empresa</label>
+                                <input required onChange={e => setFormData({...formData, company: e.target.value})} type="text" placeholder="Ej: Restaurante El Gourmet" style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none' }} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Tipo de Lista de Precios</label>
-                                <select required onChange={e => setFormData({...formData, catalogType: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Tipo de Lista de Precios</label>
+                                <select required onChange={e => setFormData({...formData, catalogType: e.target.value})} style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none', backgroundColor: 'white' }}>
                                     <option value="standard">Estándar HORECA</option>
                                     <option value="premium">Premium / Especial</option>
                                     <option value="contract">Contrato a largo plazo</option>
@@ -399,19 +442,22 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
                     {isTicket && (
                         <>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Asunto</label>
-                                <input required onChange={e => setFormData({...formData, subject: e.target.value})} type="text" placeholder="Ej: Error en envío de correos" style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Asunto</label>
+                                <input required onChange={e => setFormData({...formData, subject: e.target.value})} type="text" placeholder="Ej: Error en envío de correos" style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none' }} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>Descripción del Problema</label>
-                                <textarea required onChange={e => setFormData({...formData, description: e.target.value})} rows={4} placeholder="Describe detalladamente lo que sucede..." style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', resize: 'none' }} />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Descripción del Problema</label>
+                                <textarea required onChange={e => setFormData({...formData, description: e.target.value})} rows={4} placeholder="Describe detalladamente lo que sucede..." style={{ width: '100%', padding: '0.65rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, fontWeight: '500', outline: 'none', resize: 'none' }} />
                             </div>
                         </>
                     )}
 
                     <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
-                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0', backgroundColor: 'white', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
-                        <button type="submit" disabled={loading} style={{ flex: 1, padding: '1rem', borderRadius: '16px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '0.75rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', fontSize: '0.9rem' }}>Cancelar</button>
+                        <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', borderRadius: THEME.radius.sm, border: 'none', backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', cursor: 'pointer', opacity: loading ? 0.7 : 1, transition: 'background-color 0.2s', fontSize: '0.9rem' }}
+                        onMouseOver={e => { if (!loading) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                        onMouseOut={e => { if (!loading) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
+                        >
                             {loading ? 'Enviando...' : 'Enviar Solicitud'}
                         </button>
                     </div>
@@ -420,3 +466,4 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
         </div>
     );
 }
+

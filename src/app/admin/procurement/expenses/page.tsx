@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function ExpensesPage() {
     const [mounted, setMounted] = useState(false);
@@ -52,58 +53,79 @@ export default function ExpensesPage() {
 
     if (!mounted) return null;
 
+    // Dynamically calculate expenses by category
+    const sumByCategory = (categoryName: string) => {
+        const catNorm = categoryName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        return expenses
+            .filter(exp => {
+                const expCat = (exp.category || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                return expCat === catNorm;
+            })
+            .reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    };
+
+    const totalTransporte = sumByCategory('transporte');
+    const totalServicios = sumByCategory('servicios');
+    const totalAlimentacion = sumByCategory('alimentacion');
+    const totalViaticos = sumByCategory('viaticos');
+
+    const todayStr = new Date().toDateString();
+    const todayExpenses = expenses.filter(exp => new Date(exp.created_at).toDateString() === todayStr);
+    const totalGastosHoy = todayExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    const saldoDisponible = 5000000 - totalGastosHoy; // baseline limit minus today's expenses
+
     const expenseCategories = [
-        { name: 'Transporte', icon: <Truck size={18} />, color: '#EF4444' },
-        { name: 'Servicios', icon: <Zap size={18} />, color: '#0EA5E9' },
-        { name: 'Alimentación', icon: <Utensils size={18} />, color: '#F59E0B' },
-        { name: 'Viáticos', icon: <Briefcase size={18} />, color: '#8B5CF6' }
+        { name: 'Transporte', icon: <Truck size={18} strokeWidth={1.5} />, color: '#DC2626', value: totalTransporte },
+        { name: 'Servicios', icon: <Zap size={18} strokeWidth={1.5} />, color: '#0EA5E9', value: totalServicios },
+        { name: 'Alimentación', icon: <Utensils size={18} strokeWidth={1.5} />, color: '#D97706', value: totalAlimentacion },
+        { name: 'Viáticos', icon: <Briefcase size={18} strokeWidth={1.5} />, color: '#7C3AED', value: totalViaticos }
     ];
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 
-                {/* Header - Matching HR/Commercial */}
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {/* Header */}
+                <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748B', fontSize: '0.9rem', fontWeight: '700', marginBottom: '0.5rem' }}>
-                            <Link href="/admin/procurement" style={{ color: '#64748B', textDecoration: 'none' }}>Compras 360</Link>
-                            <ChevronRight size={14} />
-                            <span style={{ color: '#0891B2' }}>Gastos Operativos</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                            <Link href="/admin/procurement" style={{ color: THEME.colors.textSecondary, textDecoration: 'none' }}>Compras 360</Link>
+                            <ChevronRight size={12} strokeWidth={1.5} />
+                            <span style={{ color: THEME.colors.primary }}>Gastos Operativos</span>
                         </div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.025em', margin: 0 }}>
-                            Gestión de <span style={{ color: '#0891B2' }}>Gastos</span>
+                        <h1 style={{ fontSize: '2.2rem', fontWeight: '800', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
+                            Gestión de <span style={{ color: THEME.colors.primary }}>Gastos</span>
                         </h1>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <button style={{ 
-                            padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: '#0891B2', 
-                            color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', 
-                            boxShadow: '0 10px 20px -5px rgba(8, 145, 178, 0.4)',
-                            display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'transform 0.2s'
+                            padding: '0.75rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primary, 
+                            color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer', 
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'background-color 0.2s',
+                            fontSize: '0.9rem'
                         }}
-                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                         >
-                            <Plus size={20} /> Legalizar Gasto
+                            <Plus size={16} strokeWidth={1.5} /> Legalizar Gasto
                         </button>
                     </div>
                 </header>
 
-                {/* Categories Grid - Matching HR/Commercial Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                {/* Categories Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
                     {expenseCategories.map((cat, i) => (
                         <div key={i} style={{ 
-                            backgroundColor: 'white', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0',
-                            display: 'flex', alignItems: 'center', gap: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
+                            backgroundColor: THEME.colors.surface, padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`,
+                            display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: THEME.shadow.sm
                         }}>
-                            <div style={{ fontSize: '1.5rem', backgroundColor: '#F8FAFC', width: '55px', height: '55px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: cat.color }}>
+                            <div style={{ backgroundColor: THEME.colors.background, width: '48px', height: '48px', borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', color: cat.color }}>
                                 {cat.icon}
                             </div>
                             <div>
-                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{cat.name}</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#0F172A' }}>$0.00</div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{cat.name}</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: '700', color: THEME.colors.textMain }}>{formatMoney(cat.value)}</div>
                             </div>
                         </div>
                     ))}
@@ -111,50 +133,50 @@ export default function ExpensesPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
                     
-                    {/* Activity List - Matching HR List Style */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>Flujo de Caja Fija</h2>
+                    {/* Activity List */}
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0 }}>Flujo de Caja Fija</h2>
                             <div style={{ position: 'relative' }}>
-                                <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                <input placeholder="Buscar gasto..." style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderRadius: '12px', border: '1px solid #F1F5F9', fontSize: '0.85rem' }} />
+                                <Search size={14} strokeWidth={1.5} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                <input placeholder="Buscar gasto..." style={{ padding: '0.4rem 0.75rem 0.4rem 2rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontSize: '0.85rem', color: THEME.colors.textMain, outline: 'none' }} />
                             </div>
                         </div>
 
                         {loading ? (
-                            <div style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8', fontWeight: '600' }}>Cargando egresos...</div>
+                            <div style={{ padding: '4rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '500' }}>Cargando egresos...</div>
                         ) : expenses.length === 0 ? (
                             <div style={{ padding: '4rem', textAlign: 'center' }}>
-                                <AlertCircle size={48} color="#CBD5E1" style={{ marginBottom: '1rem' }} />
-                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#64748B' }}>No hay registros</div>
+                                <AlertCircle size={40} strokeWidth={1.5} color={THEME.colors.textSecondary} style={{ marginBottom: '1rem' }} />
+                                <div style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textSecondary }}>No hay registros</div>
                             </div>
                         ) : (
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                                <thead style={{ backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}` }}>
                                     <tr>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Descripción</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Categoría</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Monto</th>
-                                        <th style={{ padding: '1rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Descripción</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Categoría</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Monto</th>
+                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Fecha</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {expenses.map((exp) => (
-                                        <tr key={exp.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
-                                                <div style={{ fontWeight: '800', color: '#0F172A' }}>{exp.description || 'Gasto Operativo'}</div>
-                                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>Ref: {exp.reference_doc || 'N/A'}</div>
+                                        <tr key={exp.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                            <td style={{ padding: '1rem 1.5rem' }}>
+                                                <div style={{ fontWeight: '600', color: THEME.colors.textMain }}>{exp.description || 'Gasto Operativo'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '0.2rem' }}>Ref: {exp.reference_doc || 'N/A'}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
-                                                <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '6px' }}>
+                                            <td style={{ padding: '1rem 1.5rem' }}>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: '600', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '3px 8px', borderRadius: '4px' }}>
                                                     {(exp.category || 'GENERAL').toUpperCase()}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
-                                                <div style={{ fontWeight: '900', color: '#EF4444' }}>-${new Intl.NumberFormat().format(exp.amount)}</div>
+                                            <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+                                                <div style={{ fontWeight: '600', color: '#DC2626' }}>–{formatMoney(exp.amount)}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#64748B' }}>{new Date(exp.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                            <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+                                                <div style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(exp.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                             </td>
                                         </tr>
                                     ))}
@@ -163,32 +185,32 @@ export default function ExpensesPage() {
                         )}
                     </div>
 
-                    {/* Summary Card - Matching HR Card Style */}
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', marginBottom: '2rem' }}>Estado de Caja Planta</h3>
+                    {/* Summary Card */}
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, padding: '2rem', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, alignSelf: 'start' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '1.5rem', marginTop: 0 }}>Estado de Caja Planta</h3>
                         
-                        <div style={{ padding: '1.5rem', backgroundColor: '#F8FAFC', borderRadius: '18px', marginBottom: '2rem' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Saldo Disponible</div>
-                            <div style={{ fontSize: '2rem', fontWeight: '900', color: '#0F172A' }}>$0.00</div>
+                        <div style={{ padding: '1.25rem', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.sm, marginBottom: '1.5rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Saldo Disponible</div>
+                            <div style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain }}>{formatMoney(saldoDisponible)}</div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#64748B' }}>Ingresos Hoy</span>
-                                <span style={{ fontWeight: '800', color: '#10B981' }}>+$0.00</span>
+                                <span style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary }}>Ingresos Hoy</span>
+                                <span style={{ fontWeight: '600', color: '#16A34A' }}>+{formatMoney(0)}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#64748B' }}>Gastos Hoy</span>
-                                <span style={{ fontWeight: '800', color: '#EF4444' }}>-$0.00</span>
+                                <span style={{ fontSize: '0.9rem', color: THEME.colors.textSecondary }}>Gastos Hoy</span>
+                                <span style={{ fontWeight: '600', color: '#DC2626' }}>–{formatMoney(totalGastosHoy)}</span>
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #F1F5F9' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
-                                <AlertCircle size={18} color="#F59E0B" />
-                                <span style={{ fontSize: '0.8rem', fontWeight: '900', color: '#F59E0B', textTransform: 'uppercase' }}>Aviso de Fondos</span>
+                        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: `1px solid ${THEME.colors.border}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                <AlertCircle size={16} strokeWidth={1.5} color="#D97706" />
+                                <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#D97706', textTransform: 'uppercase' }}>Aviso de Fondos</span>
                             </div>
-                            <p style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: '500', lineHeight: '1.6', margin: 0 }}>
+                            <p style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '400', lineHeight: '1.5', margin: 0 }}>
                                 El saldo de caja planta debe ser conciliado diariamente con el reporte de WorldOffice.
                             </p>
                         </div>
@@ -200,3 +222,4 @@ export default function ExpensesPage() {
         </main>
     );
 }
+

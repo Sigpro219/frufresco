@@ -3,6 +3,39 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { 
+    MessageSquare, 
+    Phone, 
+    Mail, 
+    UploadCloud, 
+    Home, 
+    Building2, 
+    Globe, 
+    ShoppingCart, 
+    Clock, 
+    PackageOpen, 
+    Package, 
+    Coins, 
+    Truck, 
+    CheckCircle2, 
+    AlertTriangle, 
+    Calendar, 
+    Search, 
+    List, 
+    Grid, 
+    Plus, 
+    Trash2, 
+    RefreshCw, 
+    Edit2, 
+    Save, 
+    Check, 
+    Sparkles, 
+    HelpCircle,
+    FileText,
+    Eye,
+    MapPin
+} from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
     switch (s) {
@@ -410,7 +443,7 @@ export default function OrderLoadingPage() {
 
             // Eliminaciones
             if (idsToDelete.length > 0) {
-                console.log('🗑️ Eliminando ítems:', idsToDelete.length);
+                console.log('<Trash2 size={16} strokeWidth={1.5} /> Eliminando ítems:', idsToDelete.length);
                 operations.push(supabase.from('order_items').delete().in('id', idsToDelete));
             }
 
@@ -642,12 +675,19 @@ export default function OrderLoadingPage() {
 
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#F0F2F5' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <h1 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>Cargue de <span style={{ color: 'var(--primary)' }}>Pedidos</span></h1>
+                        
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+            <FileText size={18} strokeWidth={1.5} />
+        </div>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
+    </div>
+    
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
                              <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
                              <span style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
@@ -697,7 +737,7 @@ export default function OrderLoadingPage() {
                             const input = e.currentTarget.querySelector('input');
                             if (input) (input as any).showPicker?.();
                         }}>
-                             <span style={{ fontSize: '0.8rem', marginRight: '8px' }}>📅</span>
+                             <Calendar size={16} strokeWidth={1.5} style={{ marginRight: '8px', color: THEME.colors.textSecondary }} />
                              <input
                                 type="date"
                                 value={selectedDate}
@@ -717,7 +757,7 @@ export default function OrderLoadingPage() {
 
                         {/* Search Segment - Flexible & Responsive (MATCHING CLIENTS UI) */}
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <Search size={16} strokeWidth={1.5} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
                             <input 
                                 placeholder="Buscar por ID, empresa, @estado..."
                                 value={searchTerm}
@@ -968,7 +1008,7 @@ export default function OrderLoadingPage() {
                 {/* Loading */}
                 {loading && (
                     <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '12px' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+                        <div style={{ color: THEME.colors.primary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><RefreshCw size={48} strokeWidth={1.5} className="animate-spin" /></div>
                         <div style={{ color: '#64748B' }}>Cargando pedidos...</div>
                     </div>
                 )}
@@ -976,7 +1016,7 @@ export default function OrderLoadingPage() {
                 {/* Empty */}
                 {!loading && filteredOrders.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: '12px' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
+                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
                         <div style={{ color: '#64748B', fontWeight: '600' }}>No se encontraron pedidos con estos criterios</div>
                     </div>
                 )}
@@ -985,7 +1025,7 @@ export default function OrderLoadingPage() {
                 {!loading && filteredOrders.length > 0 && (
                     <>
                         {viewMode === 'table' ? (
-                            <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)', border: '1px solid #E5E7EB' }}>
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
@@ -1026,11 +1066,11 @@ export default function OrderLoadingPage() {
                                                 >
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>{friendlyId}</div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899' }}>{isB2B ? '🏢 B2B' : '🏠 B2C'}</div>
+                                                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: isB2B ? '#6366F1' : '#EC4899' }}>{isB2B ? 'B2B' : 'B2C'}</div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>📞 {order.customer_phone || 'Sin tel.'}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Phone size={10} strokeWidth={1.5} /> {order.customer_phone || 'Sin tel.'}</div>
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem' }}>
                                                         <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{order.shipping_address?.slice(0, 35)}...</div>
@@ -1044,10 +1084,10 @@ export default function OrderLoadingPage() {
                                                         {getChannelBadge(order.origin_source)}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                                                        {order.total_weight_kg?.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                                                        {formatNumber(order.total_weight_kg, 1)} kg
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
-                                                        ${order.total.toLocaleString('es-CO')}
+                                                        {formatMoney(order.total)}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                                                         <div style={{
@@ -1326,13 +1366,13 @@ export default function OrderLoadingPage() {
                                             )}
                                         </div>
                                         <div style={{ color: '#64748B', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span>📍</span> {selectedOrder.shipping_address}
+                                            <MapPin size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} /> {selectedOrder.shipping_address}
                                         </div>
                                         <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#475569', alignItems: 'center' }}>
-                                            <div>📞 {selectedOrder.customer_phone || 'Sin tel.'}</div>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={12} strokeWidth={1.5} /> {selectedOrder.customer_phone || 'Sin tel.'}</div>
                                             {selectedOrder.paymentMethod && (
                                                 <div style={{ fontWeight: '700', color: '#166534', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '4px' }}>
-                                                    💳 {selectedOrder.paymentMethod}
+                                                    {selectedOrder.paymentMethod}
                                                 </div>
                                             )}
                                         </div>
@@ -1354,7 +1394,7 @@ export default function OrderLoadingPage() {
                                                 boxShadow: '0 4px 6px -1px rgba(8, 145, 178, 0.4)'
                                             }}
                                         >
-                                            ✏️ Modificar
+                                            <Edit2 size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Modificar
                                         </button>
                                     ) : (
                                         <button 
@@ -1373,7 +1413,7 @@ export default function OrderLoadingPage() {
                                                 boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.4)'
                                             }}
                                         >
-                                            {updateLoading ? '⏳ Guardando...' : '💾 Guardar Cambios'}
+                                            {updateLoading ? 'Guardando...' : 'Guardar Cambios'}
                                         </button>
                                     )}
                                     <button 
@@ -1491,7 +1531,7 @@ export default function OrderLoadingPage() {
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748B' }}>SKU: {prod.sku} | {prod.unit_of_measure}</div>
                                                             </div>
                                                             <div style={{ fontWeight: '800', color: '#059669' }}>
-                                                                ${(prod.base_price || 0).toLocaleString()}
+                                                                {formatMoney(prod.base_price || 0)}
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1503,7 +1543,7 @@ export default function OrderLoadingPage() {
 
                                 {loadingItems ? (
                                     <div style={{ textAlign: 'center', padding: '5rem' }}>
-                                        <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>🍳</div>
+                                        <div style={{ color: THEME.colors.textSecondary, marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}><PackageOpen size={48} strokeWidth={1.5} /></div>
                                         <p style={{ color: '#64748B', fontWeight: '600', fontSize: '1.125rem' }}>Preparando el detalle de los productos...</p>
                                     </div>
                                 ) : (
@@ -1565,7 +1605,7 @@ export default function OrderLoadingPage() {
                                                                 color: '#334155',
                                                                 fontSize: '1rem'
                                                             }}>
-                                                                {item.quantity.toString().replace('.', ',')} 
+                                                                {formatNumber(item.quantity, 1)} 
                                                                 <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '4px', fontWeight: '600' }}>
                                                                     {item.products?.unit_of_measure}
                                                                 </span>
@@ -1573,10 +1613,10 @@ export default function OrderLoadingPage() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#475569', fontWeight: '600' }}>
-                                                        ${(item.unit_price || 0).toLocaleString('es-CO')}
+                                                        {formatMoney(item.unit_price || 0)}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
-                                                        ${((item.unit_price || 0) * item.quantity).toLocaleString('es-CO')}
+                                                        {formatMoney((item.unit_price || 0) * item.quantity)}
                                                     </td>
                                                     {editMode && (
                                                         <td style={{ paddingRight: '1rem' }}>
@@ -1614,16 +1654,16 @@ export default function OrderLoadingPage() {
                             }}>
                                 <div style={{ display: 'flex', gap: '3rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ fontSize: '2rem' }}>⚖️</div>
+                                        <div style={{ color: THEME.colors.textSecondary }}><Truck size={24} strokeWidth={1.5} /></div>
                                         <div>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>PESO TOTAL</div>
                                             <div style={{ fontWeight: '900', color: '#1E293B', fontSize: '1.125rem' }}>
-                                                {currentWeight.toFixed(1).replace('.', ',')} kg
+                                                {formatNumber(currentWeight, 1)} kg
                                             </div>
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ fontSize: '2rem' }}>🌐</div>
+                                        <div style={{ color: THEME.colors.textSecondary }}><Globe size={24} strokeWidth={1.5} /></div>
                                         <div>
                                             <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase' }}>CANAL</div>
                                             <div style={{ marginTop: '2px' }}>
@@ -1635,7 +1675,7 @@ export default function OrderLoadingPage() {
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: '700', marginBottom: '4px' }}>TOTAL CONSOLIDADO</div>
                                     <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#059669', lineHeight: '1' }}>
-                                        ${currentTotal.toLocaleString('es-CO')}
+                                        {formatMoney(currentTotal)}
                                     </div>
                                 </div>
                             </div>
@@ -1811,7 +1851,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
                 <div>
                     <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}>{friendlyId}</div>
                     <div style={{ fontSize: '0.7rem', fontWeight: '900', color: isB2B ? '#6366F1' : '#EC4899', marginTop: '2px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <span>{isB2B ? '🏢 CORPORATIVO' : '🏠 CONSUMIDOR'}</span>
+                        <span>{isB2B ? 'CORPORATIVO' : 'CONSUMIDOR'}</span>
                         {getChannelBadge(order.origin_source)}
                     </div>
                 </div>
@@ -1827,12 +1867,12 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick }: any) {
 
             <div style={{ marginBottom: '1rem' }}>
                 <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#111827' }}>{order.customer_name}</div>
-                <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '4px' }}>📍 {order.shipping_address?.slice(0, 45)}...</div>
+                <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '4px' }}>{order.shipping_address?.slice(0, 45)}...</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F3F4F6', paddingTop: '0.8rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>${order.total.toLocaleString('es-CO')}</div>
-                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{order.total_weight_kg?.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10B981' }}>{formatMoney(order.total)}</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8' }}>{formatNumber(order.total_weight_kg, 1)} kg</div>
             </div>
 
             <div 

@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { User, Users, Briefcase, FileText, Calendar, Plus, Search, Filter, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { 
+    User, Users, Briefcase, FileText, Calendar, Plus, Search, Filter, Mail, Phone, 
+    MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, 
+    FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen 
+} from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { THEME, formatNumber } from '@/lib/adminTheme';
 
 interface Profile {
     id: string;
@@ -239,7 +244,7 @@ export default function HRManagement() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 <header style={{ 
@@ -248,46 +253,58 @@ export default function HRManagement() {
                     transition: 'all 0.4s ease'
                 }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.025em', margin: 0 }}>
-                            Gestión de <span style={{ color: '#0891B2' }}>Talento Humano</span>
+                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
+                            Gestión de <span style={{ color: THEME.colors.primary }}>Talento Humano</span>
                         </h1>
-                        <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
                             Administra colaboradores, roles y especialidad operativa.
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', backgroundColor: 'white', padding: '0.4rem', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', backgroundColor: 'white', padding: '0.4rem', borderRadius: '16px', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                             <button 
                                 onClick={() => setViewMode('gallery')}
                                 style={{ 
                                     padding: '0.6rem 1rem', borderRadius: '12px', border: 'none', 
-                                    backgroundColor: viewMode === 'gallery' ? '#F1F5F9' : 'transparent',
-                                    color: viewMode === 'gallery' ? '#0F172A' : '#94A3B8',
-                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                                    backgroundColor: viewMode === 'gallery' ? THEME.colors.primary : 'transparent',
+                                    color: viewMode === 'gallery' ? '#FFFFFF' : THEME.colors.textSecondary,
+                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center', gap: '0.4rem'
                                 }}
-                            >🖼️ Galería</button>
+                            >
+                                <LayoutGrid strokeWidth={1.5} size={16} /> Galería
+                            </button>
                             <button 
                                 onClick={() => setViewMode('list')}
                                 style={{ 
                                     padding: '0.6rem 1rem', borderRadius: '12px', border: 'none', 
-                                    backgroundColor: viewMode === 'list' ? '#F1F5F9' : 'transparent',
-                                    color: viewMode === 'list' ? '#0F172A' : '#94A3B8',
-                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                                    backgroundColor: viewMode === 'list' ? THEME.colors.primary : 'transparent',
+                                    color: viewMode === 'list' ? '#FFFFFF' : THEME.colors.textSecondary,
+                                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center', gap: '0.4rem'
                                 }}
-                            >📋 Lista</button>
+                            >
+                                <List strokeWidth={1.5} size={16} /> Lista
+                            </button>
                         </div>
                         <button 
                             onClick={() => setShowAdd(true)}
                             style={{ 
-                                padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: '#0891B2', 
+                                padding: '0.9rem 1.8rem', borderRadius: '18px', backgroundColor: THEME.colors.primary, 
                                 color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', 
-                                boxShadow: '0 10px 20px -5px rgba(8, 145, 178, 0.4)',
-                                display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'transform 0.2s'
+                                boxShadow: '0 10px 20px -5px rgba(13, 122, 87, 0.4)',
+                                display: 'flex', alignItems: 'center', gap: '0.6rem', transition: 'all 0.2s'
                             }}
-                            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                            onMouseOver={e => {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                            }}
+                            onMouseOut={e => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                            }}
                         >
-                            <span style={{ fontSize: '1.2rem' }}>+</span> Registrar Colaborador
+                            <Plus strokeWidth={1.5} size={18} /> Registrar Colaborador
                         </button>
                     </div>
                 </header>
@@ -295,33 +312,46 @@ export default function HRManagement() {
                 {/* SUBTLE DASHBOARD */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     {[
-                        { label: 'Total Equipo', value: users.length, icon: '👥', color: '#0F172A' },
-                        { label: 'Activos', value: users.filter(u => u.is_active !== false).length, icon: '✅', color: '#10B981' },
-                        { label: 'Temporales', value: users.filter(u => u.is_temporary).length, icon: '⏳', color: '#F59E0B' },
-                        { label: 'Conductores', value: users.filter(u => u.role === 'CONDUCTOR').length, icon: '🚛', color: '#0891B2' }
+                        { label: 'Total Equipo', value: users.length, icon: <Users strokeWidth={1.5} size={18} style={{ color: THEME.colors.primary }} />, color: THEME.colors.textMain },
+                        { label: 'Activos', value: users.filter(u => u.is_active !== false).length, icon: <CheckCircle2 strokeWidth={1.5} size={18} style={{ color: '#10B981' }} />, color: '#10B981' },
+                        { label: 'Temporales', value: users.filter(u => u.is_temporary).length, icon: <Clock strokeWidth={1.5} size={18} style={{ color: '#F59E0B' }} />, color: '#F59E0B' },
+                        { label: 'Conductores', value: users.filter(u => u.role === 'CONDUCTOR').length, icon: <Truck strokeWidth={1.5} size={18} style={{ color: '#0891B2' }} />, color: '#0891B2' }
                     ].map((stat, i) => (
-                        <div key={i} style={{ 
-                            backgroundColor: 'white', padding: '1.2rem', borderRadius: '20px', border: '1px solid #E2E8F0',
-                            display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
-                        }}>
-                            <div style={{ fontSize: '1.5rem', backgroundColor: '#F8FAFC', width: '45px', height: '45px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div key={i} 
+                            style={{ 
+                                backgroundColor: THEME.colors.surface, padding: '1.2rem', borderRadius: '20px', border: `1px solid ${THEME.colors.border}`,
+                                display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: THEME.shadow.sm,
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                            onMouseOver={e => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = THEME.shadow.lg;
+                            }}
+                            onMouseOut={e => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                            }}
+                        >
+                            <div style={{ backgroundColor: THEME.colors.background, width: '45px', height: '45px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {stat.icon}
                             </div>
                             <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: stat.color }}>{stat.value}</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{stat.label}</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: stat.color }}>{formatNumber(stat.value)}</div>
                             </div>
                         </div>
                     ))}
                 </div>
 
                 <div style={{ 
-                    backgroundColor: 'white', padding: '1rem 1.5rem', borderRadius: '24px', 
-                    border: '1px solid #E2E8F0', marginBottom: '2.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', 
-                    alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', position: 'sticky', top: '10px', zIndex: 50
+                    backgroundColor: THEME.colors.surface, padding: '1rem 1.5rem', borderRadius: '24px', 
+                    border: `1px solid ${THEME.colors.border}`, marginBottom: '2.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', 
+                    alignItems: 'center', boxShadow: THEME.shadow.md, position: 'sticky', top: '10px', zIndex: 50
                 }}>
                     <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
+                        <div style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                            <Search strokeWidth={1.5} size={18} style={{ color: THEME.colors.textSecondary }} />
+                        </div>
                         <input 
                             placeholder="Buscar por nombre, teléfono, rol (@rol), ID o @temporal..."
                             value={searchTerm}
@@ -330,34 +360,34 @@ export default function HRManagement() {
                             onBlur={() => setTimeout(() => setShowSearchHelp(false), 200)}
                             style={{ 
                                 width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.8rem', borderRadius: '14px', 
-                                border: '1.5px solid #F1F5F9', backgroundColor: '#F8FAFC', fontSize: '0.95rem',
-                                fontWeight: '600', color: '#1E293B', outline: 'none'
+                                border: `1.5px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontSize: '0.95rem',
+                                fontWeight: '600', color: THEME.colors.textMain, outline: 'none'
                             }}
                         />
                         {showSearchHelp && (
                             <div style={{ 
                                 position: 'absolute', top: '110%', left: 0, right: 0, backgroundColor: 'white', 
-                                padding: '1.2rem', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                                zIndex: 100, border: '1px solid #E2E8F0', fontSize: '0.8rem'
+                                padding: '1.2rem', borderRadius: '16px', boxShadow: THEME.shadow.lg,
+                                zIndex: 100, border: `1px solid ${THEME.colors.border}`, fontSize: '0.8rem'
                             }}>
-                                <div style={{ fontWeight: '900', color: '#0F172A', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>
-                                    <span style={{ fontSize: '1rem' }}>💡</span> Atajos de Búsqueda Avanzada
+                                <div style={{ fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>
+                                    <HelpCircle strokeWidth={1.5} size={16} style={{ color: THEME.colors.primary }} /> Atajos de Búsqueda Avanzada
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@cargo</code> <span style={{fontSize: '0.7rem'}}>Filtra por rol</span>
+                                    <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: THEME.colors.primary }}>@cargo</code> <span style={{fontSize: '0.7rem'}}>Filtra por rol</span>
                                     </div>
-                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@sede</code> <span style={{fontSize: '0.7rem'}}>Filtra por sede</span>
+                                    <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: THEME.colors.primary }}>@sede</code> <span style={{fontSize: '0.7rem'}}>Filtra por sede</span>
                                     </div>
-                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@temporal</code> <span style={{fontSize: '0.7rem'}}>Solo temporales</span>
+                                    <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: THEME.colors.primary }}>@temporal</code> <span style={{fontSize: '0.7rem'}}>Solo temporales</span>
                                     </div>
-                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>@inactivo</code> <span style={{fontSize: '0.7rem'}}>Solo archivados</span>
+                                    <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: THEME.colors.primary }}>@inactivo</code> <span style={{fontSize: '0.7rem'}}>Solo archivados</span>
                                     </div>
-                                    <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <code style={{ backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: '#0891B2' }}>,</code> <span style={{fontSize: '0.7rem'}}>Busca varios ítems</span>
+                                    <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <code style={{ backgroundColor: THEME.colors.primaryLight, padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', color: THEME.colors.primary }}>,</code> <span style={{fontSize: '0.7rem'}}>Busca varios ítems</span>
                                     </div>
                                 </div>
                             </div>
@@ -367,38 +397,63 @@ export default function HRManagement() {
                                 onClick={() => setSearchTerm('')}
                                 style={{ 
                                     position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)',
-                                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem',
-                                    color: '#94A3B8', fontWeight: 'bold', padding: '0.2rem'
+                                    background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                    color: THEME.colors.textSecondary, fontWeight: 'bold', padding: '0.2rem'
                                 }}
-                            >✕</button>
+                            >
+                                <X strokeWidth={1.5} size={16} />
+                            </button>
                         )}
                     </div>
                     <select 
                         value={filterRole} 
                         onChange={e => setFilterRole(e.target.value)} 
-                        style={{ padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', fontWeight: '700', color: '#475569', backgroundColor: 'white', outline: 'none' }}
+                        style={{ 
+                            padding: '0.8rem 1.2rem', borderRadius: '14px', border: `1.5px solid ${THEME.colors.border}`, 
+                            fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: 'white', outline: 'none', cursor: 'pointer' 
+                        }}
                     >
-                        <option value="all">🎭 Todos los Roles</option>
+                        <option value="all">Todos los Roles</option>
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
 
                     <button 
                         onClick={() => setShowArchived(!showArchived)}
                         style={{ 
-                            padding: '0.8rem 1.2rem', borderRadius: '14px', border: '1.5px solid #F1F5F9', 
-                            fontWeight: '800', color: showArchived ? '#B91C1C' : '#64748B', 
-                            backgroundColor: showArchived ? '#FEF2F2' : 'white', cursor: 'pointer',
+                            padding: '0.8rem 1.2rem', borderRadius: '14px', border: `1px solid ${showArchived ? '#FCA5A5' : THEME.colors.border}`, 
+                            fontWeight: '800', color: showArchived ? '#B91C1C' : THEME.colors.textSecondary, 
+                            backgroundColor: showArchived ? '#FEF2F2' : 'transparent', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s'
                         }}
+                        onMouseOver={e => {
+                            if (!showArchived) {
+                                e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                            }
+                        }}
+                        onMouseOut={e => {
+                            if (!showArchived) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = THEME.colors.border;
+                            }
+                        }}
                     >
-                        {showArchived ? '👁️ Ocultar Archivados' : '📁 Mostrar Archivados'}
+                        {showArchived ? (
+                            <>
+                                <EyeOff strokeWidth={1.5} size={16} /> Ocultar Archivados
+                            </>
+                        ) : (
+                            <>
+                                <Archive strokeWidth={1.5} size={16} /> Mostrar Archivados
+                            </>
+                        )}
                     </button>
                 </div>
 
                 {loading ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
                         {[...Array(6)].map((_, i) => (
-                            <div key={i} style={{ height: '240px', backgroundColor: 'white', borderRadius: '24px', animation: 'pulse 1.5s infinite', border: '1px solid #E2E8F0' }}></div>
+                            <div key={i} style={{ height: '240px', backgroundColor: 'white', borderRadius: '24px', animation: 'pulse 1.5s infinite', border: `1px solid ${THEME.colors.border}` }}></div>
                         ))}
                     </div>
                 ) : viewMode === 'gallery' ? (
@@ -409,28 +464,30 @@ export default function HRManagement() {
 
                             return (
                                 <div key={user.id} style={{ 
-                                    backgroundColor: 'white', borderRadius: '28px', padding: '1.8rem', border: '1px solid rgba(226, 232, 240, 0.8)',
-                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.03), 0 8px 10px -6px rgba(0,0,0,0.03)', 
+                                    backgroundColor: THEME.colors.surface, borderRadius: '24px', padding: '1.8rem', border: `1px solid ${THEME.colors.border}`,
+                                    boxShadow: THEME.shadow.sm, 
                                     display: 'flex', flexDirection: 'column',
-                                    opacity: user.is_active === false ? 0.6 : 1, transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    opacity: user.is_active === false ? 0.65 : 1, transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     position: 'relative', overflow: 'hidden',
                                     cursor: 'default'
                                 }}
                                 onMouseOver={e => {
-                                    e.currentTarget.style.transform = 'translateY(-5px)';
-                                    e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.08), 0 10px 10px -5px rgba(0,0,0,0.04)';
+                                    e.currentTarget.style.transform = 'translateY(-3px)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.lg;
+                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
                                 }}
                                 onMouseOut={e => {
                                     e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.03), 0 8px 10px -6px rgba(0,0,0,0.03)';
+                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                                    e.currentTarget.style.borderColor = THEME.colors.border;
                                 }}
                                 >
                                     {/* Status Badge - Top Row */}
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                                         <span style={{ 
                                             padding: '0.25rem 0.6rem', borderRadius: '8px', fontSize: '0.6rem', fontWeight: '900',
-                                            backgroundColor: user.is_active === false ? '#FEE2E2' : '#DCFCE7',
-                                            color: user.is_active === false ? '#B91C1C' : '#15803D',
+                                            backgroundColor: user.is_active === false ? '#FEE2E2' : THEME.colors.primaryLight,
+                                            color: user.is_active === false ? '#B91C1C' : THEME.colors.primary,
                                             letterSpacing: '0.05em'
                                         }}>
                                             {user.is_active === false ? 'ARCHIVADO' : 'ACTIVO'}
@@ -450,7 +507,7 @@ export default function HRManagement() {
                                             {avatar.initials}
                                         </div>
                                         <div style={{ overflow: 'hidden', flex: 1 }}>
-                                            <h3 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.05rem', lineHeight: '1.2', letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
+                                            <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.05rem', lineHeight: '1.2', letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
                                                 {user.contact_name}
                                             </h3>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.3rem' }}>
@@ -465,40 +522,32 @@ export default function HRManagement() {
                                         </div>
                                     </div>
 
-                                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '16px' }}>
-                                            {user.is_temporary && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                    <span style={{ fontSize: '0.85rem' }}>⏳</span>
-                                                    <span style={{ fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
-                                                        PERSONAL TEMPORAL
-                                                    </span>
-                                                </div>
-                                            )}
+                                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.lg }}>
+                                        {user.is_temporary && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>📞</span>
-                                            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>
+                                                <Clock strokeWidth={1.5} size={14} style={{ color: '#EF4444' }} />
+                                                <span style={{ fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '0.15rem 0.5rem', borderRadius: '6px' }}>
+                                                    PERSONAL TEMPORAL
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                            <Phone strokeWidth={1.5} size={14} style={{ color: THEME.colors.textSecondary }} />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textMain }}>
                                                 {user.phone || user.contact_phone || '---'}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>📧</span>
-                                            <span style={{ fontSize: '0.8rem', fontWeight: '500', color: '#64748B', wordBreak: 'break-all' }}>
+                                            <Mail strokeWidth={1.5} size={14} style={{ color: THEME.colors.textSecondary }} />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '500', color: THEME.colors.textSecondary, wordBreak: 'break-all' }}>
                                                 {user.email || 'Sin correo'}
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                            <span style={{ fontSize: '0.85rem', filter: 'grayscale(1)' }}>🏬</span>
-                                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0891B2', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                            <MapPin strokeWidth={1.5} size={14} style={{ color: THEME.colors.primary }} />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.primary, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                                                 {user.specialty || 'Sede FruFresco'}
                                             </span>
-                                            {user.specialty?.includes('TEMPORAL') && (
-                                                <span style={{ 
-                                                    fontSize: '0.6rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', 
-                                                    padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.5rem' 
-                                                }}>
-                                                    TEMPORAL
-                                                </span>
-                                            )}
                                         </div>
                                     </div>
 
@@ -506,25 +555,42 @@ export default function HRManagement() {
                                         <button 
                                             onClick={() => setEditingUser(user)}
                                             style={{ 
-                                                flex: 1, padding: '0.6rem', borderRadius: '12px', border: '1.5px solid #E2E8F0', 
-                                                backgroundColor: 'white', color: '#334155', fontWeight: '800', 
-                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem'
+                                                flex: 1, padding: '0.6rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', 
+                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
                                             }}
-                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.borderActive; }}
                                             onMouseOut={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
-                                        >✏️ Editar</button>
+                                        >
+                                            <Edit2 strokeWidth={1.5} size={14} /> Editar
+                                        </button>
                                         <button 
                                             onClick={() => toggleUserStatus(user.id, user.is_active !== false)}
                                             style={{ 
-                                                flex: 1, padding: '0.6rem', borderRadius: '12px', border: 'none', 
-                                                backgroundColor: user.is_active === false ? '#DCFCE7' : '#FEE2E2', 
-                                                color: user.is_active === false ? '#15803D' : '#B91C1C', 
-                                                fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem'
+                                                flex: 1, padding: '0.6rem', borderRadius: '12px', 
+                                                border: `1px solid ${user.is_active === false ? THEME.colors.primary : '#FCA5A5'}`, 
+                                                backgroundColor: 'transparent', 
+                                                color: user.is_active === false ? THEME.colors.primary : '#EF4444', 
+                                                fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem'
                                             }}
-                                            onMouseOver={e => e.currentTarget.style.filter = 'brightness(0.95)'}
-                                            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.backgroundColor = user.is_active === false ? THEME.colors.primaryLight : '#FEE2E2';
+                                            }}
+                                            onMouseOut={e => {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
                                         >
-                                            {user.is_active === false ? '📂 Reactivar' : '🔒 Archivar'}
+                                            {user.is_active === false ? (
+                                                <>
+                                                    <FolderOpen strokeWidth={1.5} size={14} /> Reactivar
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <EyeOff strokeWidth={1.5} size={14} /> Archivar
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -532,22 +598,22 @@ export default function HRManagement() {
                         })}
                     </div>
                 ) : (
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
+                            <thead style={{ backgroundColor: THEME.colors.background, borderBottom: `2px solid ${THEME.colors.border}` }}>
                                 <tr>
-                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Colaborador</th>
-                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Rol / Especialidad</th>
-                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'left', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Contacto</th>
-                                    <th style={{ padding: '1.2rem 1.5rem', textAlign: 'right', color: '#64748B', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase' }}>Acciones</th>
+                                    <th style={{ padding: '0.8rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>Colaborador</th>
+                                    <th style={{ padding: '0.8rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>Rol / Especialidad</th>
+                                    <th style={{ padding: '0.8rem 1.25rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>Contacto</th>
+                                    <th style={{ padding: '0.8rem 1.25rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredUsers.map(user => {
                                     const roleInfo = ROLES.find(r => r.value === user.role) || { label: user.role, color: '#64748B', bgColor: '#F1F5F9' };
                                     return (
-                                        <tr key={user.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: user.is_active === false ? 0.6 : 1 }}>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
+                                        <tr key={user.id} className="collaborator-row" style={{ borderBottom: `1px solid ${THEME.colors.border}`, opacity: user.is_active === false ? 0.65 : 1 }}>
+                                            <td style={{ padding: '0.65rem 1.25rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                                     {(() => {
                                                         const av = getAvatarStyle(user.contact_name || '');
@@ -563,8 +629,8 @@ export default function HRManagement() {
                                                         );
                                                     })()}
                                                     <div>
-                                                        <div style={{ fontWeight: '800', color: '#0F172A' }}>{user.contact_name}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                        <div style={{ fontWeight: '700', color: THEME.colors.textMain }}>{user.contact_name}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                             ID: {user.document_id || '---'}
                                                             {user.is_temporary && (
                                                                 <span style={{ fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 4px', borderRadius: '4px' }}>TEMP</span>
@@ -573,26 +639,47 @@ export default function HRManagement() {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
+                                            <td style={{ padding: '0.65rem 1.25rem' }}>
                                                 <span style={{ fontSize: '0.7rem', fontWeight: '900', color: roleInfo.color, backgroundColor: roleInfo.bgColor, padding: '3px 8px', borderRadius: '6px' }}>
                                                     {roleInfo.label.toUpperCase()}
                                                 </span>
-                                                <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                     {user.specialty || 'GENERAL'}
-                                                    {user.specialty?.includes('TEMPORAL') && (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '1px 4px', borderRadius: '4px' }}>TEMPORAL</span>
-                                                    )}
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem' }}>
-                                                <div style={{ fontWeight: '700', color: '#334155', fontSize: '0.85rem' }}>{user.phone || user.contact_phone || '---'}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{user.email || '---'}</div>
+                                            <td style={{ padding: '0.65rem 1.25rem' }}>
+                                                <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{user.phone || user.contact_phone || '---'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>{user.email || '---'}</div>
                                             </td>
-                                            <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>
-                                                <button onClick={() => setEditingUser(user)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', fontSize: '1rem' }} title="Editar">✏️</button>
-                                                <button onClick={() => toggleUserStatus(user.id, user.is_active !== false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', fontSize: '1rem' }} title="Cambiar Estado">
-                                                    {user.is_active === false ? '📂' : '🔒'}
-                                                </button>
+                                            <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }}>
+                                                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                                    <button 
+                                                        onClick={() => setEditingUser(user)} 
+                                                        style={{ 
+                                                            background: 'none', border: `1px solid ${THEME.colors.border}`, borderRadius: '8px', 
+                                                            cursor: 'pointer', padding: '0.4rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                            color: THEME.colors.textSecondary, transition: 'all 0.2s'
+                                                        }} 
+                                                        title="Editar"
+                                                        onMouseOver={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                                        onMouseOut={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                    >
+                                                        <Edit2 strokeWidth={1.5} size={14} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => toggleUserStatus(user.id, user.is_active !== false)} 
+                                                        style={{ 
+                                                            background: 'none', border: `1px solid ${user.is_active === false ? THEME.colors.primary : '#FCA5A5'}`, 
+                                                            borderRadius: '8px', cursor: 'pointer', padding: '0.4rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                            color: user.is_active === false ? THEME.colors.primary : '#EF4444', transition: 'all 0.2s'
+                                                        }} 
+                                                        title={user.is_active === false ? 'Reactivar' : 'Archivar'}
+                                                        onMouseOver={e => { e.currentTarget.style.backgroundColor = user.is_active === false ? THEME.colors.primaryLight : '#FEE2E2'; }}
+                                                        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                    >
+                                                        {user.is_active === false ? <FolderOpen strokeWidth={1.5} size={14} /> : <EyeOff strokeWidth={1.5} size={14} />}
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -605,78 +692,99 @@ export default function HRManagement() {
 
             {/* MODAL EDITAR */}
             {editingUser && (
-                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '32px', width: '100%', maxWidth: '550px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '500px', boxShadow: THEME.shadow.lg }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                            <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.5rem' }}>✏️ Perfil de <span style={{ color: '#0891B2' }}>Colaborador</span></h2>
-                            <button onClick={() => setEditingUser(null)} style={{ background: '#F1F5F9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                    <Edit2 strokeWidth={1.5} size={18} />
+                                </div>
+                                <h2 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.4rem' }}>
+                                    Editar Perfil
+                                </h2>
+                            </div>
+                            <button 
+                                onClick={() => setEditingUser(null)} 
+                                style={{ 
+                                    background: THEME.colors.background, border: 'none', width: '32px', height: '32px', borderRadius: '50%', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary, transition: 'all 0.2s' 
+                                }}
+                                onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.border}
+                                onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                            >
+                                <X strokeWidth={1.5} size={18} />
+                            </button>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Nombre Completo</label>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nombre Completo</label>
                                 <input 
                                     value={editingUser.contact_name} 
                                     onChange={e => setEditingUser({...editingUser, contact_name: e.target.value})}
-                                    style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
+                                    style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, outline: 'none', boxSizing: 'border-box' }}
                                 />
                             </div>
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Teléfono Móvil</label>
-                                    <input value={editingUser.phone || editingUser.contact_phone || ''} onChange={e => setEditingUser({...editingUser, phone: e.target.value, contact_phone: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Teléfono Móvil</label>
+                                    <input value={editingUser.phone || editingUser.contact_phone || ''} onChange={e => setEditingUser({...editingUser, phone: e.target.value, contact_phone: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }} />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Cédula / ID</label>
-                                    <input value={editingUser.document_id || ''} onChange={e => setEditingUser({...editingUser, document_id: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cédula / ID</label>
+                                    <input value={editingUser.document_id || ''} onChange={e => setEditingUser({...editingUser, document_id: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }} />
                                 </div>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Correo Electrónico</label>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correo Electrónico</label>
                                 <input 
                                     value={editingUser.email || ''} 
                                     onChange={e => setEditingUser({...editingUser, email: e.target.value})}
-                                    style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', outline: 'none', boxSizing: 'border-box' }}
+                                    style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, outline: 'none', boxSizing: 'border-box' }}
                                 />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Cargo en la Compañía</label>
-                                <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cargo en la Compañía</label>
+                                <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '700', color: THEME.colors.textMain, backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}>
                                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Especialidad / Departamento / Sede</label>
-                                <select value={editingUser.specialty || ''} onChange={e => setEditingUser({...editingUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Especialidad / Sede</label>
+                                <select value={editingUser.specialty || ''} onChange={e => setEditingUser({...editingUser, specialty: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '700', color: THEME.colors.textMain, backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}>
                                     <option value="">Seleccionar Ubicación...</option>
                                     {dynamicSpecialties.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1.5px solid #F1F5F9' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
                                 <input 
                                     type="checkbox" 
                                     id="edit_is_temporary"
                                     checked={editingUser.is_temporary || false} 
                                     onChange={e => setEditingUser({...editingUser, is_temporary: e.target.checked})}
-                                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#0891B2' }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
                                 />
-                                <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', cursor: 'pointer' }}>Personal Temporal</label>
+                                <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
                             </div>
 
                             <button 
                                 onClick={() => updateProfile(editingUser.id, editingUser)} 
                                 style={{ 
-                                    marginTop: '1rem', padding:'1.1rem', borderRadius:'18px', border: 'none', 
-                                    backgroundColor:'#0891B2', color:'white', fontWeight:'900', cursor: 'pointer',
-                                    boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)', fontSize: '1rem'
+                                    marginTop: '1rem', padding:'1rem', borderRadius: '12px', border: 'none', 
+                                    backgroundColor: THEME.colors.primary, color:'white', fontWeight:'800', cursor: 'pointer',
+                                    boxShadow: THEME.shadow.md, fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                             >
-                                {saving ? '⏳ Guardando...' : '💾 GUARDAR CAMBIOS'}
+                                {saving ? <Clock strokeWidth={1.5} size={18} className="animate-spin" /> : <FolderOpen strokeWidth={1.5} size={18} />}
+                                {saving ? 'Guardando...' : 'GUARDAR CAMBIOS'}
                             </button>
                         </div>
                     </div>
@@ -685,11 +793,28 @@ export default function HRManagement() {
 
             {/* MODAL REGISTRO */}
             {showAdd && (
-                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '32px', width: '100%', maxWidth: '550px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '500px', boxShadow: THEME.shadow.lg }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                            <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A', fontSize: '1.5rem' }}>✨ Nuevo <span style={{ color: '#0891B2' }}>Colaborador</span></h2>
-                            <button onClick={() => setShowAdd(false)} style={{ background: '#F1F5F9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                    <Plus strokeWidth={1.5} size={18} />
+                                </div>
+                                <h2 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.4rem' }}>
+                                    Nuevo Colaborador
+                                </h2>
+                            </div>
+                            <button 
+                                onClick={() => setShowAdd(false)} 
+                                style={{ 
+                                    background: THEME.colors.background, border: 'none', width: '32px', height: '32px', borderRadius: '50%', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary, transition: 'all 0.2s' 
+                                }}
+                                onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.border}
+                                onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                            >
+                                <X strokeWidth={1.5} size={18} />
+                            </button>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
@@ -697,47 +822,51 @@ export default function HRManagement() {
                                 placeholder="Nombre completo" 
                                 value={newUser.contact_name} 
                                 onChange={e => setNewUser({...newUser, contact_name: e.target.value})}
-                                style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }}
                             />
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <input placeholder="Cédula" value={newUser.document_id || ''} onChange={e => setNewUser({...newUser, document_id: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
-                                <input placeholder="Teléfono" value={newUser.phone || ''} onChange={e => setNewUser({...newUser, phone: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                                <input placeholder="Cédula" value={newUser.document_id || ''} onChange={e => setNewUser({...newUser, document_id: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }} />
+                                <input placeholder="Teléfono" value={newUser.phone || ''} onChange={e => setNewUser({...newUser, phone: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }} />
                             </div>
 
-                            <input placeholder="Correo electrónico" value={newUser.email || ''} onChange={e => setNewUser({...newUser, email: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '600', boxSizing: 'border-box' }} />
+                            <input placeholder="Correo electrónico" value={newUser.email || ''} onChange={e => setNewUser({...newUser, email: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, boxSizing: 'border-box', outline: 'none' }} />
                             
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
-                                    <option value="" disabled>Seleccionar Cargo...</option>
+                                <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '700', color: THEME.colors.textMain, backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}>
+                                    <option value="" disabled>Cargo...</option>
                                     {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
-                                <select value={newUser.specialty} onChange={e => setNewUser({...newUser, specialty: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', backgroundColor: 'white' }}>
-                                    <option value="" disabled>Seleccionar Ubicación...</option>
+                                <select value={newUser.specialty} onChange={e => setNewUser({...newUser, specialty: e.target.value})} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '700', color: THEME.colors.textMain, backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}>
+                                    <option value="" disabled>Ubicación...</option>
                                     {dynamicSpecialties.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1.5px solid #F1F5F9' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
                                 <input 
                                     type="checkbox" 
                                     id="is_temporary"
                                     checked={newUser.is_temporary || false} 
                                     onChange={e => setNewUser({...newUser, is_temporary: e.target.checked})}
-                                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#0891B2' }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
                                 />
-                                <label htmlFor="is_temporary" style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B', cursor: 'pointer' }}>Personal Temporal</label>
+                                <label htmlFor="is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
                             </div>
 
                             <button 
                                 onClick={registerUser} 
                                 style={{ 
-                                    marginTop: '1rem', padding:'1.1rem', borderRadius:'18px', border: 'none', 
-                                    backgroundColor:'#0891B2', color:'white', fontWeight:'900', cursor: 'pointer',
-                                    boxShadow: '0 10px 15px -3px rgba(8, 145, 178, 0.3)', fontSize: '1rem'
+                                    marginTop: '1rem', padding:'1rem', borderRadius: '12px', border: 'none', 
+                                    backgroundColor: THEME.colors.primary, color:'white', fontWeight:'800', cursor: 'pointer',
+                                    boxShadow: THEME.shadow.md, fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                             >
-                                {saving ? '⏳ Registrando...' : '🚀 COMPLETAR REGISTRO'}
+                                {saving ? <Clock strokeWidth={1.5} size={18} className="animate-spin" /> : <Plus strokeWidth={1.5} size={18} />}
+                                {saving ? 'Registrando...' : 'COMPLETAR REGISTRO'}
                             </button>
                         </div>
                     </div>
@@ -746,8 +875,21 @@ export default function HRManagement() {
 
             <style jsx>{`
                 @keyframes pulse {
-                    0%, 100% { background-color: #F8FAFC; }
-                    50% { background-color: #F1F5F9; }
+                    0%, 100% { background-color: #F4F7F6; }
+                    50% { background-color: #EAEFEA; }
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                .animate-spin {
+                    animation: spin 1s linear infinite;
+                    display: inline-block;
+                }
+                tr.collaborator-row {
+                    transition: background-color 0.2s ease;
+                }
+                tr.collaborator-row:hover {
+                    background-color: #F8FAF9 !important;
                 }
             `}</style>
         </main>
