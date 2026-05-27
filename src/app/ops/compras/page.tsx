@@ -239,7 +239,10 @@ export default function ProcurementPage() {
   const fetchTasks = async (signal?: AbortSignal, categoryFilter?: string) => {
     setLoading(true);
     const targetDate = await getTargetDeliveryDate(signal);
-    if (!targetDate) return;
+    if (!targetDate) {
+      if (isMounted.current && !signal?.aborted) setLoading(false);
+      return;
+    }
 
     if (isMounted.current) setTargetDateLabel(targetDate);
 
@@ -445,18 +448,25 @@ export default function ProcurementPage() {
           return dateA.localeCompare(dateB);
         });
 
-        setTasks(formatted);
+        if (isMounted.current && !signal?.aborted) {
+          setTasks(formatted);
+          setLoading(false);
+        }
       } else {
-        setTasks([]);
-        setTaskPurchases([]);
-        setNovelties([]);
+        if (isMounted.current && !signal?.aborted) {
+          setTasks([]);
+          setTaskPurchases([]);
+          setNovelties([]);
+          setLoading(false);
+        }
       }
     } catch (err: unknown) {
       if (isAbortError(err)) return;
       console.error("Error en fetchTasks:", err);
       alert("No se pudieron cargar los productos reales.");
-    } finally {
-      setLoading(false);
+      if (isMounted.current && !signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -939,7 +949,7 @@ export default function ProcurementPage() {
       }, 300);
     }
     prevProgressRef.current = currentProgress;
-  }, [currentProgress, tasks.length]);
+}, [currentProgress, tasks.length]);
 
   return (
     <div style={{ padding: "1rem", paddingBottom: "5rem" }}>
@@ -949,6 +959,22 @@ export default function ProcurementPage() {
           __html: `
                 ::-webkit-scrollbar { width: 0 !important; display: none; }
                 html, body { -ms-overflow-style: none; scrollbar-width: none; }
+
+                @media (max-width: 480px) {
+                    .header-title-container {
+                        font-size: 1.15rem !important;
+                        gap: 0.35rem !important;
+                    }
+                    .header-date-badge {
+                        font-size: 0.68rem !important;
+                        padding: 2px 6px !important;
+                    }
+                    .header-tutor-btn {
+                        font-size: 0.68rem !important;
+                        padding: 0.4rem 0.6rem !important;
+                    }
+                }
+
                 /* Ocultar flechas de input number */
                 input[type=number]::-webkit-inner-spin-button, 
                 input[type=number]::-webkit-outer-spin-button { 
@@ -1034,50 +1060,41 @@ export default function ProcurementPage() {
         }}
       />
 
-      {/* STICKY HEADER (Título + Dashboard Completo) */}
+      {/* Título y Botón (No pegajosos, se ocultan al hacer scroll) */}
       <div
         className="no-print"
         style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          backgroundColor: "var(--ops-bg)", // Fondo sólido
           paddingTop: "0.5rem",
           paddingBottom: "0.5rem",
-          marginBottom: "1rem",
-          borderBottom: "1px solid var(--ops-border)",
+          backgroundColor: "var(--ops-bg)",
         }}
       >
-        {/* Título y Botón */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "1rem",
+            marginBottom: "0.5rem",
             padding: "0 0.5rem",
           }}
         >
           <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0 }}>
-              Compras <span style={{ color: "var(--ops-primary)" }}>Hoy</span>
-            </h1>
-            <div
-              style={{
-                fontSize: "0.9rem",
-                color: "#F59E0B",
-                fontWeight: "800",
-                marginTop: "0.2rem",
-              }}
+            <h1 
+              className="header-title-container"
+              style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
             >
-              📅 Entregas: {formatDateFriendly(targetDateLabel)}
-            </div>
+              <span style={{ whiteSpace: "nowrap" }}>Compras <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
+              <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
+                📅 {formatDateFriendly(targetDateLabel)}
+              </span>
+            </h1>
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
+              className="header-tutor-btn"
               onClick={() => { setShowGuide(true); setGuideStep(0); }}
               style={{
-                backgroundColor: "#1F2937",
+                backgroundColor: "var(--ops-surface)",
                 color: "var(--ops-primary)",
                 border: "1px solid var(--ops-primary)",
                 padding: "0.5rem 0.75rem",
@@ -1094,11 +1111,25 @@ export default function ProcurementPage() {
             </button>
           </div>
         </div>
+      </div>
 
+      {/* STICKY CONTAINER (Barra de progreso + Dashboard de estados) */}
+      <div
+        className="no-print"
+        style={{
+          position: "sticky",
+          top: "57px",
+          zIndex: 50,
+          backgroundColor: "var(--ops-bg)",
+          paddingBottom: "0.8rem",
+          marginBottom: "1rem",
+          borderBottom: "1px solid var(--ops-border)",
+        }}
+      >
         {/* Barra de Progreso Lineal (General) */}
         {tasks.length > 0 && (
           <div
-            style={{ width: "100%", marginBottom: "1rem", padding: "0 0.5rem" }}
+            style={{ width: "100%", marginTop: "0.4rem", marginBottom: "1rem", padding: "0 0.5rem" }}
           >
             <div
               style={{
@@ -1131,20 +1162,20 @@ export default function ProcurementPage() {
           <div
             style={{
               backgroundColor: "var(--ops-surface)",
-              padding: "0.8rem",
               borderRadius: "16px",
               border: "1px solid var(--ops-border)",
               boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
               display: "flex",
-              justifyContent: "space-around",
+              justifyContent: "space-evenly",
               alignItems: "center",
+              padding: "0.6rem 0.8rem",
             }}
           >
             {/* Pendientes (Gris/Rojo Suave) */}
             <div style={{ textAlign: "center" }}>
               <div
                 style={{
-                  fontSize: "1.25rem",
+                  fontSize: "1.1rem",
                   fontWeight: "900",
                   color: "var(--ops-text-muted)",
                 }}
@@ -1153,7 +1184,7 @@ export default function ProcurementPage() {
               </div>
               <div
                 style={{
-                  fontSize: "0.65rem",
+                  fontSize: "0.55rem",
                   fontWeight: "bold",
                   color: "var(--ops-text-muted)",
                   textTransform: "uppercase",
@@ -1167,7 +1198,7 @@ export default function ProcurementPage() {
             <div style={{ textAlign: "center", position: "relative" }}>
               <div
                 style={{
-                  fontSize: "1.25rem",
+                  fontSize: "1.1rem",
                   fontWeight: "900",
                   color: "#F59E0B",
                 }}
@@ -1176,7 +1207,7 @@ export default function ProcurementPage() {
               </div>
               <div
                 style={{
-                  fontSize: "0.65rem",
+                  fontSize: "0.55rem",
                   fontWeight: "bold",
                   color: "#F59E0B",
                   textTransform: "uppercase",
@@ -1188,10 +1219,10 @@ export default function ProcurementPage() {
                 <div
                   style={{
                     position: "absolute",
-                    top: -5,
-                    right: -5,
-                    width: "6px",
-                    height: "6px",
+                    top: -4,
+                    right: -4,
+                    width: "5px",
+                    height: "5px",
                     borderRadius: "50%",
                     background: "#F59E0B",
                   }}
@@ -1201,10 +1232,10 @@ export default function ProcurementPage() {
 
             {/* Completados (Verde) */}
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: "900", color: "var(--ops-primary)" }}>
+              <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "var(--ops-primary)" }}>
                 {completedTasks}
               </div>
-              <div style={{ fontSize: "0.65rem", fontWeight: "bold", color: "var(--ops-primary)", textTransform: "uppercase" }}>
+              <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "var(--ops-primary)", textTransform: "uppercase" }}>
                 Listos
               </div>
             </div>
@@ -1215,22 +1246,22 @@ export default function ProcurementPage() {
                 style={{
                   textAlign: "center",
                   borderLeft: "1px solid rgba(239,68,68,0.3)",
-                  paddingLeft: "1rem",
+                  paddingLeft: "0.8rem",
                   position: "relative",
                   animation: "pulse-red 2s infinite",
                 }}
               >
-                <div style={{ fontSize: "1.25rem", fontWeight: "900", color: "#EF4444" }}>
+                <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EF4444" }}>
                   {noveltyCount}
                 </div>
-                <div style={{ fontSize: "0.6rem", fontWeight: "900", color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <div style={{ fontSize: "0.55rem", fontWeight: "900", color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   Novedad
                 </div>
                 <div
                   style={{
                     position: "absolute",
-                    top: -4, right: -4,
-                    width: "8px", height: "8px",
+                    top: -3, right: -3,
+                    width: "6px", height: "6px",
                     borderRadius: "50%",
                     background: "#EF4444",
                     animation: "pulse-red 1.5s infinite",
@@ -1244,27 +1275,53 @@ export default function ProcurementPage() {
               style={{
                 textAlign: "center",
                 borderLeft: "1px solid var(--ops-border)",
-                paddingLeft: "1.2rem",
+                paddingLeft: "0.8rem",
                 marginLeft: "0.2rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem"
               }}
             >
               <div
                 style={{
                   backgroundColor: totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.15)",
-                  padding: "0.5rem 0.8rem",
-                  borderRadius: "12px",
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: "10px",
                   border: `1px solid ${totalProgress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.3)"}`,
                   boxShadow: totalProgress > 0 ? "0 0 15px rgba(59, 130, 246, 0.2)" : "none",
                   transition: "all 0.4s ease",
                 }}
               >
-                <div style={{ fontSize: "1.5rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", lineHeight: "1" }}>
+                <div style={{ fontSize: "1.2rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", lineHeight: "1" }}>
                   {Math.round(totalProgress)}%
                 </div>
-                <div style={{ fontSize: "0.6rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   TOTAL AVANCE
                 </div>
               </div>
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--ops-border)',
+                  color: 'var(--ops-text)',
+                  borderRadius: '8px',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  transition: 'all 0.2s',
+                  flexShrink: 0
+                }}
+                title="Subir al inicio"
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+              >
+                ▲
+              </button>
             </div>
           </div>
         )}
@@ -1281,8 +1338,9 @@ export default function ProcurementPage() {
               flex: 1,
               padding: "0.5rem 1rem",
               borderRadius: "12px",
-              backgroundColor: "var(--ops-primary)",
-              color: "white",
+              backgroundColor: "rgba(16, 185, 129, 0.12)",
+              border: "1px solid var(--ops-primary)",
+              color: "var(--ops-text)",
               fontSize: "0.75rem",
               fontWeight: "800",
               textTransform: "uppercase",
@@ -1367,11 +1425,11 @@ export default function ProcurementPage() {
                         ? "1px solid rgba(16, 185, 129, 0.6)" 
                         : "1px solid var(--ops-border)",
                     backgroundColor: isActive
-                      ? "var(--ops-primary)"
+                      ? "rgba(16, 185, 129, 0.12)"
                       : pct === 100 
                         ? "rgba(16, 185, 129, 0.15)"
                         : "var(--ops-surface)",
-                    color: isActive ? "white" : pct === 100 ? "#059669" : "var(--ops-text-muted)",
+                    color: isActive ? "var(--ops-text)" : pct === 100 ? "#059669" : "var(--ops-text-muted)",
                     fontSize: "0.7rem",
                     fontWeight: "700",
                     textAlign: "left",
@@ -1458,7 +1516,7 @@ export default function ProcurementPage() {
         <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite" }}>
           <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🔄</div>
           <p style={{ color: "var(--ops-text-muted)", fontWeight: "700", letterSpacing: "0.05em" }}>
-            BUSCANDO ABASTOS...
+            BUSCANDO PEDIDOS...
           </p>
         </div>
       ) : tasks.length === 0 ? (
@@ -1479,11 +1537,6 @@ export default function ProcurementPage() {
               ? `No hay compras pendientes en la categoría de ${filterCategory}.`
               : "No se han encontrado compras generadas para esta jornada."}
           </p>
-          <div style={{ marginTop: "1.5rem", padding: "0.5rem 1rem", backgroundColor: "var(--ops-surface)", border: "1px solid var(--ops-border)", borderRadius: "12px", display: "inline-block" }}>
-            <p style={{ fontSize: "0.75rem", fontWeight: "700", opacity: 0.8, margin: 0 }}>
-              💡 TIP: Dale a &quot;SINCRONIZAR&quot; para refrescar pedidos.
-            </p>
-          </div>
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1rem" }}>
@@ -2391,7 +2444,7 @@ export default function ProcurementPage() {
                                 <span style={{ color: "#10B981", fontWeight: "800", marginRight: "6px" }}>
                                   {prov.product ? prov.product.toUpperCase() : "PRODUCTO"}
                                 </span>
-                                <span style={{ color: "#FFFFFF", opacity: 0.9 }}>
+                                <span style={{ color: "var(--ops-text)", opacity: 0.9 }}>
                                   - {prov.name}
                                 </span>
                               </div>
@@ -2544,7 +2597,7 @@ export default function ProcurementPage() {
                                 <span style={{ color: "#10B981", fontWeight: "800", marginRight: "6px" }}>
                                   {p.product ? p.product.toUpperCase() : "PRODUCTO"}
                                 </span>
-                                <span style={{ color: "#FFFFFF", opacity: 0.9 }}>
+                                <span style={{ color: "var(--ops-text)", opacity: 0.9 }}>
                                   - {p.name}
                                 </span>
                               </div>

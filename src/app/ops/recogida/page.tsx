@@ -36,6 +36,19 @@ export default function RecogidaPage() {
     const [showFilterGrid, setShowFilterGrid] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
     const [groupMode, setGroupMode] = useState<'provider' | 'bodega'>('provider');
+    const [showGuide, setShowGuide] = useState(false);
+    const [guideStep, setGuideStep] = useState(0);
+    const [targetDateLabel, setTargetDateLabel] = useState('');
+
+    const formatDateFriendly = (dateStr: string) => {
+        if (!dateStr) return "";
+        const date = new Date(`${dateStr}T12:00:00`); // Force mid-day to avoid TZ shifts
+        const dayName = date.toLocaleDateString("es-ES", { weekday: "long" });
+        const day = date.getDate();
+        const month = date.toLocaleDateString("es-ES", { month: "short" });
+        // Capitalize first letter
+        return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day} ${month}`;
+    };
 
     // Utility: Parse Bodega Name from pickup_location
     const getBodegaName = (location: string | null | undefined): string => {
@@ -146,6 +159,7 @@ export default function RecogidaPage() {
             if (error) throw error;
 
             setPurchases(data || []);
+            setTargetDateLabel(todayBogota);
         } catch (err: unknown) {
             console.error('Error fetching pickups:', err);
         } finally {
@@ -456,75 +470,78 @@ export default function RecogidaPage() {
             })
             .map(key => ({
                 key,
-                purchases: groups[key]
+purchases: groups[key]
             }));
     };
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '5rem', backgroundColor: 'var(--ops-bg)', minHeight: '100vh' }}>
-            {/* STICKY HEADER (Título + Dashboard Completo) */}
+        <div style={{ padding: '1rem', paddingBottom: '5rem', backgroundColor: 'var(--ops-bg)', minHeight: '100vh' }}>            {/* Título y Botón (No pegajosos, se ocultan al hacer scroll) */}
             <div
                 className="no-print"
                 style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 50,
-                    backgroundColor: "var(--ops-bg)",
                     paddingTop: "0.5rem",
                     paddingBottom: "0.5rem",
-                    marginBottom: "1rem",
-                    borderBottom: "1px solid var(--ops-border)",
+                    backgroundColor: "var(--ops-bg)",
                 }}
             >
-                {/* Título y Botón */}
                 <div
                     style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        marginBottom: "1rem",
+                        marginBottom: "0.5rem",
                         padding: "0 0.5rem",
                     }}
                 >
                     <div>
                         <h1 
+                            className="header-title-container"
                             onClick={() => router.push('/ops')}
-                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer" }}
+                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
                         >
-                            Recogidas <span style={{ color: "var(--ops-primary)" }}>Hoy</span>
+                            <span style={{ whiteSpace: "nowrap" }}>Recogidas <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
+                                📅 {formatDateFriendly(targetDateLabel) || "Cargando..."}
+                            </span>
                         </h1>
-                        <div
-                            style={{
-                                fontSize: "0.9rem",
-                                color: "#F59E0B",
-                                fontWeight: "800",
-                                marginTop: "0.2rem",
-                            }}
-                        >
-                            📋 Tareas del Turno
-                        </div>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                         <button
-                            onClick={() => fetchPurchases(false)}
-                            disabled={loading}
+                            className="header-tutor-btn"
+                            onClick={() => { setShowGuide(true); setGuideStep(0); }}
                             style={{
-                                backgroundColor: "var(--ops-primary)",
-                                color: "white",
-                                border: "none",
-                                padding: "0.5rem 1rem",
+                                backgroundColor: "var(--ops-surface)",
+                                color: "var(--ops-primary)",
+                                border: "1px solid var(--ops-primary)",
+                                padding: "0.5rem 0.75rem",
                                 borderRadius: "8px",
-                                fontSize: "0.8rem",
-                                fontWeight: "800",
-                                boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-                                cursor: 'pointer',
-                                opacity: loading ? 0.7 : 1
+                                fontSize: "0.75rem",
+                                fontWeight: "900",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
                             }}
                         >
-                            {loading ? '...' : '🔄 REFRESCAR'}
+                            🎓 TUTOR
                         </button>
                     </div>
                 </div>
+            </div>
+
+            {/* STICKY CONTAINER (Barra de progreso + Dashboard de estados) */}
+            <div
+                className="no-print"
+                style={{
+                    position: "sticky",
+                    top: "57px",
+                    zIndex: 50,
+                    backgroundColor: "var(--ops-bg)",
+                    paddingBottom: "0.8rem",
+                    marginBottom: "1rem",
+                    borderBottom: "1px solid var(--ops-border)",
+                }}
+            >
 
                 {/* Barra de Progreso Lineal (General) */}
                 {filteredPurchases.length > 0 && (() => {
@@ -533,7 +550,7 @@ export default function RecogidaPage() {
                     const progress = Math.round((completed / total) * 100);
 
                     return (
-                        <div style={{ width: "100%", marginBottom: "1rem", padding: "0 0.5rem" }}>
+                        <div style={{ width: "100%", marginTop: "0.4rem", marginBottom: "1rem", padding: "0 0.5rem" }}>
                             <div
                                 style={{
                                     width: "100%",
@@ -572,12 +589,12 @@ export default function RecogidaPage() {
                         <div
                             style={{
                                 backgroundColor: "var(--ops-surface)",
-                                padding: "0.8rem",
+                                padding: "0.6rem 0.8rem",
                                 borderRadius: "16px",
                                 border: "1px solid var(--ops-border)",
                                 boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                                 display: "flex",
-                                justifyContent: "space-around",
+                                justifyContent: "space-evenly",
                                 alignItems: "center",
                             }}
                         >
@@ -585,7 +602,7 @@ export default function RecogidaPage() {
                             <div style={{ textAlign: "center" }}>
                                 <div
                                     style={{
-                                        fontSize: "1.25rem",
+                                        fontSize: "1.1rem",
                                         fontWeight: "900",
                                         color: "var(--ops-text-muted)",
                                     }}
@@ -594,7 +611,7 @@ export default function RecogidaPage() {
                                 </div>
                                 <div
                                     style={{
-                                        fontSize: "0.65rem",
+                                        fontSize: "0.55rem",
                                         fontWeight: "bold",
                                         color: "var(--ops-text-muted)",
                                         textTransform: "uppercase",
@@ -608,7 +625,7 @@ export default function RecogidaPage() {
                             <div style={{ textAlign: "center", position: "relative" }}>
                                 <div
                                     style={{
-                                        fontSize: "1.25rem",
+                                        fontSize: "1.1rem",
                                         fontWeight: "900",
                                         color: "#F59E0B",
                                     }}
@@ -617,7 +634,7 @@ export default function RecogidaPage() {
                                 </div>
                                 <div
                                     style={{
-                                        fontSize: "0.65rem",
+                                        fontSize: "0.55rem",
                                         fontWeight: "bold",
                                         color: "#F59E0B",
                                         textTransform: "uppercase",
@@ -629,10 +646,10 @@ export default function RecogidaPage() {
                                     <div
                                         style={{
                                             position: "absolute",
-                                            top: -5,
-                                            right: -5,
-                                            width: "6px",
-                                            height: "6px",
+                                            top: -4,
+                                            right: -4,
+                                            width: "5px",
+                                            height: "5px",
                                             borderRadius: "50%",
                                             background: "#F59E0B",
                                         }}
@@ -644,7 +661,7 @@ export default function RecogidaPage() {
                             <div style={{ textAlign: "center" }}>
                                 <div
                                     style={{
-                                        fontSize: "1.25rem",
+                                        fontSize: "1.1rem",
                                         fontWeight: "900",
                                         color: "var(--ops-primary)",
                                     }}
@@ -653,7 +670,7 @@ export default function RecogidaPage() {
                                 </div>
                                 <div
                                     style={{
-                                        fontSize: "0.65rem",
+                                        fontSize: "0.55rem",
                                         fontWeight: "bold",
                                         color: "var(--ops-primary)",
                                         textTransform: "uppercase",
@@ -668,16 +685,18 @@ export default function RecogidaPage() {
                                 style={{
                                     textAlign: "center",
                                     borderLeft: "1px solid var(--ops-border)",
-                                    paddingLeft: "1.2rem",
+                                    paddingLeft: "0.8rem",
                                     marginLeft: "0.2rem",
-                                    position: "relative",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem"
                                 }}
                             >
                                 <div
                                     style={{
                                         backgroundColor: progress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.15)",
-                                        padding: "0.5rem 0.8rem",
-                                        borderRadius: "12px",
+                                        padding: "0.4rem 0.6rem",
+                                        borderRadius: "10px",
                                         border: `1px solid ${progress === 100 ? "var(--ops-primary)" : "rgba(59, 130, 246, 0.3)"}`,
                                         boxShadow: progress > 0 ? "0 0 15px rgba(59, 130, 246, 0.2)" : "none",
                                         transition: "all 0.4s ease",
@@ -685,7 +704,7 @@ export default function RecogidaPage() {
                                 >
                                     <div
                                         style={{
-                                            fontSize: "1.5rem",
+                                            fontSize: "1.2rem",
                                             fontWeight: "900",
                                             color: progress === 100 ? "white" : "var(--ops-text)",
                                             lineHeight: "1",
@@ -695,7 +714,7 @@ export default function RecogidaPage() {
                                     </div>
                                     <div
                                         style={{
-                                            fontSize: "0.6rem",
+                                            fontSize: "0.5rem",
                                             fontWeight: "900",
                                             color: progress === 100 ? "white" : "var(--ops-text)",
                                             opacity: 0.8,
@@ -707,6 +726,29 @@ export default function RecogidaPage() {
                                         TOTAL AVANCE
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        border: '1px solid var(--ops-border)',
+                                        color: 'var(--ops-text)',
+                                        borderRadius: '8px',
+                                        width: '28px',
+                                        height: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0
+                                    }}
+                                    title="Subir al inicio"
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                                >
+                                    ▲
+                                </button>
                             </div>
                         </div>
                     );
@@ -714,7 +756,7 @@ export default function RecogidaPage() {
             </div>
 
             {/* Category Filter — Colapsable */}
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: "0.6rem" }}>
                 {/* Barra activa: siempre visible */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     {/* Pill de categoría activa */}
@@ -723,8 +765,9 @@ export default function RecogidaPage() {
                             flex: 1,
                             padding: "0.5rem 1rem",
                             borderRadius: "12px",
-                            backgroundColor: "var(--ops-primary)",
-                            color: "white",
+                            backgroundColor: "rgba(16, 185, 129, 0.12)",
+                            border: "1px solid var(--ops-primary)",
+                            color: "var(--ops-text)",
                             fontSize: "0.75rem",
                             fontWeight: "800",
                             textTransform: "uppercase",
@@ -805,9 +848,9 @@ export default function RecogidaPage() {
                                         borderRadius: "10px",
                                         border: `1px solid ${isActive ? "var(--ops-primary)" : "var(--ops-border)"}`,
                                         backgroundColor: isActive
-                                            ? "var(--ops-primary)"
+                                            ? "rgba(16, 185, 129, 0.12)"
                                             : "var(--ops-surface)",
-                                        color: isActive ? "white" : "var(--ops-text-muted)",
+                                        color: isActive ? "var(--ops-text)" : "var(--ops-text-muted)",
                                         fontSize: "0.7rem",
                                         fontWeight: "700",
                                         textAlign: "left",
@@ -869,31 +912,37 @@ export default function RecogidaPage() {
                 </div>
             ) : (
                 <div>
-                    {/* Grouping Selector */}
+                    {/* Segmented Control Selector */}
                     <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr', 
-                        gap: '0.5rem', 
-                        marginBottom: '1.5rem', 
-                        padding: '0 0.5rem' 
+                        background: 'color-mix(in srgb, var(--ops-surface) 65%, transparent)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        padding: '4px',
+                        borderRadius: '12px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        marginBottom: '0.65rem',
+                        border: '1px solid color-mix(in srgb, var(--ops-border) 60%, transparent)',
+                        marginLeft: '0.5rem',
+                        marginRight: '0.5rem',
+                        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.04)',
                     }}>
                         <button
                             onClick={() => setGroupMode('provider')}
                             style={{
-                                padding: '0.8rem',
-                                borderRadius: '12px',
-                                border: `2px solid ${groupMode === 'provider' ? 'var(--ops-primary)' : 'var(--ops-border)'}`,
-                                backgroundColor: groupMode === 'provider' ? 'rgba(16, 185, 129, 0.15)' : 'var(--ops-surface)',
-                                color: groupMode === 'provider' ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                                padding: '0.45rem 0.2rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: groupMode === 'provider' ? 'var(--ops-primary)' : 'transparent',
+                                color: groupMode === 'provider' ? '#FFFFFF' : 'var(--ops-text-muted)',
                                 fontWeight: '900',
-                                fontSize: '0.85rem',
+                                fontSize: '0.8rem',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '0.4rem',
-                                boxShadow: groupMode === 'provider' ? '0 2px 8px rgba(16,185,129,0.2)' : 'none',
-                                transition: 'all 0.2s ease',
+                                gap: '0.3rem',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
                             🏢 Por Proveedor
@@ -901,20 +950,19 @@ export default function RecogidaPage() {
                         <button
                             onClick={() => setGroupMode('bodega')}
                             style={{
-                                padding: '0.8rem',
-                                borderRadius: '12px',
-                                border: `2px solid ${groupMode === 'bodega' ? 'var(--ops-primary)' : 'var(--ops-border)'}`,
-                                backgroundColor: groupMode === 'bodega' ? 'rgba(16, 185, 129, 0.15)' : 'var(--ops-surface)',
-                                color: groupMode === 'bodega' ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
+                                padding: '0.45rem 0.2rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: groupMode === 'bodega' ? 'var(--ops-primary)' : 'transparent',
+                                color: groupMode === 'bodega' ? '#FFFFFF' : 'var(--ops-text-muted)',
                                 fontWeight: '900',
-                                fontSize: '0.85rem',
+                                fontSize: '0.8rem',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '0.4rem',
-                                boxShadow: groupMode === 'bodega' ? '0 2px 8px rgba(16,185,129,0.2)' : 'none',
-                                transition: 'all 0.2s ease',
+                                gap: '0.3rem',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
                             📍 Por Bodega
@@ -1609,12 +1657,239 @@ export default function RecogidaPage() {
                 </div>
             )}
 
+            {/* Onboarding Guide Modal (Carrusel del Profesor) */}
+            {showGuide && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    zIndex: 9000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '1.5rem',
+                    animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}>
+                    <style dangerouslySetInnerHTML={{__html: `
+                        @keyframes float {
+                            0%, 100% { transform: translateY(0px); }
+                            50% { transform: translateY(-6px); }
+                        }
+                        @keyframes pulse-glow {
+                            0%, 100% { transform: scale(1); opacity: 0.6; }
+                            50% { transform: scale(1.05); opacity: 1; }
+                        }
+                        @keyframes dash {
+                            to {
+                                stroke-dashoffset: -20;
+                            }
+                        }
+                        @keyframes modalEntrance {
+                            from { transform: scale(0.95); opacity: 0; }
+                            to { transform: scale(1); opacity: 1; }
+                        }
+                        .animate-float { animation: float 3s ease-in-out infinite; }
+                        .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+                        .animate-dash { stroke-dasharray: 6; animation: dash 1.5s linear infinite; }
+                        .modal-content-card {
+                            animation: modalEntrance 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                        }
+                    `}} />
+
+                    <div 
+                        className="modal-content-card"
+                        style={{
+                            backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                            borderRadius: '28px',
+                            width: '100%',
+                            maxWidth: '440px',
+                            padding: '2.2rem',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)',
+                            color: '#F8FAFC',
+                            position: 'relative'
+                        }}
+                    >
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setShowGuide(false)}
+                            style={{
+                                position: 'absolute', top: '1.25rem', right: '1.25rem',
+                                width: '32px', height: '32px', borderRadius: '50%',
+                                backgroundColor: 'rgba(255,255,255,0.08)',
+                                border: 'none', color: '#94A3B8',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.2s ease',
+                                fontWeight: 'bold'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                                e.currentTarget.style.color = '#EF4444';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.color = '#94A3B8';
+                            }}
+                        >
+                            ✕
+                        </button>
+
+                        {/* Step Content */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                            
+                            {/* Animated Illustration Area */}
+                            <div style={{ height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', width: '100%' }}>
+                                {guideStep === 0 && (
+                                    <svg width="120" height="120" viewBox="0 0 120 120" className="animate-float">
+                                        <circle cx="60" cy="60" r="45" fill="rgba(16, 185, 129, 0.15)" className="animate-pulse-glow" />
+                                        <rect x="35" y="40" width="50" height="45" rx="8" fill="none" stroke="#10B981" strokeWidth="3" />
+                                        <line x1="35" y1="52" x2="85" y2="52" stroke="#10B981" strokeWidth="2" />
+                                        <circle cx="50" cy="65" r="4" fill="#3B82F6" />
+                                        <circle cx="70" cy="65" r="4" fill="#3B82F6" />
+                                        <path d="M 52 74 Q 60 79 68 74" stroke="#F59E0B" strokeWidth="3" fill="none" strokeLinecap="round" />
+                                        <path d="M 60 20 L 60 30" stroke="#10B981" strokeWidth="3" strokeLinecap="round" />
+                                        <circle cx="60" cy="16" r="3" fill="#10B981" />
+                                    </svg>
+                                )}
+                                {guideStep === 1 && (
+                                    <svg width="160" height="120" viewBox="0 0 160 120" className="animate-float">
+                                        <rect x="15" y="45" width="55" height="35" rx="8" fill="none" stroke="#64748B" strokeWidth="2.5" />
+                                        <text x="42" y="67" fill="#94A3B8" fontSize="9" fontWeight="bold" textAnchor="middle">PROVEEDOR</text>
+                                        
+                                        <line x1="70" y1="62" x2="90" y2="62" stroke="#3B82F6" strokeWidth="2" strokeDasharray="4" className="animate-dash" />
+                                        
+                                        <rect x="90" y="45" width="55" height="35" rx="8" fill="none" stroke="#10B981" strokeWidth="2.5" />
+                                        <text x="117" y="67" fill="#10B981" fontSize="9" fontWeight="bold" textAnchor="middle">BODEGA</text>
+                                    </svg>
+                                )}
+                                {guideStep === 2 && (
+                                    <svg width="120" height="120" viewBox="0 0 120 120">
+                                        <circle cx="60" cy="60" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                                        <circle cx="60" cy="35" r="12" fill="rgba(239, 68, 68, 0.2)" stroke="#EF4444" strokeWidth="2.5" className="animate-pulse-glow" />
+                                        <circle cx="60" cy="35" r="5" fill="#EF4444" />
+                                        <circle cx="35" cy="75" r="12" fill="rgba(245, 158, 11, 0.2)" stroke="#F59E0B" strokeWidth="2.5" style={{ animation: 'pulse-glow 2s infinite', animationDelay: '0.6s' }} />
+                                        <circle cx="35" cy="75" r="5" fill="#F59E0B" />
+                                        <circle cx="85" cy="75" r="12" fill="rgba(16, 185, 129, 0.2)" stroke="#10B981" strokeWidth="2.5" style={{ animation: 'pulse-glow 2s infinite', animationDelay: '1.2s' }} />
+                                        <circle cx="85" cy="75" r="5" fill="#10B981" />
+                                    </svg>
+                                )}
+                                {guideStep === 3 && (
+                                    <svg width="120" height="120" viewBox="0 0 120 120" className="animate-float">
+                                        <circle cx="60" cy="60" r="45" fill="rgba(239, 68, 68, 0.1)" />
+                                        <path d="M40 80 L40 50 A20 20 0 0 1 80 50 L80 80 Z" fill="none" stroke="#EF4444" strokeWidth="3.5" />
+                                        <circle cx="60" cy="45" r="5" fill="#EF4444" />
+                                        <circle cx="60" cy="65" r="8" fill="none" stroke="#EF4444" strokeWidth="3" />
+                                    </svg>
+                                )}
+                            </div>
+
+                            {/* Title */}
+                            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '900', color: '#FFFFFF' }}>
+                                {guideStep === 0 && "¡Bienvenido a Recogidas!"}
+                                {guideStep === 1 && "Agrupación en Pestañas"}
+                                {guideStep === 2 && "Registro de Calidad"}
+                                {guideStep === 3 && "Foto de Evidencia Obligatoria"}
+                            </h4>
+
+                            {/* Description */}
+                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', lineHeight: '1.5', minHeight: '60px' }}>
+                                {guideStep === 0 && "Esta interfaz te permite ver qué productos debes recoger y validar hoy de tus proveedores o bodegas programados para el turno."}
+                                {guideStep === 1 && "Alterna rápidamente entre las vistas 'Por Proveedor' o 'Por Bodega'. El selector estilo pestaña optimiza el espacio en tu pantalla móvil."}
+                                {guideStep === 2 && "Presiona en cualquier producto para abrir el formulario, confirmar cantidades y registrar la calidad: Verde (🟢), Amarillo (🟡) o Rojo (🔴)."}
+                                {guideStep === 3 && "Si rechazas un producto (Rojo), la app bloqueará la confirmación hasta que subas una foto de evidencia para respaldar la novedad."}
+                            </p>
+
+                            {/* Progress Dots */}
+                            <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0' }}>
+                                {[0, 1, 2, 3].map((step) => (
+                                    <div
+                                        key={step}
+                                        onClick={() => setGuideStep(step)}
+                                        style={{
+                                            width: guideStep === step ? '20px' : '8px',
+                                            height: '8px',
+                                            borderRadius: '4px',
+                                            backgroundColor: guideStep === step ? 'var(--ops-primary)' : '#475569',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                        }}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Navigation Buttons */}
+                            <div style={{ display: 'flex', width: '100%', gap: '0.75rem', marginTop: '0.5rem' }}>
+                                {guideStep > 0 ? (
+                                    <button
+                                        onClick={() => setGuideStep(prev => prev - 1)}
+                                        style={{
+                                            flex: 1, padding: '0.75rem', borderRadius: '12px',
+                                            backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                                            color: '#F8FAFC', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                    >
+                                        Atrás
+                                    </button>
+                                ) : (
+                                    <div style={{ flex: 1 }} />
+                                )}
+
+                                {guideStep < 3 ? (
+                                    <button
+                                        onClick={() => setGuideStep(prev => prev + 1)}
+                                        style={{
+                                            flex: 2, padding: '0.75rem', borderRadius: '12px',
+                                            backgroundColor: 'var(--ops-primary)', border: 'none',
+                                            color: 'white', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                                        }}
+                                    >
+                                        Siguiente
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowGuide(false)}
+                                        style={{
+                                            flex: 2, padding: '0.75rem', borderRadius: '12px',
+                                            backgroundColor: 'var(--ops-primary)', border: 'none',
+                                            color: 'white', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                                        }}
+                                    >
+                                        Comenzar 🚀
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Ocultar Barra de Scroll (Estilo App Nativa) y Estilos de Animación */}
             <style
                 dangerouslySetInnerHTML={{
                     __html: `
                         ::-webkit-scrollbar { width: 0 !important; display: none; }
                         html, body { -ms-overflow-style: none; scrollbar-width: none; }
+
+                        @media (max-width: 480px) {
+                            .header-title-container {
+                                font-size: 1.15rem !important;
+                                gap: 0.35rem !important;
+                            }
+                            .header-date-badge {
+                                font-size: 0.68rem !important;
+                                padding: 2px 6px !important;
+                            }
+                            .header-tutor-btn {
+                                font-size: 0.68rem !important;
+                                padding: 0.4rem 0.6rem !important;
+                            }
+                        }
                         
                         /* Ocultar flechas de input number */
                         input[type=number]::-webkit-inner-spin-button, 

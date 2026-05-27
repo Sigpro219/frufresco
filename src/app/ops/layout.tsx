@@ -49,17 +49,18 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 top: 0,
                 zIndex: 100
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{
                         backgroundColor: 'white',
-                        width: '42px',
-                        height: '42px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 0 15px rgba(255,255,255,0.1)',
-                        padding: '4px'
+                        boxShadow: '0 0 10px rgba(255,255,255,0.1)',
+                        padding: '3px',
+                        flexShrink: 0
                     }}>
                         <img 
                             src={dynamicLogosymbol || "/logosimbolo.png"} 
@@ -68,26 +69,26 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                             onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
                         />
                     </div>
-                     <span style={{ fontWeight: '800', fontSize: '1.2rem', letterSpacing: '0.05em', color: 'var(--ops-text)' }}>
+                     <span style={{ fontWeight: '800', fontSize: '0.95rem', letterSpacing: '0.03em', color: 'var(--ops-text)' }}>
                         {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
                     </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Link href="/">
                         <button style={{
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             border: '1px solid var(--ops-primary)',
                             color: 'var(--ops-primary)',
-                            padding: '6px 12px',
+                            padding: '5px 10px',
                             borderRadius: '8px',
-                            fontSize: '0.85rem',
+                            fontSize: '0.75rem',
                             fontWeight: 'bold',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px'
                         }}>
-                            🏠 Volver al Sitio
+                            🏠 <span className="desktop-text">Volver al Sitio</span><span className="mobile-text">Volver</span>
                         </button>
                     </Link>
                     <button
@@ -95,7 +96,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                         style={{
                             background: 'none',
                             border: 'none',
-                            fontSize: '1.2rem',
+                            fontSize: '1.1rem',
                             cursor: 'pointer',
                             padding: '4px',
                             display: 'flex',
@@ -105,7 +106,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                     >
                         {isDarkMode ? '☀️' : '🌙'}
                     </button>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>
+                    <div className="hide-mobile" style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)' }}>
                         V1.0
                     </div>
                 </div>
@@ -179,6 +180,16 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                     padding: 1rem;
                     margin-bottom: 1rem;
                     color: var(--ops-text);
+                }
+                
+                @media (max-width: 480px) {
+                    .desktop-text { display: none !important; }
+                    .mobile-text { display: inline !important; }
+                    .hide-mobile { display: none !important; }
+                }
+                @media (min-width: 481px) {
+                    .desktop-text { display: inline !important; }
+                    .mobile-text { display: none !important; }
                 }
             `}</style>
         </div>
