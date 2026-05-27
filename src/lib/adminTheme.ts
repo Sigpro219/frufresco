@@ -23,6 +23,17 @@ export const THEME = {
         sm: '0 1px 3px rgba(0,0,0,0.02)',
         md: '0 2px 8px rgba(0,0,0,0.04)',      // Sombra ambiental estándar
         lg: '0 4px 12px rgba(0,0,0,0.06)'      // Sombra de elevación hover
+    },
+    typography: {
+        fontFamilyMain: 'var(--font-outfit), sans-serif',
+        fontFamilySecondary: 'var(--font-inter), sans-serif',
+        tableHeader: {
+            fontSize: '0.65rem',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase' as const,
+            color: '#64748B',
+            fontWeight: '600'
+        }
     }
 };
 

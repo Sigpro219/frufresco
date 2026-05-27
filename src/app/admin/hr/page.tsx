@@ -244,7 +244,7 @@ export default function HRManagement() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 <header style={{ 

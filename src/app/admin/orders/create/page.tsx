@@ -687,7 +687,7 @@ function CreateOrderContent() {
     const getSelectedClientDetails = () => clients.find(c => c.id === selectedClient);
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
@@ -1456,10 +1456,10 @@ function CreateOrderContent() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                             <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                                                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-                                                    <th style={{ padding: '1rem 2rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>NOMBRE EN DOCUMENTO</th>
-                                                    <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>TU PRODUCTO (SKU)</th>
-                                                    <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', textAlign: 'center' }}>CANT.</th>
-                                                    <th style={{ padding: '1rem 2rem', width: '50px' }}></th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left' }}>NOMBRE EN DOCUMENTO</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (SKU)</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>CANT.</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', width: '50px' }}></th>
                                                 </tr>
                                             </thead>
                                             <tbody>

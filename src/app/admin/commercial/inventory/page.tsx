@@ -138,7 +138,7 @@ const THEME = {
 };
 
 const styles = {
-    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain, fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif' },
+    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain, fontFamily: 'var(--font-outfit), sans-serif' },
     container: { maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' },
     header: { display: 'flex' as const, justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
     titleArea: { flex: 1 },

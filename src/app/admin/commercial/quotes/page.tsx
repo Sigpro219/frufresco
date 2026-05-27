@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Inbox, Plus, ChevronRight } from 'lucide-react';
+import { THEME, formatMoney } from '@/lib/adminTheme';
 
 export default function QuotesListPage() {
     const [quotes, setQuotes] = useState<any[]>([]);
@@ -58,78 +59,150 @@ export default function QuotesListPage() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
-                    <Link href="/admin/commercial" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver al Panel</Link>
+                    <Link href="/admin/commercial" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem' }}>
+                        ← Volver al Panel
+                    </Link>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#111827', margin: 0 }}>Historial de Cotizaciones</h1>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>Historial de Cotizaciones</h1>
                     <Link href="/admin/commercial/quotes/create">
-                        <button style={{ padding: '0.8rem 1.5rem', backgroundColor: '#111827', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}>
-                            + Nueva Cotización
+                        <button 
+                            style={{ 
+                                padding: '0.75rem 1.5rem', 
+                                backgroundColor: THEME.colors.primary, 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: THEME.radius.md, 
+                                fontWeight: '700', 
+                                cursor: 'pointer', 
+                                fontSize: '0.9rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s',
+                                boxShadow: THEME.shadow.sm
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                        >
+                            <Plus size={16} strokeWidth={1.5} /> Nueva Cotización
                         </button>
                     </Link>
                 </div>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, overflow: 'hidden' }}>
                     {loading ? (
-                        <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280' }}>Cargando...</div>
+                        <div style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary, fontWeight: '500' }}>Cargando...</div>
                     ) : quotes.length === 0 ? (
-                        <div style={{ padding: '4rem', textAlign: 'center' }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
-                            <h3 style={{ color: '#374151' }}>No hay cotizaciones registradas</h3>
-                            <p style={{ color: '#9CA3AF' }}>Crea la primera para empezar a vender.</p>
+                        <div style={{ padding: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ 
+                                backgroundColor: THEME.colors.primaryLight, 
+                                width: '64px', 
+                                height: '64px', 
+                                borderRadius: '50%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                color: THEME.colors.primary,
+                                marginBottom: '1.5rem'
+                            }}>
+                                <Inbox size={32} strokeWidth={1.5} />
+                            </div>
+                            <h3 style={{ color: THEME.colors.textMain, margin: '0 0 0.5rem 0', fontWeight: '700' }}>No hay cotizaciones registradas</h3>
+                            <p style={{ color: THEME.colors.textSecondary, margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>Crea la primera para empezar a vender.</p>
                         </div>
                     ) : (
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>ID</th>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>Fecha</th>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>Cliente</th>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>Modelo</th>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>Total</th>
-                                    <th style={{ padding: '1rem', color: '#6B7280', fontSize: '0.8rem', textTransform: 'uppercase' }}>Estado</th>
-                                    <th style={{ padding: '1rem' }}></th>
+                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>ID</th>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Fecha</th>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Cliente</th>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Modelo</th>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Total</th>
+                                    <th style={{ padding: '0.65rem 1.25rem', ...THEME.typography?.tableHeader }}>Estado</th>
+                                    <th style={{ padding: '0.65rem 1.25rem' }}></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {quotes.map(quote => (
-                                    <tr key={quote.id} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background 0.2s' }}>
-                                        <td style={{ padding: '1rem', fontWeight: 'bold', color: '#111827', fontSize: '0.9rem' }}>
+                                    <tr 
+                                        key={quote.id} 
+                                        style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s ease' }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain, fontSize: '0.9rem' }}>
                                             {quote.quote_number || '#'}
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: '500', color: '#374151' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '500', color: THEME.colors.textSecondary }}>
                                             {formatDate(quote.created_at)}
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: 'bold', color: '#111827' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.textMain }}>
                                             {quote.client_name}
                                         </td>
-                                        <td style={{ padding: '1rem', color: '#4B5563' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textSecondary }}>
                                             {quote.model_snapshot_name || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '1rem', fontWeight: 'bold', color: '#059669' }}>
-                                            ${quote.total_amount?.toLocaleString()}
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: 'bold', color: THEME.colors.primary }}>
+                                            {formatMoney(quote.total_amount || 0)}
                                         </td>
-                                        <td style={{ padding: '1rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             {getStatusBadge(quote.status)}
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                            <Link href={`/admin/commercial/quotes/${quote.id}`}>
-                                                <button style={{ color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                    Ver Detalle →
+                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                            <Link href={`/admin/commercial/quotes/${quote.id}`} style={{ textDecoration: 'none' }}>
+                                                <button style={{ 
+                                                    border: `1px solid ${THEME.colors.borderActive}`,
+                                                    backgroundColor: 'transparent',
+                                                    color: THEME.colors.textSecondary,
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: THEME.radius.sm,
+                                                    cursor: 'pointer', 
+                                                    fontWeight: '600',
+                                                    fontSize: '0.75rem',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    transition: 'all 0.2s'
+                                                }}>
+                                                    Ver Detalle <ChevronRight size={12} strokeWidth={1.5} />
                                                 </button>
                                             </Link>
                                             <button 
                                                 onClick={() => handleDelete(quote.id, quote.quote_number)}
-                                                style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', borderRadius: '4px', display: 'flex', alignItems: 'center', transition: 'background 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                style={{ 
+                                                    color: '#EF4444', 
+                                                    background: 'none', 
+                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                    cursor: 'pointer', 
+                                                    padding: '0.35rem', 
+                                                    borderRadius: THEME.radius.sm, 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    transition: 'all 0.2s' 
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                                    e.currentTarget.style.borderColor = '#EF4444';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                    e.currentTarget.style.borderColor = THEME.colors.border;
+                                                }}
                                                 title="Eliminar permanentemente"
                                             >
-                                                <Trash2 size={18} />
+                                                <Trash2 size={14} strokeWidth={1.5} />
                                             </button>
                                         </td>
                                     </tr>

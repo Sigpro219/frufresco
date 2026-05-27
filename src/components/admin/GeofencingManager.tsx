@@ -2,6 +2,9 @@
 
 import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react';
 import { Map, Marker, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
+import { Save, Trash2, Eye, EyeOff, Edit2 } from 'lucide-react';
+import { THEME } from '@/lib/adminTheme';
+
 
 interface Point {
     lat: number;
@@ -153,8 +156,8 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
     };
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
-            <div style={{ position: 'relative', height: '600px', borderRadius: '24px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
+            <div style={{ position: 'relative', height: '600px', borderRadius: THEME.radius.lg, overflow: 'hidden', border: `1px solid ${THEME.colors.border}` }}>
                 <Map
                     style={{ width: '100%', height: '100%' }}
                     defaultCenter={{ lat: 4.6097, lng: -74.0817 }}
@@ -170,7 +173,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         editable={editMode === 'b2c'}
                         draggable={editMode === 'b2c'}
                         fillColor="#EF4444"
-                        fillOpacity={0.3}
+                        fillOpacity={0.2}
                         strokeColor="#EF4444"
                         strokeWeight={2}
                     />
@@ -182,7 +185,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                         editable={editMode === 'b2b'}
                         draggable={editMode === 'b2b'}
                         fillColor="#7C3AED"
-                        fillOpacity={0.3}
+                        fillOpacity={0.2}
                         strokeColor="#7C3AED"
                         strokeWeight={2}
                     />
@@ -194,25 +197,89 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
                 </Map>
 
                 {editMode && (
-                    <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 1, backgroundColor: 'rgba(255,255,255,0.9)', padding: '1rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)', width: '280px' }}>
-                        <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', fontWeight: '900' }}>Modo Edición: <span style={{ color: '#0EA5E9' }}>{editMode === 'b2c' ? 'HOGARES' : 'HORECA'}</span></p>
-                        <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: '#64748B' }}>Arrastra los puntos o haz clic en las líneas para ajustar la zona.</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ 
+                        position: 'absolute', 
+                        top: '20px', 
+                        left: '20px', 
+                        zIndex: 1, 
+                        backgroundColor: 'rgba(255,255,255,0.95)', 
+                        padding: '1.25rem', 
+                        borderRadius: THEME.radius.lg, 
+                        boxShadow: THEME.shadow.lg, 
+                        backdropFilter: 'blur(4px)', 
+                        width: '280px',
+                        border: `1px solid ${THEME.colors.border}`
+                    }}>
+                        <p style={{ margin: '0 0 4px 0', fontSize: '0.8rem', fontWeight: '700', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Modo Edición: <span style={{ color: editMode === 'b2c' ? '#EF4444' : '#7C3AED' }}>{editMode === 'b2c' ? 'Hogares (B2C)' : 'HORECA (B2B)'}</span>
+                        </p>
+                        <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, lineHeight: '1.4' }}>Arrastra los puntos o haz clic en las líneas para ajustar la zona de cobertura.</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <button 
                                 onClick={async () => { 
                                     const success = await onSave(editMode === 'b2c' ? 'geofence_b2c_poly' : 'geofence_b2b_poly', JSON.stringify(tempPoly)); 
                                     if (success) setEditMode(null); 
                                 }} 
                                 disabled={saving} 
-                                style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#0EA5E9', color: 'white', border: 'none', fontWeight: '800', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                                style={{ 
+                                    padding: '0.65rem', 
+                                    borderRadius: THEME.radius.sm, 
+                                    backgroundColor: THEME.colors.primary, 
+                                    color: 'white', 
+                                    border: 'none', 
+                                    fontWeight: '600', 
+                                    cursor: 'pointer', 
+                                    opacity: saving ? 0.7 : 1,
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onMouseOver={e => { if (!saving) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseOut={e => { if (!saving) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                {saving ? 'Guardando...' : '💾 Guardar'}
+                                <Save size={14} strokeWidth={1.5} />
+                                <span>{saving ? 'Guardando...' : 'Guardar Zona'}</span>
                             </button>
-                            <button onClick={clearVertices} style={{ padding: '0.7rem', borderRadius: '8px', backgroundColor: '#F1F5F9', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                🗑️ Limpiar
+                            <button 
+                                onClick={clearVertices} 
+                                style={{ 
+                                    padding: '0.65rem', 
+                                    borderRadius: THEME.radius.sm, 
+                                    backgroundColor: THEME.colors.primaryLight, 
+                                    color: THEME.colors.primary, 
+                                    border: 'none', 
+                                    fontWeight: '600', 
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <Trash2 size={14} strokeWidth={1.5} />
+                                <span>Limpiar Puntos</span>
                             </button>
-                            <button onClick={() => setEditMode(null)} style={{ gridColumn: 'span 2', padding: '0.7rem', borderRadius: '8px', backgroundColor: '#F1F5F9', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                Salir del Editor
+                            <button 
+                                onClick={() => setEditMode(null)} 
+                                style={{ 
+                                    padding: '0.65rem', 
+                                    borderRadius: THEME.radius.sm, 
+                                    backgroundColor: 'white', 
+                                    border: `1px solid ${THEME.colors.borderActive}`, 
+                                    color: THEME.colors.textSecondary, 
+                                    fontWeight: '600', 
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.textMain; e.currentTarget.style.color = THEME.colors.textMain; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.color = THEME.colors.textSecondary; }}
+                            >
+                                Cancelar Edición
                             </button>
                         </div>
                     </div>
@@ -220,28 +287,104 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <h3 style={{ fontWeight: '900', color: '#0F172A', margin: 0 }}>Control de Cobertura</h3>
+                <h3 style={{ fontWeight: '800', color: THEME.colors.textMain, margin: 0, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Control de Cobertura</h3>
                 
-                <div style={{ padding: '1.5rem', borderRadius: '16px', border: editMode === 'b2c' ? '2px solid #EF4444' : '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                        <span style={{ fontWeight: '800', fontSize: '0.9rem' }}>🔴 B2C (Hogares)</span>
-                        <button onClick={() => setVisibleB2C(!visibleB2C)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>{visibleB2C ? '👁️' : '👁️‍G'}</button>
+                {/* B2C Coverage Card */}
+                <div style={{ 
+                    padding: '1.25rem', 
+                    borderRadius: THEME.radius.lg, 
+                    border: editMode === 'b2c' ? '2px solid #EF4444' : `1px solid ${THEME.colors.border}`, 
+                    backgroundColor: THEME.colors.surface,
+                    boxShadow: THEME.shadow.sm 
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }} />
+                            <span>B2C (Hogares)</span>
+                        </span>
+                        <button 
+                            onClick={() => setVisibleB2C(!visibleB2C)} 
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                            {visibleB2C ? <Eye size={16} strokeWidth={1.5} /> : <EyeOff size={16} strokeWidth={1.5} />}
+                        </button>
                     </div>
                     {canEdit && !editMode && (
-                        <button onClick={() => startEditing('b2c')} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #EF4444', backgroundColor: 'white', color: '#EF4444', fontWeight: '900', cursor: 'pointer' }}>
-                            ✏️ Editar Polígono
+                        <button 
+                            onClick={() => startEditing('b2c')} 
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.65rem', 
+                                borderRadius: THEME.radius.sm, 
+                                border: '1px solid #EF4444', 
+                                backgroundColor: 'white', 
+                                color: '#EF4444', 
+                                fontWeight: '600', 
+                                cursor: 'pointer',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; }}
+                        >
+                            <Edit2 size={14} strokeWidth={1.5} />
+                            <span>Editar Polígono</span>
                         </button>
                     )}
                 </div>
 
-                <div style={{ padding: '1.5rem', borderRadius: '16px', border: editMode === 'b2b' ? '2px solid #7C3AED' : '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                        <span style={{ fontWeight: '800', fontSize: '0.9rem' }}>🟣 B2B (HORECA)</span>
-                        <button onClick={() => setVisibleB2B(!visibleB2B)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>{visibleB2B ? '👁️' : '👁️‍G'}</button>
+                {/* B2B Coverage Card */}
+                <div style={{ 
+                    padding: '1.25rem', 
+                    borderRadius: THEME.radius.lg, 
+                    border: editMode === 'b2b' ? '2px solid #7C3AED' : `1px solid ${THEME.colors.border}`, 
+                    backgroundColor: THEME.colors.surface,
+                    boxShadow: THEME.shadow.sm
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: THEME.colors.textMain }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#7C3AED' }} />
+                            <span>B2B (HORECA)</span>
+                        </span>
+                        <button 
+                            onClick={() => setVisibleB2B(!visibleB2B)} 
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                            onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                            {visibleB2B ? <Eye size={16} strokeWidth={1.5} /> : <EyeOff size={16} strokeWidth={1.5} />}
+                        </button>
                     </div>
                     {canEdit && !editMode && (
-                        <button onClick={() => startEditing('b2b')} style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #7C3AED', backgroundColor: 'white', color: '#7C3AED', fontWeight: '900', cursor: 'pointer' }}>
-                            ✏️ Editar Polígono
+                        <button 
+                            onClick={() => startEditing('b2b')} 
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.65rem', 
+                                borderRadius: THEME.radius.sm, 
+                                border: '1px solid #7C3AED', 
+                                backgroundColor: 'white', 
+                                color: '#7C3AED', 
+                                fontWeight: '600', 
+                                cursor: 'pointer',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#F5F3FF'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; }}
+                        >
+                            <Edit2 size={14} strokeWidth={1.5} />
+                            <span>Editar Polígono</span>
                         </button>
                     )}
                 </div>

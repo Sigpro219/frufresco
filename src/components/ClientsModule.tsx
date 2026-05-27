@@ -4,6 +4,26 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
+import { THEME } from '@/lib/adminTheme';
+import {
+    AlertTriangle,
+    Check,
+    Cpu,
+    Edit2,
+    FileText,
+    Folder,
+    Loader2,
+    Mail,
+    MapPin,
+    Package,
+    Phone,
+    Printer,
+    Search,
+    Sliders,
+    Sparkles,
+    Trash2,
+    X,
+} from 'lucide-react';
 
 declare global {
     interface Window {
@@ -2236,14 +2256,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
                             </section>
 
-
-
-                            
-                            {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
-                            <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                                    <div style={{ width: '36px', height: '36px', backgroundColor: '#FFF7ED', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📞</div>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>CONTACTO OPERATIVO</h4>
+              {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
+                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>CONTACTO OPERATIVO</h4>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
                                     <FormField label="Responsable Directo" value={formData.contact_name} onChange={(v) => setFormData({...formData, contact_name: v})} required readOnly={isReadOnly} />
@@ -2254,11 +2271,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE: UBICACIÓN Y LOGÍSTICA (SOLO SUCURSAL) */}
                             {!formData.is_corporate_parent && (
-                                <section style={{ backgroundColor: '#F0FDF4', padding: '2rem', borderRadius: '32px', border: '1px solid #DCFCE7' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #F3F4F6', paddingBottom: '0.8rem' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.8rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <div style={{ width: '36px', height: '36px', backgroundColor: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📍</div>
-                                            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', margin: 0 }}>🚢 LOCALIZACIÓN OPERATIVA</h4>
+                                            <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><MapPin size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                            <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>LOCALIZACIÓN OPERATIVA</h4>
                                         </div>
                                         {!isReadOnly && (
                                             <button 
@@ -2266,21 +2283,32 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 onClick={handleGeocode} 
                                                 disabled={geocoding} 
                                                 style={{ 
-                                                    backgroundColor: '#3B82F6', 
+                                                    backgroundColor: THEME.colors.primary, 
                                                     color: 'white', 
                                                     border: 'none', 
                                                     padding: '0.5rem 1.2rem', 
-                                                    borderRadius: '12px', 
-                                                    fontSize: '0.8rem', 
-                                                    fontWeight: '800', 
+                                                    borderRadius: THEME.radius.md, 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '600', 
                                                     cursor: 'pointer',
-                                                    boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '8px'
+                                                    gap: '6px',
+                                                    fontFamily: THEME.typography.fontFamilySecondary,
+                                                    transition: 'all 0.2s'
                                                 }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                             >
-                                                {geocoding ? '📍 Buscando...' : '⚡ Pin inteligente (IA)'}
+                                                {geocoding ? (
+                                                    <>
+                                                        <Loader2 size={14} className="animate-spin" /> Buscando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles size={14} /> Pin inteligente (IA)
+                                                    </>
+                                                )}
                                             </button>
                                         )}
                                     </div>
@@ -2289,25 +2317,25 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
                                                 <div>
-                                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>DIRECCIÓN PRINCIPAL (Calle/Cra/Num)</label>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>DIRECCIÓN PRINCIPAL (Calle/Cra/Num)</label>
                                                     <input 
                                                         type="text" 
                                                         value={formData.address} 
                                                         onChange={(e) => setFormData({...formData, address: e.target.value})}
                                                         placeholder="Ej: AV CRA 68 # 90-88"
                                                         readOnly={isReadOnly}
-                                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', backgroundColor: isReadOnly ? '#F8FAFC' : '#F0F9FF', cursor: isReadOnly ? 'default' : 'text' }}
+                                                        style={{ width: '100%', height: '34px', padding: '0 0.6rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'text', fontFamily: THEME.typography.fontFamilySecondary, outline: 'none' }}
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem', display: 'block' }}>COMPLEMENTO (Local/Of/Torre)</label>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>COMPLEMENTO (Local/Of/Torre)</label>
                                                     <input 
                                                         type="text" 
                                                         value={formData.address_complement} 
                                                         onChange={(e) => setFormData({...formData, address_complement: e.target.value})}
                                                         placeholder="Ej: Local 1-006"
                                                         readOnly={isReadOnly}
-                                                        style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '600', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'text' }}
+                                                        style={{ width: '100%', height: '34px', padding: '0 0.6rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'text', fontFamily: THEME.typography.fontFamilySecondary, outline: 'none' }}
                                                     />
                                                 </div>
                                             </div>
@@ -2318,33 +2346,33 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </div>
 
                                             {/* PANEL DE GEOCERCAS MANUAL */}
-                                            <div style={{ backgroundColor: 'rgba(255,255,255,0.6)', padding: '1.5rem', borderRadius: '24px', border: '1px solid #DCFCE7' }}>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#166534', marginBottom: '1rem', letterSpacing: '0.05rem' }}>GEOCERCAS (LAT/LNG)</div>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '0.8rem', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilySecondary }}>GEOCERCAS (LAT/LNG)</div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
                                                     <FormField label="LAT" value={formData.latitude} onChange={(v) => setFormData({...formData, latitude: v, geocoding_status: 'manual'})} readOnly={isReadOnly} />
                                                     <FormField label="LNG" value={formData.longitude} onChange={(v) => setFormData({...formData, longitude: v, geocoding_status: 'manual'})} readOnly={isReadOnly} />
                                                 </div>
                                                 {!isReadOnly && (
-                                                    <div style={{ marginTop: '0.8rem', fontSize: '0.65rem', fontWeight: '900', color: '#B45309' }}>
-                                                        ⚠️ AJUSTE MANUAL (VERIFICA EN MAPA)
+                                                    <div style={{ marginTop: '0.6rem', fontSize: '0.65rem', fontWeight: '600', color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        <AlertTriangle size={12} /> AJUSTE MANUAL (VERIFICA EN MAPA)
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
 
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                            <div style={{ height: '300px', width: '100%', borderRadius: '24px', overflow: 'hidden', border: '4px solid white', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', position: 'relative' }}>
+                                            <div style={{ height: '300px', width: '100%', borderRadius: THEME.radius.lg, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative' }}>
                                                 <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
                                                 {!formData.latitude && (
                                                     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)', zIndex: 10 }}>
-                                                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E40AF', marginBottom: '4px' }}>Esperando dirección...</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Usa el pin inteligente o arrastra el mapa</div>
+                                                        <div style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textMain, marginBottom: '4px', fontFamily: THEME.typography.fontFamilyMain }}>Esperando dirección...</div>
+                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Usa el pin inteligente o arrastra el mapa</div>
                                                     </div>
                                                 )}
                                             </div>
                                             {!isReadOnly && (
-                                                <div style={{ backgroundColor: '#FFFBEB', padding: '1rem', borderRadius: '16px', fontSize: '0.75rem', color: '#92400E', fontWeight: '700' }}>
-                                                    💡 Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
+                                                <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '0.8rem', borderRadius: THEME.radius.md, fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '600', border: `1px solid ${THEME.colors.primary}33`, display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                    <Sparkles size={12} /> Tip: Puedes arrastrar el marcador rojo en el mapa para ubicar el punto de entrega exacto si la dirección es ambigua.
                                                 </div>
                                             )}
                                         </div>
@@ -2354,13 +2382,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE: RESTRICCIONES Y OPERACIÓN LOGÍSTICA (SOLO SUCURSAL) */}
                             {!formData.is_corporate_parent && (
-                                <section style={{ backgroundColor: '#FFFBEB', padding: '2.5rem', borderRadius: '32px', border: '1px solid #FEF3C7' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <div style={{ width: '40px', height: '40px', backgroundColor: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>🚚</div>
+                                            <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sliders size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                             <div>
-                                                <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#92400E', margin: 0 }}>RESTRICCIONES Y OPERACIÓN LOGÍSTICA</h4>
-                                                <p style={{ fontSize: '0.75rem', color: '#B45309', margin: 0, fontWeight: '600' }}>Configura las franjas horarias para el optimizador de rutas.</p>
+                                                <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>RESTRICCIONES Y OPERACIÓN LOGÍSTICA</h4>
+                                                <p style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, margin: 0, fontWeight: '400', fontFamily: THEME.typography.fontFamilySecondary }}>Configura las franjas horarias para el optimizador de rutas.</p>
                                             </div>
                                         </div>
                                         {!isReadOnly && (
@@ -2372,9 +2400,31 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                     setFormData({ ...formData, logistics_data: parsed });
                                                     window.showToast?.('IA: Franja actualizada según el texto', 'info');
                                                 }}
-                                                style={{ backgroundColor: '#F59E0B', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '14px', fontSize: '0.8rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 10px 15px -3px rgba(245, 158, 11, 0.3)' }}
+                                                style={{ 
+                                                    backgroundColor: 'white', 
+                                                    color: THEME.colors.textMain, 
+                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                    padding: '0.5rem 1rem', 
+                                                    borderRadius: THEME.radius.md, 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '600', 
+                                                    cursor: 'pointer', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '6px',
+                                                    fontFamily: THEME.typography.fontFamilySecondary,
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.border;
+                                                    e.currentTarget.style.backgroundColor = 'white';
+                                                }}
                                             >
-                                                🪄 Autodiagnóstico IA
+                                                <Sparkles size={14} style={{ color: THEME.colors.primary }} /> Autodiagnóstico IA
                                             </button>
                                         )}
                                     </div>
@@ -2382,29 +2432,29 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '2rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                             <div>
-                                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.6rem', display: 'block' }}>Instrucciones Naturales (Voz o Texto)</label>
+                                                <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block', fontFamily: THEME.typography.fontFamilySecondary }}>Instrucciones Naturales (Voz o Texto)</label>
                                                 <textarea 
                                                     value={formData.delivery_restrictions} 
                                                     onChange={(e) => setFormData({...formData, delivery_restrictions: e.target.value})} 
                                                     placeholder="Ej: 'Entregar todos los días antes de las 9:30 AM, menos los jueves'..."
                                                     readOnly={isReadOnly}
-                                                    style={{ width: '100%', padding: '1.2rem', borderRadius: '24px', border: '1px solid #FEF3C7', minHeight: '160px', outline: 'none', fontWeight: '600', fontSize: '1rem', resize: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : 'white', lineHeight: '1.5', cursor: isReadOnly ? 'default' : 'text' }} 
+                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, minHeight: '120px', outline: 'none', fontWeight: '400', fontSize: '0.85rem', resize: 'none', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', lineHeight: '1.5', cursor: isReadOnly ? 'default' : 'text', fontFamily: THEME.typography.fontFamilySecondary }} 
                                                 />
                                                 {!isReadOnly && (
-                                                    <div style={{ marginTop: '0.8rem', padding: '0.8rem 1.2rem', backgroundColor: '#FEF3C7', borderRadius: '14px', fontSize: '0.7rem', color: '#B45309', fontWeight: '700', border: '1px solid #FDE68A' }}>
-                                                        💡 Tip: Describe las condiciones de entrega y usa el Autodiagnóstico para generar el JSON técnico automáticamente.
+                                                    <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.8rem', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.md, fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '600', border: `1px solid ${THEME.colors.primary}33`, display: 'flex', alignItems: 'center', gap: '6px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        <Sparkles size={12} /> Tip: Describe las condiciones de entrega y usa el Autodiagnóstico para generar el JSON técnico automáticamente.
                                                     </div>
                                                 )}
                                             </div>
 
                                             {formData.logistics_data?.allowed_days?.length > 0 && (
-                                                <div style={{ backgroundColor: '#FFF7ED', padding: '1.2rem', borderRadius: '24px', border: '1px solid #FFEDD5', display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                    <div style={{ width: '45px', height: '45px', backgroundColor: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', border: '1px solid #FFEDD5', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>🤖</div>
+                                                <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '1rem 1.2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                    <div style={{ width: '36px', height: '36px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}><Cpu size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                                     <div>
-                                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.05rem', marginBottom: '2px' }}>
+                                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem', marginBottom: '2px', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                             FRANJA IA GENERADA (JSON ACTIVO)
                                                         </div>
-                                                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#C2410C' }}>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
                                                             {formatTimeWindow(formData.logistics_data)}
                                                         </div>
                                                     </div>
@@ -2412,9 +2462,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             )}
                                         </div>
 
-                                        <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '28px', border: '1px solid #FEF3C7', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-                                            <div style={{ marginBottom: '1.5rem' }}>
-                                                <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '1rem' }}>DÍAS PERMITIDOS</label>
+                                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                                            <div style={{ marginBottom: '1.2rem' }}>
+                                                <label style={{ fontSize: '0.7rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.8rem', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>DÍAS PERMITIDOS</label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                     {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, idx) => {
                                                         const days = formData.logistics_data?.allowed_days || [];
@@ -2432,12 +2482,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                     } });
                                                                 }}
                                                                 style={{ 
-                                                                    width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: '900', cursor: isReadOnly ? 'default' : 'pointer',
-                                                                    backgroundColor: isActive ? '#F59E0B' : '#F8FAFC',
-                                                                    color: isActive ? 'white' : '#94A3B8',
+                                                                    width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '600', cursor: isReadOnly ? 'default' : 'pointer',
+                                                                    backgroundColor: isActive ? THEME.colors.primary : '#F1F5F9',
+                                                                    color: isActive ? 'white' : THEME.colors.textSecondary,
                                                                     transition: 'all 0.2s',
-                                                                    boxShadow: isActive ? '0 4px 12px -2px rgba(245, 158, 11, 0.4)' : 'none',
-                                                                    pointerEvents: isReadOnly ? 'none' : 'auto'
+                                                                    boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.2)' : 'none',
+                                                                    pointerEvents: isReadOnly ? 'none' : 'auto',
+                                                                    fontFamily: THEME.typography.fontFamilyMain
                                                                 }}
                                                             >
                                                                 {day}
@@ -2447,9 +2498,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                                                 <div>
-                                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '0.5rem' }}>INICIO (MIN 04:30)</label>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>INICIO (MIN 04:30)</label>
                                                     <input 
                                                         type="time" 
                                                         value={formData.logistics_data?.start_time || '04:30'} 
@@ -2462,11 +2513,11 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             } });
                                                         }}
                                                         readOnly={isReadOnly}
-                                                        style={{ width: '100%', height: '48px', padding: '0 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '1rem', outline: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer' }} 
+                                                        style={{ width: '100%', height: '34px', padding: '0 0.6rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.8rem', outline: 'none', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'pointer', fontFamily: THEME.typography.fontFamilySecondary }} 
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#92400E', display: 'block', marginBottom: '0.5rem' }}>FIN (MAX 19:00)</label>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>FIN (MAX 19:00)</label>
                                                     <input 
                                                         type="time" 
                                                         value={formData.logistics_data?.end_time || '12:00'} 
@@ -2479,27 +2530,41 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             } });
                                                         }}
                                                         readOnly={isReadOnly}
-                                                        style={{ width: '100%', height: '48px', padding: '0 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '1rem', outline: 'none', backgroundColor: isReadOnly ? '#FFFDF5' : '#F8FAFC', cursor: isReadOnly ? 'default' : 'pointer' }} 
+                                                        style={{ width: '100%', height: '34px', padding: '0 0.6rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', fontSize: '0.8rem', outline: 'none', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', cursor: isReadOnly ? 'default' : 'pointer', fontFamily: THEME.typography.fontFamilySecondary }} 
                                                     />
                                                 </div>
                                             </div>
 
                                             <div style={{ 
-                                                backgroundColor: formData.logistics_data?.allowed_days?.length > 0 ? '#ECFDF5' : '#F1F5F9', 
-                                                padding: '1.2rem', 
-                                                borderRadius: '20px', 
+                                                backgroundColor: formData.logistics_data?.allowed_days?.length > 0 ? THEME.colors.primaryLight : '#F1F5F9', 
+                                                padding: '1rem', 
+                                                borderRadius: THEME.radius.lg, 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
                                                 gap: '12px',
-                                                border: `1px solid ${formData.logistics_data?.allowed_days?.length > 0 ? '#10B981' : '#E2E8F0'}`,
+                                                border: `1px solid ${formData.logistics_data?.allowed_days?.length > 0 ? THEME.colors.primary + '33' : THEME.colors.border}`,
                                                 transition: 'all 0.3s'
                                             }}>
-                                                <span style={{ fontSize: '1.5rem' }}>{formData.logistics_data?.allowed_days?.length > 0 ? '✅' : '⏳'}</span>
+                                                <div style={{ 
+                                                    width: '28px', height: '28px', 
+                                                    backgroundColor: 'white', 
+                                                    borderRadius: '50%', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    boxShadow: THEME.shadow.sm 
+                                                }}>
+                                                    {formData.logistics_data?.allowed_days?.length > 0 ? (
+                                                        <Check size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+                                                    ) : (
+                                                        <AlertTriangle size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                                                    )}
+                                                </div>
                                                 <div>
-                                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: formData.logistics_data?.allowed_days?.length > 0 ? '#065F46' : '#64748B' }}>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.logistics_data?.allowed_days?.length > 0 ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
                                                         {formData.logistics_data?.allowed_days?.length > 0 ? 'RESTRICCIÓN LISTA' : 'ESPERANDO DATOS'}
                                                     </div>
-                                                    <div style={{ fontSize: '0.65rem', color: formData.logistics_data?.allowed_days?.length > 0 ? '#059669' : '#94A3B8', fontWeight: '700' }}>
+                                                    <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '400', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                         {formData.logistics_data?.allowed_days?.length > 0 ? 'Estructura JSON generada para el planeador.' : 'Completa la info para generar el JSON.'}
                                                     </div>
                                                 </div>
@@ -2511,10 +2576,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE: INFORMACIÓN FISCAL (SOLO MATRIZ) */}
                             {formData.is_corporate_parent && (
-                                <section style={{ backgroundColor: '#F1F5F9', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                        <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>⚖️</div>
-                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>RÉGIMEN FISCAL</h4>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>RÉGIMEN FISCAL</h4>
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', alignItems: 'center' }}>
                                         {[
@@ -2531,26 +2596,25 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 }} 
                                                 style={{ 
                                                     padding: '0.6rem 1.2rem', 
-                                                    borderRadius: '14px', 
-                                                    border: `2px solid ${formData[tax.key as keyof typeof formData] ? '#10B981' : 'white'}`, 
-                                                    backgroundColor: formData[tax.key as keyof typeof formData] ? '#ECFDF5' : 'rgba(255,255,255,0.5)', 
+                                                    borderRadius: THEME.radius.md, 
+                                                    border: `1.5px solid ${formData[tax.key as keyof typeof formData] ? THEME.colors.primary : THEME.colors.border}`, 
+                                                    backgroundColor: formData[tax.key as keyof typeof formData] ? THEME.colors.primaryLight : 'white', 
                                                     cursor: isReadOnly ? 'default' : 'pointer', 
                                                     display: 'flex', 
                                                     alignItems: 'center', 
                                                     gap: '10px',
                                                     transition: 'all 0.2s',
-                                                    boxShadow: formData[tax.key as keyof typeof formData] ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
-                                                    transform: (formData[tax.key as keyof typeof formData] && !isReadOnly) ? 'translateY(-1px)' : 'none',
+                                                    boxShadow: formData[tax.key as keyof typeof formData] ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
                                                     opacity: isReadOnly ? 0.9 : 1,
                                                     pointerEvents: isReadOnly ? 'none' : 'auto'
                                                 }}
                                             >
-                                                <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: formData[tax.key as keyof typeof formData] ? '#10B981' : '#CBD5E1', boxShadow: (formData[tax.key as keyof typeof formData] && !isReadOnly) ? '0 0 8px #10B981' : 'none', border: `2px solid ${formData[tax.key as keyof typeof formData] ? 'white' : 'transparent'}` }}></div>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: '900', color: formData[tax.key as keyof typeof formData] ? '#1E293B' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>{tax.label}</div>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: formData[tax.key as keyof typeof formData] ? THEME.colors.primary : '#CBD5E1', border: `2px solid ${formData[tax.key as keyof typeof formData] ? 'white' : 'transparent'}` }}></div>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: formData[tax.key as keyof typeof formData] ? THEME.colors.textMain : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.02rem', fontFamily: THEME.typography.fontFamilySecondary }}>{tax.label}</div>
                                             </div>
                                         ))}
-                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#0F172A', padding: '0.5rem 1rem', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.2)' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>CIIU</label>
+                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: THEME.colors.textMain, padding: '0.5rem 1rem', borderRadius: THEME.radius.md, boxShadow: THEME.shadow.sm }}>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilySecondary }}>CIIU</label>
                                             <input 
                                                 type="text" 
                                                 maxLength={4}
@@ -2561,7 +2625,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 }} 
                                                 readOnly={isReadOnly}
                                                 placeholder="0000"
-                                                style={{ width: '50px', height: '24px', border: 'none', borderBottom: '2px solid #334155', textAlign: 'center', fontWeight: '900', fontSize: '1rem', color: 'white', outline: 'none', backgroundColor: 'transparent', cursor: isReadOnly ? 'default' : 'text' }}
+                                                style={{ width: '50px', height: '24px', border: 'none', borderBottom: `2px solid ${THEME.colors.border}`, textAlign: 'center', fontWeight: '600', fontSize: '1rem', color: 'white', outline: 'none', backgroundColor: 'transparent', cursor: isReadOnly ? 'default' : 'text', fontFamily: THEME.typography.fontFamilySecondary }}
                                             />
                                         </div>
                                     </div>
@@ -2570,10 +2634,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                             {/* BLOQUE CONDICIONAL: EXPEDIENTE (MATRIZ) VS OPERACIÓN (SUCURSAL) */}
                             {formData.is_corporate_parent ? (
-                                <section style={{ backgroundColor: '#F8FAFC', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                                        <div style={{ width: '36px', height: '36px', backgroundColor: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>📎</div>
-                                        <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#475569', margin: 0 }}>EXPEDIENTE DIGITAL</h4>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Folder size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>EXPEDIENTE DIGITAL</h4>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <DocumentUploadField label="Registro RUT (PDF)" url={formData.rut_url} onUpload={(url) => setFormData({...formData, rut_url: url})} readOnly={isReadOnly} />
@@ -2582,7 +2646,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     </div>
                                 </section>
                             ) : (
-                                <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '32px', border: '1px solid #BAE6FD' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', alignItems: 'flex-end' }}>
                                         <div 
                                             onClick={() => {
@@ -2590,29 +2654,30 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                 setFormData({...formData, needs_crates: !formData.needs_crates});
                                             }}
                                             style={{ 
-                                                height: '42px', padding: '0 1.2rem', borderRadius: '14px', border: `2px solid ${formData.needs_crates ? '#10B981' : '#E0F2FE'}`, 
-                                                backgroundColor: formData.needs_crates ? '#ECFDF5' : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
-                                                boxShadow: formData.needs_crates ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none',
+                                                height: '42px', padding: '0 1.2rem', borderRadius: THEME.radius.md, border: `1.5px solid ${formData.needs_crates ? THEME.colors.primary : THEME.colors.border}`, 
+                                                backgroundColor: formData.needs_crates ? THEME.colors.primaryLight : 'white', cursor: isReadOnly ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s',
+                                                boxShadow: formData.needs_crates ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
                                                 opacity: isReadOnly ? 0.9 : 1
                                             }}
                                         >
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? '#10B981' : '#CBD5E1', boxShadow: formData.needs_crates ? '0 0 8px #10B981' : 'none' }}></div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '900', color: formData.needs_crates ? '#065F46' : '#64748B' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: formData.needs_crates ? THEME.colors.primary : '#CBD5E1' }}></div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: formData.needs_crates ? THEME.colors.textMain : THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
                                                 REQUIERE CANASTILLAS
                                             </span>
                                         </div>
 
                                         <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>Configuración de Documento (Excluyente)</label>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.03rem', fontFamily: THEME.typography.fontFamilySecondary }}>Configuración de Documento (Excluyente)</label>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.6rem' }}>
                                                 {[
-                                                    { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: '📧', doc: 'invoice', withPrices: true, print: false },
-                                                    { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: '🖨️', doc: 'invoice', withPrices: true, print: true },
-                                                    { id: 'remission_prices', label: 'REM. CON $', icon: '📄', doc: 'remission', withPrices: true, print: true },
-                                                    { id: 'remission_no_prices', label: 'REM. SIN $', icon: '📝', doc: 'remission', withPrices: false, print: true }
+                                                    { id: 'invoice_digital', label: 'FAC. DIGITAL', icon: Mail, doc: 'invoice', withPrices: true, print: false },
+                                                    { id: 'invoice_printed', label: 'FAC. IMPRESA', icon: Printer, doc: 'invoice', withPrices: true, print: true },
+                                                    { id: 'remission_prices', label: 'REM. CON $', icon: FileText, doc: 'remission', withPrices: true, print: true },
+                                                    { id: 'remission_no_prices', label: 'REM. SIN $', icon: FileText, doc: 'remission', withPrices: false, print: true }
                                                 ].map((opt) => {
                                                     const isActive = formData.document_type === opt.doc && 
                                                                    (opt.doc === 'invoice' ? formData.print_invoice === opt.print : formData.remission_with_prices === opt.withPrices);
+                                                    const IconComponent = opt.icon;
                                                     
                                                     return (
                                                         <div 
@@ -2627,24 +2692,25 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                 });
                                                             }}
                                                             style={{
-                                                                padding: '0.5rem 0.4rem',
-                                                                borderRadius: '12px',
-                                                                border: `1.5px solid ${isActive ? '#10B981' : '#E2E8F0'}`,
-                                                                backgroundColor: isActive ? '#ECFDF5' : 'white',
+                                                                padding: '0.6rem 0.5rem',
+                                                                borderRadius: THEME.radius.md,
+                                                                border: `1.5px solid ${isActive ? THEME.colors.primary : THEME.colors.border}`,
+                                                                backgroundColor: isActive ? THEME.colors.primaryLight : 'white',
                                                                 cursor: isReadOnly ? 'default' : 'pointer',
                                                                 display: 'flex',
                                                                 flexDirection: 'column',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                gap: '4px',
+                                                                gap: '6px',
                                                                 transition: 'all 0.2s',
-                                                                boxShadow: isActive ? '0 4px 10px rgba(16, 185, 129, 0.1)' : 'none',
+                                                                boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.1)' : 'none',
                                                                 opacity: isReadOnly ? 0.8 : 1,
-                                                                minHeight: '60px'
+                                                                minHeight: '70px',
+                                                                fontFamily: THEME.typography.fontFamilySecondary
                                                             }}
                                                         >
-                                                            <span style={{ fontSize: '1.1rem' }}>{opt.icon}</span>
-                                                            <div style={{ fontSize: '0.6rem', fontWeight: '900', color: isActive ? '#065F46' : '#475569', textAlign: 'center' }}>{opt.label}</div>
+                                                            <IconComponent size={18} strokeWidth={1.5} style={{ color: isActive ? THEME.colors.primary : THEME.colors.textSecondary }} />
+                                                            <div style={{ fontSize: '0.6rem', fontWeight: '600', color: isActive ? THEME.colors.textMain : THEME.colors.textSecondary, textAlign: 'center' }}>{opt.label}</div>
                                                         </div>
                                                     );
                                                 })}
@@ -2653,32 +2719,33 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     </div>
 
                                     {/* BOTÓN DE EXCEPCIONES LOGÍSTICAS (SOLO SUCURSAL) */}
-                                    <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: '1px dashed #BAE6FD' }}>
+                                    <div style={{ marginTop: '1.2rem', paddingTop: '1.2rem', borderTop: `1px dashed ${THEME.colors.border}` }}>
                                         <button 
                                             type="button"
                                             onClick={() => setIsExceptionsModalOpen(true)}
                                             style={{ 
                                                 width: '100%',
                                                 backgroundColor: 'white', 
-                                                color: '#0369A1', 
-                                                border: '1px solid #0891B2', 
+                                                color: THEME.colors.textMain, 
+                                                border: `1px solid ${THEME.colors.border}`, 
                                                 padding: '0.8rem 1.2rem', 
-                                                borderRadius: '16px', 
+                                                borderRadius: THEME.radius.md, 
                                                 fontSize: '0.75rem', 
-                                                fontWeight: '900', 
+                                                fontWeight: '600', 
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                gap: '10px',
+                                                gap: '8px',
+                                                fontFamily: THEME.typography.fontFamilySecondary,
                                                 transition: 'all 0.2s'
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E0F2FE'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
                                         >
-                                            <span>⚙️</span> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
+                                            <Sliders size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> CONFIGURAR EXCEPCIONES Y NOTAS (PICKING)
                                             {exceptionCount > 0 && (
-                                                <span style={{ backgroundColor: '#0EA5E9', color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px' }}>
+                                                <span style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '2px 8px', borderRadius: '20px', fontSize: '0.7rem', marginLeft: '4px', fontWeight: '600' }}>
                                                     {exceptionCount}
                                                 </span>
                                             )}
@@ -2688,10 +2755,14 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             )}
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', marginTop: '3rem' }}>
-                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: '20px', border: '2px solid #F1F5F9', background: 'white', color: '#64748B', fontWeight: '900', cursor: 'pointer', transition: 'all 0.2s' }}>{isReadOnly ? 'CERRAR' : 'CANCELAR'}</button>
+                        <button type="button" onClick={onClose} style={{ flex: 1, padding: '1.2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', fontFamily: THEME.typography.fontFamilySecondary }}>{isReadOnly ? 'CERRAR' : 'CANCELAR'}</button>
                         {!isReadOnly && (
-                            <button type="submit" disabled={saving} style={{ flex: 2, padding: '1.2rem', borderRadius: '20px', border: 'none', background: '#0F172A', color: 'white', fontWeight: '900', cursor: 'pointer', boxShadow: '0 10px 20px -5px rgba(15, 23, 42, 0.3)', transition: 'all 0.2s' }}>
-                                {saving ? '⌛ GUARDANDO...' : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
+                            <button type="submit" disabled={saving} style={{ flex: 2, padding: '1.2rem', borderRadius: THEME.radius.lg, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', fontFamily: THEME.typography.fontFamilyMain }}>
+                                {saving ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <Loader2 size={16} className="animate-spin" /> GUARDANDO...
+                                    </div>
+                                ) : `GUARDAR ${formData.is_corporate_parent ? 'CASA MATRIZ' : 'SUCURSAL'}`}
                             </button>
                         )}
                     </div>
@@ -2769,28 +2840,34 @@ function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label
     };
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '1.2rem' }}>{url ? '✅' : '📄'}</div>
-                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>{label}</div>
+                <div style={{ width: '28px', height: '28px', backgroundColor: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                    {url ? (
+                        <Check size={14} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+                    ) : (
+                        <FileText size={14} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary }} />
+                    )}
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textMain, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>{label}</div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="application/pdf,image/*" />
                 {url && (
-                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', backgroundColor: 'white', color: '#0891B2', fontSize: '0.65rem', fontWeight: '900', textDecoration: 'none', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center' }}>VER</a>
+                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', color: THEME.colors.primary, fontSize: '0.65rem', fontWeight: '600', textDecoration: 'none', border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary }}>VER</a>
                 )}
                 {!readOnly && (
                     <button 
                         type="button" 
                         onClick={() => fileInputRef.current?.click()} 
                         disabled={uploading}
-                        style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', backgroundColor: uploading ? '#E2E8F0' : '#0F172A', color: 'white', fontSize: '0.65rem', fontWeight: '900', border: 'none', cursor: 'pointer' }}
+                        style={{ padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, backgroundColor: uploading ? '#E2E8F0' : THEME.colors.primary, color: 'white', fontSize: '0.65rem', fontWeight: '600', border: 'none', cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary }}
                     >
                         {uploading ? '...' : (url ? 'CAMBIAR' : 'SUBIR')}
                     </button>
                 )}
                 {readOnly && !url && (
-                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: '700' }}>PENDIENTE</span>
+                    <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>PENDIENTE</span>
                 )}
             </div>
         </div>
@@ -2867,33 +2944,73 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                <header style={{ padding: '2rem', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.xl, width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+                <header style={{ padding: '2rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#0F172A' }}>{readOnly ? '📋 Consulta de Excepciones' : '⚙️ Excepciones Logísticas'}</h3>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>{readOnly ? 'Visualizando nombres de factura y notas de picking personalizadas.' : 'Personaliza nombres de factura y notas de picking para este cliente.'}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Sliders size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
+                                {readOnly ? 'Consulta de Excepciones' : 'Excepciones Logísticas'}
+                            </h3>
+                        </div>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>{readOnly ? 'Visualizando nombres de factura y notas de picking personalizadas.' : 'Personaliza nombres de factura y notas de picking para este cliente.'}</p>
                     </div>
-                    <button onClick={onClose} style={{ border: 'none', background: '#F1F5F9', width: '36px', height: '36px', borderRadius: '10px', cursor: 'pointer' }}>✕</button>
+                    <button 
+                        onClick={onClose} 
+                        style={{ 
+                            border: 'none', 
+                            background: '#F1F5F9', 
+                            width: '32px', 
+                            height: '32px', 
+                            borderRadius: '8px', 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#E2E8F0'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                    >
+                        <X size={16} style={{ color: THEME.colors.textSecondary }} />
+                    </button>
                 </header>
 
                 <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
                     {!readOnly && !isAdding && (
                         <button 
                             onClick={() => setIsAdding(true)}
-                            style={{ width: '100%', padding: '1rem', borderRadius: '16px', border: '2px dashed #CBD5E1', background: '#F8FAFC', color: '#64748B', fontWeight: '800', cursor: 'pointer', marginBottom: '2rem' }}
+                            style={{ 
+                                width: '100%', 
+                                padding: '1rem', 
+                                borderRadius: THEME.radius.md, 
+                                border: `2px dashed ${THEME.colors.border}`, 
+                                background: '#F8FAFC', 
+                                color: THEME.colors.textSecondary, 
+                                fontWeight: '600', 
+                                cursor: 'pointer', 
+                                marginBottom: '2rem',
+                                fontFamily: THEME.typography.fontFamilySecondary,
+                                fontSize: '0.8rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.border; }}
                         >
                             + Agregar nueva regla personalizada
                         </button>
                     )}
 
                     {!readOnly && isAdding && (
-                        <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginBottom: '2rem' }}>
+                        <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginBottom: '2rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '6px' }}>Producto Original (Buscador)</label>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Producto Original (Buscador)</label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem', pointerEvents: 'none' }}>🔍</span>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                <Search size={16} style={{ color: THEME.colors.textSecondary }} />
+                                            </span>
                                             <input 
                                                 type="text"
                                                 placeholder="Buscar por nombre o ID (SKU)..."
@@ -2905,21 +3022,24 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 onFocus={() => setShowResults(true)}
                                                 style={{ 
                                                     width: '100%', 
-                                                    height: '48px', 
+                                                    height: '38px', 
                                                     padding: '0 1rem 0 2.8rem', 
-                                                    borderRadius: '12px', 
-                                                    border: '2px solid #E2E8F0', 
-                                                    fontWeight: '700',
-                                                    fontSize: '0.9rem',
+                                                    borderRadius: '8px', 
+                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                    fontWeight: '500',
+                                                    fontSize: '0.85rem',
                                                     outline: 'none',
                                                     transition: 'all 0.2s',
-                                                    backgroundColor: 'white'
+                                                    backgroundColor: 'white',
+                                                    fontFamily: THEME.typography.fontFamilySecondary
                                                 }}
                                                 onBlur={() => setTimeout(() => setShowResults(false), 200)}
                                             />
                                             {newException.product_id && (
-                                                <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ backgroundColor: '#ECFDF5', color: '#059669', padding: '4px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: '900' }}>SELECCIONADO ✅</span>
+                                                <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                                                    <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        <Check size={12} strokeWidth={2.5} /> SELECCIONADO
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
@@ -2927,8 +3047,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         {showResults && searchTerm.length > 0 && (
                                             <div style={{ 
                                                 position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', 
-                                                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', 
+                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                boxShadow: THEME.shadow.lg, 
                                                 zIndex: 10, marginTop: '8px', maxHeight: '250px', overflowY: 'auto' 
                                             }}>
                                                 {products
@@ -2946,7 +3066,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                                 setShowResults(false);
                                                             }}
                                                             style={{ 
-                                                                padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9',
+                                                                padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                                                 transition: 'background 0.2s'
                                                             }}
@@ -2954,15 +3074,15 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B' }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B' }}>SKU: {p.sku}</span>
+                                                                <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
                                                             </div>
-                                                            <span style={{ color: '#0891B2', fontSize: '0.9rem' }}>＋</span>
+                                                            <span style={{ color: THEME.colors.primary, fontSize: '0.95rem', fontWeight: '600' }}>＋</span>
                                                         </div>
                                                     ))
                                                 }
                                                 {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                                                    <div style={{ padding: '1.2rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                                    <div style={{ padding: '1.2rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                         No se encontraron productos.
                                                     </div>
                                                 )}
@@ -2990,8 +3110,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         setEditingId(null);
                                         setNewException({ product_id: '', nickname: '', picking_note: '' });
                                         setSearchTerm('');
-                                    }} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #CBD5E1', background: 'white', fontWeight: '800', cursor: 'pointer' }}>Cancelar</button>
-                                    <button onClick={handleSave} style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '800', cursor: 'pointer' }}>Guardar Regla</button>
+                                    }} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary, fontSize: '0.8rem' }}>Cancelar</button>
+                                    <button onClick={handleSave} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.8rem' }}>Guardar Regla</button>
                                 </div>
                             </div>
                         </div>
@@ -2999,23 +3119,25 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         {loading ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>Cargando reglas...</div>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando reglas...</div>
                         ) : exceptions.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', border: '1px dashed #E2E8F0', borderRadius: '20px' }}>No hay excepciones configuradas.</div>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>No hay excepciones configuradas.</div>
                         ) : (
                             exceptions.map(exc => (
-                                <div key={exc.id} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-                                    <div style={{ width: '40px', height: '40px', backgroundColor: '#F1F5F9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>📦</div>
+                                <div key={exc.id} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                    </div>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase' }}>Original: {exc.products?.name}</div>
+                                        <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Original: {exc.products?.name}</div>
                                         <div style={{ display: 'flex', gap: '1.5rem', marginTop: '4px' }}>
                                             <div>
-                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>Factura: </span>
-                                                <span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: '800' }}>{exc.nickname || '---'}</span>
+                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Factura: </span>
+                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textMain, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>{exc.nickname || '---'}</span>
                                             </div>
                                             <div>
-                                                <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700' }}>Picking: </span>
-                                                <span style={{ fontSize: '0.85rem', color: '#0891B2', fontWeight: '800' }}>{exc.picking_note || '---'}</span>
+                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Picking: </span>
+                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.primary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>{exc.picking_note || '---'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -3032,11 +3154,20 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     setSearchTerm(`[${exc.products?.sku}] ${exc.products?.name}`);
                                                     setIsAdding(true);
                                                 }} 
-                                                style={{ border: 'none', background: '#F1F5F9', color: '#64748B', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                             >
-                                                ✏️
+                                                <Edit2 size={14} />
                                             </button>
-                                            <button onClick={() => handleDelete(exc.id)} style={{ border: 'none', background: '#FEE2E2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                                            <button 
+                                                onClick={() => handleDelete(exc.id)} 
+                                                style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         </div>
                                     )}
                                 </div>

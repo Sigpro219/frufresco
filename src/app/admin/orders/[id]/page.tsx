@@ -408,7 +408,7 @@ export default function OrderDetailPage() {
         : order.total;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <Link href="/admin/orders/loading" style={{ color: '#6B7280', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
                     <ArrowLeft size={16} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Volver al Listado

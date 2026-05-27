@@ -676,7 +676,7 @@ export default function OrderLoadingPage() {
 
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
+        <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1032,13 +1032,13 @@ export default function OrderLoadingPage() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ID / TIPO</th>
-                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>DIRECCIÓN / GPS</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ORIGEN</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>PESO</th>
-                                            <th style={{ padding: '1rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>VALOR</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', color: '#111827', textTransform: 'uppercase' }}>ESTADO</th>
+                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ID / TIPO</th>
+                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ORIGEN</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>PESO</th>
+                                            <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
+                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
                                             <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
                                                 <input 
                                                     type="checkbox" 
@@ -1553,10 +1553,10 @@ export default function OrderLoadingPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>PRODUCTO / SKU</th>
-                                                <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', textAlign: 'center' }}>CANTIDAD</th>
-                                                <th style={{ padding: '1rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', textAlign: 'right' }}>PRECIO U.</th>
-                                                <th style={{ padding: '1rem 2rem', fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', textAlign: 'right' }}>SUBTOTAL</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO / SKU</th>
+                                                <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
+                                                <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>SUBTOTAL</th>
                                                 {editMode && <th style={{ width: '50px' }}></th>}
                                             </tr>
                                         </thead>

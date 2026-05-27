@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info } from 'lucide-react';
+import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
 
@@ -449,6 +450,7 @@ export default function B2BDashboard() {
         const fetchAgreements = async () => {
             setIsLoadingAgreements(true);
             try {
+                // Try with join first; fall back to simple query if FK not configured
                 const { data, error } = await supabase
                     .from('quotes')
                     .select('*, pricing_models!model_id(name)')
@@ -456,10 +458,29 @@ export default function B2BDashboard() {
                     .eq('status', 'agreement')
                     .order('created_at', { ascending: false });
 
-                if (error) throw error;
-                if (isMounted.current) setAgreements(data || []);
+                if (error) {
+                    // FK join may not exist — retry without it
+                    const { data: fallback, error: fallbackError } = await supabase
+                        .from('quotes')
+                        .select('*')
+                        .eq('client_id', profile.id)
+                        .eq('status', 'agreement')
+                        .order('created_at', { ascending: false });
+
+                    if (fallbackError) {
+                        // Non-critical: show empty state silently
+                        console.warn('[agreements] fetch failed, showing empty state');
+                        if (isMounted.current) setAgreements([]);
+                    } else {
+                        if (isMounted.current) setAgreements(fallback || []);
+                    }
+                } else {
+                    if (isMounted.current) setAgreements(data || []);
+                }
             } catch (err) {
-                console.error("Error fetching agreements:", err);
+                // Unexpected error — degrade gracefully, do not propagate to global handler
+                console.warn('[agreements] unexpected error, showing empty state');
+                if (isMounted.current) setAgreements([]);
             } finally {
                 if (isMounted.current) setIsLoadingAgreements(false);
             }
@@ -553,116 +574,69 @@ export default function B2BDashboard() {
     }
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
 
             <div className="container" style={{ padding: '2rem 1rem', maxWidth: '800px' }}>
 
                 {/* HEADER */}
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div style={{ marginBottom: '2rem' }}>
                     <h1 style={{ 
-                        fontFamily: 'var(--font-outfit), sans-serif',
-                        fontSize: '2.2rem', 
-                        fontWeight: '900', 
-                        color: 'var(--text-main)', 
-                        marginBottom: '0.75rem',
-                        letterSpacing: '-0.04em'
+                        fontFamily: THEME.typography.fontFamilyMain,
+                        fontSize: '1.75rem', 
+                        fontWeight: '600', 
+                        color: THEME.colors.textMain, 
+                        marginBottom: '0',
+                        letterSpacing: '-0.02em'
                     }}>
                         {profile?.company_name || t.b2b.dashboard.title}
                     </h1>
-
+                    <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
                 </div>
 
-                {/* TAB NAVIGATION */}
+                {/* TAB NAVIGATION — segmented control */}
                 <div style={{
                     display: 'flex',
-                    justifyContent: 'center',
-                    gap: '1rem',
-                    marginBottom: '2rem'
+                    backgroundColor: THEME.colors.background,
+                    borderRadius: THEME.radius.lg,
+                    padding: '4px',
+                    marginBottom: '1.5rem',
+                    border: `1px solid ${THEME.colors.border}`,
+                    gap: '2px',
                 }}>
-                    <button 
-                        onClick={() => setActiveTab('order')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.8rem 1.5rem',
-                            borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            backgroundColor: activeTab === 'order' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
-                            color: activeTab === 'order' ? 'white' : 'var(--text-main)',
-                            fontWeight: '800',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            boxShadow: activeTab === 'order' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
-                            backdropFilter: 'blur(8px)'
-                        }}
-                    >
-                        <ShoppingCart size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabQuickOrder}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('invoices')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.8rem 1.5rem',
-                            borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            backgroundColor: activeTab === 'invoices' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
-                            color: activeTab === 'invoices' ? 'white' : 'var(--text-main)',
-                            fontWeight: '800',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            boxShadow: activeTab === 'invoices' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
-                            backdropFilter: 'blur(8px)'
-                        }}
-                    >
-                        <FileText size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabInvoices}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('consumption')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.8rem 1.5rem',
-                            borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            backgroundColor: activeTab === 'consumption' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
-                            color: activeTab === 'consumption' ? 'white' : 'var(--text-main)',
-                            fontWeight: '800',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            boxShadow: activeTab === 'consumption' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
-                            backdropFilter: 'blur(8px)'
-                        }}
-                    >
-                        <BarChart3 size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabConsumption}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('agreements')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.8rem 1.5rem',
-                            borderRadius: 'var(--radius-full)',
-                            border: 'none',
-                            backgroundColor: activeTab === 'agreements' ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
-                            color: activeTab === 'agreements' ? 'white' : 'var(--text-main)',
-                            fontWeight: '800',
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            boxShadow: activeTab === 'agreements' ? '0 4px 12px rgba(26, 77, 46, 0.2)' : '0 2px 8px rgba(0,0,0,0.05)',
-                            backdropFilter: 'blur(8px)'
-                        }}
-                    >
-                        <Rocket size={18} strokeWidth={2.5} /> {t.b2b.dashboard.tabAgreements}
-                    </button>
+                    {[
+                        { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
+                        { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
+                        { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
+                        { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
+                    ].map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key as any)}
+                            style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                padding: '0.6rem 0.75rem',
+                                borderRadius: THEME.radius.md,
+                                border: 'none',
+                                backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
+                                color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
+                                fontWeight: activeTab === tab.key ? '600' : '500',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap',
+                                fontFamily: THEME.typography.fontFamilySecondary,
+                                boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
+                            }}
+                            onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                            onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                            {tab.icon} <span className="tab-label">{tab.label}</span>
+                        </button>
+                    ))}
                 </div>
 
                 {/* ORDER CARD */}
@@ -671,38 +645,38 @@ export default function B2BDashboard() {
                     <>
                         {/* Order Card */}
                         <div style={{
-                            backgroundColor: 'white',
-                            borderRadius: 'var(--radius-lg)',
-                            boxShadow: 'var(--shadow-lg)',
+                            backgroundColor: THEME.colors.surface,
+                            borderRadius: THEME.radius.lg,
+                            boxShadow: THEME.shadow.md,
+                            border: `1px solid ${THEME.colors.border}`,
                             overflow: 'visible',
                             position: 'relative'
                         }}>
-                            {/* Header */}
+                            {/* Header — neutral flat */}
                             <div style={{
-                                backgroundColor: 'var(--primary)',
-                                color: 'white',
-                                padding: '1.5rem 2rem',
+                                backgroundColor: THEME.colors.surface,
+                                padding: '1.25rem 1.5rem',
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
-                                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-                                boxShadow: '0 4px 20px rgba(26, 77, 46, 0.15)',
-                                zIndex: 5
+                                borderBottom: `1px solid ${THEME.colors.border}`,
+                                borderLeft: `3px solid ${THEME.colors.primary}`,
+                                borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                             }}>
                                 <div>
                                     <h2 style={{ 
-                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontSize: '1.3rem', 
-                                        fontWeight: '900', 
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        fontSize: '1.1rem', 
+                                        fontWeight: '600', 
                                         margin: 0,
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '10px',
-                                        letterSpacing: '-0.02em'
+                                        gap: '8px',
+                                        color: THEME.colors.textMain,
                                     }}>
-                                        <Package size={22} strokeWidth={2.5} /> {t.b2b.dashboard.cardTitle}
+                                        <Package size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
                                     </h2>
-                                    <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem', fontWeight: '500' }}>
+                                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '400' }}>
                                         {t.b2b.dashboard.cardDesc}
                                     </p>
                                 </div>
@@ -710,20 +684,24 @@ export default function B2BDashboard() {
                                     <button
                                         onClick={handleClearOrder}
                                         title="Borrar todo y empezar de cero"
-                                        className="btn-glass"
                                         style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: 'var(--radius-full)',
-                                            fontSize: '0.8rem',
+                                            padding: '0.4rem 0.9rem',
+                                            borderRadius: THEME.radius.md,
+                                            border: `1px solid ${THEME.colors.border}`,
+                                            background: 'white',
+                                            color: THEME.colors.textSecondary,
+                                            fontSize: '0.75rem',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '0.5rem',
-                                            color: 'white',
-                                            fontWeight: '800',
-                                            cursor: 'pointer'
+                                            gap: '5px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
                                         }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#FCA5A5'; e.currentTarget.style.color = '#EF4444'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                                     >
-                                        <Trash2 size={16} /> {t.b2b.dashboard.btnClear}
+                                        <Trash2 size={13} strokeWidth={1.5} /> {t.b2b.dashboard.btnClear}
                                     </button>
                                 )}
                             </div>

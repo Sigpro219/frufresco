@@ -9,6 +9,7 @@ import { CATEGORY_MAP } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { THEME } from '@/lib/adminTheme';
 
 interface Purchase {
     product_id: string;
@@ -479,7 +480,7 @@ export default function CostMatrixPage() {
     };
 
     return (
-        <main style={{ padding: '1.2rem', backgroundColor: '#F8FAFC', minHeight: '100vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <main style={{ padding: '1.2rem', backgroundColor: '#F8FAFC', minHeight: '100vh', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
                 
                 {/* --- HEADER LINE --- */}

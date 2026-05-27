@@ -6,7 +6,8 @@ import { useCart } from '../lib/cartContext';
 import { useAuth } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
-import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, Globe } from 'lucide-react';
+import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon } from 'lucide-react';
+import { THEME } from '@/lib/adminTheme';
 import { config } from '@/lib/config';
 import { SYNC_METADATA } from '@/lib/sync-status';
 import { translations, Locale } from '@/lib/translations';
@@ -23,6 +24,7 @@ export default function Navbar() {
     const [lastSyncDate, setLastSyncDate] = useState(process.env.NEXT_PUBLIC_BUILD_TIME || SYNC_METADATA.lastSync);
     const [themeConfig, setThemeConfig] = useState<{primary: string, secondary: string} | null>(null);
     const [operationsOpen, setOperationsOpen] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const [roles, setRoles] = useState<Role[]>([]);
@@ -172,15 +174,24 @@ export default function Navbar() {
         return modules.some(m => hasPermission(m));
     };
 
-    const dropdownLinkStyle = (color: string) => ({
-        display: 'block', 
-        padding: '10px 16px', 
-        color: color, 
-        fontWeight: '700',
+    const dropdownLinkStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '9px 16px',
+        color: THEME.colors.textMain,
+        fontWeight: '500',
         textDecoration: 'none',
-        transition: 'background-color 0.2s',
-        fontSize: '0.9rem'
-    });
+        transition: 'background-color 0.15s',
+        fontSize: '0.875rem',
+        fontFamily: THEME.typography.fontFamilySecondary,
+        borderRadius: '0',
+    };
+
+    const dropdownIconStyle = {
+        color: THEME.colors.primary,
+        flexShrink: 0,
+    };
 
     return (
         <header 
@@ -285,7 +296,7 @@ export default function Navbar() {
                 </Link>
 
                 {/* NAV LINKS */}
-                <nav style={{ 
+                <nav className="nav-desktop" style={{ 
                     display: 'flex', 
                     gap: '2.5rem', 
                     alignItems: 'center',
@@ -369,77 +380,101 @@ export default function Navbar() {
                                             zIndex: 1000,
                                             padding: '8px 0'
                                         }}>
-                                        <div style={{ padding: '4px 16px', fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.navAdministration}</div>
+                                        {/* Section label */}
+                                        <div style={{ padding: '6px 16px 4px', fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: THEME.typography.fontFamilySecondary }}>{t.navAdministration}</div>
+
                                             {hasPermission('dashboard') && (
-                                                <Link href="/admin/dashboard" 
+                                                <Link href="/admin/dashboard"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={{ ...dropdownLinkStyle('#334155'), display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <Settings size={14} strokeWidth={2.5} /> {t.navAdmin}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Settings size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navAdmin}
                                                 </Link>
                                             )}
-                                            <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }}></div>
+
+                                            <div style={{ borderTop: `1px solid ${THEME.colors.border}`, margin: '4px 0' }} />
+
                                             {hasPermission('commercial') && (
-                                                <Link href="/admin/orders/loading" 
+                                                <Link href="/admin/orders/loading"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle('#0891B2')}>
-                                                    📋 {t.navOrders}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <ClipboardList size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navOrders}
                                                 </Link>
                                             )}
                                             {hasPermission('transport') && (
-                                                <Link href="/admin/transport" 
+                                                <Link href="/admin/transport"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle('#EA580C')}>
-                                                    🚛 {t.navTransport}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Truck size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navTransport}
                                                 </Link>
                                             )}
                                             {hasPermission('commercial') && (
                                                 <>
-                                                    <Link href="/admin/commercial/billing" 
+                                                    <Link href="/admin/commercial/billing"
                                                         onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle('#6366F1')}>
-                                                        💰 {t.navBilling}
+                                                        style={dropdownLinkStyle}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <DollarSign size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navBilling}
                                                     </Link>
-                                                    <Link href="/admin/procurement" 
+                                                    <Link href="/admin/procurement"
                                                         onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle('#0EA5E9')}>
-                                                        🛒 {t.navProcurement}
+                                                        style={dropdownLinkStyle}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <ShoppingBag size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navProcurement}
                                                     </Link>
                                                     <Link href="/admin/commercial"
                                                         onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle('#059669')}>
-                                                        💼 {t.navCommercial}
+                                                        style={dropdownLinkStyle}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <Briefcase size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCommercial}
                                                     </Link>
                                                 </>
                                             )}
                                             {hasPermission('hr') && (
                                                 <Link href="/admin/hr"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle('#8B5CF6')}>
-                                                    👥 {t.navHR}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Users size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navHR}
                                                 </Link>
                                             )}
                                             {hasPermission('inventory') && (
                                                 <Link href="/admin/commercial/inventory"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={dropdownLinkStyle('#0369A1')}>
-                                                    📦 {t.navInventory}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Archive size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navInventory}
                                                 </Link>
                                             )}
 
-                                            
+                                            <div style={{ borderTop: `1px solid ${THEME.colors.border}`, margin: '4px 0' }} />
+
                                             {hasPermission('dashboard') && (
-                                                <Link href="/admin/strategy" 
+                                                <Link href="/admin/strategy"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={{ ...dropdownLinkStyle('#7C3AED'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
-                                                    🧠 {t.navStrategy}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Brain size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navStrategy}
                                                 </Link>
                                             )}
-
                                             {hasPermission('transport') && (
-                                                <Link href="/ops" 
+                                                <Link href="/ops"
                                                     onClick={() => setOperationsOpen(false)}
-                                                    style={{ ...dropdownLinkStyle('#10B981'), borderTop: '1px solid #F3F4F6', fontWeight: '900' }}>
-                                                    🏭 {t.navOpsPortal}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Factory size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navOpsPortal}
                                                 </Link>
                                             )}
                                         </div>
@@ -450,7 +485,27 @@ export default function Navbar() {
                     )}
                 </nav>
 
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                {/* HAMBURGER BUTTON — mobile only */}
+                <button
+                    className="nav-hamburger"
+                    onClick={() => setMobileOpen(o => !o)}
+                    aria-label="Menú"
+                    style={{
+                        display: 'none',
+                        background: 'none',
+                        border: `1px solid ${THEME.colors.border}`,
+                        borderRadius: THEME.radius.md,
+                        padding: '8px',
+                        cursor: 'pointer',
+                        color: THEME.colors.textMain,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    {mobileOpen ? <XIcon size={22} strokeWidth={1.5} /> : <Menu size={22} strokeWidth={1.5} />}
+                </button>
+
+                <div className="nav-right-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {isShoppingContext && (
                     <div className="cart-container" style={{ position: 'relative' }}>
                         <Link href="/checkout">
@@ -625,7 +680,168 @@ export default function Navbar() {
                         opacity: 0;
                     }
                 }
+
+                /* ── Responsive ── */
+                @media (max-width: 768px) {
+                    .nav-desktop { display: none !important; }
+                    .nav-hamburger { display: flex !important; }
+                    .nav-right-actions { display: none !important; }
+                }
+                @media (min-width: 769px) {
+                    .nav-mobile-menu { display: none !important; }
+                }
+
+                /* Mobile menu items */
+                .mobile-nav-link {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 14px 20px;
+                    color: #1A231E;
+                    font-size: 0.95rem;
+                    font-weight: 500;
+                    text-decoration: none;
+                    border-bottom: 1px solid #E5E7EB;
+                    transition: background 0.15s;
+                    font-family: var(--font-inter), sans-serif;
+                }
+                .mobile-nav-link:hover { background: #F4F7F6; }
+                .mobile-nav-section {
+                    font-size: 0.6rem;
+                    font-weight: 700;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: #64748B;
+                    padding: 14px 20px 6px;
+                    font-family: var(--font-inter), sans-serif;
+                }
             `}</style>
+            {/* ── MOBILE MENU PANEL ── */}
+            {mobileOpen && (
+                <div
+                    className="nav-mobile-menu"
+                    style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: 'white',
+                        borderBottom: `1px solid ${THEME.colors.border}`,
+                        boxShadow: THEME.shadow.lg,
+                        zIndex: 200,
+                        maxHeight: 'calc(100vh - 85px)',
+                        overflowY: 'auto',
+                    }}
+                >
+                    {/* User info */}
+                    {mounted && user && (
+                        <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background }}>
+                            <User size={16} color={THEME.colors.primary} />
+                            <span style={{ fontWeight: '600', fontSize: '0.9rem', color: THEME.colors.textMain }}>{profile?.company_name || user.email?.split('@')[0]}</span>
+                        </div>
+                    )}
+
+                    {/* Navigation links for admin/employee */}
+                    {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
+                        <>
+                            <div className="mobile-nav-section">{t.navAdministration}</div>
+                            {hasPermission('dashboard') && (
+                                <Link href="/admin/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Settings size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navAdmin}
+                                </Link>
+                            )}
+                            {hasPermission('commercial') && (
+                                <Link href="/admin/orders/loading" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <ClipboardList size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navOrders}
+                                </Link>
+                            )}
+                            {hasPermission('transport') && (
+                                <Link href="/admin/transport" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Truck size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navTransport}
+                                </Link>
+                            )}
+                            {hasPermission('commercial') && (
+                                <>
+                                    <Link href="/admin/commercial/billing" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                        <DollarSign size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navBilling}
+                                    </Link>
+                                    <Link href="/admin/procurement" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                        <ShoppingBag size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navProcurement}
+                                    </Link>
+                                    <Link href="/admin/commercial" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                        <Briefcase size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCommercial}
+                                    </Link>
+                                </>
+                            )}
+                            {hasPermission('hr') && (
+                                <Link href="/admin/hr" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Users size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHR}
+                                </Link>
+                            )}
+                            {hasPermission('inventory') && (
+                                <Link href="/admin/commercial/inventory" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Archive size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInventory}
+                                </Link>
+                            )}
+                            {hasPermission('dashboard') && (
+                                <Link href="/admin/strategy" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Brain size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navStrategy}
+                                </Link>
+                            )}
+                            {hasPermission('transport') && (
+                                <Link href="/ops" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Factory size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navOpsPortal}
+                                </Link>
+                            )}
+                        </>
+                    )}
+
+                    {/* B2B client links */}
+                    {mounted && user && profile?.role === 'b2b_client' && (
+                        <>
+                            <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> Mi Portal
+                            </Link>
+                            <Link href="/b2b/orders" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <ShoppingCart size={16} strokeWidth={1.5} color={THEME.colors.primary} /> Mis Pedidos
+                            </Link>
+                        </>
+                    )}
+
+                    {/* Guest links */}
+                    {mounted && !user && (
+                        <>
+                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
+                            </Link>
+                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                            </Link>
+                        </>
+                    )}
+
+                    {/* Auth actions */}
+                    <div style={{ padding: '16px 20px', display: 'flex', gap: '12px', borderTop: `2px solid ${THEME.colors.border}` }}>
+                        {mounted && user ? (
+                            <button
+                                onClick={() => { signOut(); setMobileOpen(false); }}
+                                style={{ flex: 1, padding: '10px', border: '1px solid #fee2e2', backgroundColor: '#fff1f1', color: '#ef4444', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                <LogOut size={16} /> {t.navSignOut}
+                            </button>
+                        ) : (
+                            <>
+                                <Link href="/login" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
+                                    <button style={{ width: '100%', padding: '10px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textMain, borderRadius: THEME.radius.md, fontWeight: '600', cursor: 'pointer' }}>{t.navLogin}</button>
+                                </Link>
+                                <Link href="/register" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
+                                    <button style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: THEME.colors.primary, color: 'white', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer' }}>{t.navRegister}</button>
+                                </Link>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </header>
     );
 }

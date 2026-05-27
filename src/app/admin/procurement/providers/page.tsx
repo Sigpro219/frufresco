@@ -310,7 +310,7 @@ export default function ProvidersPage() {
     if (!mounted) return null;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F0F2F5', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F0F2F5', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 
@@ -596,12 +596,12 @@ export default function ProvidersPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                    <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase' }}>Nombre del Proveedor</th>
-                                    <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase' }}>Identificación</th>
-                                    <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase' }}>Contacto</th>
-                                    <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase' }}>Categoría</th>
-                                    <th style={{ padding: '1rem', textAlign: 'left', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase' }}>Tipo Pago</th>
-                                    <th style={{ padding: '1rem', textAlign: 'right', color: '#111827', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', width: '100px' }}>Acciones</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Nombre del Proveedor</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Identificación</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Contacto</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Categoría</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Tipo Pago</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right', width: '100px' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>

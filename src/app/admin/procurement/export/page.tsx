@@ -172,7 +172,7 @@ export default function WorldOfficeExportPage() {
     if (!mounted) return null;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '3rem 2rem' }}>
                 
                 {/* Header */}

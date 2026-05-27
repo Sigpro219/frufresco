@@ -352,7 +352,7 @@ export default function AdminSettingsPage() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <Toast />
             {showAttributesModal && <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />}
             <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1.5rem' }}>

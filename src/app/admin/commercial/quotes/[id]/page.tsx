@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { THEME } from '@/lib/adminTheme';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function QuoteDetailPage() {
@@ -180,7 +181,7 @@ export default function QuoteDetailPage() {
     if (!quote) return <div style={{ padding: '2rem' }}>Cotización no encontrada.</div>;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: 'Inter, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/commercial/quotes" style={{ textDecoration: 'none', color: '#6B7280', fontWeight: '600' }}>← Volver</Link>
@@ -229,13 +230,13 @@ export default function QuoteDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>
-                                <th style={{ padding: '1rem' }}>Producto</th>
-                                <th style={{ padding: '1rem' }}>Cant</th>
-                                <th style={{ padding: '1rem' }}>Costo Base</th>
-                                <th style={{ padding: '1rem' }}>Margen</th>
-                                <th style={{ padding: '1rem', textAlign: 'center' }}>IVA</th>
-                                <th style={{ padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
-                                <th style={{ padding: '1rem', textAlign: 'right' }}>Total</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Producto</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Cant</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Costo Base</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem' }}>Margen</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>IVA</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Precio Unit.</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right' }}>Total</th>
                             </tr>
                         </thead>
                         <tbody>

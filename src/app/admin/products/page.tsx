@@ -654,7 +654,7 @@ export default function AdminProductsPage() {
                                     style={{
                                         width: '36px',
                                         height: '18px',
-                                        backgroundColor: autosyncEnabled ? THEME.colors.primary : '#CBD5E1',
+                                        backgroundColor: autosyncEnabled ? THEME.colors.primary : THEME.colors.borderActive,
                                         borderRadius: '20px',
                                         position: 'relative',
                                         cursor: 'pointer',
@@ -732,7 +732,7 @@ export default function AdminProductsPage() {
                         <div style={{ 
                             display: 'inline-flex', 
                             gap: '2px', 
-                            backgroundColor: '#F1F5F9', 
+                            backgroundColor: THEME.colors.background, 
                             padding: '3px', 
                             borderRadius: '10px',
                             border: `1px solid ${THEME.colors.border}`
@@ -925,7 +925,7 @@ export default function AdminProductsPage() {
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
                             <thead>
                                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <th style={{ padding: '0.75rem 1rem', width: '50px', textAlign: 'center' }}>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '50px', textAlign: 'center' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.length === paginatedProducts.length && paginatedProducts.length > 0}
@@ -936,13 +936,13 @@ export default function AdminProductsPage() {
                                                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                             />
                                     </th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Producto</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Categoría</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Atributos & Tags</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Precio</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Oferta / Var.</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Presencia</th>
-                                    <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Acción</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left' }}>Producto</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Categoría</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Atributos & Tags</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Precio</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Oferta / Var.</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Presencia</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>

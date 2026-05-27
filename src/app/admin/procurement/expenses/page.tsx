@@ -82,7 +82,7 @@ export default function ExpensesPage() {
     ];
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
                 
@@ -154,10 +154,10 @@ export default function ExpensesPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead style={{ backgroundColor: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}` }}>
                                     <tr>
-                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Descripción</th>
-                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Categoría</th>
-                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Monto</th>
-                                        <th style={{ padding: '0.85rem 1.5rem', textAlign: 'right', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.85rem 1.5rem', textAlign: 'left' }}>Descripción</th>
+                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.85rem 1.5rem', textAlign: 'left' }}>Categoría</th>
+                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.85rem 1.5rem', textAlign: 'right' }}>Monto</th>
+                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.85rem 1.5rem', textAlign: 'right' }}>Fecha</th>
                                     </tr>
                                 </thead>
                                 <tbody>

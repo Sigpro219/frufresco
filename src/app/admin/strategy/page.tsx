@@ -15,10 +15,7 @@ import {
     Users, 
     Building2, 
     Wrench, 
-    Clock, 
-    ChevronRight,
     ArrowRight,
-    X,
     Cpu
 } from 'lucide-react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
@@ -50,6 +47,7 @@ interface SEOStrategy {
 
 export default function AdminStrategyPage() {
     const [activeTab, setActiveTab] = useState<Tab>('geofencing');
+    const [hoveredTab, setHoveredTab] = useState<Tab | null>(null);
     const { profile } = useAuth();
     const [settings, setSettings] = useState<AppSetting[]>([]);
     const [itRequests, setItRequests] = useState<ITRequest[]>([]);
@@ -144,40 +142,52 @@ export default function AdminStrategyPage() {
     const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <Toast />
             <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
                 <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Inteligencia & Estrategia</h1>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Inteligencia & Estrategia</h1>
                     </div>
+                    {/* Segmented Control (Tabs) per design_manual.md */}
                     <div style={{ backgroundColor: '#E5E7EB', padding: '0.25rem', borderRadius: THEME.radius.md, display: 'flex', gap: '4px' }}>
-                        {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => (
-                            <button 
-                                key={t}
-                                onClick={() => setActiveTab(t)}
-                                style={{
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: THEME.radius.sm,
-                                    border: 'none',
-                                    backgroundColor: activeTab === t ? 'white' : 'transparent',
-                                    boxShadow: activeTab === t ? THEME.shadow.sm : 'none',
-                                    color: activeTab === t ? THEME.colors.textMain : THEME.colors.textSecondary,
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    fontSize: '0.85rem'
-                                }}
-                            >
-                                {t === 'geofencing' && <MapPin size={14} strokeWidth={1.5} />}
-                                {t === 'seo' && <TrendingUp size={14} strokeWidth={1.5} />}
-                                {t === 'it' && <ShieldCheck size={14} strokeWidth={1.5} />}
-                                {t === 'hierarchy' && <Layers size={14} strokeWidth={1.5} />}
-                                {t === 'geofencing' ? 'Geocercas' : t === 'seo' ? 'SEO' : t === 'it' ? 'IT' : 'Jerarquía'}
-                            </button>
-                        ))}
+                        {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => {
+                            const isActive = activeTab === t;
+                            const isHovered = hoveredTab === t;
+                            return (
+                                <button 
+                                    key={t}
+                                    onClick={() => setActiveTab(t)}
+                                    onMouseEnter={() => setHoveredTab(t)}
+                                    onMouseLeave={() => setHoveredTab(null)}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: THEME.radius.sm,
+                                        border: 'none',
+                                        backgroundColor: isActive 
+                                            ? THEME.colors.primary 
+                                            : (isHovered ? THEME.colors.primaryLight : 'transparent'),
+                                        boxShadow: isActive ? THEME.shadow.sm : 'none',
+                                        color: isActive 
+                                            ? '#FFFFFF' 
+                                            : (isHovered ? THEME.colors.textMain : THEME.colors.textSecondary),
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        fontSize: '0.85rem',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    {t === 'geofencing' && <MapPin size={14} strokeWidth={1.5} />}
+                                    {t === 'seo' && <TrendingUp size={14} strokeWidth={1.5} />}
+                                    {t === 'it' && <ShieldCheck size={14} strokeWidth={1.5} />}
+                                    {t === 'hierarchy' && <Layers size={14} strokeWidth={1.5} />}
+                                    {t === 'geofencing' ? 'Geocercas' : t === 'seo' ? 'SEO' : t === 'it' ? 'IT' : 'Jerarquía'}
+                                </button>
+                            );
+                        })}
                     </div>
                 </header>
 
@@ -198,6 +208,7 @@ export default function AdminStrategyPage() {
 }
 
 function HierarchyView({ products, onFix }: { products: any[], onFix: () => void }) {
+    const [hoveredRow, setHoveredRow] = useState<string | null>(null);
     const hijos = products.filter(p => p.parent_id);
     const criticalIssues = hijos.filter(p => p.web_conversion_factor === 1);
 
@@ -206,11 +217,11 @@ function HierarchyView({ products, onFix }: { products: any[], onFix: () => void
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
                 <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                     <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Total Hijos</p>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: THEME.colors.textMain }}>{formatNumber(hijos.length)}</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(hijos.length)}</p>
                 </div>
                 <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: criticalIssues.length > 0 ? '#FEF2F2' : THEME.colors.surface, border: criticalIssues.length > 0 ? '#FECACA 1px solid' : `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                     <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Factores Críticos (1.0)</p>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textMain }}>{formatNumber(criticalIssues.length)}</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(criticalIssues.length)}</p>
                 </div>
                 <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <button 
@@ -227,32 +238,41 @@ function HierarchyView({ products, onFix }: { products: any[], onFix: () => void
             {criticalIssues.length > 0 && (
                 <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                        <h3 style={{ margin: 0, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#DC2626', fontSize: '1.1rem' }}>
+                        <h3 style={{ margin: 0, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#DC2626', fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
                             <AlertCircle size={18} strokeWidth={1.5} /> Alerta de Inventario: Factores de Conversión Genéricos
                         </h3>
                         <p style={{ margin: 0, fontSize: '0.85rem', color: THEME.colors.textSecondary }}>Estos productos restan 1:1 del padre, lo cual suele ser incorrecto para fraccionados.</p>
                     </div>
                     <div style={{ maxHeight: '400px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
                             <thead style={{ backgroundColor: THEME.colors.background, position: 'sticky', top: 0 }}>
                                 <tr>
-                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>SKU</th>
-                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Nombre</th>
-                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Unidad Web</th>
-                                    <th style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Factor</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>SKU</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Nombre</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Unidad Web</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Factor</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {criticalIssues.map(p => (
-                                    <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                        <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: THEME.colors.primary }}>{p.sku}</td>
-                                        <td style={{ padding: '0.85rem 1rem', color: THEME.colors.textMain }}>{p.name}</td>
-                                        <td style={{ padding: '0.85rem 1rem' }}>
+                                    <tr 
+                                        key={p.id} 
+                                        style={{ 
+                                            borderBottom: `1px solid ${THEME.colors.border}`,
+                                            backgroundColor: hoveredRow === p.id ? '#F8FAF9' : 'transparent',
+                                            transition: 'background-color 0.2s ease'
+                                        }}
+                                        onMouseEnter={() => setHoveredRow(p.id)}
+                                        onMouseLeave={() => setHoveredRow(null)}
+                                    >
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.primary }}>{p.sku}</td>
+                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textMain }}>{p.name}</td>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
                                                 {p.web_unit || 'N/A'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: '#DC2626' }}>{formatNumber(p.web_conversion_factor, 2)}</td>
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: '#DC2626' }}>{formatNumber(p.web_conversion_factor, 2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -273,14 +293,14 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem' }}>Estrategias SEO Activas</h3>
+                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Estrategias SEO Activas</h3>
                 {strategies.length === 0 ? (
                     <div style={{ padding: '3rem', textAlign: 'center', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px dashed ${THEME.colors.border}` }}>
                         <p style={{ color: THEME.colors.textSecondary, margin: 0, fontSize: '0.9rem' }}>No hay estrategias generadas.</p>
                     </div>
                 ) : (
                     strategies.map(s => (
-                        <div key={s.id} style={{ padding: '1.25rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background }}>
+                        <div key={s.id} style={{ padding: '1.25rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', alignItems: 'center' }}>
                                 <span style={{ fontWeight: '600', color: THEME.colors.primary }}>{s.municipality_name}</span>
                                 <span style={{ fontSize: '0.7rem', fontWeight: '600', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px' }}>ACTIVO</span>
@@ -295,7 +315,7 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
                 )}
             </div>
             <div style={{ backgroundColor: '#1E293B', color: 'white', borderRadius: THEME.radius.md, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignSelf: 'start' }}>
-                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
                     <Cpu size={18} strokeWidth={1.5} style={{ color: THEME.colors.primaryLight }} /> Sugerente AI
                 </h4>
                 <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.5', margin: 0 }}>Genera metadatos optimizados usando Gemini analizando el contexto geográfico de tus geocercas.</p>
@@ -321,27 +341,38 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
 }
 
 function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (type: string) => void }) {
+    const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem' }}>Auditoría de Solicitudes</h3>
+                <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Auditoría de Solicitudes</h3>
                 <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
                         <thead style={{ backgroundColor: THEME.colors.background }}>
                             <tr>
-                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Tipo</th>
-                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Estado</th>
-                                <th style={{ padding: '0.85rem 1rem', textAlign: 'left', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase' }}>Fecha</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Tipo</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Estado</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Fecha</th>
                             </tr>
                         </thead>
                         <tbody>
                             {requests.map(r => (
-                                <tr key={r.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: THEME.colors.textMain }}>{r.type}</td>
-                                    <td style={{ padding: '0.85rem 1rem' }}>
+                                <tr 
+                                    key={r.id} 
+                                    style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        backgroundColor: hoveredRow === r.id ? '#F8FAF9' : 'transparent',
+                                        transition: 'background-color 0.2s ease'
+                                    }}
+                                    onMouseEnter={() => setHoveredRow(r.id)}
+                                    onMouseLeave={() => setHoveredRow(null)}
+                                >
+                                    <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.textMain }}>{r.type}</td>
+                                    <td style={{ padding: '0.65rem 1.25rem' }}>
                                         <span style={{ fontSize: '0.7rem', fontWeight: '600', backgroundColor: r.status === 'pending' ? '#FEF3C7' : THEME.colors.primaryLight, color: r.status === 'pending' ? '#92400E' : THEME.colors.primary, padding: '4px 8px', borderRadius: '4px' }}>{r.status.toUpperCase()}</span>
                                     </td>
-                                    <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                    <td style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(r.created_at).toLocaleDateString()}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -349,27 +380,27 @@ function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (ty
                 </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', color: THEME.colors.textMain }}>Acciones Disponibles</h4>
+                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Acciones Disponibles</h4>
                 
-                <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                <button onClick={() => onRequest('Alta Colaborador')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.borderActive}`, fontWeight: '600', color: THEME.colors.textSecondary, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.textMain; e.currentTarget.style.color = THEME.colors.textMain; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                 >
-                    <Users size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Nuevo Colaborador
+                    <Users size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Nuevo Colaborador
                 </button>
                 
-                <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                <button onClick={() => onRequest('Registro B2B Especial')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.borderActive}`, fontWeight: '600', color: THEME.colors.textSecondary, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.textMain; e.currentTarget.style.color = THEME.colors.textMain; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                 >
-                    <Building2 size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Cliente B2B Especial
+                    <Building2 size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Cliente B2B Especial
                 </button>
                 
-                <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, fontWeight: '600', color: THEME.colors.textMain, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.backgroundColor = THEME.colors.background; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                <button onClick={() => onRequest('Ticket Infraestructura')} style={{ padding: '0.75rem 1rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', border: `1px solid ${THEME.colors.borderActive}`, fontWeight: '600', color: THEME.colors.textSecondary, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.colors.textMain; e.currentTarget.style.color = THEME.colors.textMain; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                 >
-                    <Wrench size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Soporte Técnico
+                    <Wrench size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> Soporte Técnico
                 </button>
             </div>
         </div>
@@ -389,13 +420,12 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
 
     const isColaborador = type === 'Alta Colaborador';
     const isB2B = type === 'Registro B2B Especial';
-    const isTicket = type === 'Ticket Infraestructura';
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.md, width: '100%', maxWidth: '480px', padding: '2rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.md, width: '100%', maxWidth: '480px', padding: '2rem', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}`, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: THEME.colors.textMain }}>{type}</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>{type}</h3>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: THEME.colors.textSecondary }}>&times;</button>
                 </div>
 
@@ -439,7 +469,7 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
                         </>
                     )}
 
-                    {isTicket && (
+                    {!isColaborador && !isB2B && (
                         <>
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, marginBottom: '6px' }}>Asunto</label>
@@ -466,4 +496,3 @@ function ITRequestModal({ type, onClose, onSubmit }: { type: string, onClose: ()
         </div>
     );
 }
-

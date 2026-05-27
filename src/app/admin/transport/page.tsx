@@ -194,7 +194,7 @@ export default function TransportControlTower() {
     }, [fetchTransportData]);
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: 'Outfit, sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '100%', margin: '0 auto', padding: '1rem 2rem' }}>
                 

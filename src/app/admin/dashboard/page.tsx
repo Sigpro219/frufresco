@@ -198,19 +198,19 @@ export default function AdminDashboard() {
                         title="Pedidos Pendientes" 
                         value={formatNumber(stats.pendingOrders)} 
                         icon={<Clock size={20} strokeWidth={1.5} />} 
-                        color="#F59E0B" 
+                        color={THEME.colors.textSecondary} 
                     />
                     <KPICard 
                         title="Leads Nuevos" 
                         value={formatNumber(stats.newLeads)} 
                         icon={<TrendingUp size={20} strokeWidth={1.5} />} 
-                        color="#6366F1" 
+                        color={THEME.colors.primary} 
                     />
                     <KPICard 
                         title="Ticket Promedio" 
                         value={formatMoney(stats.avgTicket)} 
                         icon={<Tag size={20} strokeWidth={1.5} />} 
-                        color="#4F46E5" 
+                        color={THEME.colors.textSecondary} 
                     />
                 </div>
 
@@ -326,39 +326,39 @@ export default function AdminDashboard() {
                         {profile?.role === 'sys_admin' && (
                             <Link href="/admin/command-center" style={{ gridColumn: 'span 2', textDecoration: 'none' }}>
                                 <div style={{ 
-                                    backgroundColor: '#0F172A', 
+                                    backgroundColor: THEME.colors.surface, 
                                     padding: '1.25rem', 
                                     borderRadius: THEME.radius.lg, 
                                     display: 'flex', 
                                     alignItems: 'center', 
                                     justifyContent: 'space-between',
-                                    border: '1px solid #1E293B',
+                                    border: `1px solid ${THEME.colors.border}`,
                                     boxShadow: THEME.shadow.sm,
-                                    backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.01) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.01) 1px, transparent 1px)',
+                                    backgroundImage: 'linear-gradient(to right, rgba(0,0,0,0.01) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.01) 1px, transparent 1px)',
                                     backgroundSize: '16px 16px',
                                     transition: 'all 0.2s ease-in-out'
                                 }}
                                 onMouseEnter={e => {
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                    e.currentTarget.style.borderColor = '#334155';
-                                    e.currentTarget.style.boxShadow = THEME.shadow.md;
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                    e.currentTarget.style.boxShadow = THEME.shadow.lg;
                                 }}
                                 onMouseLeave={e => {
                                     e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.borderColor = '#1E293B';
+                                    e.currentTarget.style.borderColor = THEME.colors.border;
                                     e.currentTarget.style.boxShadow = THEME.shadow.sm;
                                 }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ color: '#D4AF37' }}>
+                                        <div style={{ color: THEME.colors.primary }}>
                                             <Radio size={24} strokeWidth={1.5} />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: '800', color: '#D4AF37', fontSize: '0.9rem', letterSpacing: '0.05em' }}>DELTA COMMAND CENTER</div>
-                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Infraestructura & Datos</div>
+                                            <div style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.9rem', letterSpacing: '0.05em' }}>DELTA COMMAND CENTER</div>
+                                            <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase' }}>Infraestructura & Datos</div>
                                         </div>
                                     </div>
-                                    <div style={{ color: '#D4AF37', fontWeight: '800' }}>
+                                    <div style={{ color: THEME.colors.primary, fontWeight: '800' }}>
                                         <ArrowRight size={16} strokeWidth={1.5} />
                                     </div>
                                 </div>
@@ -467,8 +467,8 @@ function KPICard({ title, value, icon, color }: KPICardProps) {
             minWidth: 0
         }}
         onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = THEME.shadow.md;
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
             e.currentTarget.style.borderColor = THEME.colors.borderActive;
         }}
         onMouseLeave={e => {
@@ -482,7 +482,7 @@ function KPICard({ title, value, icon, color }: KPICardProps) {
                 backgroundColor: `${color}15`, 
                 width: '42px', 
                 height: '42px', 
-                borderRadius: THEME.radius.md, 
+                borderRadius: '50%', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
@@ -526,8 +526,8 @@ function AdminCard({ title, href, icon, desc, style }: AdminCardProps) {
                 height: '100%'
             }}
                 onMouseEnter={e => {
-                    e.currentTarget.style.transform = 'translateY(-3px)';
-                    e.currentTarget.style.boxShadow = THEME.shadow.md;
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = THEME.shadow.lg;
                     e.currentTarget.style.borderColor = THEME.colors.primary;
                 }}
                 onMouseLeave={e => {

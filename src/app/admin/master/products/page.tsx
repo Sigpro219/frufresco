@@ -983,18 +983,18 @@ export default function MasterProductsPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '60px' }}>Foto</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '140px' }}>SKU Código</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Nombre Técnico</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Categoría</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Logística</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Unidad</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>IVA</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Mínimo</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', textAlign: 'center' }}>Configuración</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>Descripción</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '60px', textAlign: 'center' }}>Web</th>
-                                <th style={{ padding: '0.75rem 1rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', width: '100px' }}>Estado</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>SKU Código</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Categoría</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>IVA</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Mínimo</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Configuración</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Descripción</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px', textAlign: 'center' }}>Web</th>
+                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '100px' }}>Estado</th>
                             </tr>
                         </thead>
                         <tbody>
