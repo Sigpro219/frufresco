@@ -170,6 +170,22 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                     color: var(--ops-text);
                     transition: background-color 0.3s, color 0.3s;
                 }
+                /* Sleek Custom Scrollbar for Ops Portal */
+                ::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
+                }
+                ::-webkit-scrollbar-track {
+                    background: var(--ops-bg);
+                }
+                ::-webkit-scrollbar-thumb {
+                    background: var(--ops-border);
+                    border-radius: 4px;
+                    transition: background 0.2s;
+                }
+                ::-webkit-scrollbar-thumb:hover {
+                    background: var(--ops-text-muted);
+                }
                 .btn-op {
                     display: flex;
                     align-items: center;
