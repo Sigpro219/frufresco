@@ -20,8 +20,12 @@ import {
     Scale, 
     XCircle,
     AlertCircle,
-    Grid
+    Grid,
+    ChevronUp,
+    RefreshCw,
+    Sparkles
 } from 'lucide-react';
+
 
 interface PickingItem {
     id: string;
@@ -474,29 +478,35 @@ export default function PickingExecutionPage() {
     return (
         <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#0A111C', minHeight: '100vh', paddingBottom: '7rem', color: '#F8FAFC' }}>
             
-            {/* REDESIGNED PREMIUM HEADER */}
-            <div style={{
-                backgroundColor: '#121D2D',
-                padding: '1.5rem',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                color: 'white',
-                margin: '1rem',
-                position: 'relative',
-                zIndex: 10,
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
-                    <div style={{ flex: 1 }}>
+            {/* Título y Botón (No pegajosos, se ocultan al hacer scroll) */}
+            <div
+                className="no-print"
+                style={{
+                    paddingTop: "0.5rem",
+                    paddingBottom: "0.5rem",
+                    backgroundColor: "#0A111C",
+                }}
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.5rem",
+                        padding: "0 1rem",
+                        flexWrap: "wrap",
+                        gap: "0.5rem"
+                    }}
+                >
+                    <div>
                         <h1 
                             className="header-title-container"
                             onClick={() => router.push('/ops')}
-                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}
+                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
                         >
-                            <span>Alistamiento <span style={{ color: '#0D7A57' }}>Bodega</span></span>
-                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "4px 10px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                                <Calendar size={13} strokeWidth={2.5} />
-                                {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
+                            <span style={{ whiteSpace: "nowrap" }}>Alistamiento <span style={{ color: "#0D7A57" }}>Bodega</span></span>
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                <Calendar size={14} /> {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
                             </span>
                         </h1>
                     </div>
@@ -505,82 +515,166 @@ export default function PickingExecutionPage() {
                             onClick={() => router.push('/ops')}
                             className="header-tutor-btn"
                             style={{
-                                backgroundColor: 'rgba(13, 122, 87, 0.08)', color: '#0D7A57', border: '1px solid #0D7A57',
-                                padding: '0.5rem 0.85rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', transition: 'all 0.2s ease'
+                                backgroundColor: '#121D2D', color: '#0D7A57', border: '1px solid #0D7A57',
+                                padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
                             }}
                         >
-                            <GraduationCap size={14} strokeWidth={2.5} /> TUTOR
+                            <GraduationCap size={14} /> TUTOR
                         </button>
                     </div>
                 </div>
+            </div>
 
-                {/* Intelligent Search Bar */}
-                <div style={{ position: 'relative', marginBottom: '1.2rem' }}>
-                    <input 
-                        type="text"
-                        placeholder={viewMode === 'client' ? "Buscar cliente o espacio..." : "Buscar producto..."}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)',
-                            backgroundColor: '#0A111C', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s'
-                        }}
-                    />
-                    <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                    {searchTerm && (
-                        <button 
-                            onClick={() => setSearchTerm('')}
-                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            <X size={16} />
-                        </button>
-                    )}
-                </div>
-
-                {/* Progress Bar */}
-                {totalTasks > 0 && (
-                    <div style={{ marginBottom: '1.2rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', fontWeight: '700', color: '#CBD5E1' }}>
-                            <span>AVANCE DE ALISTAMIENTO</span>
-                            <span style={{ color: '#0D7A57' }}>{progress}%</span>
-                        </div>
-                        <div style={{ width: '100%', height: '8px', backgroundColor: '#0A111C', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+            {/* STICKY CONTAINER (Barra de progreso + Dashboard de estados) */}
+            {totalTasks > 0 && (
+                <div
+                    className="no-print"
+                    style={{
+                        position: "sticky",
+                        top: "57px",
+                        zIndex: 50,
+                        backgroundColor: "#0A111C",
+                        padding: "0 1rem 0.8rem 1rem",
+                        marginBottom: "1rem",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                    }}
+                >
+                    {/* Barra de Progreso Lineal (General) */}
+                    <div style={{ width: "100%", marginTop: "0.4rem", marginBottom: "1rem" }}>
+                        <div style={{
+                            width: "100%",
+                            height: "8px",
+                            backgroundColor: "#121D2D",
+                            borderRadius: "4px",
+                            overflow: "hidden",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            display: 'flex'
+                        }}>
                             <div style={{ width: `${readyPct}%`, height: '100%', backgroundColor: '#0D7A57', transition: 'width 0.5s ease-out' }} />
                             <div style={{ width: `${partialPct}%`, height: '100%', backgroundColor: '#EAB308', transition: 'width 0.5s ease-out' }} />
                             <div style={{ width: `${alertPct}%`, height: '100%', backgroundColor: '#EF4444', transition: 'width 0.5s ease-out' }} />
                         </div>
                     </div>
-                )}
 
-                {/* Metrics Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', marginBottom: '1.2rem' }}>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#94A3B8' }}>{pendingTasks}</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PENDIENTE</div>
-                    </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EAB308' }}>{partialTasks}</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PARCIAL</div>
-                    </div>
-                    <div style={{ backgroundColor: alertTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: alertTasks > 0 ? '1px solid #EF4444' : '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EF4444' }}>{alertTasks}</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#EF4444' }}>ALERTAS</div>
-                    </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0D7A57' }}>{readyTasks}</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>LISTO</div>
-                    </div>
-                    
-                    {/* Avance Badge */}
-                    <div style={{ backgroundColor: 'rgba(13, 122, 87, 0.1)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid #0D7A57' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0D7A57' }}>{progress}%</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#0D7A57' }}>AVANCE</div>
+                    {/* Dashboard de Estados (Semáforo) */}
+                    <div
+                        style={{
+                            backgroundColor: "#121D2D",
+                            padding: "0.6rem 0.8rem",
+                            borderRadius: "16px",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                            display: "flex",
+                            justifyContent: "space-evenly",
+                            alignItems: "center",
+                        }}
+                    >
+                        {/* Pendiente */}
+                        <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#94A3B8" }}>
+                                {pendingTasks}
+                            </div>
+                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                                PENDIENTE
+                            </div>
+                        </div>
+
+                        {/* Parcial */}
+                        <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EAB308" }}>
+                                {partialTasks}
+                            </div>
+                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                                PARCIAL
+                            </div>
+                        </div>
+
+                        {/* Alertas */}
+                        <div style={{ textAlign: "center", position: "relative" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EF4444" }}>
+                                {alertTasks}
+                            </div>
+                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
+                                ALERTAS
+                            </div>
+                            {alertTasks > 0 && (
+                                <div style={{ position: "absolute", top: -4, right: -4, width: "5px", height: "5px", borderRadius: "50%", background: "#EF4444" }} />
+                            )}
+                        </div>
+
+                        {/* Listo */}
+                        <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#0D7A57" }}>
+                                {readyTasks}
+                            </div>
+                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                                LISTO
+                            </div>
+                        </div>
+
+                        {/* Avance Badge */}
+                        <div
+                            style={{
+                                textAlign: "center",
+                                borderLeft: "1px solid rgba(255, 255, 255, 0.08)",
+                                paddingLeft: "0.8rem",
+                                marginLeft: "0.2rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.4rem"
+                            }}
+                        >
+                            <div
+                                style={{
+                                    backgroundColor: "rgba(13, 122, 87, 0.15)",
+                                    padding: "0.4rem 0.6rem",
+                                    borderRadius: "10px",
+                                    border: "1px solid rgba(13, 122, 87, 0.3)",
+                                    boxShadow: progress > 0 ? "0 0 15px rgba(13, 122, 87, 0.2)" : "none",
+                                    transition: "all 0.4s ease",
+                                }}
+                            >
+                                <div style={{ fontSize: "1.2rem", fontWeight: "900", color: "white", lineHeight: "1" }}>
+                                    {progress}%
+                                </div>
+                                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: "white", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    AVANCE
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    color: 'white',
+                                    borderRadius: '8px',
+                                    width: '28px',
+                                    height: '28px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                    transition: 'all 0.2s',
+                                    flexShrink: 0
+                                }}
+                                title="Subir al inicio"
+                            >
+                                <ChevronUp size={16} />
+                            </button>
+                        </div>
                     </div>
                 </div>
+            )}
 
-                {/* Collapsible Category Filter (Buying Team) */}
-                <div style={{ marginBottom: "0.5rem" }}>
+            {/* FILTERS CONTAINER */}
+            <div style={{ padding: "0 1rem", marginBottom: "1rem" }}>
+                {/* Category Filter — Colapsable */}
+                <div style={{ marginBottom: "0.6rem" }}>
+                    {/* Barra activa: siempre visible */}
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        {/* Pill de categoría activa */}
                         <div
                             style={{
                                 flex: 1,
@@ -598,22 +692,23 @@ export default function PickingExecutionPage() {
                                 justifyContent: "space-between",
                             }}
                         >
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <ClipboardList size={14} strokeWidth={2.5} />
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <ClipboardList size={14} />
                                 {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
                             </span>
                             <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
                         </div>
 
+                        {/* Botón toggle del grid */}
                         <button
                             onClick={() => setShowFilterGrid(v => !v)}
-                            title={showFilterGrid ? "Ocultar filtros" : "Cambiar equipo"}
+                            title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
                             style={{
                                 width: "40px",
                                 height: "40px",
                                 borderRadius: "12px",
-                                border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255,255,255,0.1)"}`,
-                                backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "rgba(255,255,255,0.05)",
+                                border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
+                                backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "#121D2D",
                                 color: showFilterGrid ? "#0D7A57" : "#94A3B8",
                                 fontSize: "1rem",
                                 display: "flex",
@@ -628,6 +723,7 @@ export default function PickingExecutionPage() {
                         </button>
                     </div>
 
+                    {/* Grid de Filtros */}
                     {showFilterGrid && (
                         <div
                             style={{
@@ -650,12 +746,10 @@ export default function PickingExecutionPage() {
                                         style={{
                                             padding: "0.55rem 0.75rem",
                                             borderRadius: "10px",
-                                            border: isActive 
-                                                ? "1px solid #0D7A57" 
-                                                : "1px solid rgba(255,255,255,0.1)",
+                                            border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
                                             backgroundColor: isActive
                                                 ? "rgba(13, 122, 87, 0.12)"
-                                                : "rgba(255,255,255,0.02)",
+                                                : "#121D2D",
                                             color: isActive ? "white" : "#94A3B8",
                                             fontSize: "0.7rem",
                                             fontWeight: "700",
@@ -677,16 +771,37 @@ export default function PickingExecutionPage() {
                     )}
                 </div>
 
+                {/* Intelligent Search Bar */}
+                <div style={{ position: 'relative', marginBottom: '0.65rem' }}>
+                    <input 
+                        type="text"
+                        placeholder={viewMode === 'client' ? "Buscar cliente o espacio..." : "Buscar producto..."}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{
+                            width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)',
+                            backgroundColor: '#121D2D', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s'
+                        }}
+                    />
+                    <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, color: '#94A3B8' }} />
+                    {searchTerm && (
+                        <button 
+                            onClick={() => setSearchTerm('')}
+                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+
                 {/* Sub-filter row (Cubículo & Suministro) */}
                 <div style={{ 
-                    background: 'rgba(10, 17, 28, 0.6)',
+                    background: 'rgba(18, 29, 45, 0.6)',
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
                     padding: '4px',
                     borderRadius: '12px',
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr',
-                    marginTop: '0.75rem',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
                 }}>
@@ -735,9 +850,17 @@ export default function PickingExecutionPage() {
 
             {/* MAIN CONTENT AREA */}
             <div style={{ padding: '0.5rem 1rem' }}>
-                
-                {/* VIEW 1: BY CLIENT (CUBÍCULO) */}
-                {viewMode === 'client' && (() => {
+                {loading ? (
+                    <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                        <RefreshCw size={36} style={{ color: "#0D7A57", animation: "spin 2s linear infinite" }} />
+                        <p style={{ color: "#94A3B8", fontWeight: "700", letterSpacing: "0.05em" }}>
+                            BUSCANDO PEDIDOS...
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        {/* VIEW 1: BY CLIENT (CUBÍCULO) */}
+                        {viewMode === 'client' && (() => {
                     const hasAnyTasks = tasks.length > 0;
                     const filteredTasks = tasks
                         .filter(t => (showCompleted || t.status !== 'ready'))
@@ -923,6 +1046,8 @@ export default function PickingExecutionPage() {
                         </div>
                     );
                 })()}
+                    </>
+                )}
             </div>
 
             {/* VALIDATION MODAL (MOBILE BOTTOM SHEET LAYOUT) */}
@@ -1142,16 +1267,19 @@ export default function PickingExecutionPage() {
                 </div>
             )}
 
-            {loading && (
-                <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(10,17,28,0.85)', zIndex: 100, color: 'white', fontWeight: 'bold' }}>
-                    BUSCANDO PEDIDOS...
-                </div>
-            )}
-            
             <style jsx>{`
                 @keyframes slideDown {
                     from { opacity: 0; transform: translateY(-6px); }
                     to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                @keyframes pulse {
+                    0% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.6; transform: scale(0.98); }
+                    100% { opacity: 1; transform: scale(1); }
                 }
                 .client-card:hover {
                     border-color: rgba(13, 122, 87, 0.4) !important;
