@@ -5,7 +5,20 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
-import { Monitor, LayoutGrid, Tv, Bell } from 'lucide-react';
+import { 
+    Monitor, 
+    LayoutGrid, 
+    Tv, 
+    Bell, 
+    AlertTriangle, 
+    AlertOctagon, 
+    AlertCircle, 
+    CheckCircle, 
+    Check, 
+    Calendar,
+    X,
+    XCircle
+} from 'lucide-react';
 
 // Types
 type Product = {
@@ -108,11 +121,7 @@ export default function PickingDashboard() {
     const loadData = useCallback(async (signal?: AbortSignal, silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // 1. Fetch Active Orders — solo estados que requieren alistamiento:
-            // para_compra: confirmado para comprar/preparar
-            // approved: aprobado, listo para alistar
-            // picking: en preparación activa
-            // Excluidos: pending_approval (sin confirmar), shipped/delivered (ya salió), cancelled
+            // 1. Fetch Active Orders
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
@@ -137,12 +146,6 @@ export default function PickingDashboard() {
                 return p.contact_name || p.company_name || 'Cliente B2C';
             };
 
-            const getOrderKey = (order: any): string => {
-                const baseName = getOrderName(order);
-                const shortId = order.sequence_id ? `#${order.sequence_id}` : `#${order.id.substring(0, 4)}`;
-                return `${baseName} (Ped. ${shortId})`;
-            };
-
             const activeOrders = (orders || []).filter(o => o.order_items && o.order_items.length > 0);
 
             // 2. Fetch routes and route_stops to get assigned vehicle
@@ -163,7 +166,6 @@ export default function PickingDashboard() {
             const plateToDriver = new Map<string, string>();
             (fleet || []).forEach(f => {
                 if (f.plate && f.collaborators && f.collaborators.contact_name) {
-                    // Extract first name and first surname for brevity
                     const parts = f.collaborators.contact_name.split(' ').filter(Boolean);
                     const shortName = parts.length >= 3 ? `${parts[0]} ${parts[2]}` : parts[0];
                     plateToDriver.set(f.plate, shortName);
@@ -197,7 +199,6 @@ export default function PickingDashboard() {
                     const zoneA = a.zone_name.toUpperCase();
                     const zoneB = b.zone_name.toUpperCase();
                     if (zoneA !== zoneB) {
-                        // Put "SIN ASIGNAR" at the end
                         if (zoneA === 'SIN ASIGNAR') return 1;
                         if (zoneB === 'SIN ASIGNAR') return -1;
                         return zoneA.localeCompare(zoneB);
@@ -240,7 +241,6 @@ export default function PickingDashboard() {
                 activeOrders.forEach(order => {
                     if (order.order_items) {
                         order.order_items.forEach((item: { product_id: string, quantity: number, picked_quantity: number, quality_status?: string | null, id: string }) => {
-                            // Unified item storage regardless of category (TV needs full context for progress)
                             if (!newMatrix[item.product_id]) newMatrix[item.product_id] = {};
                             const currentCell = newMatrix[item.product_id][order.id] || { ordered: 0, picked: 0, hasRejection: false, hasWarning: false, items: [] };
                             const qty = Number(item.quantity) || 0;
@@ -343,7 +343,7 @@ export default function PickingDashboard() {
             case 'Oriente': return '#A855F7';
             case 'Occidente': return '#EC4899';
             case 'Centro': return '#14B8A6';
-            default: return '#333';
+            default: return '#64748B';
         }
     };
 
@@ -362,15 +362,13 @@ export default function PickingDashboard() {
         let total = 0;
         let picked = 0;
 
-        // Find clients in this zone
         const zoneClients = clients.filter(c => c.zone_name === zoneName);
 
         zoneClients.forEach(c => {
             Object.values(matrix).forEach(prodRow => {
-                const cell = prodRow[c.company_name];
+                const cell = prodRow[c.id];
                 if (cell) {
                     total += cell.ordered;
-                    // Cap picked at ordered to not go over 100% if over-picking happens
                     picked += Math.min(cell.ordered, cell.picked);
                 }
             });
@@ -378,7 +376,6 @@ export default function PickingDashboard() {
 
         if (total === 0) return 0;
         const percent = (picked / total) * 100;
-        // Use floor for everything except true 100% to avoid premature rounding
         return percent >= 100 ? 100 : Math.floor(percent);
     };
 
@@ -457,26 +454,22 @@ export default function PickingDashboard() {
         let newlyCompletedName = null;
 
         clients.forEach(c => {
-            const isDone = isClientComplete(c.company_name);
+            const isDone = isClientComplete(c.id);
             if (isDone) {
-                currentCompleted.add(c.company_name);
-                if (!lastCompletedClientsRef.current.has(c.company_name)) {
+                currentCompleted.add(c.id);
+                if (!lastCompletedClientsRef.current.has(c.id)) {
                     newlyCompletedName = c.company_name;
                 }
             }
         });
 
-        // Trigger milestone only if it's a real new completion
-        // and we aren't already showing one. 
-        // We check size > 0 to avoid triggering on initial load.
         if (newlyCompletedName && !milestone && lastCompletedClientsRef.current.size > 0) {
             setMilestone({ type: 'CLIENT', name: newlyCompletedName });
             setTimeout(() => setMilestone(null), 5000);
         }
 
-        // Always sync the ref
         lastCompletedClientsRef.current = currentCompleted;
-    }, [matrix, loading, clients, isClientComplete, milestone]); // Removed lastCompletedClients from deps
+    }, [matrix, loading, clients, isClientComplete, milestone]);
 
     // --- Global Progress Logic ---
     let totalGlobalOrdered = 0;
@@ -517,7 +510,7 @@ export default function PickingDashboard() {
         });
     });
 
-    if (loading) return <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: '2rem' }}>AGUARDE...</div>;
+    if (loading) return <div style={{ background: '#0A111C', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: '2rem' }}>AGUARDE...</div>;
 
     // Inventory Alerts Calculation
     const inventoryAlerts = products
@@ -532,7 +525,7 @@ export default function PickingDashboard() {
     const bannerAlerts: { type: 'critical' | 'warning' | 'info', msg: string }[] = [];
 
     if (!isConnected) {
-        bannerAlerts.push({ type: 'critical', msg: '🔴 CONEXIÓN PERDIDA - Intentando reconectar...' });
+        bannerAlerts.push({ type: 'critical', msg: 'CONEXIÓN PERDIDA - Intentando reconectar...' });
     }
 
     let hasAnyRejection = false;
@@ -546,47 +539,55 @@ export default function PickingDashboard() {
     });
 
     if (hasAnyRejection) {
-        bannerAlerts.push({ type: 'critical', msg: '🚨 CALIDAD: Hay productos rechazados en piso que requieren atención.' });
+        bannerAlerts.push({ type: 'critical', msg: 'CALIDAD: Hay productos rechazados en piso que requieren atención.' });
     }
     if (hasAnyWarning) {
-        bannerAlerts.push({ type: 'warning', msg: '⚠️ NOVEDAD: Hay advertencias de calidad en productos.' });
+        bannerAlerts.push({ type: 'warning', msg: 'NOVEDAD: Hay advertencias de calidad en productos.' });
     }
 
     if (inventoryAlerts && inventoryAlerts.length > 0) {
         inventoryAlerts.slice(0, 3).forEach(p => {
-            bannerAlerts.push({ type: 'warning', msg: `⚠️ INVENTARIO: Bajo stock de ${p.name} (Actual: ${p.current})` });
+            bannerAlerts.push({ type: 'warning', msg: `INVENTARIO: Bajo stock de ${p.name} (Actual: ${p.current})` });
         });
         if (inventoryAlerts.length > 3) {
-            bannerAlerts.push({ type: 'warning', msg: `⚠️ INVENTARIO: Y ${inventoryAlerts.length - 3} alertas más.` });
+            bannerAlerts.push({ type: 'warning', msg: `INVENTARIO: Y ${inventoryAlerts.length - 3} alertas más.` });
         }
     }
 
     if (bannerAlerts.length === 0) {
-        bannerAlerts.push({ type: 'info', msg: `✅ OPERACIÓN FLUIDA - Progreso Global: ${percentComplete}%` });
+        bannerAlerts.push({ type: 'info', msg: `OPERACIÓN FLUIDA - Progreso Global: ${percentComplete}%` });
     }
 
     const hasCritical = bannerAlerts.some(a => a.type === 'critical');
     const hasWarningBanner = bannerAlerts.some(a => a.type === 'warning');
     
-    const bannerBgClass = hasCritical ? 'bg-red-600/80 text-white' : (hasWarningBanner ? 'bg-yellow-500/80 text-black' : 'bg-green-700/80 text-white');
+    let bannerBg = 'rgba(13, 122, 87, 0.85)';
+    let bannerFg = 'white';
+    let bannerBorder = '1px solid rgba(13, 122, 87, 0.4)';
+    if (hasCritical) {
+        bannerBg = 'rgba(239, 68, 68, 0.85)';
+        bannerFg = 'white';
+        bannerBorder = '1px solid rgba(239, 68, 68, 0.4)';
+    } else if (hasWarningBanner) {
+        bannerBg = 'rgba(234, 179, 8, 0.85)';
+        bannerFg = 'black';
+        bannerBorder = '1px solid rgba(234, 179, 8, 0.4)';
+    }
 
-    const bannerText = bannerAlerts.map(a => a.msg).join(' *** ');
-    // ----------------------------
+    const bannerText = bannerAlerts.map(a => a.msg).join(' ••• ');
 
     return (
-        <main style={{ backgroundColor: '#000', height: '100vh', color: '#fff', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-
+        <main style={{ backgroundColor: '#0A111C', height: '100vh', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* TOP HEADER */}
             <header style={{ 
                 height: cfg.headerHeight, 
-                borderBottom: '1px solid #333', 
+                borderBottom: '1px solid rgba(255,255,255,0.08)', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'space-between', 
                 padding: density === 'tv' ? '0 1rem' : '0 2rem', 
-                background: '#050505',
+                background: '#121D2D',
                 flexShrink: 0
             }}>
                 <div
@@ -595,59 +596,52 @@ export default function PickingDashboard() {
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: density === 'tv' ? '0.5rem' : '1rem', 
-                        color: '#22C55E', 
+                        color: '#0D7A57', 
                         fontWeight: '900', 
                         fontSize: density === 'tv' ? '1rem' : '1.5rem', 
                         cursor: 'pointer' 
                     }}>
                     <img src="/logo_completo_compacto.png" alt="Fru Fresco" style={{ height: density === 'tv' ? '30px' : '45px', objectFit: 'contain', borderRadius: '6px' }} />
-                    <span style={{ color: '#666', marginLeft: '8px' }}>|</span> <span style={{ color: '#fff', marginLeft: '8px' }}>PICKING</span>
+                    <span style={{ color: '#475569', marginLeft: '8px' }}>|</span> <span style={{ color: '#fff', marginLeft: '8px' }}>PICKING</span>
                 </div>
-
-                {/* INVENTORY ALERTS BANNER - INSIDE HEADER OR BELOW? 
-                    User asked for a yellow alert or banner. Let's put it in the center of the header if there are few, or a marquee if many.
-                    Actually, let's put it below the header for better visibility.
-                */}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '3rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '600px', marginTop: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#aaa', textTransform: 'uppercase' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '400px', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase' }}>
                             <span>PRODUCCIÓN</span>
                             <span>{totalGlobalPicked} / {totalGlobalOrdered} Und</span>
                         </div>
                         {/* THE BAR */}
-                        <div style={{ width: '100%', height: '12px', background: '#222', borderRadius: '6px', overflow: 'hidden', display: 'flex' }}>
-                            {/* COMPLETED SEGMENT */}
+                        <div style={{ width: '100%', height: '10px', background: '#0A111C', borderRadius: '6px', overflow: 'hidden', display: 'flex', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <div style={{
                                 width: `${percentComplete}%`,
-                                background: '#22C55E', // Green
+                                background: '#0D7A57',
                                 height: '100%',
                                 transition: 'width 0.5s'
                             }} title={`Terminado: ${percentComplete}%`}></div>
 
-                            {/* PARTIAL SEGMENT */}
                             <div style={{
                                 width: `${percentPartial}%`,
-                                background: '#EAB308', // Yellow
+                                background: '#EAB308',
                                 height: '100%',
                                 transition: 'width 0.5s'
                             }} title={`Parcial: ${percentPartial}%`}></div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: '600' }}>
-                            <span style={{ color: '#22C55E' }}>⬤ {percentComplete}% OK</span>
+                            <span style={{ color: '#0D7A57' }}>⬤ {percentComplete}% OK</span>
                             <span style={{ color: '#EAB308' }}>⬤ {percentPartial}% PARCIAL</span>
                         </div>
                     </div>
 
                     {/* GLOBAL PROGRESS */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ color: '#888', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL</span>
+                        <span style={{ color: '#94A3B8', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL</span>
                         <div style={{
                             fontSize: '2rem',
                             fontWeight: 'bold',
-                            color: globalPercent === 100 ? '#4ADE80' : '#FACC15',
-                            textShadow: '0 0 10px rgba(250, 204, 21, 0.3)'
+                            color: globalPercent === 100 ? '#10B981' : '#FACC15',
+                            textShadow: '0 0 10px rgba(250, 204, 21, 0.1)'
                         }}>
                             {globalPercent}%
                         </div>
@@ -655,17 +649,16 @@ export default function PickingDashboard() {
 
                     {/* CLOCK & STATUS */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                         {/* Connection Status */}
                         <div style={{
                             padding: '5px 10px', borderRadius: '20px',
-                            background: isConnected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.2)',
-                            border: isConnected ? '1px solid #22C55E' : '1px solid #EF4444',
+                            background: isConnected ? 'rgba(13, 122, 87, 0.1)' : 'rgba(239, 68, 68, 0.2)',
+                            border: isConnected ? '1px solid #0D7A57' : '1px solid #EF4444',
                             display: 'flex', alignItems: 'center', gap: '8px'
                         }}>
                             <div style={{
                                 width: '10px', height: '10px', borderRadius: '50%',
-                                background: isConnected ? '#22C55E' : '#EF4444',
-                                boxShadow: isConnected ? '0 0 10px #22C55E' : '0 0 10px #EF4444',
+                                background: isConnected ? '#0D7A57' : '#EF4444',
+                                boxShadow: isConnected ? '0 0 10px #0D7A57' : '0 0 10px #EF4444',
                                 animation: !isConnected ? 'pulseAlert 1s infinite' : 'none'
                             }}></div>
                             {!isConnected && <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: 'bold' }}>DESCONECTADO</span>}
@@ -676,36 +669,39 @@ export default function PickingDashboard() {
                         {/* DENSITY SELECTOR */}
                         <div style={{ 
                             display: 'flex', 
-                            background: '#111', 
+                            background: '#0A111C', 
                             padding: '3px', 
                             borderRadius: '8px', 
-                            border: '1px solid #333',
+                            border: '1px solid rgba(255,255,255,0.08)',
                             marginLeft: '10px'
                         }}>
                             <button 
                                 onClick={() => changeDensity('standard')}
                                 style={{
                                     padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                                    background: density === 'standard' ? '#22C55E' : 'transparent',
-                                    color: density === 'standard' ? '#000' : '#888',
-                                    transition: 'all 0.2s'
-                                }} title="Estándar"><Monitor size={14} strokeWidth={3} /></button>
+                                    background: density === 'standard' ? '#0D7A57' : 'transparent',
+                                    color: density === 'standard' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Estándar"><Monitor size={14} strokeWidth={2.5} /></button>
                             <button 
                                 onClick={() => changeDensity('high')}
                                 style={{
                                     padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                                    background: density === 'high' ? '#22C55E' : 'transparent',
-                                    color: density === 'high' ? '#000' : '#888',
-                                    transition: 'all 0.2s'
-                                }} title="Alta Densidad"><LayoutGrid size={14} strokeWidth={3} /></button>
+                                    background: density === 'high' ? '#0D7A57' : 'transparent',
+                                    color: density === 'high' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Alta Densidad"><LayoutGrid size={14} strokeWidth={2.5} /></button>
                             <button 
                                 onClick={() => changeDensity('tv')}
                                 style={{
                                     padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                                    background: density === 'tv' ? '#22C55E' : 'transparent',
-                                    color: density === 'tv' ? '#000' : '#888',
-                                    transition: 'all 0.2s'
-                                }} title="Modo TV / Aeropuerto"><Tv size={14} strokeWidth={3} /></button>
+                                    background: density === 'tv' ? '#0D7A57' : 'transparent',
+                                    color: density === 'tv' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Modo TV"><Tv size={14} strokeWidth={2.5} /></button>
                         </div>
                     </div>
                 </div>
@@ -726,7 +722,7 @@ export default function PickingDashboard() {
                     fontSize: '0.9rem',
                     overflow: 'hidden'
                 }}>
-                    <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                    <AlertTriangle size={18} className="text-amber-700" />
                     <div style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         <div style={{ 
                             display: 'inline-block', 
@@ -752,18 +748,18 @@ export default function PickingDashboard() {
                         <tr>
                             <th style={{
                                 position: 'sticky', top: 0, left: 0, zIndex: 40,
-                                background: '#000', minWidth: '200px',
-                                borderBottom: '1px solid #333', borderRight: '1px solid #333',
+                                background: '#0A111C', minWidth: '200px',
+                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
                                 height: '44px'
                             }}></th>
 
                             {zoneHeaders.map((zone, i) => (
                                 <th key={i} colSpan={zone.count} style={{
                                     position: 'sticky', top: 0, zIndex: 30,
-                                    background: '#0a0a0a',
-                                    color: zone.percent === 100 ? '#22C55E' : zone.color,
-                                    borderBottom: `4px solid ${zone.percent === 100 ? '#22C55E' : zone.color}`,
-                                    borderRight: '1px solid #333',
+                                    background: '#121D2D',
+                                    color: zone.percent === 100 ? '#0D7A57' : zone.color,
+                                    borderBottom: `4px solid ${zone.percent === 100 ? '#0D7A57' : zone.color}`,
+                                    borderRight: '1px solid rgba(255,255,255,0.08)',
                                     textAlign: 'center',
                                     fontWeight: 'bold',
                                     fontSize: '1rem',
@@ -778,9 +774,9 @@ export default function PickingDashboard() {
                         <tr>
                             <th style={{
                                 position: 'sticky', top: '44px', left: 0, zIndex: 40,
-                                background: '#000',
-                                borderBottom: '1px solid #333', borderRight: '1px solid #333',
-                                color: '#888', textAlign: 'right', padding: '1rem',
+                                background: '#0A111C',
+                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
+                                color: '#94A3B8', textAlign: 'right', padding: '1rem',
                                 fontSize: cfg.fontSize
                             }}>PRODUCTO</th>
 
@@ -789,9 +785,9 @@ export default function PickingDashboard() {
                                 return (
                                     <th key={client.id} style={{
                                         position: 'sticky', top: '44px', zIndex: 20,
-                                        background: complete ? '#064E3B' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#000'),
-                                        borderBottom: '1px solid #333',
-                                        borderRight: '1px solid #111',
+                                        background: complete ? 'rgba(13, 122, 87, 0.2)' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#0A111C'),
+                                        borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                        borderRight: '1px solid rgba(255,255,255,0.05)',
                                         height: cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
@@ -803,7 +799,7 @@ export default function PickingDashboard() {
                                         <div style={{
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            height: cfg.clientHeaderHeight, // Explicit height matching th
+                                            height: cfg.clientHeaderHeight,
                                             alignItems: 'center',
                                             justifyContent: 'flex-start',
                                             overflow: 'hidden'
@@ -812,9 +808,9 @@ export default function PickingDashboard() {
                                             <div style={{
                                                 fontSize: cfg.laneFontSize,
                                                 fontWeight: '800',
-                                                color: complete ? '#4ADE80' : '#fff',
-                                                marginBottom: '2px', // Tighter spacing
-                                                borderBottom: '1px solid #333',
+                                                color: complete ? '#34D399' : '#fff',
+                                                marginBottom: '2px',
+                                                borderBottom: '1px solid rgba(255,255,255,0.08)',
                                                 width: '100%',
                                                 textAlign: 'center',
                                                 paddingTop: '4px',
@@ -833,7 +829,7 @@ export default function PickingDashboard() {
                                                 fontSize: cfg.clientFontSize, 
                                                 fontWeight: '800',
                                                 letterSpacing: '0.5px',
-                                                color: complete ? '#86EFAC' : '#fff',
+                                                color: complete ? '#A7F3D0' : '#fff',
                                                 textAlign: 'left',
                                                 width: '100%',
                                                 flex: 1,
@@ -865,27 +861,27 @@ export default function PickingDashboard() {
                                     {/* Category Header */}
                                     <tr>
                                         <td colSpan={clients.length + 1} style={{
-                                            background: '#111', color: '#888',
+                                            background: '#121D2D', color: '#94A3B8',
                                             fontWeight: 'bold', fontSize: cfg.fontSize,
-                                            padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid #222',
-                                            position: 'sticky', left: 0 // Optional: Sticky category header? Maybe too much.
+                                            padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                            position: 'sticky', left: 0
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
                                                 <span style={{ minWidth: '250px', display: 'inline-block' }}>{(CATEGORY_MAP[category] || category).toUpperCase()}</span>
 
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     {/* Mini Progress Bar Background */}
-                                                    <div style={{ width: '100px', height: '6px', background: '#333', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    <div style={{ width: '100px', height: '6px', background: '#0A111C', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
                                                         <div style={{
                                                             width: `${catPercent}%`,
                                                             height: '100%',
-                                                            background: isCatComplete ? '#4ADE80' : '#FACC15',
+                                                            background: isCatComplete ? '#0D7A57' : '#FACC15',
                                                             transition: 'width 0.5s ease'
                                                         }} />
                                                     </div>
 
                                                     <span style={{
-                                                        color: catPercent === 0 ? '#fff' : (isCatComplete ? '#4ADE80' : '#FACC15'),
+                                                        color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
                                                         fontWeight: 'bold',
                                                         minWidth: '35px', textAlign: 'right',
                                                         fontSize: '0.9rem'
@@ -898,8 +894,7 @@ export default function PickingDashboard() {
                                     </tr>
 
                                     {categoryProducts.map(product => {
-                                        // Filter out products that have NO orders at all in visible clients
-                                        const rowHasData = clients.some(c => matrix[product.id]?.[c.company_name]);
+                                        const rowHasData = clients.some(c => matrix[product.id]?.[c.id]);
                                         if (!rowHasData) return null;
 
                                         return (
@@ -907,8 +902,8 @@ export default function PickingDashboard() {
                                                 {/* Product Name (Sticky Left) */}
                                                 <td style={{
                                                     position: 'sticky', left: 0, zIndex: 10,
-                                                    background: productsWithAlerts.has(product.id) ? '#7F1D1D' : '#000',
-                                                    borderRight: '1px solid #333', borderBottom: '1px solid #222',
+                                                    background: productsWithAlerts.has(product.id) ? '#7F1D1D' : '#0A111C',
+                                                    borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.05)',
                                                     padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
                                                     color: productsWithAlerts.has(product.id) ? '#fff' : '#ddd', 
                                                     fontSize: cfg.productFontSize,
@@ -924,19 +919,19 @@ export default function PickingDashboard() {
 
                                                 {/* Matrix Cells */}
                                                 {clients.map(client => {
-                                                    const cell = matrix[product.id]?.[client.company_name];
+                                                    const cell = matrix[product.id]?.[client.id];
 
                                                     if (!cell) {
-                                                        return <td key={client.id} style={{ background: '#050505', borderBottom: '1px solid #111', borderRight: '1px solid #111' }}></td>;
+                                                        return <td key={client.id} style={{ background: '#0A111C', borderBottom: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)' }}></td>;
                                                     }
 
                                                     // State Logic
-                                                    let bg = '#111';
-                                                    let fg = '#444';
+                                                    let bg = '#0A111C';
+                                                    let fg = '#475569';
                                                     if (cell.picked > 0) { bg = '#331B00'; fg = '#F59E0B'; } // Picking
-                                                    if (cell.picked >= cell.ordered) { bg = '#062C10'; fg = '#10B981'; } // Ready
+                                                    if (cell.picked >= cell.ordered) { bg = 'rgba(13, 122, 87, 0.2)'; fg = '#34D399'; } // Ready
 
-                                                    // REJECTION & WARNING OVERRIDES (Contundentes)
+                                                    // REJECTION & WARNING OVERRIDES
                                                     if (cell.hasRejection) {
                                                         bg = '#EF4444'; 
                                                         fg = '#fff';
@@ -947,11 +942,10 @@ export default function PickingDashboard() {
 
                                                     // If just ordered but not picked
                                                     if (cell.ordered > 0 && cell.picked === 0) {
-                                                        bg = '#222';
+                                                        bg = '#1E293B';
                                                         fg = '#fff';
                                                     }
 
-                                                    // Partial Display Logic
                                                     const isPartial = cell.picked > 0 && cell.picked < cell.ordered;
 
                                                     return (
@@ -959,26 +953,25 @@ export default function PickingDashboard() {
                                                             onClick={() => handleCellClick(product, client.id, client.company_name, cell)}
                                                             style={{
                                                                 background: bg, color: fg,
-                                                                borderBottom: '1px solid #000', borderRight: '1px solid #000',
+                                                                borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
                                                                 textAlign: 'center', fontWeight: 'bold',
                                                                 fontSize: cfg.fontSize,
                                                                 height: cfg.cellHeight,
                                                                 cursor: 'pointer', transition: 'all 0.1s',
                                                                 animation: cell.hasRejection ? 'pulseAlert 1s infinite' : (cell.hasWarning ? 'pulseWarning 1.5s infinite' : 'none'),
-                                                                boxShadow: (cell.hasRejection || cell.hasWarning) ? 'inset 0 0 15px rgba(0,0,0,0.5)' : 'none',
                                                                 position: 'relative',
                                                                 zIndex: (cell.hasRejection || cell.hasWarning) ? 5 : 1
                                                             }}
                                                         >
                                                             {cell.hasRejection ? (
-                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center' }}>
-                                                                    <span style={{ fontSize: '1.2rem' }}>🚨</span>
-                                                                    <span style={{ fontSize: '0.7rem' }}> RECHAZO</span>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <AlertOctagon size={14} />
+                                                                    <span style={{ fontSize: '0.65rem' }}> RECHAZO</span>
                                                                 </div>
                                                             ) : cell.hasWarning ? (
-                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center' }}>
-                                                                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                                                                    <span style={{ fontSize: '0.7rem' }}> VERIF</span>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <AlertTriangle size={14} />
+                                                                    <span style={{ fontSize: '0.65rem' }}> VERIF</span>
                                                                 </div>
                                                             ) : isPartial ? (
                                                                 <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1' }}>
@@ -1004,32 +997,38 @@ export default function PickingDashboard() {
             {/* Footer Ticker */}
             <div 
                 onClick={() => setShowBannerModal(true)}
-                className={`${bannerBgClass} p-1 font-bold text-sm overflow-hidden whitespace-nowrap cursor-pointer`}
                 style={{ 
                     position: 'fixed',
                     bottom: 0,
                     left: 0,
                     width: '100%',
+                    backgroundColor: bannerBg,
+                    color: bannerFg,
+                    borderTop: bannerBorder,
+                    padding: '0.5rem',
+                    fontWeight: 'bold',
+                    fontSize: '0.85rem',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    zIndex: 100,
                     backdropFilter: 'blur(8px)',
                     WebkitBackdropFilter: 'blur(8px)',
-                    borderTop: '1px solid rgba(255,255,255,0.1)',
-                    zIndex: 100 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
                 }}
                 title="Clic para ver detalles de alertas"
             >
-                <div className="animate-marquee inline-block" style={{ animationDuration: hasCritical ? '45s' : '90s' }}>
-                    *** {bannerText} ***
+                <div style={{ display: 'inline-block', animation: 'marquee 45s linear infinite', width: '100%' }}>
+                    ••• {bannerText} •••
                 </div>
             </div>
 
             <style jsx>{`
-                /* GLOBAL OVERRIDES */
                 :global(#ops-main-header) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
                 :global(#ops-main-footer) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
 
-                .animate-marquee {
-                    animation: marquee 30s linear infinite;
-                }
                 @keyframes marquee {
                     0% { transform: translateX(100%); }
                     100% { transform: translateX(-100%); }
@@ -1063,33 +1062,39 @@ export default function PickingDashboard() {
             {showBannerModal && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-                    background: 'rgba(0,0,0,0.8)', zIndex: 100,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 1000,
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }} onClick={() => setShowBannerModal(false)}>
                     <div style={{
-                        background: '#111', border: '1px solid #333', padding: '2rem',
-                        borderRadius: '8px', minWidth: '400px', maxWidth: '800px',
-                        color: '#fff'
+                        background: '#121D2D', border: '1px solid rgba(255,255,255,0.08)', padding: '2rem',
+                        borderRadius: '16px', minWidth: '400px', maxWidth: '800px',
+                        color: '#fff',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
                     }} onClick={e => e.stopPropagation()}>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', borderBottom: '1px solid #333', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Bell size={24} /> Alertas Activas
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Bell size={24} className="text-slate-400" /> Alertas Activas
                         </h2>
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {bannerAlerts.map((a, i) => (
                                 <li key={i} style={{ 
                                     padding: '0.75rem', 
-                                    background: a.type === 'critical' ? '#7F1D1D' : (a.type === 'warning' ? '#78350F' : '#064E3B'),
-                                    borderRadius: '4px',
+                                    background: a.type === 'critical' ? 'rgba(239, 68, 68, 0.15)' : (a.type === 'warning' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(13, 122, 87, 0.15)'),
+                                    borderRadius: '12px',
                                     fontWeight: 'bold',
-                                    borderLeft: `4px solid ${a.type === 'critical' ? '#EF4444' : (a.type === 'warning' ? '#F59E0B' : '#10B981')}`
+                                    borderLeft: `4px solid ${a.type === 'critical' ? '#EF4444' : (a.type === 'warning' ? '#F59E0B' : '#0D7A57')}`,
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
                                 }}>
+                                    {a.type === 'critical' ? <AlertOctagon size={16} className="text-red-500" /> : (a.type === 'warning' ? <AlertTriangle size={16} className="text-yellow-500" /> : <CheckCircle size={16} className="text-emerald-500" />)}
                                     {a.msg}
                                 </li>
                             ))}
                         </ul>
                         <div style={{ marginTop: '2rem', textAlign: 'right' }}>
                             <button onClick={() => setShowBannerModal(false)} style={{
-                                background: '#333', color: '#fff', border: 'none', padding: '0.5rem 1.5rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+                                background: '#0D7A57', color: '#fff', border: 'none', padding: '0.5rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s'
                             }}>Cerrar</button>
                         </div>
                     </div>
@@ -1100,18 +1105,20 @@ export default function PickingDashboard() {
             {milestone && (
                 <div style={{
                     position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                    background: 'rgba(5, 46, 22, 0.95)', border: '4px solid #4ADE80',
-                    padding: '2rem 4rem', borderRadius: '20px', zIndex: 100,
-                    textAlign: 'center', boxShadow: '0 0 50px rgba(74, 222, 128, 0.5)',
+                    background: 'rgba(12, 29, 45, 0.95)', border: '4px solid #0D7A57',
+                    padding: '2rem 4rem', borderRadius: '20px', zIndex: 1000,
+                    textAlign: 'center', boxShadow: '0 0 50px rgba(13, 122, 87, 0.5)',
                     animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}>
-                    <div style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '1.2rem', color: '#94A3B8', marginBottom: '10px', fontWeight: 'bold' }}>
                         {milestone.type === 'CLIENT' ? 'PEDIDO COMPLETADO' : 'ZONA LISTA'}
                     </div>
-                    <div style={{ fontSize: '3rem', fontWeight: '900', color: '#4ADE80', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: '3rem', fontWeight: '900', color: 'white', textTransform: 'uppercase', marginBottom: '1rem' }}>
                         {milestone.name}
                     </div>
-                    <div style={{ fontSize: '5rem', lineHeight: '1' }}>🎉</div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <CheckCircle size={64} strokeWidth={1.5} className="text-emerald-500" />
+                    </div>
                 </div>
             )}
         </main>

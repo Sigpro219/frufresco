@@ -5,6 +5,23 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { 
+    Calendar, 
+    GraduationCap, 
+    Search, 
+    X, 
+    ClipboardList, 
+    Filter, 
+    Layers, 
+    User, 
+    CheckCircle, 
+    AlertTriangle, 
+    Check, 
+    Scale, 
+    XCircle,
+    AlertCircle,
+    Grid
+} from 'lucide-react';
 
 interface PickingItem {
     id: string;
@@ -455,30 +472,31 @@ export default function PickingExecutionPage() {
     const alertPct = totalTasks > 0 ? (alertTasks / totalTasks) * 100 : 0;
 
     return (
-        <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#0F172A', minHeight: '100vh', paddingBottom: '7rem' }}>
+        <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#0A111C', minHeight: '100vh', paddingBottom: '7rem', color: '#F8FAFC' }}>
             
-            {/* DARK DASHBOARD HEADER */}
+            {/* REDESIGNED PREMIUM HEADER */}
             <div style={{
-                backgroundColor: '#1E293B',
-                padding: '1.5rem 1.5rem 1.5rem 1.5rem',
-                borderBottomLeftRadius: '32px',
-                borderBottomRightRadius: '32px',
+                backgroundColor: '#121D2D',
+                padding: '1.5rem',
+                borderRadius: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
                 color: 'white',
-                marginBottom: '1rem',
+                margin: '1rem',
                 position: 'relative',
                 zIndex: 10,
-                boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.4)'
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                     <div style={{ flex: 1 }}>
                         <h1 
                             className="header-title-container"
                             onClick={() => router.push('/ops')}
-                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
+                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}
                         >
-                            <span style={{ whiteSpace: "nowrap" }}>Alistamiento <span style={{ color: '#22C55E' }}>Bodega</span></span>
-                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
-                                📅 {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
+                            <span>Alistamiento <span style={{ color: '#0D7A57' }}>Bodega</span></span>
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "4px 10px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                                <Calendar size={13} strokeWidth={2.5} />
+                                {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
                             </span>
                         </h1>
                     </div>
@@ -487,12 +505,12 @@ export default function PickingExecutionPage() {
                             onClick={() => router.push('/ops')}
                             className="header-tutor-btn"
                             style={{
-                                backgroundColor: 'rgba(255,255,255,0.05)', color: '#22C55E', border: '1px solid #22C55E',
-                                padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
+                                backgroundColor: 'rgba(13, 122, 87, 0.08)', color: '#0D7A57', border: '1px solid #0D7A57',
+                                padding: '0.5rem 0.85rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '900', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', transition: 'all 0.2s ease'
                             }}
                         >
-                            🎓 TUTOR
+                            <GraduationCap size={14} strokeWidth={2.5} /> TUTOR
                         </button>
                     </div>
                 </div>
@@ -505,15 +523,17 @@ export default function PickingExecutionPage() {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={{
-                            width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '14px', border: '2px solid rgba(255,255,255,0.1)',
-                            backgroundColor: 'rgba(0,0,0,0.2)', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'border-color 0.2s'
+                            width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)',
+                            backgroundColor: '#0A111C', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s'
                         }}
                     />
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
+                    <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
                     {searchTerm && (
                         <button 
                             onClick={() => setSearchTerm('')}
-                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <X size={16} />
+                        </button>
                     )}
                 </div>
 
@@ -522,10 +542,10 @@ export default function PickingExecutionPage() {
                     <div style={{ marginBottom: '1.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', fontWeight: '700', color: '#CBD5E1' }}>
                             <span>AVANCE DE ALISTAMIENTO</span>
-                            <span style={{ color: '#22C55E' }}>{progress}%</span>
+                            <span style={{ color: '#0D7A57' }}>{progress}%</span>
                         </div>
-                        <div style={{ width: '100%', height: '8px', backgroundColor: '#334155', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
-                            <div style={{ width: `${readyPct}%`, height: '100%', backgroundColor: '#22C55E', transition: 'width 0.5s ease-out' }} />
+                        <div style={{ width: '100%', height: '8px', backgroundColor: '#0A111C', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+                            <div style={{ width: `${readyPct}%`, height: '100%', backgroundColor: '#0D7A57', transition: 'width 0.5s ease-out' }} />
                             <div style={{ width: `${partialPct}%`, height: '100%', backgroundColor: '#EAB308', transition: 'width 0.5s ease-out' }} />
                             <div style={{ width: `${alertPct}%`, height: '100%', backgroundColor: '#EF4444', transition: 'width 0.5s ease-out' }} />
                         </div>
@@ -533,28 +553,28 @@ export default function PickingExecutionPage() {
                 )}
 
                 {/* Metrics Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', marginBottom: '1.2rem' }}>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', marginBottom: '1.2rem' }}>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
                         <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#94A3B8' }}>{pendingTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PENDIENTE</div>
                     </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
                         <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EAB308' }}>{partialTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>PARCIAL</div>
                     </div>
-                    <div style={{ backgroundColor: alertTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: alertTasks > 0 ? '1px solid #EF4444' : '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ backgroundColor: alertTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: alertTasks > 0 ? '1px solid #EF4444' : '1px solid rgba(255,255,255,0.08)' }}>
                         <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#EF4444' }}>{alertTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#EF4444' }}>ALERTAS</div>
                     </div>
-                    <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#22C55E' }}>{readyTasks}</div>
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0D7A57' }}>{readyTasks}</div>
                         <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#64748B' }}>LISTO</div>
                     </div>
                     
                     {/* Avance Badge */}
-                    <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '14px', padding: '0.5rem', textAlign: 'center', border: '1px solid #22C55E' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#22C55E' }}>{progress}%</div>
-                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#22C55E' }}>AVANCE</div>
+                    <div style={{ backgroundColor: 'rgba(13, 122, 87, 0.1)', borderRadius: '16px', padding: '0.5rem', textAlign: 'center', border: '1px solid #0D7A57' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0D7A57' }}>{progress}%</div>
+                        <div style={{ fontSize: '0.5rem', fontWeight: 'bold', color: '#0D7A57' }}>AVANCE</div>
                     </div>
                 </div>
 
@@ -566,8 +586,8 @@ export default function PickingExecutionPage() {
                                 flex: 1,
                                 padding: "0.5rem 1rem",
                                 borderRadius: "12px",
-                                backgroundColor: "rgba(34, 197, 94, 0.12)",
-                                border: "1px solid #22C55E",
+                                backgroundColor: "rgba(13, 122, 87, 0.12)",
+                                border: "1px solid #0D7A57",
                                 color: "white",
                                 fontSize: "0.75rem",
                                 fontWeight: "800",
@@ -578,8 +598,9 @@ export default function PickingExecutionPage() {
                                 justifyContent: "space-between",
                             }}
                         >
-                            <span>
-                                📋 {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <ClipboardList size={14} strokeWidth={2.5} />
+                                {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
                             </span>
                             <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
                         </div>
@@ -591,9 +612,9 @@ export default function PickingExecutionPage() {
                                 width: "40px",
                                 height: "40px",
                                 borderRadius: "12px",
-                                border: `1px solid ${showFilterGrid ? "#22C55E" : "rgba(255,255,255,0.1)"}`,
-                                backgroundColor: showFilterGrid ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.05)",
-                                color: showFilterGrid ? "#22C55E" : "#94A3B8",
+                                border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255,255,255,0.1)"}`,
+                                backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "rgba(255,255,255,0.05)",
+                                color: showFilterGrid ? "#0D7A57" : "#94A3B8",
                                 fontSize: "1rem",
                                 display: "flex",
                                 alignItems: "center",
@@ -603,7 +624,7 @@ export default function PickingExecutionPage() {
                                 transition: "all 0.2s ease",
                             }}
                         >
-                            {showFilterGrid ? "✕" : "⊞"}
+                            {showFilterGrid ? <X size={16} /> : <Grid size={16} />}
                         </button>
                     </div>
 
@@ -630,10 +651,10 @@ export default function PickingExecutionPage() {
                                             padding: "0.55rem 0.75rem",
                                             borderRadius: "10px",
                                             border: isActive 
-                                                ? "1px solid #22C55E" 
+                                                ? "1px solid #0D7A57" 
                                                 : "1px solid rgba(255,255,255,0.1)",
                                             backgroundColor: isActive
-                                                ? "rgba(34, 197, 94, 0.12)"
+                                                ? "rgba(13, 122, 87, 0.12)"
                                                 : "rgba(255,255,255,0.02)",
                                             color: isActive ? "white" : "#94A3B8",
                                             fontSize: "0.7rem",
@@ -658,7 +679,7 @@ export default function PickingExecutionPage() {
 
                 {/* Sub-filter row (Cubículo & Suministro) */}
                 <div style={{ 
-                    background: 'rgba(15, 23, 42, 0.6)',
+                    background: 'rgba(10, 17, 28, 0.6)',
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
                     padding: '4px',
@@ -675,19 +696,19 @@ export default function PickingExecutionPage() {
                             padding: '0.45rem 0.2rem',
                             borderRadius: '8px',
                             border: 'none',
-                            backgroundColor: viewMode === 'client' ? '#22C55E' : 'transparent',
-                            color: viewMode === 'client' ? '#022C22' : '#94A3B8',
+                            backgroundColor: viewMode === 'client' ? '#0D7A57' : 'transparent',
+                            color: viewMode === 'client' ? 'white' : '#94A3B8',
                             fontWeight: '900',
                             fontSize: '0.8rem',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.3rem',
+                            gap: '0.4rem',
                             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                         }}
                     >
-                        📦 Cubículo
+                        <User size={14} strokeWidth={2.5} /> Cubículo
                     </button>
                     <button
                         onClick={() => setViewMode('product')}
@@ -695,19 +716,19 @@ export default function PickingExecutionPage() {
                             padding: '0.45rem 0.2rem',
                             borderRadius: '8px',
                             border: 'none',
-                            backgroundColor: viewMode === 'product' ? '#22C55E' : 'transparent',
-                            color: viewMode === 'product' ? '#022C22' : '#94A3B8',
+                            backgroundColor: viewMode === 'product' ? '#0D7A57' : 'transparent',
+                            color: viewMode === 'product' ? 'white' : '#94A3B8',
                             fontWeight: '900',
                             fontSize: '0.8rem',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.3rem',
+                            gap: '0.4rem',
                             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                         }}
                     >
-                        🥦 Suministro
+                        <Layers size={14} strokeWidth={2.5} /> Suministro
                     </button>
                 </div>
             </div>
@@ -727,14 +748,17 @@ export default function PickingExecutionPage() {
                             <div style={{
                                 textAlign: 'center',
                                 padding: '4rem 2rem',
-                                backgroundColor: '#1E293B',
-                                border: '1px solid rgba(255, 255, 255, 0.05)',
-                                borderRadius: '24px',
+                                backgroundColor: '#121D2D',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderRadius: '16px',
                                 color: '#94A3B8',
                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
-                                marginTop: '1rem'
+                                marginTop: '1rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center'
                             }}>
-                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{hasAnyTasks ? '🏁' : '📋'}</div>
+                                <CheckCircle size={48} strokeWidth={1.5} style={{ color: '#0D7A57', marginBottom: '1rem' }} />
                                 <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
                                     {hasAnyTasks ? '¡Todo alistado!' : 'Sin pedidos'}
                                 </h3>
@@ -751,16 +775,18 @@ export default function PickingExecutionPage() {
                         <div style={{ display: 'grid', gap: '1rem' }}>
                             {filteredTasks.map(task => (
                             <div key={task.company_name} style={{
-                                backgroundColor: '#1E293B', borderRadius: '20px', overflow: 'hidden',
-                                borderLeft: `6px solid ${task.status === 'ready' ? '#22C55E' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
-                                opacity: task.status === 'ready' ? 0.6 : 1
-                            }}>
+                                backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderLeft: `6px solid ${task.status === 'ready' ? '#0D7A57' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
+                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
+                                opacity: task.status === 'ready' ? 0.6 : 1,
+                                transition: 'all 0.2s ease-in-out'
+                            }} className="client-card">
                                 <div style={{ 
-                                    padding: '1rem', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '1rem', 
-                                    backgroundColor: task.hasAlert ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.02)',
+                                    padding: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '1rem', 
+                                    backgroundColor: task.hasAlert ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255,255,255,0.01)',
                                 }}>
-                                    <div style={{ padding: '0.5rem', minWidth: '80px', height: '45px', backgroundColor: '#0F172A', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#22C55E' }}>
+                                    <div style={{ padding: '0.5rem', minWidth: '80px', height: '45px', backgroundColor: '#0A111C', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#0D7A57', border: '1px solid rgba(255,255,255,0.05)' }}>
                                         <div style={{ fontSize: '0.6rem', opacity: 0.6, lineHeight: 1 }}>ESPACIO</div>
                                         <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>{task.assigned_space}</div>
                                     </div>
@@ -770,7 +796,7 @@ export default function PickingExecutionPage() {
                                     </div>
                                     <button 
                                         onClick={() => setShowCompleted(!showCompleted)}
-                                        style={{ fontSize: '0.65rem', backgroundColor: 'rgba(255,255,255,0.05)', color: '#94A3B8', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold' }}>
+                                        style={{ fontSize: '0.65rem', backgroundColor: 'rgba(255,255,255,0.05)', color: '#94A3B8', padding: '0.4rem 0.6rem', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
                                         {showCompleted ? 'OCULTAR LISTOS' : 'VER LISTOS'}
                                     </button>
                                 </div>
@@ -778,23 +804,23 @@ export default function PickingExecutionPage() {
                                     {task.items.map(item => {
                                         const isDone = item.picked_quantity >= item.quantity;
                                         return (
-                                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid #334155' }}>
+                                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                                                 <div onClick={() => openExceptionModal(item)} style={{ flex: 1, cursor: 'pointer' }}>
                                                     <div style={{ fontSize: '0.95rem', fontWeight: '700', color: isDone ? '#94A3B8' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                         {item.product_name} 
-                                                        {item.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.7rem' }}>🚨 RECHAZADO</span>}
-                                                        {item.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.7rem' }}>⚠️ VERIFICAR</span>}
+                                                        {item.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertCircle size={10} /> RECHAZADO</span>}
+                                                        {item.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertTriangle size={10} /> VERIFICAR</span>}
                                                     </div>
-                                                    <div style={{ fontSize: '0.8rem', color: item.quality_status === 'red' ? '#EF4444' : (isDone ? '#22C55E' : '#EAB308'), fontWeight: '800' }}>
+                                                    <div style={{ fontSize: '0.8rem', color: item.quality_status === 'red' ? '#EF4444' : (isDone ? '#0D7A57' : '#EAB308'), fontWeight: '800' }}>
                                                         {item.quality_status === 'red' ? `RECHAZADO: ${item.quality_notes}` : (isDone ? 'COMPLETO' : `${item.quantity} ${item.unit}`)} 
                                                         {item.picked_quantity > 0 && !isDone && item.quality_status !== 'red' && ` (Llevas: ${item.picked_quantity})`}
                                                     </div>
                                                 </div>
                                                 {!isDone ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#22C55E', color: '#022C22', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem', cursor: 'pointer' }}>
                                                         LISTO
                                                     </button>
-                                                ) : <div onClick={() => openExceptionModal(item)} style={{ fontSize: '1.2rem', cursor: 'pointer' }}>✅</div>}
+                                                ) : <div onClick={() => openExceptionModal(item)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}><CheckCircle size={20} className="text-emerald-500" /></div>}
                                             </div>
                                         );
                                     })}
@@ -816,14 +842,17 @@ export default function PickingExecutionPage() {
                             <div style={{
                                 textAlign: 'center',
                                 padding: '4rem 2rem',
-                                backgroundColor: '#1E293B',
-                                border: '1px solid rgba(255, 255, 255, 0.05)',
-                                borderRadius: '24px',
+                                backgroundColor: '#121D2D',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderRadius: '16px',
                                 color: '#94A3B8',
                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
-                                marginTop: '1rem'
+                                marginTop: '1rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center'
                             }}>
-                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{hasAnyGroups ? '🏁' : '📋'}</div>
+                                <CheckCircle size={48} strokeWidth={1.5} style={{ color: '#0D7A57', marginBottom: '1rem' }} />
                                 <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F8FAFC', margin: '0 0 0.5rem 0' }}>
                                     {hasAnyGroups ? '¡Todo alistado!' : 'Sin pedidos'}
                                 </h3>
@@ -839,8 +868,8 @@ export default function PickingExecutionPage() {
                     return (
                         <div style={{ display: 'grid', gap: '1.5rem' }}>
                             {filteredProductGroups.map(group => (
-                            <div key={group.name} style={{ backgroundColor: '#1E293B', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
-                                <div style={{ padding: '1.2rem', backgroundColor: '#22C55E', color: '#064E3B' }}>
+                            <div key={group.name} style={{ backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
+                                <div style={{ padding: '1.2rem', backgroundColor: '#0D7A57', color: 'white' }}>
                                     <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
                                     <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.8 }}>REPARTIR A {group.clients.filter((c:any) => !c.isDone).length} RECINTOS</p>
                                 </div>
@@ -852,7 +881,7 @@ export default function PickingExecutionPage() {
                                             style={{ 
                                                 display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem 0.5rem', 
                                                 borderRadius: '16px',
-                                                borderBottom: '1px solid #334155', 
+                                                borderBottom: '1px solid rgba(255,255,255,0.08)', 
                                                 opacity: (target.isDone && !target.quality_status) ? 0.4 : 1,
                                                 backgroundColor: target.quality_status === 'red' ? 'rgba(239, 68, 68, 0.15)' : (target.quality_status === 'yellow' ? 'rgba(234, 179, 8, 0.15)' : 'transparent'),
                                                 border: target.quality_status === 'red' ? '2px solid rgba(239, 68, 68, 0.5)' : (target.quality_status === 'yellow' ? '2px solid rgba(234, 179, 8, 0.5)' : '1px solid transparent'),
@@ -860,17 +889,17 @@ export default function PickingExecutionPage() {
                                                 transition: 'all 0.2s'
                                             }}
                                         >
-                                            <div style={{ padding: '0.3rem', minWidth: '60px', height: '40px', backgroundColor: '#0F172A', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : '#22C55E', border: '1px solid #334155' }}>
+                                            <div style={{ padding: '0.3rem', minWidth: '60px', height: '40px', backgroundColor: '#0A111C', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : '#0D7A57', border: '1px solid rgba(255,255,255,0.08)' }}>
                                                 <div style={{ fontSize: '0.5rem', opacity: 0.6, lineHeight: 1 }}>ESP</div>
                                                 <div style={{ fontSize: '1.1rem', lineHeight: 1 }}>{target.space}</div>
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                     {target.company_name}
-                                                    {target.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.6rem' }}>🚨 RECHAZO</span>}
-                                                    {target.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.6rem' }}>⚠️ VERIF</span>}
+                                                    {target.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertCircle size={10} /> RECHAZO</span>}
+                                                    {target.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertTriangle size={10} /> VERIF</span>}
                                                 </div>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : (target.isDone ? '#22C55E' : '#EAB308') }}>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: target.quality_status === 'red' ? '#EF4444' : (target.isDone ? '#0D7A57' : '#EAB308') }}>
                                                     {target.quality_status === 'red' ? `RECHAZADO: ${target.quality_notes}` : `${target.quantity} ${group.unit}`}
                                                     {target.picked_quantity > 0 && !target.isDone && target.quality_status !== 'red' && ` (Llevas: ${target.picked_quantity})`}
                                                 </div>
@@ -878,11 +907,11 @@ export default function PickingExecutionPage() {
                                             {!target.isDone ? (
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); quickComplete({ ...target, product_name: group.name, unit: group.unit }); }}
-                                                    style={{ backgroundColor: target.quality_status === 'red' ? '#EF4444' : '#22C55E', color: target.quality_status === 'red' ? 'white' : '#022C22', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800' }}>
+                                                    style={{ backgroundColor: target.quality_status === 'red' ? '#EF4444' : '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' }}>
                                                     {target.quality_status === 'red' ? 'RE-ALISTAR' : 'LISTO'}
                                                 </button>
                                             ) : (
-                                                <div style={{ fontSize: '1.2rem' }}>✅</div>
+                                                <div style={{ display: 'flex', alignItems: 'center' }}><CheckCircle size={20} className="text-emerald-500" /></div>
                                             )}
                                         </div>
                                     ))}
@@ -899,7 +928,7 @@ export default function PickingExecutionPage() {
                 <div style={{
                     position: 'fixed',
                     inset: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    backgroundColor: 'rgba(10, 17, 28, 0.85)',
                     backdropFilter: 'blur(8px)',
                     zIndex: 1000,
                     display: 'flex',
@@ -907,35 +936,42 @@ export default function PickingExecutionPage() {
                     justifyContent: 'center',
                 }}>
                     <div style={{ 
-                        backgroundColor: 'white',
+                        backgroundColor: '#121D2D',
                         width: '100%',
                         maxWidth: '500px',
-                        borderTopLeftRadius: '32px',
-                        borderTopRightRadius: '32px',
+                        borderTopLeftRadius: '24px',
+                        borderTopRightRadius: '24px',
                         borderBottomLeftRadius: '0px',
                         borderBottomRightRadius: '0px',
                         padding: '2rem 1.5rem',
                         position: 'relative',
-                        boxShadow: '0 -10px 25px rgba(0, 0, 0, 0.3)',
-                        color: '#1E293B',
+                        boxShadow: '0 -10px 25px rgba(0, 0, 0, 0.5)',
+                        color: 'white',
                         maxHeight: '90vh',
-                        overflowY: 'auto'
+                        overflowY: 'auto',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderBottom: 'none'
                     }}>
                         {/* Close Button */}
-                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1rem', right: '1rem', background: '#F1F5F9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '1rem', color: '#64748B' }}>✕</button>
+                        <button onClick={handleCloseExceptionModal} style={{ position: 'absolute', top: '1rem', right: '1rem', background: '#0A111C', border: '1px solid rgba(255,255,255,0.08)', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
+                            <X size={18} />
+                        </button>
 
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1E293B', margin: '0 0 0.5rem 0' }}>Validar Alistamiento ⚖️</h2>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'white', margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Scale size={20} strokeWidth={2.5} className="text-slate-400" />
+                            Validar Alistamiento
+                        </h2>
                         <button onClick={() => setExceptionQty('0')} style={{ background: 'none', border: 'none', color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem', padding: 0, marginBottom: '1.5rem', cursor: 'pointer', textDecoration: 'underline' }}>¿Reportar Faltante Total?</button>
 
                         {/* Product Info Chips */}
                         <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem' }}>
-                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.8rem 1rem', borderRadius: '16px', flex: 1 }}>
-                                <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
-                                <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1E293B' }}>{exceptionItem.product_name}</div>
+                            <div style={{ backgroundColor: '#0A111C', border: '1px solid rgba(255,255,255,0.08)', padding: '0.8rem 1rem', borderRadius: '16px', flex: 1 }}>
+                                <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>{exceptionItem.product_name}</div>
                             </div>
-                            <div style={{ backgroundColor: '#F8FAFC', border: '2px dashed #E2E8F0', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '100px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '0.65rem', color: '#22C55E', fontWeight: 'bold', marginBottom: '4px' }}>A ALISTAR</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#166534' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem' }}>{exceptionItem.unit}</span></div>
+                            <div style={{ backgroundColor: '#0A111C', border: '1px dashed rgba(13, 122, 87, 0.4)', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '100px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#0D7A57', fontWeight: 'bold', marginBottom: '4px' }}>A ALISTAR</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'white' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
                             </div>
                         </div>
 
@@ -943,14 +979,14 @@ export default function PickingExecutionPage() {
                             /* PHASE 1: QUANTITY VALIDATION - Mobile stacked layout */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div style={{ 
-                                    backgroundColor: '#DCFCE7',
-                                    color: '#166534',
+                                    backgroundColor: 'rgba(13, 122, 87, 0.1)',
+                                    color: 'white',
                                     padding: '1.5rem 1rem',
-                                    borderRadius: '20px', 
-                                    border: '2px solid #22C55E',
+                                    borderRadius: '16px', 
+                                    border: '1px solid #0D7A57',
                                     textAlign: 'center'
                                 }}>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#22C55E', marginBottom: '6px' }}>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#0D7A57', marginBottom: '6px' }}>
                                         CANTIDAD ALISTADA ({exceptionQty || '0'} / {exceptionItem.quantity} {exceptionItem.unit})
                                     </div>
                                     <input 
@@ -962,7 +998,7 @@ export default function PickingExecutionPage() {
                                         step="any"
                                         style={{ 
                                             background: 'none', border: 'none', width: '100%', textAlign: 'center', 
-                                            fontSize: '2.4rem', fontWeight: '900', color: '#166534', outline: 'none' 
+                                            fontSize: '2.4rem', fontWeight: '900', color: 'white', outline: 'none' 
                                         }}
                                     />
                                 </div>
@@ -972,10 +1008,10 @@ export default function PickingExecutionPage() {
                                     disabled={!exceptionQty}
                                     style={{ 
                                         width: '100%', 
-                                        backgroundColor: (parseFloat(exceptionQty) < exceptionItem.quantity) ? '#F59E0B' : '#1E293B', 
+                                        backgroundColor: (parseFloat(exceptionQty) < exceptionItem.quantity) ? '#F59E0B' : '#0D7A57', 
                                         color: 'white',
                                         padding: '1.1rem', 
-                                        borderRadius: '20px',
+                                        borderRadius: '16px',
                                         border: 'none',
                                         fontWeight: '900',
                                         fontSize: '1.1rem',
@@ -990,9 +1026,9 @@ export default function PickingExecutionPage() {
 
                                 {parseFloat(exceptionQty) < exceptionItem.quantity && (
                                     <div style={{ 
-                                        padding: '1rem', borderRadius: '16px', backgroundColor: '#FFFBEB', 
-                                        color: '#B45309', fontWeight: 'bold', fontSize: '0.85rem',
-                                        border: '1px solid #FCD34D', textAlign: 'center'
+                                        padding: '1rem', borderRadius: '16px', backgroundColor: 'rgba(234,179,8,0.1)', 
+                                        color: '#FBBF24', fontWeight: 'bold', fontSize: '0.85rem',
+                                        border: '1px solid rgba(234,179,8,0.3)', textAlign: 'center'
                                     }}>
                                         ⚠️ Estás registrando una entrega parcial.
                                     </div>
@@ -1002,55 +1038,67 @@ export default function PickingExecutionPage() {
                             /* PHASE 2: QUALITY VALIDATION */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div style={{ 
-                                    backgroundColor: '#DCFCE7', color: '#166534', padding: '0.8rem', borderRadius: '16px', 
+                                    backgroundColor: 'rgba(13, 122, 87, 0.15)', color: 'white', padding: '0.8rem', borderRadius: '16px', 
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: '900', 
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.9rem', border: '1px solid #0D7A57'
                                 }}>
-                                    ✅ Cantidad Correcta ({exceptionQty} {exceptionItem.unit})
+                                    <CheckCircle size={18} className="text-emerald-500" /> Cantidad Correcta ({exceptionQty} {exceptionItem.unit})
                                 </div>
 
-                                <h3 style={{ textAlign: 'center', fontSize: '1rem', color: '#475569', margin: '0.5rem 0' }}>Validar Calidad</h3>
+                                <h3 style={{ textAlign: 'center', fontSize: '1rem', color: '#94A3B8', margin: '0.5rem 0' }}>Validar Calidad</h3>
                                 
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '1rem' }}>
                                     <button 
                                         onClick={() => setExceptionQuality('green')}
                                         style={{ 
-                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
-                                            backgroundColor: exceptionQuality === 'green' ? '#22C55E' : '#F1F5F9',
+                                            width: '64px', height: '64px', borderRadius: '50%', 
+                                            backgroundColor: exceptionQuality === 'green' ? '#0D7A57' : '#0A111C',
                                             color: exceptionQuality === 'green' ? 'white' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
-                                            boxShadow: exceptionQuality === 'green' ? '0 10px 15px -3px rgba(34, 197, 94, 0.4)' : 'none',
-                                            transform: exceptionQuality === 'green' ? 'scale(1.1)' : 'scale(1)'
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            boxShadow: exceptionQuality === 'green' ? '0 10px 15px -3px rgba(13, 122, 87, 0.4)' : 'none',
+                                            transform: exceptionQuality === 'green' ? 'scale(1.1)' : 'scale(1)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
                                         }}
-                                    >✓</button>
+                                    >
+                                        <Check size={28} strokeWidth={3} />
+                                    </button>
                                     <button 
                                         onClick={() => setExceptionQuality('yellow')}
                                         style={{ 
-                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
-                                            backgroundColor: exceptionQuality === 'yellow' ? '#EAB308' : '#F1F5F9',
-                                            color: exceptionQuality === 'yellow' ? 'white' : '#64748B',
+                                            width: '64px', height: '64px', borderRadius: '50%', 
+                                            backgroundColor: exceptionQuality === 'yellow' ? '#EAB308' : '#0A111C',
+                                            color: exceptionQuality === 'yellow' ? 'black' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
+                                            border: '1px solid rgba(255,255,255,0.08)',
                                             boxShadow: exceptionQuality === 'yellow' ? '0 10px 15px -3px rgba(234, 179, 8, 0.4)' : 'none',
-                                            transform: exceptionQuality === 'yellow' ? 'scale(1.1)' : 'scale(1)'
+                                            transform: exceptionQuality === 'yellow' ? 'scale(1.1)' : 'scale(1)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
                                         }}
-                                    >⚠</button>
+                                    >
+                                        <AlertTriangle size={26} strokeWidth={2.5} />
+                                    </button>
                                     <button 
                                         onClick={() => setExceptionQuality('red')}
                                         style={{ 
-                                            width: '64px', height: '64px', borderRadius: '50%', border: 'none', 
-                                            backgroundColor: exceptionQuality === 'red' ? '#EF4444' : '#F1F5F9',
+                                            width: '64px', height: '64px', borderRadius: '50%', 
+                                            backgroundColor: exceptionQuality === 'red' ? '#EF4444' : '#0A111C',
                                             color: exceptionQuality === 'red' ? 'white' : '#64748B',
                                             fontSize: '1.4rem', cursor: 'pointer', transition: 'all 0.2s',
+                                            border: '1px solid rgba(255,255,255,0.08)',
                                             boxShadow: exceptionQuality === 'red' ? '0 10px 15px -3px rgba(239, 68, 68, 0.4)' : 'none',
-                                            transform: exceptionQuality === 'red' ? 'scale(1.1)' : 'scale(1)'
+                                            transform: exceptionQuality === 'red' ? 'scale(1.1)' : 'scale(1)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
                                         }}
-                                    >✕</button>
+                                    >
+                                        <XCircle size={28} strokeWidth={2.5} />
+                                    </button>
                                 </div>
 
                                 {/* Rejection Reasons Chips */}
                                 {exceptionQuality && exceptionQuality !== 'green' && (
                                     <div style={{ marginBottom: '1rem' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', marginBottom: '0.6rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', marginBottom: '0.6rem', textAlign: 'center' }}>¿CUÁL ES EL MOTIVO?</h4>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
                                             {REJECTION_REASONS.map(reason => (
                                                 <button
@@ -1058,11 +1106,11 @@ export default function PickingExecutionPage() {
                                                     onClick={() => setExceptionReason(reason)}
                                                     style={{
                                                         padding: '0.5rem 0.8rem', borderRadius: '12px',
-                                                        backgroundColor: exceptionReason === reason ? '#1E293B' : '#F1F5F9',
-                                                        color: exceptionReason === reason ? 'white' : '#64748B',
+                                                        backgroundColor: exceptionReason === reason ? 'white' : '#0A111C',
+                                                        color: exceptionReason === reason ? 'black' : '#94A3B8',
                                                         fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer',
                                                         transition: 'all 0.2s',
-                                                        border: exceptionReason === reason ? '2px solid #1E293B' : '2px solid transparent'
+                                                        border: exceptionReason === reason ? '2px solid white' : '2px solid rgba(255,255,255,0.08)'
                                                     }}
                                                 >
                                                     {reason}
@@ -1076,10 +1124,10 @@ export default function PickingExecutionPage() {
                                     onClick={handleExceptionSave}
                                     disabled={!exceptionQuality || (exceptionQuality !== 'green' && !exceptionReason) || isSaving}
                                     style={{ 
-                                        width: '100%', padding: '1.2rem', borderRadius: '20px', 
+                                        width: '100%', padding: '1.2rem', borderRadius: '16px', 
                                         color: 'white', border: 'none', 
                                         fontWeight: '900', fontSize: '1.1rem', cursor: 'pointer',
-                                        background: (exceptionQuality === 'green' || (exceptionQuality && exceptionReason)) ? '#1E293B' : '#94A3B8',
+                                        background: (exceptionQuality === 'green' || (exceptionQuality && exceptionReason)) ? '#0D7A57' : '#475569',
                                         transition: 'all 0.2s',
                                         opacity: isSaving ? 0.7 : 1
                                     }}
@@ -1093,7 +1141,7 @@ export default function PickingExecutionPage() {
             )}
 
             {loading && (
-                <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15,23,42,0.85)', zIndex: 100, color: 'white', fontWeight: 'bold' }}>
+                <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(10,17,28,0.85)', zIndex: 100, color: 'white', fontWeight: 'bold' }}>
                     BUSCANDO PEDIDOS...
                 </div>
             )}
@@ -1102,6 +1150,10 @@ export default function PickingExecutionPage() {
                 @keyframes slideDown {
                     from { opacity: 0; transform: translateY(-6px); }
                     to { opacity: 1; transform: translateY(0); }
+                }
+                .client-card:hover {
+                    border-color: rgba(13, 122, 87, 0.4) !important;
+                    transform: translateY(-2px);
                 }
             `}</style>
         </div>
