@@ -20,7 +20,8 @@ import {
   ShoppingCart,
   User,
   Clock,
-  HelpCircle
+  HelpCircle,
+  Pencil
 } from 'lucide-react';
 
 interface ProcurementTask {
@@ -2550,7 +2551,7 @@ export default function ProcurementPage() {
                         color: "var(--ops-text-muted)",
                         fontSize: "0.9rem"
                       }}>
-                        🔎
+                        <Search size={16} />
                       </span>
 
                       {showProviderDropdown && (
@@ -2901,7 +2902,7 @@ export default function ProcurementPage() {
                       }}
                       title="Ingresar ubicación excepcional"
                     >
-                      <span>✏️</span> {showLocationContingency ? "Ocultar" : "Excepcional"}
+                      <Pencil size={12} style={{ display: 'inline-flex', alignItems: 'center' }} /> {showLocationContingency ? "Ocultar" : "Excepcional"}
                     </button>
                   </div>
                   <input
@@ -3132,7 +3133,7 @@ export default function ProcurementPage() {
                       color: "white",
                     }}
                   >
-                    🔎
+                    <Search size={16} />
                   </button>
                 </div>
 
