@@ -6,6 +6,38 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { 
+  Calendar, 
+  BookOpen, 
+  ChevronUp, 
+  List, 
+  Apple, 
+  Package, 
+  X, 
+  LayoutGrid, 
+  RefreshCw, 
+  Sparkles, 
+  Building2, 
+  MapPin, 
+  Scale, 
+  Clock, 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle, 
+  Search, 
+  Check, 
+  Camera, 
+  PackageX, 
+  ThumbsDown, 
+  HelpCircle,
+  Truck,
+  Eye,
+  EyeOff,
+  Wrench,
+  TrendingUp,
+  AlertOctagon,
+  AlertCircle
+} from 'lucide-react';
 
 // Interfaces
 interface Product {
@@ -507,8 +539,8 @@ export default function ReceptionPage() {
                             style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
                         >
                             <span style={{ whiteSpace: "nowrap" }}>Recepción <span style={{ color: "var(--ops-primary)" }}>Bodega</span></span>
-                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
-                                📅 {formatDateFriendly(targetDateLabel) || "Cargando..."}
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                <Calendar size={14} /> {formatDateFriendly(targetDateLabel) || "Cargando..."}
                             </span>
                         </h1>
                     </div>
@@ -522,7 +554,7 @@ export default function ReceptionPage() {
                                 display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap'
                             }}
                         >
-                            🎓 TUTOR
+                            <BookOpen size={14} /> TUTOR
                         </button>
                     </div>
                 </div>
@@ -669,7 +701,7 @@ export default function ReceptionPage() {
                                 }}
                                 title="Subir al inicio"
                             >
-                                ▲
+                                <ChevronUp size={16} />
                             </button>
                         </div>
                     </div>
@@ -705,15 +737,17 @@ export default function ReceptionPage() {
                             justifyContent: "space-between",
                         }}
                     >
-                        <span>
-                            {activeCategory === "Todas"
-                                ? "📋 Ver Todo"
-                                : activeCategory === "Rechazados"
-                                    ? `🛑 Rechazados`
-                                    : (() => {
-                                        const s = categoryStats.find(s => s.name === activeCategory);
-                                        return `${activeCategory}${s ? ` · ${s.percentage}%` : ""}`;
-                                    })()}
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            {activeCategory === "Todas" ? (
+                                <><List size={14} /> Ver Todo</>
+                            ) : activeCategory === "Rechazados" ? (
+                                <><XCircle size={14} /> Rechazados</>
+                            ) : (
+                                (() => {
+                                    const s = categoryStats.find(s => s.name === activeCategory);
+                                    return `${activeCategory}${s ? ` · ${s.percentage}%` : ""}`;
+                                })()
+                            )}
                         </span>
                         {activeCategory !== "Todas" && (
                             <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
@@ -740,7 +774,7 @@ export default function ReceptionPage() {
                             transition: "all 0.2s ease",
                         }}
                     >
-                        {showFilterGrid ? "✕" : "⊞"}
+                        {showFilterGrid ? <X size={16} /> : <LayoutGrid size={16} />}
                     </button>
                 </div>
 
@@ -785,8 +819,8 @@ export default function ReceptionPage() {
                                             transition: "all 0.15s ease",
                                         }}
                                     >
-                                        <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
-                                            🛑 RECHAZADOS
+                                        <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <XCircle size={14} /> RECHAZADOS
                                         </span>
                                         <span style={{ fontSize: "0.65rem", fontWeight: "900", color: "#EF4444" }}>
                                             {rejectedCount} rechazados
@@ -828,10 +862,11 @@ export default function ReceptionPage() {
                                         transform: pct === 100 && !isActive ? "scale(1.02)" : "scale(1)",
                                     }}
                                 >
-                                    <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "flex", alignItems: "center", gap: "4px" }}>
-                                        {cat === "Todas" ? "📋 VER TODO" : (
+                                    <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                        {cat === "Todas" ? <List size={12} /> : null}
+                                        {cat === "Todas" ? "VER TODO" : (
                                             <>
-                                                {cat} {pct === 100 && <span style={{ fontSize: "0.85rem", filter: "drop-shadow(0 0 2px rgba(16,185,129,0.5))" }}>✨</span>}
+                                                {cat} {pct === 100 && <Sparkles size={12} style={{ color: "var(--ops-primary)", display: "inline-flex" }} />}
                                             </>
                                         )}
                                     </span>
@@ -890,7 +925,7 @@ export default function ReceptionPage() {
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                 >
-                    🚛 Tránsito
+                    <Truck size={14} /> Tránsito
                 </button>
                 <button
                     onClick={() => setActiveTab('received')}
@@ -910,7 +945,7 @@ export default function ReceptionPage() {
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                 >
-                    ✅ Historial
+                    <CheckCircle size={14} /> Historial
                 </button>
             </div>
 
@@ -989,7 +1024,7 @@ export default function ReceptionPage() {
                                         {item.product?.image_url ? (
                                             <img src={item.product.image_url} alt={item.product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         ) : (
-                                            <span style={{ fontSize: '1.6rem', opacity: 0.6 }}>📦</span>
+                                            <Package size={24} style={{ opacity: 0.6, color: 'var(--ops-text-muted)' }} />
                                         )}
                                     </div>
 
@@ -1031,7 +1066,7 @@ export default function ReceptionPage() {
                                                             transition: 'all 0.2s'
                                                         }}
                                                     >
-                                                        📷 {expandedVouchers[item.id] ? 'Ocultar Soporte' : 'Ver Soporte'}
+                                                        <Camera size={12} /> {expandedVouchers[item.id] ? 'Ocultar Soporte' : 'Ver Soporte'}
                                                     </button>
                                                 )}
                                             </div>
@@ -1054,7 +1089,7 @@ export default function ReceptionPage() {
 
                                         {item.provider && (
                                             <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
-                                                <span>🛒 Prov:</span>
+                                                <Building2 size={14} /> <span>Prov:</span>
                                                 <strong style={{ color: 'var(--ops-text)' }}>{item.provider.name}</strong>
                                             </div>
                                         )}
@@ -1123,8 +1158,8 @@ export default function ReceptionPage() {
                                 overflowY: 'auto'
                             }}
                         >
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--ops-text)', marginBottom: '0.2rem' }}>
-                                Validar Entrada ⚖️
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--ops-text)', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                Validar Entrada <Scale size={18} style={{ color: 'var(--ops-primary)' }} />
                             </h2>
                             <button
                                 onClick={() => { setQualityStatus(null); setShowRejectionOptions(true); }}
@@ -1190,7 +1225,7 @@ export default function ReceptionPage() {
                                             <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--ops-border)', backgroundColor: '#000' }}>
                                                 <img src={rejectionPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                                 <div style={{ position: 'absolute', bottom: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                                                    <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}>🔄 Cambiar Foto</button>
+                                                    <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</button>
                                                 </div>
                                             </div>
                                         ) : (
@@ -1211,7 +1246,7 @@ export default function ReceptionPage() {
                                                     padding: '1.2rem'
                                                 }}
                                             >
-                                                <span style={{ fontSize: '2rem' }}>📸</span>
+                                                <Camera size={32} />
                                                 <span style={{ fontSize: '0.85rem', fontWeight: '900', marginTop: '0.3rem' }}>FOTO OBLIGATORIA — TAP PARA AGREGAR</span>
                                                 <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: 0.8 }}>Se requiere evidencia para registrar el rechazo</span>
                                             </div>
@@ -1220,7 +1255,7 @@ export default function ReceptionPage() {
 
                                     {!rejectionFile && (
                                         <div style={{ textAlign: 'center', padding: '0.5rem', marginBottom: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                            <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '800' }}>📸 Agrega la foto antes de seleccionar el motivo</span>
+                                            <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}><Camera size={14} /> Agrega la foto antes de seleccionar el motivo</span>
                                         </div>
                                     )}
 
@@ -1234,10 +1269,11 @@ export default function ReceptionPage() {
                                                 color: rejectionFile ? '#DC2626' : 'var(--ops-text-muted)', 
                                                 border: 'none', fontWeight: 'bold', fontSize: '1rem', 
                                                 cursor: rejectionFile ? 'pointer' : 'not-allowed',
-                                                opacity: rejectionFile ? 1 : 0.5
+                                                opacity: rejectionFile ? 1 : 0.5,
+                                                display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center'
                                             }}
                                         >
-                                            🥀 Mala Calidad / Feo
+                                            <ThumbsDown size={14} /> Mala Calidad / Feo
                                         </button>
                                         <button
                                             disabled={!rejectionFile || processing}
@@ -1248,10 +1284,11 @@ export default function ReceptionPage() {
                                                 color: rejectionFile ? '#DC2626' : 'var(--ops-text-muted)', 
                                                 border: 'none', fontWeight: 'bold', fontSize: '1rem', 
                                                 cursor: rejectionFile ? 'pointer' : 'not-allowed',
-                                                opacity: rejectionFile ? 1 : 0.5
+                                                opacity: rejectionFile ? 1 : 0.5,
+                                                display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center'
                                             }}
                                         >
-                                            ❌ Producto Equivocado
+                                            <XCircle size={14} /> Producto Equivocado
                                         </button>
                                         <button
                                             disabled={!rejectionFile || processing}
@@ -1262,10 +1299,11 @@ export default function ReceptionPage() {
                                                 color: rejectionFile ? '#DC2626' : 'var(--ops-text-muted)', 
                                                 border: 'none', fontWeight: 'bold', fontSize: '1rem', 
                                                 cursor: rejectionFile ? 'pointer' : 'not-allowed',
-                                                opacity: rejectionFile ? 1 : 0.5
+                                                opacity: rejectionFile ? 1 : 0.5,
+                                                display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center'
                                             }}
                                         >
-                                            🔨 Averiado / Roto
+                                            <Wrench size={14} /> Averiado / Roto
                                         </button>
                                         <button
                                             disabled={!rejectionFile || processing}
@@ -1281,10 +1319,11 @@ export default function ReceptionPage() {
                                                 border: rejectionFile ? '1px solid var(--ops-border)' : 'none', 
                                                 fontWeight: 'bold', fontSize: '1rem', 
                                                 cursor: rejectionFile ? 'pointer' : 'not-allowed',
-                                                opacity: rejectionFile ? 1 : 0.5
+                                                opacity: rejectionFile ? 1 : 0.5,
+                                                display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center'
                                             }}
                                         >
-                                            ✏️ Otro Motivo...
+                                            <HelpCircle size={14} /> Otro Motivo...
                                         </button>
                                         <button
                                             onClick={handleCloseModal}
@@ -1342,10 +1381,11 @@ export default function ReceptionPage() {
                                                             padding: '0.8rem 1.2rem', borderRadius: '8px',
                                                             backgroundColor: '#F59E0B', color: 'white', border: 'none',
                                                             fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem',
-                                                            boxShadow: '0 2px 4px rgba(245, 158, 11, 0.2)'
+                                                            boxShadow: '0 2px 4px rgba(245, 158, 11, 0.2)',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '4px'
                                                         }}
                                                     >
-                                                        ⚠️ Confirmar como PARCIAL
+                                                        <AlertTriangle size={14} /> Confirmar como PARCIAL
                                                     </button>
                                                 </div>
                                             </div>
@@ -1358,13 +1398,13 @@ export default function ReceptionPage() {
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                                     <button
                                                         onClick={() => handleSubmitResult('received_partial', 'Déficit confirmado en recepción')}
-                                                        style={{ padding: '1rem', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                        ⚠️ Recibir como PARCIAL
+                                                        style={{ padding: '1rem', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                                                        <AlertTriangle size={14} /> Recibir como PARCIAL
                                                     </button>
                                                     <button
                                                         onClick={() => setShowRejectionOptions(true)}
-                                                        style={{ padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                        🛑 RECHAZAR TODO
+                                                        style={{ padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                                                        <XCircle size={14} /> RECHAZAR TODO
                                                     </button>
                                                 </div>
                                             </div>
@@ -1390,7 +1430,7 @@ export default function ReceptionPage() {
                                                     transform: qualityStatus === 'green' ? 'scale(1.1)' : 'scale(1)',
                                                     cursor: 'pointer'
                                                 }}
-                                            >✔</button>
+                                            ><Check size={20} /></button>
                                             <button
                                                 onClick={() => { setQualityStatus('yellow'); setShowRejectionOptions(false); }}
                                                 style={{
@@ -1402,7 +1442,7 @@ export default function ReceptionPage() {
                                                     transform: qualityStatus === 'yellow' ? 'scale(1.1)' : 'scale(1)',
                                                     cursor: 'pointer'
                                                 }}
-                                            >⚠</button>
+                                            ><AlertTriangle size={20} /></button>
                                             <button
                                                 onClick={() => { setQualityStatus('red'); setShowRejectionOptions(true); }}
                                                 style={{
@@ -1414,7 +1454,7 @@ export default function ReceptionPage() {
                                                     transform: qualityStatus === 'red' ? 'scale(1.1)' : 'scale(1)',
                                                     cursor: 'pointer'
                                                 }}
-                                            >✖</button>
+                                            ><X size={20} /></button>
                                         </div>
 
                                         <div style={{ textAlign: 'center', marginTop: '-1rem', marginBottom: '1.5rem', fontWeight: '600', color: qualityStatus === 'green' ? '#10B981' : qualityStatus === 'yellow' ? '#F59E0B' : '#EF4444' }}>
@@ -1435,7 +1475,7 @@ export default function ReceptionPage() {
                                                         fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem'
                                                     }}
                                                 >
-                                                    ⚠️ ¿Quieres rechazar el pedido?
+                                                    <AlertTriangle size={14} /> ¿Quieres rechazar el pedido?
                                                 </button>
                                             </div>
                                         )}
@@ -1468,11 +1508,11 @@ export default function ReceptionPage() {
                                     backgroundColor: 'var(--ops-bg)', color: 'var(--ops-text-muted)',
                                     borderRadius: '50%', width: '40px', height: '40px',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    border: '1px solid var(--ops-border)', fontSize: '1.2rem', cursor: 'pointer',
+                                    border: '1px solid var(--ops-border)', cursor: 'pointer',
                                     transition: 'background-color 0.2s'
                                 }}
                             >
-                                ✕
+                                <X size={20} />
                             </button>
                         </div>
                     </div>
@@ -1591,9 +1631,9 @@ export default function ReceptionPage() {
 
                             {/* Header */}
                             <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#FFFFFF', marginBottom: '0.8rem' }}>
-                                {guideStep === 0 && "Recepción Bodega ⚖️"}
-                                {guideStep === 1 && "Validación Ciega 🔍"}
-                                {guideStep === 2 && "Calidad y Excepciones 🍏"}
+                                {guideStep === 0 && "Recepción Bodega"}
+                                {guideStep === 1 && "Validación Ciega"}
+                                {guideStep === 2 && "Calidad y Excepciones"}
                             </h3>
 
                             {/* Description */}
@@ -1639,7 +1679,7 @@ export default function ReceptionPage() {
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
                                 >
-                                    {guideStep < 2 ? "Siguiente" : "Comenzar 🚀"}
+                                    {guideStep < 2 ? "Siguiente" : "Comenzar"}
                                 </button>
                             </div>
 
