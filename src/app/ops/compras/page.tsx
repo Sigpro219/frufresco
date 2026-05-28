@@ -6,6 +6,22 @@ import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import confetti from "canvas-confetti";
+import { 
+  Calendar, 
+  BookOpen, 
+  List, 
+  RefreshCw, 
+  Search, 
+  Camera, 
+  AlertCircle, 
+  AlertTriangle, 
+  Info, 
+  CheckCircle,
+  ShoppingCart,
+  User,
+  Clock,
+  HelpCircle
+} from 'lucide-react';
 
 interface ProcurementTask {
   id: string;
@@ -1085,7 +1101,7 @@ export default function ProcurementPage() {
             >
               <span style={{ whiteSpace: "nowrap" }}>Compras <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
               <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
-                📅 {formatDateFriendly(targetDateLabel)}
+                <Calendar size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> {formatDateFriendly(targetDateLabel)}
               </span>
             </h1>
           </div>
@@ -1107,7 +1123,7 @@ export default function ProcurementPage() {
                 gap: "4px",
               }}
             >
-              🎓 TUTOR
+              <BookOpen size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> TUTOR
             </button>
           </div>
         </div>
@@ -1352,7 +1368,7 @@ export default function ProcurementPage() {
           >
             <span>
               {filterCategory === "" || filterCategory === "Ver Todo"
-                ? "📋 Ver Todo"
+                ? <span><List size={13} style={{ marginRight: "4px", verticalAlign: "middle" }} /> Ver Todo</span>
                 : (() => {
                     const s = categoryStats.find(s => s.name === filterCategory);
                     return `${filterCategory}${s ? ` · ${s.percentage}%` : ""}`;
@@ -1443,7 +1459,7 @@ export default function ProcurementPage() {
                   }}
                 >
                   <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "flex", alignItems: "center", gap: "4px" }}>
-                    {cat === "Ver Todo" ? "📋 Ver Todo" : (
+                    {cat === "Ver Todo" ? <span style={{ display: "inline-flex", alignItems: "center" }}><List size={13} style={{ marginRight: "4px" }} /> Ver Todo</span> : (
                       <>
                         {cat} {pct === 100 && <span style={{ fontSize: "0.85rem", filter: "drop-shadow(0 0 2px rgba(16,185,129,0.5))" }}>✨</span>}
                       </>
@@ -1514,7 +1530,7 @@ export default function ProcurementPage() {
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🔄</div>
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--ops-primary)", animation: "spin 2s linear infinite", marginBottom: "1rem" }}><RefreshCw size={36} /></div>
           <p style={{ color: "var(--ops-text-muted)", fontWeight: "700", letterSpacing: "0.05em" }}>
             BUSCANDO PEDIDOS...
           </p>
@@ -3019,7 +3035,7 @@ export default function ProcurementPage() {
                       />
                     ) : (
                       <>
-                        <span style={{ fontSize: "1.5rem" }}>📸</span>
+                        <span style={{ color: "var(--ops-primary)", marginBottom: "8px" }}><Camera size={28} strokeWidth={1.5} /></span>
                         <span style={{ fontSize: "0.7rem" }}>
                           TOCAR PARA TOMAR FOTO
                         </span>
@@ -3174,6 +3190,10 @@ export default function ProcurementPage() {
           animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
           <style dangerouslySetInnerHTML={{__html: `
+            @keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
             @keyframes float {
               0%, 100% { transform: translateY(0px); }
               50% { transform: translateY(-8px); }

@@ -3,6 +3,17 @@
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { 
+  ShoppingBag, 
+  ShoppingCart, 
+  Scale, 
+  Package, 
+  Monitor, 
+  Truck, 
+  Home,
+  Sun,
+  Moon
+} from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
     const [isDarkMode, setIsDarkMode] = useState(true);
@@ -79,16 +90,16 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             border: '1px solid var(--ops-primary)',
                             color: 'var(--ops-primary)',
-                            padding: '5px 10px',
+                            padding: '6px 12px',
                             borderRadius: '8px',
                             fontSize: '0.75rem',
                             fontWeight: 'bold',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            gap: '6px'
                         }}>
-                            🏠 <span className="desktop-text">Volver al Sitio</span><span className="mobile-text">Volver</span>
+                            <Home size={14} /> <span className="desktop-text">Volver al Sitio</span><span className="mobile-text">Volver</span>
                         </button>
                     </Link>
                     <button
@@ -96,15 +107,16 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                         style={{
                             background: 'none',
                             border: 'none',
-                            fontSize: '1.1rem',
                             cursor: 'pointer',
-                            padding: '4px',
+                            padding: '6px',
                             display: 'flex',
-                            alignItems: 'center'
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--ops-text)'
                         }}
                         title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
                     >
-                        {isDarkMode ? '☀️' : '🌙'}
+                        {isDarkMode ? <Sun size={18} style={{ color: '#F59E0B' }} /> : <Moon size={18} style={{ color: 'var(--ops-primary)' }} />}
                     </button>
                     <div className="hide-mobile" style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)' }}>
                         V1.0
@@ -122,32 +134,32 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                backgroundColor: 'var(--ops-surface)',
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
                 borderTop: '1px solid var(--ops-border)',
                 display: 'flex',
                 justifyContent: 'space-around',
-                padding: '0.75rem 0',
-                paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+                padding: '0.65rem 0',
+                paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))',
                 zIndex: 100,
-                boxShadow: '0 -4px 20px rgba(0,0,0,0.3)'
+                boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
             }}>
-                <NavItem href="/ops/compras" icon="🛍️" label="COMPRAS" />
-                <NavItem href="/ops/recogida" icon="🛒" label="RECOGIDA" />
-                <NavItem href="/ops/recepcion" icon="⚖️" label="RECIBO" />
-                <NavItem href="/ops/picking" icon="📦" label="ALISTAR" />
-                <NavItem href="/ops/picking/dashboard" icon="📺" label="TABLERO" />
-                <NavItem href="/ops/driver" icon="🚚" label="DESPACHO" />
-                <NavItem href="/ops" icon="🏠" label="INICIO" highlight />
+                <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />
+                <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />
+                <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />
+                <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />
+                <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />
+                <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />
+                <NavItem href="/ops" icon={Home} label="INICIO" highlight />
             </nav>
             <style jsx global>{`
                 :root {
-                    --ops-bg: ${isDarkMode ? '#111827' : '#F3F4F6'};
-                    --ops-surface: ${isDarkMode ? '#1F2937' : '#FFFFFF'};
+                    --ops-bg: ${isDarkMode ? '#0a111c' : '#F3F4F6'};
+                    --ops-surface: ${isDarkMode ? '#121d2d' : '#FFFFFF'};
                     --ops-text: ${isDarkMode ? '#F9FAFB' : '#111827'};
-                    --ops-text-muted: ${isDarkMode ? '#9CA3AF' : '#6B7280'};
-                    --ops-border: ${isDarkMode ? '#374151' : '#E5E7EB'};
+                    --ops-text-muted: ${isDarkMode ? '#8295a5' : '#6B7280'};
+                    --ops-border: ${isDarkMode ? '#22354c' : '#E5E7EB'};
                     --ops-primary: #10B981;
                 }
                 body {
@@ -196,7 +208,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     );
 }
 
-function NavItem({ href, icon, label, highlight = false }: { href: string, icon: string, label: string, highlight?: boolean }) {
+function NavItem({ href, icon: Icon, label, highlight = false }: { href: string, icon: any, label: string, highlight?: boolean }) {
     return (
         <Link href={href} style={{ 
             textAlign: 'center', 
@@ -208,8 +220,10 @@ function NavItem({ href, icon, label, highlight = false }: { href: string, icon:
             gap: '4px',
             flex: 1
         }}>
-            <div style={{ fontSize: '1.4rem' }}>{icon}</div>
-            <div style={{ fontSize: '0.6rem', fontWeight: 'bold', letterSpacing: '0.05em' }}>{label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={20} strokeWidth={1.8} />
+            </div>
+            <div style={{ fontSize: '0.55rem', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '2px' }}>{label}</div>
         </Link>
     );
 }

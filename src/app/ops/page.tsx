@@ -3,6 +3,18 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { 
+  ShoppingBag, 
+  ShoppingCart, 
+  Scale, 
+  Package, 
+  Truck, 
+  BarChart3, 
+  RotateCcw,
+  Activity,
+  ArrowRight,
+  Server
+} from 'lucide-react';
 
 interface OpsStats {
     totalStockValue: number;
@@ -54,97 +66,245 @@ export default function OpsHome() {
     }, []);
 
     return (
-        <div style={{ padding: '2rem 1rem' }}>
-            <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem' }}>Portal <span style={{ color: '#10B981' }}>Operativo</span></h1>
-            <p style={{ color: 'var(--ops-text-muted)', marginBottom: '2rem' }}>Bienvenido al sistema de administración de Logistics Pro.</p>
+        <div style={{ padding: '2rem 1.5rem', maxWidth: '1000px', margin: '0 auto' }}>
+            <style dangerouslySetInnerHTML={{__html: `
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                .card-op {
+                    background: var(--ops-surface);
+                    border: 1px solid var(--ops-border);
+                    border-radius: 20px;
+                    padding: 2.2rem 1.5rem;
+                    text-align: center;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 0.8rem;
+                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.015);
+                    position: relative;
+                }
+
+                .card-op:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08);
+                    border-color: var(--ops-primary);
+                }
+
+                .card-op-highlight {
+                    border: 1px solid rgba(16, 185, 129, 0.4) !important;
+                }
+                .card-op-highlight:hover {
+                    box-shadow: 0 20px 40px rgba(16, 185, 129, 0.15) !important;
+                }
+
+                .card-op-warning {
+                    border: 1px solid rgba(245, 158, 11, 0.4) !important;
+                }
+                .card-op-warning:hover {
+                    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.12) !important;
+                }
+
+                .op-icon-wrapper {
+                    width: 56px;
+                    height: 56px;
+                    border-radius: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: rgba(16, 185, 129, 0.05);
+                    color: var(--ops-primary);
+                    margin-bottom: 0.5rem;
+                    transition: transform 0.3s ease;
+                }
+
+                .card-op:hover .op-icon-wrapper {
+                    transform: scale(1.1) rotate(-3deg);
+                }
+            `}} />
+
+            <div style={{ marginBottom: '2.5rem' }}>
+                <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '2.5rem', fontWeight: '900', color: 'var(--ops-text)', margin: '0 0 0.5rem 0', letterSpacing: '-0.02em' }}>
+                    Portal <span style={{ color: 'var(--ops-primary)' }}>Operativo</span>
+                </h1>
+                <p style={{ fontFamily: 'Inter, sans-serif', color: 'var(--ops-text-muted)', fontSize: '1rem', margin: 0 }}>
+                    Consola central de administración física, inventario en piso y despacho de rutas.
+                </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
                 <Link href="/ops/compras" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🛍️</div>
-                        <div style={{ fontWeight: '800' }}>COMPRAS</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Abastos</div>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <ShoppingBag size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>COMPRAS</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Abastos y Abastecimiento</div>
                     </div>
                 </Link>
 
                 <Link href="/ops/recogida" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🛒</div>
-                        <div style={{ fontWeight: '800' }}>RECOGIDA</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Zorrito / Manual</div>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <ShoppingCart size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>RECOGIDA</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Zorrito / Selección Manual</div>
                     </div>
                 </Link>
 
                 <Link href="/ops/recepcion" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⚖️</div>
-                        <div style={{ fontWeight: '800' }}>RECEPCIÓN</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Control y Pesaje</div>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <Scale size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>RECEPCIÓN</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Control de Calidad y Pesaje</div>
                     </div>
                 </Link>
 
                 <Link href="/ops/picking" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📦</div>
-                        <div style={{ fontWeight: '800' }}>ALISTAMIENTO</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Capitán de Célula</div>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <Package size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>ALISTAMIENTO</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Células de Picking de Pedidos</div>
                     </div>
                 </Link>
 
                 <Link href="/ops/driver" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem', border: '2px solid var(--ops-primary)' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🚚</div>
-                        <div style={{ fontWeight: '800' }}>DESPACHO</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-primary)', marginTop: '0.5rem' }}>Salida a Ruta</div>
+                    <div className="card-op card-op-highlight">
+                        <div className="op-icon-wrapper" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--ops-primary)' }}>
+                            <Truck size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DESPACHO</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-primary)', fontWeight: 600 }}>Salida a Ruta de Conductores</div>
                     </div>
                 </Link>
 
                 <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem', border: stats.pendingAudits > 0 ? '2px solid #F59E0B' : undefined }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📊</div>
-                        <div style={{ fontWeight: '800' }}>CIERRE DE INVENTARIO</div>
-                        <div style={{ fontSize: '0.7rem', color: stats.pendingAudits > 0 ? '#B45309' : 'var(--ops-text-muted)', marginTop: '0.5rem', fontWeight: stats.pendingAudits > 0 ? '700' : 'normal' }}>
-                            {stats.pendingAudits > 0 ? `⚠️ ${stats.pendingAudits} AUDITORÍA(S)` : 'Operaciones de Piso'}
+                    <div className={`card-op ${stats.pendingAudits > 0 ? 'card-op-warning' : ''}`}>
+                        <div className="op-icon-wrapper" style={{ 
+                            background: stats.pendingAudits > 0 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.05)', 
+                            color: stats.pendingAudits > 0 ? '#F59E0B' : 'var(--ops-primary)' 
+                        }}>
+                            <BarChart3 size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>CIERRE DE INVENTARIO</div>
+                        <div style={{ 
+                            fontSize: '0.8rem', 
+                            color: stats.pendingAudits > 0 ? '#D97706' : 'var(--ops-text-muted)', 
+                            fontWeight: stats.pendingAudits > 0 ? 700 : 'normal' 
+                        }}>
+                            {stats.pendingAudits > 0 ? `⚠️ ${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
                         </div>
                     </div>
                 </Link>
 
                 <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
-                    <div className="card-op" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📥</div>
-                        <div style={{ fontWeight: '800' }}>DEVOLUCIONES</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ops-text-muted)', marginTop: '0.5rem' }}>Retornos de Ruta</div>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <RotateCcw size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DEVOLUCIONES</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos e Inconsistencias de Ruta</div>
                     </div>
                 </Link>
             </div>
 
             {/* CONNECTED INVENTORY STATUS */}
-            <div style={{ marginTop: '3rem', backgroundColor: '#F0F9FF', padding: '2rem', borderRadius: '24px', border: '1px solid #BAE6FD', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: '900', color: '#0369A1', textTransform: 'uppercase', letterSpacing: '1px' }}>🏢 Estado de Bodega</h3>
-                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0EA5E9', backgroundColor: 'white', padding: '4px 8px', borderRadius: '8px' }}>Valor: ${stats.totalStockValue.toLocaleString()}</div>
+            <div style={{ 
+                marginTop: '3.5rem', 
+                background: 'var(--ops-surface)', 
+                padding: '2.5rem 2rem', 
+                borderRadius: '24px', 
+                border: '1px solid var(--ops-border)', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '1.5rem',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.05)'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--ops-primary)', display: 'inline-block' }}></div>
+                        <h3 style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-primary)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                            Estado de Bodega y Stock
+                        </h3>
+                    </div>
+                    <div style={{ 
+                        fontSize: '0.8rem', 
+                        fontWeight: '700', 
+                        color: 'var(--ops-primary)', 
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                        padding: '6px 12px', 
+                        borderRadius: '10px',
+                        border: '1px solid rgba(16, 185, 129, 0.2)',
+                        fontFamily: 'monospace'
+                    }}>
+                        Valor Inventario: ${stats.totalStockValue.toLocaleString()}
+                    </div>
                 </div>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', backgroundColor: 'white', padding: '1rem', borderRadius: '16px' }}>
-                    <div style={{ fontSize: '1.8rem' }}>🎲</div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1E293B' }}>{stats.pendingAudits > 0 ? 'Auditoría a Ciegas Pendiente' : 'Inventario Sincronizado'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '1.25rem', 
+                    backgroundColor: 'var(--ops-bg)', 
+                    padding: '1.25rem 1.5rem', 
+                    borderRadius: '16px',
+                    border: '1px solid var(--ops-border)',
+                    flexWrap: 'wrap'
+                }}>
+                    <div style={{ 
+                        color: stats.pendingAudits > 0 ? '#F59E0B' : 'var(--ops-primary)', 
+                        background: stats.pendingAudits > 0 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        {stats.pendingAudits > 0 ? <Activity size={24} /> : <Server size={24} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: '220px' }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--ops-text)', marginBottom: '0.25rem' }}>
+                            {stats.pendingAudits > 0 ? 'Auditoría a Ciegas Solicitada' : 'Sistema de Stock Sincronizado'}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', lineHeight: '1.5' }}>
                             {stats.pendingAudits > 0 
-                                ? `El área comercial ha solicitado ${stats.pendingAudits} conteo(s).` 
-                                : 'No hay solicitudes de auditoría pendientes por completar.'}
+                                ? `Se requiere auditoría de piso para ${stats.pendingAudits} conteo(s) pendiente(s) solicitado(s) por compras.` 
+                                : 'Todos los flujos están funcionando normalmente. No hay auditorías pendientes.'}
                         </div>
                     </div>
                     {stats.pendingAudits > 0 && (
-                        <Link href="/ops/inventory">
-                            <button style={{ padding: '0.6rem 1rem', borderRadius: '10px', background: '#0F172A', color: 'white', border: 'none', fontWeight: '800', fontSize: '0.75rem', cursor: 'pointer' }}>IR AHORA</button>
+                        <Link href="/ops/inventory" style={{ textDecoration: 'none' }}>
+                            <button style={{ 
+                                padding: '0.75rem 1.25rem', 
+                                borderRadius: '12px', 
+                                background: 'var(--ops-text)', 
+                                color: 'var(--ops-surface)', 
+                                border: 'none', 
+                                fontWeight: '700', 
+                                fontSize: '0.8rem', 
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}>
+                                RESOLVER AHORA <ArrowRight size={16} />
+                            </button>
                         </Link>
                     )}
                 </div>
             </div>
             
-            <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-                <Link href="/admin/dashboard" style={{ color: 'var(--ops-text-muted)', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '700' }}>← Volver a Administración Central</Link>
+            <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <Link href="/admin/dashboard" style={{ color: 'var(--ops-text-muted)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: '600', transition: 'color 0.2s' }}>
+                    ← Volver a Administración Central
+                </Link>
             </div>
         </div>
     );
