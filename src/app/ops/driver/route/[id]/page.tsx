@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Package, Check, Navigation, Info } from 'lucide-react';
 
 interface RouteStop {
     id: string;
@@ -176,27 +177,64 @@ export default function LoadVerificationPage() {
     const allLoaded = loadedStops.size === stops.length;
     
     return (
-        <div style={{ padding: '1rem', paddingBottom: '9rem', maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ padding: '1rem', paddingBottom: '9rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16' }}>
             <header style={{ marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.8rem' }}>
-                    <button onClick={() => router.back()} style={{ background: '#1F2937', border: 'none', color: 'white', padding: '0.5rem', borderRadius: '10px' }}>←</button>
-                    <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0 }}>Validación de <span style={{ color: '#10B981' }}>Cargue</span></h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+                    <button 
+                        onClick={() => router.back()} 
+                        style={{ 
+                            background: 'rgba(255, 255, 255, 0.05)', 
+                            border: '1px solid rgba(255, 255, 255, 0.08)', 
+                            color: 'white', 
+                            padding: '0.6rem', 
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, color: 'white', letterSpacing: '-0.3px' }}>
+                        Validación de <span style={{ color: '#059669' }}>Cargue</span>
+                    </h1>
                 </div>
                 
                 <div style={{ 
-                    backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '1rem', 
-                    borderRadius: '16px', fontSize: '0.85rem', border: '1px solid #3B82F6',
-                    display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '1rem'
+                    backgroundColor: 'rgba(30, 58, 138, 0.25)', 
+                    color: '#93C5FD', 
+                    padding: '1rem', 
+                    borderRadius: '16px', 
+                    fontSize: '0.85rem', 
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    display: 'flex', 
+                    gap: '12px', 
+                    alignItems: 'center', 
+                    marginBottom: '1rem',
+                    lineHeight: '1.4'
                 }}>
-                    <span style={{ fontSize: '1.5rem' }}>📦</span>
+                    <Info size={24} style={{ color: '#93C5FD', flexShrink: 0 }} />
                     <div>
-                        <div style={{ fontWeight: '900', color: 'white' }}>LÓGICA DE CARGUE (LIFO)</div>
-                        <div style={{ opacity: 0.8 }}>Carga primero lo que entregarás al final para que quede al fondo del camión.</div>
+                        <div style={{ fontWeight: '800', color: 'white', marginBottom: '2px' }}>LÓGICA DE CARGUE (LIFO)</div>
+                        <div style={{ opacity: 0.85 }}>Carga primero lo que entregarás al final para que quede al fondo del camión.</div>
                     </div>
                 </div>
 
-                <div style={{ backgroundColor: '#064E3B', color: '#A7F3D0', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    📦 {loadedStops.size} / {totalOrders} PEDIDOS VALIDADOS
+                <div style={{ 
+                    backgroundColor: 'rgba(5, 150, 105, 0.08)', 
+                    color: '#A7F3D0', 
+                    border: '1px solid rgba(5, 150, 105, 0.3)',
+                    padding: '0.6rem 1rem', 
+                    borderRadius: '12px', 
+                    fontSize: '0.8rem', 
+                    fontWeight: '700',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                }}>
+                    <Package size={14} />
+                    <span>{loadedStops.size} / {totalOrders} PEDIDOS VALIDADOS</span>
                 </div>
             </header>
 
@@ -205,39 +243,38 @@ export default function LoadVerificationPage() {
                     <div 
                         key={stop.id} 
                         onClick={() => toggleStop(stop.id)}
+                        className={`stop-card ${loadedStops.has(stop.id) ? 'loaded' : ''}`}
                         style={{ 
-                            backgroundColor: loadedStops.has(stop.id) ? 'rgba(16, 185, 129, 0.1)' : '#1F2937', 
-                            borderRadius: '24px', 
+                            borderRadius: '16px', 
                             padding: '1.5rem', 
-                            border: `2px solid ${loadedStops.has(stop.id) ? '#10B981' : '#374151'}`,
-                            transition: 'all 0.2s ease',
+                            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                             cursor: 'pointer'
                         }}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <div style={{ 
-                                    width: '32px', height: '32px', borderRadius: '10px', 
-                                    backgroundColor: loadedStops.has(stop.id) ? '#10B981' : '#111827',
+                                    width: '30px', height: '30px', borderRadius: '50%', 
+                                    backgroundColor: loadedStops.has(stop.id) ? '#059669' : 'rgba(0,0,0,0.3)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    border: `2px solid ${loadedStops.has(stop.id) ? '#10B981' : '#4B5563'}`,
-                                    color: 'white', fontSize: '1.2rem'
+                                    border: `1.5px solid ${loadedStops.has(stop.id) ? '#059669' : 'rgba(255,255,255,0.2)'}`,
+                                    color: 'white'
                                 }}>
-                                    {loadedStops.has(stop.id) ? '✓' : ''}
+                                    {loadedStops.has(stop.id) && <Check size={16} />}
                                 </div>
                                 <div>
                                     <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{stop.orders?.customer_name}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>Parada #{stop.sequence_number} de la ruta</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '2px' }}>Parada #{stop.sequence_number} de la ruta</div>
                                 </div>
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '16px', padding: '1rem' }}>
-                            <div style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: '900', marginBottom: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Mercancía a Cargar</div>
+                        <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                            <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', marginBottom: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mercancía a Cargar</div>
                             {stop.orders?.order_items.map(item => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <span style={{ color: '#E5E7EB' }}>{item.products.name}</span>
-                                    <span style={{ fontWeight: '900', color: '#10B981' }}>{item.picked_quantity} {item.products.unit_of_measure}</span>
+                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <span style={{ color: '#E2E8F0' }}>{item.products.name}</span>
+                                    <span style={{ fontWeight: '800', color: '#059669' }}>{item.picked_quantity} {item.products.unit_of_measure}</span>
                                 </div>
                             ))}
                         </div>
@@ -247,36 +284,60 @@ export default function LoadVerificationPage() {
 
             <div style={{ 
                 position: 'fixed', 
-                bottom: '80px', // Raised to sit above global nav bar
+                bottom: '80px', 
                 left: '1rem', 
                 right: '1rem', 
                 padding: '1rem', 
-                backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                backgroundColor: 'rgba(9, 13, 22, 0.95)', 
                 backdropFilter: 'blur(20px)', 
-                borderRadius: '24px',
-                border: '1px solid #374151',
-                zIndex: 101, // Above nav bar (which is 100)
-                boxShadow: '0 -10px 25px rgba(0,0,0,0.5)'
+                borderRadius: '20px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                zIndex: 101, 
+                boxShadow: '0 -10px 30px rgba(0,0,0,0.6)'
             }}>
                 <button 
                     onClick={handleConfirmLoading}
                     disabled={saving || !allLoaded}
                     style={{ 
                         width: '100%', 
-                        padding: '1.2rem', 
-                        borderRadius: '24px', 
+                        padding: '1.1rem', 
+                        borderRadius: '16px', 
                         border: 'none', 
-                        backgroundColor: allLoaded ? '#10B981' : '#374151', 
-                        color: 'white', 
-                        fontWeight: '900', 
+                        backgroundColor: allLoaded ? '#059669' : 'rgba(255, 255, 255, 0.05)', 
+                        color: allLoaded ? 'white' : '#9CA3AF', 
+                        fontWeight: '800', 
                         fontSize: '1.1rem',
-                        boxShadow: allLoaded ? '0 10px 25px -5px rgba(16, 185, 129, 0.5)' : 'none',
+                        boxShadow: allLoaded ? '0 4px 20px rgba(5, 150, 105, 0.3)' : 'none',
                         transition: 'all 0.3s ease',
-                        opacity: saving ? 0.7 : 1
+                        cursor: allLoaded ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
                     }}>
-                    {saving ? 'PROCESANDO...' : allLoaded ? 'CONFIRMAR Y SALIR A RUTA 🚀' : `FALTAN ${totalOrders - loadedStops.size} PEDIDOS`}
+                    {saving ? 'PROCESANDO...' : allLoaded ? (
+                        <>
+                            <span>CONFIRMAR Y SALIR A RUTA</span>
+                            <Navigation size={18} style={{ transform: 'rotate(45deg)' }} />
+                        </>
+                    ) : `FALTAN ${totalOrders - loadedStops.size} PEDIDOS`}
                 </button>
             </div>
+
+            <style jsx>{`
+                .stop-card {
+                    background: rgba(30, 41, 59, 0.45);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                }
+                .stop-card.loaded {
+                    background: rgba(5, 150, 105, 0.05);
+                    border: 1px solid rgba(5, 150, 105, 0.3);
+                }
+                .stop-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                }
+            `}</style>
         </div>
     );
 }

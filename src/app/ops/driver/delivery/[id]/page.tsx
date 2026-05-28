@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, MapPin, Camera, X, Check, AlertTriangle, Package } from 'lucide-react';
 
 interface DeliverableItem {
     id: string;
@@ -340,31 +341,74 @@ export default function DeliveryConfirmationPage() {
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: '#9CA3AF' }}>Preparando remisión...</div>;
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white' }}>
-             <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <button onClick={() => router.back()} style={{ background: '#1F2937', border: 'none', color: 'white', padding: '0.5rem', borderRadius: '10px' }}>←</button>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0 }}>Cierre de <span style={{ color: '#10B981' }}>Entrega</span></h1>
+        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100vh', backgroundColor: '#090D16' }}>
+             <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button 
+                    onClick={() => router.back()} 
+                    style={{ 
+                        background: 'rgba(255, 255, 255, 0.05)', 
+                        border: '1px solid rgba(255, 255, 255, 0.08)', 
+                        color: 'white', 
+                        padding: '0.6rem', 
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
+                    <ArrowLeft size={18} />
+                </button>
+                <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
+                    Cierre de <span style={{ color: '#059669' }}>Entrega</span>
+                </h1>
             </header>
 
-            <div style={{ backgroundColor: '#1F2937', borderRadius: '24px', padding: '1.5rem', border: '1px solid #374151', marginBottom: '1.5rem' }}>
-                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{stop?.orders?.customer_name || 'Cargando cliente...'}</div>
-                <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginBottom: '1.5rem' }}>📍 {stop?.orders?.shipping_address || 'Sin dirección'}</div>
+            <div className="premium-card" style={{ 
+                padding: '1.5rem', 
+                marginBottom: '1.5rem' 
+            }}>
+                <div style={{ fontSize: '1.2rem', fontWeight: '800', color: 'white' }}>{stop?.orders?.customer_name || 'Cargando cliente...'}</div>
+                <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                    <MapPin size={14} style={{ color: '#059669' }} /> 
+                    <span>{stop?.orders?.shipping_address || 'Sin dirección'}</span>
+                </div>
 
                 {/* Photo Evidence Section */}
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#10B981', marginBottom: '0.5rem' }}>EVIDENCIA (FOTO)</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', marginBottom: '0.6rem', letterSpacing: '0.5px' }}>EVIDENCIA (FOTO)</div>
                     {evidenceUrl ? (
                         <div style={{ position: 'relative' }}>
-                             <img src={evidenceUrl} alt="Evidence" style={{ width: '100%', borderRadius: '15px', height: '200px', objectFit: 'cover' }} />
-                             <button onClick={() => setEvidenceUrl(null)} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(239, 68, 68, 0.8)', border: 'none', color: 'white', borderRadius: '50%', width: '30px', height: '30px' }}>✕</button>
+                             <img src={evidenceUrl} alt="Evidence" style={{ width: '100%', borderRadius: '12px', height: '200px', objectFit: 'cover' }} />
+                             <button 
+                                onClick={() => setEvidenceUrl(null)} 
+                                style={{ 
+                                    position: 'absolute', 
+                                    top: 10, 
+                                    right: 10, 
+                                    background: 'rgba(239, 68, 68, 0.85)', 
+                                    border: 'none', 
+                                    color: 'white', 
+                                    borderRadius: '50%', 
+                                    width: '30px', 
+                                    height: '30px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer'
+                                }}
+                             >
+                                <X size={16} />
+                             </button>
                         </div>
                     ) : (
                         <label style={{ 
                             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px',
-                            padding: '2rem', border: '2px dashed #4B5563', borderRadius: '15px', cursor: 'pointer'
-                        }}>
-                            <span style={{ fontSize: '2rem' }}>📸</span>
-                            <span style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>Subir foto de la planilla recibida</span>
+                            padding: '2rem 1.5rem', border: '1px dashed rgba(255, 255, 255, 0.15)', borderRadius: '12px', cursor: 'pointer',
+                            backgroundColor: 'rgba(9, 13, 22, 0.3)', transition: 'all 0.2s ease'
+                        }} className="upload-label">
+                            <Camera size={32} style={{ color: '#059669' }} />
+                            <span style={{ fontSize: '0.8rem', color: '#9CA3AF', fontWeight: '500' }}>Subir foto de la planilla recibida</span>
                             <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
                         </label>
                     )}
@@ -373,38 +417,63 @@ export default function DeliveryConfirmationPage() {
                 {/* Canastillas Control */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9CA3AF', marginBottom: '0.4rem' }}>CANASTILLAS ENTREGADAS</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS ENTREGADAS</div>
                         <input 
                             type="number" 
                             className="input-op" 
                             value={canastillasDelivered}
                             onChange={(e) => setCanastillasDelivered(parseInt(e.target.value) || 0)}
-                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }}
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.8rem', 
+                                borderRadius: '12px', 
+                                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                color: 'white',
+                                outline: 'none'
+                            }}
                         />
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#9CA3AF', marginBottom: '0.4rem' }}>CANASTILLAS RECIBIDAS</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS RECIBIDAS</div>
                         <input 
                             type="number" 
                             className="input-op" 
                             value={canastillasReceived}
                             onChange={(e) => setCanastillasReceived(parseInt(e.target.value) || 0)}
-                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }}
+                            style={{ 
+                                width: '100%', 
+                                padding: '0.8rem', 
+                                borderRadius: '12px', 
+                                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                backgroundColor: 'rgba(9, 13, 22, 0.5)', 
+                                color: 'white',
+                                outline: 'none'
+                            }}
                         />
                     </div>
                 </div>
 
                 {/* Novedades Switch */}
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'white', fontWeight: '700' }}>
-                        <input type="checkbox" checked={hasNovedad} onChange={(e) => setHasNovedad(e.target.checked)} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'white', fontWeight: '600', fontSize: '0.95rem', cursor: 'pointer' }}>
+                        <input 
+                            type="checkbox" 
+                            checked={hasNovedad} 
+                            onChange={(e) => setHasNovedad(e.target.checked)} 
+                            style={{ 
+                                accentColor: '#059669', 
+                                width: '16px', 
+                                height: '16px' 
+                            }} 
+                        />
                         ¿Reportar Novedad / Devolución?
                     </label>
                     
                     {hasNovedad && (
-                        <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid #374151', paddingTop: '1rem' }}>
+                        <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1.2rem' }}>
                             <div>
-                                <div style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: '800', marginBottom: '0.4rem' }}>TIPO DE NOVEDAD</div>
+                                <div style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: '800', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>TIPO DE NOVEDAD</div>
                                 <select 
                                     value={novedadReason}
                                     onChange={(e) => {
@@ -414,14 +483,22 @@ export default function DeliveryConfirmationPage() {
                                             setItems(prev => prev.map(i => ({ ...i, returned_qty: 0 })));
                                         }
                                     }}
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #F59E0B', backgroundColor: '#111827', color: 'white' }}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.8rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid rgba(245, 158, 11, 0.4)', 
+                                        backgroundColor: 'rgba(9, 13, 22, 0.7)', 
+                                        color: 'white',
+                                        outline: 'none'
+                                    }}
                                 >
-                                    <option value="">Selecciona tipo de reporte...</option>
-                                    <optgroup label="CANCELACIÓN TOTAL" style={{ color: '#EF4444' }}>
-                                        {TOTAL_CANCELLATION_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                                    <option value="" style={{ backgroundColor: '#090D16' }}>Selecciona tipo de reporte...</option>
+                                    <optgroup label="CANCELACIÓN TOTAL" style={{ color: '#EF4444', backgroundColor: '#090D16' }}>
+                                        {TOTAL_CANCELLATION_REASONS.map(r => <option key={r} value={r} style={{ backgroundColor: '#090D16', color: 'white' }}>{r}</option>)}
                                     </optgroup>
-                                    <optgroup label="DEVOLUCIÓN PARCIAL / SKU" style={{ color: '#10B981' }}>
-                                        <option value="devolucion_parcial">Reportar daños o faltantes por producto</option>
+                                    <optgroup label="DEVOLUCIÓN PARCIAL / SKU" style={{ color: '#059669', backgroundColor: '#090D16' }}>
+                                        <option value="devolucion_parcial" style={{ backgroundColor: '#090D16', color: 'white' }}>Reportar daños o faltantes por producto</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -429,17 +506,22 @@ export default function DeliveryConfirmationPage() {
                             {/* Granular Partial Return UI */}
                             {novedadReason === 'devolucion_parcial' && (
                                 <div>
-                                    <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '800', marginBottom: '0.8rem' }}>DETALLE DE PRODUCTOS DEVUELTOS</div>
+                                    <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '800', marginBottom: '0.8rem', letterSpacing: '0.5px' }}>DETALLE DE PRODUCTOS DEVUELTOS</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                         {items.map(item => (
-                                            <div key={item.id} style={{ backgroundColor: '#111827', padding: '1rem', borderRadius: '16px', border: item.returned_qty > 0 ? '1px solid #10B981' : '1px solid #374151' }}>
+                                            <div key={item.id} style={{ 
+                                                backgroundColor: 'rgba(9, 13, 22, 0.4)', 
+                                                padding: '1rem', 
+                                                borderRadius: '12px', 
+                                                border: item.returned_qty > 0 ? '1px solid rgba(5, 150, 105, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)' 
+                                            }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: item.returned_qty > 0 ? '1rem' : 0 }}>
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>{item.product_name}</div>
-                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>Pedido: {item.picked_quantity} {item.unit}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#9CA3AF', marginTop: '2px' }}>Pedido: {item.picked_quantity} {item.unit}</div>
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>DV:</span>
+                                                        <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '800' }}>DV:</span>
                                                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                             <input 
                                                                 type="number"
@@ -447,14 +529,30 @@ export default function DeliveryConfirmationPage() {
                                                                 max={item.picked_quantity}
                                                                 value={item.returned_qty}
                                                                 onChange={(e) => handleReturnQtyChange(item.id, parseFloat(e.target.value) || 0)}
-                                                                style={{ width: '80px', padding: '0.4rem', paddingRight: '2.2rem', borderRadius: '8px', border: '1px solid #4B5563', backgroundColor: 'black', color: 'white', textAlign: 'center' }}
+                                                                style={{ 
+                                                                    width: '85px', 
+                                                                    padding: '0.4rem', 
+                                                                    paddingRight: '2.4rem', 
+                                                                    borderRadius: '8px', 
+                                                                    border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                                                    backgroundColor: 'rgba(0,0,0,0.3)', 
+                                                                    color: 'white', 
+                                                                    textAlign: 'center',
+                                                                    outline: 'none'
+                                                                }}
                                                             />
                                                             <button 
                                                                 onClick={() => handleReturnQtyChange(item.id, item.picked_quantity)}
                                                                 style={{ 
                                                                     position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
-                                                                    backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '5px',
-                                                                    fontSize: '0.55rem', fontWeight: '900', padding: '4px 6px', cursor: 'pointer'
+                                                                    backgroundColor: 'rgba(239, 68, 68, 0.2)', 
+                                                                    color: '#EF4444', 
+                                                                    border: '1px solid rgba(239, 68, 68, 0.3)', 
+                                                                    borderRadius: '5px',
+                                                                    fontSize: '0.55rem', 
+                                                                    fontWeight: '800', 
+                                                                    padding: '3px 5px', 
+                                                                    cursor: 'pointer'
                                                                 }}
                                                             >
                                                                 TODO
@@ -464,23 +562,25 @@ export default function DeliveryConfirmationPage() {
                                                 </div>
 
                                                 {item.returned_qty > 0 && (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px dotted #374151', paddingTop: '0.8rem' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', borderTop: '1px dashed rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem' }}>
                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '0.5rem' }}>
                                                             <select 
                                                                 value={item.return_reason || ''}
                                                                 onChange={(e) => handleItemReasonChange(item.id, e.target.value)}
-                                                                style={{ padding: '0.6rem', borderRadius: '10px', backgroundColor: '#1F2937', color: 'white', border: '1px solid #4B5563', fontSize: '0.75rem' }}
+                                                                style={{ padding: '0.6rem', borderRadius: '8px', backgroundColor: 'rgba(30, 41, 59, 0.5)', color: 'white', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.75rem', outline: 'none' }}
                                                             >
-                                                                <option value="">Motivo devolución...</option>
-                                                                {RETURN_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                                                                <option value="" style={{ backgroundColor: '#090D16' }}>Motivo devolución...</option>
+                                                                {RETURN_REASONS.map(r => <option key={r} value={r} style={{ backgroundColor: '#090D16' }}>{r}</option>)}
                                                             </select>
                                                             
                                                             <label style={{ 
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                                                backgroundColor: item.return_evidence_url ? '#10B981' : '#374151',
-                                                                borderRadius: '10px', cursor: 'pointer', height: '36px'
+                                                                backgroundColor: item.return_evidence_url ? 'rgba(5, 150, 105, 0.2)' : 'rgba(255,255,255,0.05)',
+                                                                border: item.return_evidence_url ? '1px solid rgba(5, 150, 105, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                                                                borderRadius: '8px', cursor: 'pointer', height: '36px',
+                                                                color: item.return_evidence_url ? '#059669' : '#9CA3AF'
                                                             }}>
-                                                                {item.return_evidence_url ? '✅' : '📷'}
+                                                                {item.return_evidence_url ? <Check size={16} /> : <Camera size={16} />}
                                                                 <input type="file" accept="image/*" capture="environment" onChange={(e) => handleItemPhotoUpload(item.id, e)} style={{ display: 'none' }} />
                                                             </label>
                                                         </div>
@@ -505,17 +605,41 @@ export default function DeliveryConfirmationPage() {
                 style={{ 
                     width: '100%', 
                     padding: '1.2rem', 
-                    borderRadius: '20px', 
+                    borderRadius: '16px', 
                     border: 'none', 
-                    backgroundColor: '#10B981', 
+                    backgroundColor: '#059669', 
                     color: 'white', 
-                    fontWeight: '900', 
+                    fontWeight: '800', 
                     fontSize: '1.1rem',
-                    boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.4)',
-                    cursor: saving ? 'not-allowed' : 'pointer'
+                    boxShadow: '0 4px 20px rgba(5, 150, 105, 0.25)',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease'
                 }}>
-                {saving ? 'GUARDANDO...' : 'FINALIZAR ENTREGA ✅'}
+                {saving ? 'GUARDANDO...' : (
+                    <>
+                        <span>FINALIZAR ENTREGA</span>
+                        <Check size={18} />
+                    </>
+                )}
             </button>
+
+            <style jsx>{`
+                .premium-card {
+                    background: rgba(30, 41, 59, 0.45);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 16px;
+                    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+                }
+                .upload-label:hover {
+                    background-color: rgba(9, 13, 22, 0.4) !important;
+                    border-color: rgba(5, 150, 105, 0.3) !important;
+                }
+            `}</style>
         </div>
     );
 }

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
 import ActivityLog from '@/components/ActivityLog';
+import { ArrowLeft, MapPin, Check, X, Map, CheckCircle2, Navigation } from 'lucide-react';
 
 interface RouteStop {
     id: string;
@@ -120,87 +121,183 @@ export default function RouteExecutionPage() {
     };
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16', color: 'white' }}>
             <header style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0 }}>Ruta en <span style={{ color: '#3B82F6' }}>Curso</span></h1>
-                <div style={{ backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '0.4rem 0.8rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button 
+                        onClick={() => router.push('/ops/driver')} 
+                        style={{ 
+                            background: 'rgba(255, 255, 255, 0.05)', 
+                            border: '1px solid rgba(255, 255, 255, 0.08)', 
+                            color: 'white', 
+                            padding: '0.6rem', 
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: '900', margin: 0, letterSpacing: '-0.3px' }}>
+                        Ruta en <span style={{ color: '#059669' }}>Curso</span>
+                    </h1>
+                </div>
+                <div style={{ 
+                    backgroundColor: 'rgba(5, 150, 105, 0.08)', 
+                    color: '#A7F3D0', 
+                    border: '1px solid rgba(5, 150, 105, 0.3)',
+                    padding: '0.5rem 1rem', 
+                    borderRadius: '12px', 
+                    fontSize: '0.8rem', 
+                    fontWeight: '700' 
+                }}>
                     {completedStops} / {stops.length} COMPLETADO
                 </div>
             </header>
 
             {/* Next Stop Hero Card */}
             {nextStop ? (
-                <div style={{ 
-                    backgroundColor: '#1E3A8A', 
-                    borderRadius: '24px', 
+                <div className="premium-card hero-card" style={{ 
                     padding: '2rem 1.5rem', 
-                    marginBottom: '2rem',
-                    boxShadow: '0 20px 25px -5px rgba(30, 58, 138, 0.3)',
-                    border: '1px solid #3B82F6'
+                    marginBottom: '2rem'
                 }}>
-                    <div style={{ fontSize: '0.7rem', color: '#93C5FD', fontWeight: '900', letterSpacing: '2px', marginBottom: '0.5rem' }}>SIGUIENTE DESTINO</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem' }}>{nextStop.orders?.customer_name}</div>
-                    <div style={{ fontSize: '0.9rem', color: '#BFDBFE', marginBottom: '1.5rem' }}>📍 {nextStop.orders?.shipping_address}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '800', letterSpacing: '2px', marginBottom: '0.6rem' }}>SIGUIENTE DESTINO</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem', letterSpacing: '-0.5px' }}>{nextStop.orders?.customer_name}</div>
+                    <div style={{ fontSize: '0.9rem', color: '#9CA3AF', marginBottom: '1.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                        <span>{nextStop.orders?.shipping_address}</span>
+                    </div>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <button 
                             onClick={() => openGoogleMaps(nextStop.orders?.shipping_address || '')}
                             style={{ 
-                                padding: '1rem', borderRadius: '15px', border: 'none', 
-                                backgroundColor: '#2563EB', color: 'white', fontWeight: '800' 
-                            }}>
-                            NAVEGAR 🗺️
+                                padding: '1rem', 
+                                borderRadius: '16px', 
+                                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+                                color: 'white', 
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s ease'
+                            }}
+                            className="map-btn"
+                        >
+                            <Map size={18} />
+                            <span>NAVEGAR</span>
                         </button>
                         <button 
                             onClick={() => router.push(`/ops/driver/delivery/${nextStop.id}`)}
                             style={{ 
-                                padding: '1rem', borderRadius: '15px', border: 'none', 
-                                backgroundColor: '#10B981', color: 'white', fontWeight: '800' 
-                            }}>
-                            ENTREGAR ✅
+                                padding: '1rem', 
+                                borderRadius: '16px', 
+                                border: 'none', 
+                                backgroundColor: '#059669', 
+                                color: 'white', 
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                boxShadow: '0 4px 20px rgba(5, 150, 105, 0.25)',
+                                transition: 'all 0.2s ease'
+                            }}
+                            className="deliver-btn"
+                        >
+                            <CheckCircle2 size={18} />
+                            <span>ENTREGAR</span>
                         </button>
                     </div>
                 </div>
             ) : (
-                <div style={{ backgroundColor: '#064E3B', borderRadius: '24px', padding: '2rem', textAlign: 'center', marginBottom: '2rem' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏁</div>
-                    <h3 style={{ margin: 0, color: 'white' }}>¡Ruta completada!</h3>
-                    <p style={{ color: '#A7F3D0', fontSize: '0.85rem' }}>Todos los pedidos fueron gestionados.</p>
+                <div className="completed-banner" style={{ 
+                    borderRadius: '16px', 
+                    padding: '2rem', 
+                    textAlign: 'center', 
+                    marginBottom: '2rem',
+                    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+                    border: '1px solid rgba(5, 150, 105, 0.3)'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <CheckCircle2 size={48} style={{ color: '#059669' }} />
+                    </div>
+                    <h3 style={{ margin: 0, color: 'white', fontSize: '1.2rem', fontWeight: '800' }}>¡Ruta completada!</h3>
+                    <p style={{ color: '#A7F3D0', fontSize: '0.85rem', marginTop: '0.4rem' }}>Todos los pedidos fueron gestionados.</p>
                 </div>
             )}
 
             {/* Shared Activity Log */}
-            {plate && <ActivityLog plate={plate} />}
+            {plate && (
+                <div style={{ marginBottom: '2rem' }}>
+                    <ActivityLog plate={plate} />
+                </div>
+            )}
 
             {/* List of remaining/visited stops */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <h4 style={{ color: '#9CA3AF', fontSize: '0.8rem', margin: '0 0 0.5rem 0.5rem' }}>RECORRIDO TOTAL</h4>
+                <h4 style={{ color: '#059669', fontSize: '0.75rem', fontWeight: '800', margin: '0 0 0.5rem 0.5rem', letterSpacing: '0.5px' }}>RECORRIDO TOTAL</h4>
                 {stops.map(stop => (
                     <div key={stop.id} style={{ 
-                        backgroundColor: '#1F2937', 
+                        backgroundColor: 'rgba(30, 41, 59, 0.45)', 
                         borderRadius: '16px', 
-                        padding: '1rem', 
-                        border: '1px solid #374151',
+                        padding: '1rem 1.2rem', 
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
                         opacity: stop.status !== 'pending' ? 0.6 : 1,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '1rem'
-                    }}>
+                        gap: '1rem',
+                        transition: 'all 0.2s ease'
+                    }} className="stop-item-card">
                         <div style={{ 
                             width: '30px', height: '30px', borderRadius: '50%', 
-                            backgroundColor: stop.status === 'delivered' ? '#10B981' : stop.status === 'failed' ? '#EF4444' : '#374151',
+                            backgroundColor: stop.status === 'delivered' ? '#059669' : stop.status === 'failed' ? '#EF4444' : 'rgba(255, 255, 255, 0.05)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontWeight: '900', color: 'white', fontSize: '0.8rem'
+                            fontWeight: '800', color: 'white', fontSize: '0.8rem',
+                            border: `1.5px solid ${stop.status === 'delivered' ? '#059669' : stop.status === 'failed' ? '#EF4444' : 'rgba(255, 255, 255, 0.2)'}`
                         }}>
-                            {stop.status === 'delivered' ? '✓' : stop.status === 'failed' ? '✗' : stop.sequence_number}
+                            {stop.status === 'delivered' ? <Check size={14} /> : stop.status === 'failed' ? <X size={14} /> : stop.sequence_number}
                         </div>
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'white' }}>{stop.orders?.customer_name}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>{stop.orders?.shipping_address}</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'white' }}>{stop.orders?.customer_name}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <MapPin size={12} style={{ color: '#059669' }} />
+                                <span>{stop.orders?.shipping_address}</span>
+                            </div>
                         </div>
                     </div>
                 ))}
             </div>
+
+            <style jsx>{`
+                .premium-card {
+                    background: rgba(30, 41, 59, 0.45);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 16px;
+                    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+                }
+                .hero-card {
+                    background: linear-gradient(135deg, rgba(30, 41, 59, 0.55) 0%, rgba(9, 13, 22, 0.6) 100%);
+                    border-color: rgba(5, 150, 105, 0.2);
+                }
+                .map-btn:hover {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
+                }
+                .deliver-btn:hover {
+                    opacity: 0.9;
+                }
+                .stop-item-card:hover {
+                    transform: translateY(-1px);
+                    background-color: rgba(30, 41, 59, 0.55) !important;
+                }
+            `}</style>
         </div>
     );
 }

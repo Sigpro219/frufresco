@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import ActivityLog from '@/components/ActivityLog';
+import { Gauge, AlertTriangle, AlertOctagon, MapPin, Key, ChevronRight } from 'lucide-react';
 
 interface Route {
     id: string;
@@ -244,25 +245,27 @@ export default function DriverDashboard() {
     };
 
     return (
-        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#0F172A' }}>
+        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16' }}>
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'white' }}>
-                        Despacho <span style={{ color: '#10B981' }}>/ Salida</span>
+                    <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'white', letterSpacing: '-0.5px' }}>
+                        Despacho <span style={{ color: '#059669' }}>/ Salida</span>
                     </h1>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.5rem' }}>Gestiona tu vehículo y tus rutas de hoy.</p>
+                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.3rem' }}>Gestiona tu vehículo y tus rutas de hoy.</p>
                 </div>
                 <button 
                     onClick={() => setDemoMode(!demoMode)}
+                    className="demo-btn"
                     style={{ 
-                        padding: '0.5rem 1rem', 
-                        borderRadius: '10px', 
+                        padding: '0.6rem 1.2rem', 
+                        borderRadius: '12px', 
                         fontSize: '0.7rem', 
-                        fontWeight: '900',
-                        backgroundColor: demoMode ? '#10B981' : '#1F2937',
+                        fontWeight: '800',
+                        backgroundColor: demoMode ? '#059669' : 'rgba(255, 255, 255, 0.05)',
                         color: 'white',
-                        border: 'none',
-                        cursor: 'pointer'
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
                     }}
                 >
                     {demoMode ? 'SIMULACIÓN: ON' : 'SIMULAR OPERACIÓN'}
@@ -271,7 +274,7 @@ export default function DriverDashboard() {
 
             {/* Vehicle Selection Dropdown */}
             <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '900', color: '#10B981', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#059669', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Selecciona tu Vehículo
                 </label>
                 <select 
@@ -279,41 +282,40 @@ export default function DriverDashboard() {
                     onChange={(e) => setSelectedPlate(e.target.value)}
                     style={{ 
                         width: '100%', 
-                        padding: '1rem', 
+                        padding: '1rem 1.2rem', 
                         borderRadius: '16px', 
-                        backgroundColor: '#1E2937', 
-                        border: '1px solid #374151', 
+                        backgroundColor: 'rgba(30, 41, 59, 0.4)', 
+                        border: '1px solid rgba(255, 255, 255, 0.08)', 
                         color: 'white',
                         fontSize: '1rem',
-                        fontWeight: '700',
+                        fontWeight: '600',
                         appearance: 'none',
                         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239CA3AF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                         backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 1rem center',
-                        backgroundSize: '1.5rem'
+                        backgroundPosition: 'right 1.2rem center',
+                        backgroundSize: '1.2rem',
+                        outline: 'none',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
                     }}
                 >
-                    <option value="">-- {demoMode ? 'TODOS LOS VEHÍCULOS' : 'Elige una placa'} --</option>
+                    <option value="" style={{ backgroundColor: '#090D16' }}>-- {demoMode ? 'TODOS LOS VEHÍCULOS' : 'Elige una placa'} --</option>
                     {plates.map(p => (
-                        <option key={p} value={p}>{p}</option>
+                        <option key={p} value={p} style={{ backgroundColor: '#090D16' }}>{p}</option>
                     ))}
                 </select>
             </div>
 
             {selectedPlate && !odometerConfirmed && (
-                <div style={{ 
-                    backgroundColor: '#1E2937', 
-                    borderRadius: '24px', 
+                <div className="premium-card" style={{ 
                     padding: '1.5rem', 
                     marginBottom: '2rem',
-                    border: '1px solid #3B82F6',
                     animation: 'fadeIn 0.5s ease-out'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '1.5rem' }}>📏</span>
-                        <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem' }}>Actualiza el Kilometraje</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+                        <Gauge style={{ color: '#059669', width: '24px', height: '24px' }} />
+                        <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: '800' }}>Actualiza el Kilometraje</h3>
                     </div>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
                         Ingresa el kilometraje actual de la placa <strong>{selectedPlate}</strong> para iniciar tu operación.
                     </p>
                     
@@ -327,15 +329,16 @@ export default function DriverDashboard() {
                                 width: '100%', 
                                 padding: '1.2rem', 
                                 borderRadius: '16px', 
-                                backgroundColor: '#111827', 
-                                border: '1px solid #374151', 
+                                backgroundColor: 'rgba(9, 13, 22, 0.6)', 
+                                border: '1px solid rgba(255, 255, 255, 0.08)', 
                                 color: 'white',
                                 fontSize: '1.5rem',
-                                fontWeight: '900',
-                                textAlign: 'center'
+                                fontWeight: '800',
+                                textAlign: 'center',
+                                outline: 'none'
                             }}
                         />
-                        <span style={{ position: 'absolute', right: '1.5rem', top: '50%', transform: 'translateY(-50%)', color: '#10B981', fontWeight: '900' }}>KM</span>
+                        <span style={{ position: 'absolute', right: '1.5rem', top: '50%', transform: 'translateY(-50%)', color: '#059669', fontWeight: '800' }}>KM</span>
                     </div>
 
                     <button 
@@ -346,11 +349,13 @@ export default function DriverDashboard() {
                             padding: '1.1rem', 
                             borderRadius: '16px', 
                             border: 'none', 
-                            backgroundColor: '#3B82F6', 
+                            backgroundColor: '#059669', 
                             color: 'white', 
-                            fontWeight: '900', 
+                            fontWeight: '800', 
                             fontSize: '1rem',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.2)'
                         }}>
                         {isUpdatingOdo ? 'ACTUALIZANDO...' : 'CONFIRMAR E INICIAR'}
                     </button>
@@ -361,23 +366,29 @@ export default function DriverDashboard() {
                 <div style={{ 
                     marginBottom: '1.5rem', 
                     padding: '1.2rem', 
-                    borderRadius: '24px',
-                    backgroundColor: maintenanceAlert.status === 'urgent' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                    border: `1px solid ${maintenanceAlert.status === 'urgent' ? '#EF4444' : '#F59E0B'}`,
+                    borderRadius: '16px',
+                    backgroundColor: maintenanceAlert.status === 'urgent' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                    border: `1px solid ${maintenanceAlert.status === 'urgent' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '1rem',
                     animation: 'pulse 2s infinite'
                 }}>
-                    <span style={{ fontSize: '2rem' }}>{maintenanceAlert.status === 'urgent' ? '🚨' : '⚠️'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {maintenanceAlert.status === 'urgent' ? (
+                            <AlertOctagon style={{ color: '#EF4444', width: '28px', height: '28px' }} />
+                        ) : (
+                            <AlertTriangle style={{ color: '#F59E0B', width: '28px', height: '28px' }} />
+                        )}
+                    </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ fontSize: '0.7rem', fontWeight: '900', color: maintenanceAlert.status === 'urgent' ? '#F87171' : '#FBBF24', textTransform: 'uppercase' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: maintenanceAlert.status === 'urgent' ? '#F87171' : '#FBBF24', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 {maintenanceAlert.status === 'urgent' ? 'Acción Requerida' : 'Próximo Mantenimiento'}
                             </div>
                             <div style={{ 
                                 fontSize: '0.75rem', 
-                                fontWeight: '900', 
+                                fontWeight: '800', 
                                 backgroundColor: maintenanceAlert.status === 'urgent' ? '#EF4444' : '#F59E0B',
                                 color: 'white',
                                 padding: '2px 8px',
@@ -386,7 +397,7 @@ export default function DriverDashboard() {
                                 {maintenanceAlert.estimated}
                             </div>
                         </div>
-                        <div style={{ fontSize: '1rem', fontWeight: '800', color: 'white', marginTop: '2px' }}>{maintenanceAlert.task_name}</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'white', marginTop: '2px' }}>{maintenanceAlert.task_name}</div>
                         <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.2rem' }}>Informa al administrador al terminar tu turno.</div>
                     </div>
                 </div>
@@ -401,23 +412,23 @@ export default function DriverDashboard() {
                         />
                     )}
 
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: '900', marginBottom: '1rem', color: 'white' }}>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '1rem', color: 'white', letterSpacing: '-0.3px' }}>
                         {selectedPlate ? `Rutas para ${selectedPlate}` : 'Rutas Activas de la Flota'}
                     </h2>
 
                     {loading ? (
                         <div style={{ textAlign: 'center', padding: '2rem', color: '#9CA3AF' }}>Actualizando...</div>
                     ) : routes.length === 0 ? (
-                        <div style={{ 
-                            backgroundColor: '#1E2937', 
-                            borderRadius: '24px', 
+                        <div className="premium-card" style={{ 
                             padding: '3rem 2rem', 
                             textAlign: 'center',
-                            border: '1px dashed #374151'
+                            borderStyle: 'dashed'
                         }}>
-                            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📍</div>
-                            <h3 style={{ margin: 0, color: 'white' }}>Sin rutas asignadas</h3>
-                            <p style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>No tienes viajes pendientes para la placa {selectedPlate}.</p>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                                <MapPin style={{ width: '48px', height: '48px', color: '#9CA3AF', opacity: 0.5 }} />
+                            </div>
+                            <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: '700' }}>Sin rutas asignadas</h3>
+                            <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginTop: '0.4rem' }}>No tienes viajes pendientes para la placa {selectedPlate}.</p>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -429,11 +440,8 @@ export default function DriverDashboard() {
                                         : `/ops/driver/route-map/${route.id}`} 
                                     style={{ textDecoration: 'none' }}
                                 >
-                                    <div style={{ 
-                                        backgroundColor: '#1F2937', 
-                                        borderRadius: '20px', 
+                                    <div className="premium-card route-card" style={{ 
                                         padding: '1.5rem',
-                                        border: '1px solid #374151',
                                         position: 'relative'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
@@ -443,9 +451,9 @@ export default function DriverDashboard() {
                                             </div>
                                             <div style={{ 
                                                 padding: '0.4rem 1rem', 
-                                                fontSize: '0.7rem', fontWeight: '900',
+                                                fontSize: '0.7rem', fontWeight: '800',
                                                 backgroundColor: 
-                                                    route.status === 'in_transit' ? '#3B82F6' : '#F59E0B',
+                                                    route.status === 'in_transit' ? '#2563EB' : '#D97706',
                                                 color: 'white',
                                                 borderRadius: '12px'
                                             }}>
@@ -454,17 +462,17 @@ export default function DriverDashboard() {
                                         </div>
 
                                         <div style={{ marginBottom: '1rem' }}>
-                                            <div style={{ fontSize: '0.9rem', color: 'white', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString()}</div>
+                                            <div style={{ fontSize: '0.9rem', color: '#E2E8F0', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString()}</div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                                            <div style={{ backgroundColor: '#111827', padding: '0.75rem', borderRadius: '12px' }}>
-                                                <div style={{ fontSize: '0.6rem', color: '#10B981', fontWeight: '900' }}>PEDIDOS</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'white' }}>{route.total_orders}</div>
+                                            <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                                <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '800', letterSpacing: '0.5px' }}>PEDIDOS</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{route.total_orders}</div>
                                             </div>
-                                            <div style={{ backgroundColor: '#111827', padding: '0.75rem', borderRadius: '12px' }}>
-                                                <div style={{ fontSize: '0.6rem', color: '#10B981', fontWeight: '900' }}>PESO TOTAL</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'white' }}>{route.total_kilos} <span style={{ fontSize: '0.6rem' }}>KG</span></div>
+                                            <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', padding: '0.75rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                                <div style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '800', letterSpacing: '0.5px' }}>PESO TOTAL</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{route.total_kilos} <span style={{ fontSize: '0.6rem', color: '#9CA3AF' }}>KG</span></div>
                                             </div>
                                         </div>
 
@@ -474,11 +482,18 @@ export default function DriverDashboard() {
                                             padding: '0.8rem', 
                                             borderRadius: '12px',
                                             border: 'none',
-                                            backgroundColor: '#10B981',
+                                            backgroundColor: '#059669',
                                             color: 'white',
-                                            fontWeight: '900'
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            justifyItems: 'center',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            gap: '8px'
                                         }}>
                                             {route.status === 'planning' ? 'INICIAR CARGUE' : 'CONTINUAR RUTA'}
+                                            <ChevronRight style={{ width: '16px', height: '16px' }} />
                                         </button>
                                     </div>
                                 </Link>
@@ -487,28 +502,44 @@ export default function DriverDashboard() {
                     )}
                 </>
             ) : (
-                <div style={{ 
+                <div className="premium-card" style={{ 
                     marginTop: '2rem', 
                     padding: '3rem 1.5rem', 
-                    background: 'linear-gradient(180deg, #1E2937 0%, #111827 100%)', 
-                    borderRadius: '24px', 
-                    textAlign: 'center',
-                    border: '1px solid #374151'
+                    textAlign: 'center'
                 }}>
-                    <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🔑</div>
-                    <h3 style={{ color: 'white', margin: 0 }}>Identifica tu Vehículo</h3>
-                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.5rem' }}>Usa el selector de arriba para ver tus tareas y el estado de tu camión.</p>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <Key style={{ width: '64px', height: '64px', color: '#059669', opacity: 0.8 }} />
+                    </div>
+                    <h3 style={{ color: 'white', margin: 0, fontSize: '1.2rem', fontWeight: '800' }}>Identifica tu Vehículo</h3>
+                    <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.4' }}>Usa el selector de arriba para ver tus tareas y el estado de tu camión.</p>
                 </div>
             )}
 
             <style jsx>{`
+                .premium-card {
+                    background: rgba(30, 41, 59, 0.45);
+                    backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 16px;
+                    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .route-card:hover {
+                    transform: translateY(-2px);
+                    border-color: rgba(5, 150, 105, 0.3);
+                    box-shadow: 0 12px 40px 0 rgba(5, 150, 105, 0.1);
+                    background: rgba(30, 41, 59, 0.55);
+                }
+                .demo-btn:hover {
+                    opacity: 0.9;
+                }
                 @keyframes pulse {
                     0% { transform: scale(1); }
-                    50% { transform: scale(1.02); }
+                    50% { transform: scale(1.01); }
                     100% { transform: scale(1); }
                 }
                 @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
+                    from { opacity: 0; transform: translateY(8px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
