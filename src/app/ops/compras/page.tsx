@@ -2229,7 +2229,7 @@ export default function ProcurementPage() {
                     textAlign: "left"
                   }}>
                     <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      <span style={{ fontSize: "1.5rem" }}>⚠️</span>
+                      <span style={{ display: "flex", color: "#EF4444" }}><AlertTriangle size={24} /></span>
                       <div>
                         <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "900", color: "#EF4444" }}>
                           Novedades de Recogida — Requiere Acción
@@ -2252,7 +2252,7 @@ export default function ProcurementPage() {
                         }}>
                           <div>
                             <div style={{ fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
-                              {nov.novelty_type === 'rejection' ? '🔴 Compra Rechazada' : (nov.novelty_type === 'deficit' ? '🟠 Faltante de Recogida' : '🟡 Alerta Calidad')} ({nov.quantity} {selectedTask.unit})
+                              {nov.novelty_type === 'rejection' ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={13} /> Compra Rechazada</span> : (nov.novelty_type === 'deficit' ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={13} /> Faltante de Recogida</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Info size={13} /> Alerta Calidad</span>)} ({nov.quantity} {selectedTask.unit})
                             </div>
                             {nov.reason && (
                               <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "0.2rem" }}>
@@ -2272,7 +2272,7 @@ export default function ProcurementPage() {
                                 style={{ fontSize: "0.65rem", color: "var(--ops-primary)", cursor: "pointer", textDecoration: "underline" }}
                                 onClick={() => window.open(nov.evidence_url, '_blank')}
                               >
-                                Ampliar Foto 🔎
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><Search size={11} /> Ampliar Foto</span>
                               </span>
                             </div>
                           )}
@@ -2309,7 +2309,7 @@ export default function ProcurementPage() {
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        📋 Reclamar al proveedor y programar nueva recogida
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><Clock size={14} /> Reclamar al proveedor y programar nueva recogida</span>
                       </button>
 
                       <button
@@ -2329,7 +2329,7 @@ export default function ProcurementPage() {
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        🔄 Descartar y generar nueva compra con otro proveedor
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><RefreshCw size={14} /> Descartar y generar nueva compra con otro proveedor</span>
                       </button>
 
                       <button
@@ -2363,7 +2363,7 @@ export default function ProcurementPage() {
                           fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
                         }}
                       >
-                        💰 Reclamación Administrativa (Nota Crédito / Saldo)
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><AlertCircle size={14} /> Reclamación Administrativa (Nota Crédito / Saldo)</span>
                       </button>
                     </div>
                   </div>
@@ -2392,7 +2392,7 @@ export default function ProcurementPage() {
                         gap: "0.4rem",
                       }}
                     >
-                      <span>🔁</span> Sustituir Producto
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><RefreshCw size={12} /> Sustituir Producto</span>
                     </button>
                   </div>
 
