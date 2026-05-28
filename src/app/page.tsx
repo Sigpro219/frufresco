@@ -241,9 +241,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           }
 
           /* Bento grid styles */
+          /* Bento grid styles */
           .bento-grid {
             display: grid;
-            grid-template-columns: 1.3fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
             margin-top: 2rem;
           }
@@ -252,7 +253,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             background: white;
             border: 1px solid rgba(0, 0, 0, 0.04);
             border-radius: var(--radius-lg);
-            padding: 2.5rem;
+            padding: 2rem 2.2rem;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
             flex-direction: column;
@@ -268,10 +269,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
             border-color: rgba(26, 77, 46, 0.15);
           }
 
-          .bento-card-large {
-            grid-row: span 2;
-            background: linear-gradient(135deg, #f0fdf4 0%, #e8f5e9 100%);
-            border-color: rgba(26, 77, 46, 0.08);
+          @media (max-width: 991px) {
+            .bento-grid {
+              grid-template-columns: repeat(2, 1fr);
+            }
           }
 
           .bento-card:hover .bento-icon-container {
@@ -311,9 +312,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           @media (max-width: 768px) {
             .bento-grid {
               grid-template-columns: 1fr;
-            }
-            .bento-card-large {
-              grid-row: span 1;
             }
             .hero-split {
               min-height: 480px;
@@ -401,13 +399,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           </div>
           <div className="bento-grid">
             {t.valueProps.map((prop: any, i: number) => {
-              const isLarge = i === 0;
-              const iconColor = isLarge ? 'var(--primary)' : 'var(--primary-light)';
-              const iconBg = isLarge ? 'rgba(26, 77, 46, 0.08)' : 'rgba(26, 77, 46, 0.04)';
+              const iconColor = 'var(--primary-light)';
+              const iconBg = 'rgba(26, 77, 46, 0.04)';
               return (
                 <div 
                   key={i} 
-                  className={`bento-card ${isLarge ? 'bento-card-large' : ''}`}
+                  className="bento-card"
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', justifyContent: 'space-between' }}>
                     <div>
@@ -427,7 +424,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                       </div>
                       <h3 style={{ 
                         fontFamily: 'var(--font-outfit), sans-serif',
-                        fontSize: isLarge ? '1.8rem' : '1.4rem', 
+                        fontSize: '1.4rem', 
                         fontWeight: '800', 
                         marginBottom: '0.75rem',
                         color: 'var(--primary-dark)',
@@ -438,19 +435,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                       <p style={{ 
                         color: '#475569', 
                         lineHeight: '1.6',
-                        fontSize: isLarge ? '1.05rem' : '0.95rem',
-                        margin: 0,
-                        maxWidth: isLarge ? '500px' : '100%'
+                        fontSize: '0.95rem',
+                        margin: 0
                       }}>
                         {prop.desc}
                       </p>
                     </div>
-                    {isLarge && (
-                      <div style={{ marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', fontWeight: 600, fontSize: '0.95rem' }} className="bento-explore-link">
-                        <span>{locale === 'en' ? 'Learn more about our process' : 'Conoce más sobre nuestro proceso'}</span>
-                        <ArrowRight size={16} />
-                      </div>
-                    )}
                   </div>
                 </div>
               );

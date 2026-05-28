@@ -98,12 +98,12 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         width: '100%',
                         padding: '1.2rem 4.5rem 1.2rem 3.8rem', // Reduced right padding further
                         borderRadius: 'var(--radius-full)',
-                        border: '2px solid var(--border)',
+                        border: '1px solid rgba(0,0,0,0.06)',
                         background: 'white',
                         color: 'var(--text-main)',
                         fontSize: '1.15rem',
                         fontWeight: '500',
-                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
+                        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.02)',
                         outline: 'none',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
@@ -114,13 +114,13 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         }
                     }}
                     onFocus={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--primary)';
-                        e.currentTarget.style.boxShadow = '0 15px 40px rgba(26, 77, 46, 0.12)';
-                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.borderColor = 'rgba(26, 77, 46, 0.2)';
+                        e.currentTarget.style.boxShadow = '0 15px 40px rgba(26, 77, 46, 0.06), 0 0 0 4px rgba(26, 77, 46, 0.04)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
                     }}
                     onBlur={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border)';
-                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)';
+                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.02)';
                         e.currentTarget.style.transform = 'translateY(0)';
                     }}
                 />
@@ -198,10 +198,11 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         top: '100%',
                         left: '20px',
                         right: '20px',
-                        backgroundColor: 'white',
-                        borderRadius: '20px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                        backdropFilter: 'blur(20px)',
+                        borderRadius: '24px',
                         marginTop: '10px',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.02)',
                         zIndex: 1000,
                         overflow: 'hidden',
                         border: '1px solid rgba(0,0,0,0.05)',
@@ -212,6 +213,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             {suggestions.map(p => (
                                 <div 
                                     key={`prod-${p.id}`}
+                                    className="suggestion-row"
                                     onClick={() => {
                                         setShowDropdown(false);
                                         router.push(`/products/${p.id}`);
@@ -221,15 +223,15 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                         alignItems: 'center', 
                                         gap: '15px', 
                                         padding: '12px', 
-                                        borderRadius: '12px',
+                                        borderRadius: '16px',
                                         cursor: 'pointer',
-                                        transition: 'background 0.2s'
+                                        transition: 'all 0.25s ease'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.02)'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                 >
-                                    <div style={{ width: '50px', height: '50px', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#f3f4f6', flexShrink: 0 }}>
-                                        <img src={p.image_url || '/placeholder.png'} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#f3f4f6', flexShrink: 0 }}>
+                                        <img className="suggestion-thumb" src={p.image_url || '/placeholder.png'} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.95rem' }}>{p.display_name || p.name}</div>
@@ -247,14 +249,16 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             style={{ 
                                 padding: '15px', 
                                 textAlign: 'center', 
-                                backgroundColor: '#f9fafb', 
+                                backgroundColor: 'rgba(0,0,0,0.01)', 
+                                borderTop: '1px solid rgba(0,0,0,0.03)',
                                 color: '#6b7280', 
                                 fontSize: '0.85rem', 
                                 fontWeight: '700', 
-                                cursor: 'pointer' 
+                                cursor: 'pointer',
+                                transition: 'background 0.2s'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.03)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.01)'}
                         >
                             Ver todos los resultados para "{query}"
                         </div>
@@ -265,6 +269,12 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     @keyframes fadeInScale {
                         from { opacity: 0; transform: translateY(-10px) scale(0.98); }
                         to { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                    .suggestion-row:hover .suggestion-thumb {
+                        transform: scale(1.06);
+                    }
+                    .suggestion-thumb {
+                        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
                     }
                 `}} />
             </div>

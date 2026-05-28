@@ -196,12 +196,12 @@ export default function Navbar() {
     return (
         <header 
             style={{
-                backgroundColor: 'rgba(251, 250, 245, 0.8)',
-                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                borderBottom: '1px solid rgba(0,0,0,0.06)',
                 position: 'sticky',
                 top: 0,
                 zIndex: 100,
-                backdropFilter: 'blur(20px)',
+                backdropFilter: 'blur(24px) saturate(120%)',
                 transition: 'all 0.3s ease',
                 ...(themeConfig ? {
                     '--primary': themeConfig.primary,
@@ -305,20 +305,14 @@ export default function Navbar() {
                     {/* B2C (Sin login) o Usuario Genérico */}
                     {mounted && !user && (
                         <>
-                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navHome}</Link>
-                            <Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-main)', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-main)'}>{t.navCatalog}</Link>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navHome}</Link>
+                            <Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>{t.navCatalog}</Link>
                             {b2bEnabled && (
-                                <Link href="/b2b/register" style={{ 
-                                    fontWeight: '800', 
+                                <Link href="/b2b/register" className="premium-nav-link" style={{ 
+                                    fontWeight: '700', 
                                     fontSize: '1.05rem',
                                     color: 'var(--primary)',
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    backgroundColor: 'var(--accent)',
-                                    transition: 'all 0.3s ease'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                                 >{t.navInstitutional}</Link>
                             )}
                         </>
@@ -327,21 +321,21 @@ export default function Navbar() {
                     {/* B2B Cliente */}
                     {mounted && user && profile?.role === 'b2b_client' && (
                         <>
-                            <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
-                            <Link href="/b2b/orders" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Mis Pedidos</Link>
-                            <Link href="/b2b/catalog" style={{ fontWeight: '700', fontSize: '1.05rem' }}>Catálogo Institucional</Link>
+                            <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem' }}>Mi Portal</Link>
+                            <Link href="/b2b/orders" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>Mis Pedidos</Link>
+                            <Link href="/b2b/catalog" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem' }}>Catálogo Institucional</Link>
                         </>
                     )}
 
                     {/* Empleado FruFresco (Admin/Employee) */}
                     {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
-                            <Link href="/" style={{ fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Home size={18} strokeWidth={2.5} /> {t.navHome}
+                            <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Home size={18} strokeWidth={2} /> {t.navHome}
                             </Link>
                             {hasPermission('commercial') && (
-                                <Link href="/b2b/dashboard" style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Building2 size={18} strokeWidth={2.5} /> {t.navInstitutional}
+                                <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Building2 size={18} strokeWidth={2} /> {t.navInstitutional}
                                 </Link>
                             )}
                             
@@ -510,7 +504,7 @@ export default function Navbar() {
                     <div className="cart-container" style={{ position: 'relative' }}>
                         <Link href="/checkout">
                             <button className="btn" style={{ 
-                                border: '1px solid var(--border)', 
+                                border: '1px solid rgba(0,0,0,0.06)', 
                                 backgroundColor: 'white',
                                 borderRadius: 'var(--radius-full)',
                                 padding: '0.6rem 1.2rem',
@@ -519,16 +513,17 @@ export default function Navbar() {
                                 gap: '8px',
                                 boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease'
+                                transition: 'all 0.2s ease',
+                                fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                             }}>
-                                <ShoppingCart size={20} color="var(--primary)" strokeWidth={2.5} /> 
-                                <span style={{ fontWeight: '900', color: 'var(--text-main)', fontSize: '1rem' }}>{mounted ? totalItems : 0}</span>
+                                <ShoppingCart size={20} color="var(--primary)" strokeWidth={2} /> 
+                                <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '1rem' }}>{mounted ? totalItems : 0}</span>
                             </button>
                         </Link>
                         {mounted && totalItems > 0 && (
                             <div className="cart-tooltip">
-                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Total Estimado</div>
-                                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>Total Estimado</div>
+                                <div style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--primary)', fontFamily: THEME.typography.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
                                     ${mounted ? totalPrice.toLocaleString() : '0'}
                                 </div>
                             </div>
@@ -543,17 +538,19 @@ export default function Navbar() {
                         backgroundColor: 'rgba(0,0,0,0.03)', 
                         padding: '4px', 
                         borderRadius: 'var(--radius-full)',
-                        border: '1px solid rgba(0,0,0,0.05)'
+                        border: '1px solid rgba(0,0,0,0.05)',
+                        fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                     }}>
                         <button 
                             onClick={() => changeLanguage('es')}
                             style={{
-                                padding: '4px 8px',
+                                padding: '4px 10px',
                                 borderRadius: 'var(--radius-full)',
                                 border: 'none',
                                 cursor: 'pointer',
                                 fontSize: '0.75rem',
-                                fontWeight: '900',
+                                fontWeight: '700',
+                                fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif',
                                 backgroundColor: locale === 'es' ? 'white' : 'transparent',
                                 color: locale === 'es' ? 'var(--primary)' : '#94A3B8',
                                 boxShadow: locale === 'es' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
@@ -563,12 +560,13 @@ export default function Navbar() {
                         <button 
                             onClick={() => changeLanguage('en')}
                             style={{
-                                padding: '4px 8px',
+                                padding: '4px 10px',
                                 borderRadius: 'var(--radius-full)',
                                 border: 'none',
                                 cursor: 'pointer',
                                 fontSize: '0.75rem',
-                                fontWeight: '900',
+                                fontWeight: '700',
+                                fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif',
                                 backgroundColor: locale === 'en' ? 'white' : 'transparent',
                                 color: locale === 'en' ? 'var(--primary)' : '#94A3B8',
                                 boxShadow: locale === 'en' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
@@ -585,13 +583,14 @@ export default function Navbar() {
                                     alignItems: 'center', 
                                     gap: '8px', 
                                     backgroundColor: 'white', 
-                                    padding: '0.5rem 1rem', 
+                                    padding: '0.5rem 1.2rem', 
                                     borderRadius: 'var(--radius-full)',
-                                    border: '1px solid var(--border)',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                                    border: '1px solid rgba(0,0,0,0.06)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                                    fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif'
                                 }}>
                                     <User size={16} color="var(--primary)" />
-                                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-main)' }}>
                                         {profile?.company_name || user.email?.split('@')[0]}
                                     </span>
                                 </div>
@@ -605,7 +604,8 @@ export default function Navbar() {
                                         backgroundColor: '#fff1f1',
                                         color: '#ef4444',
                                         cursor: 'pointer',
-                                        fontWeight: '800',
+                                        fontWeight: '700',
+                                        fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif',
                                         borderRadius: 'var(--radius-full)',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -619,14 +619,14 @@ export default function Navbar() {
                                 </button>
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontFamily: THEME.typography.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
                                 <Link href="/register">
-                                    <button className="btn" style={{ border: '1px solid var(--border)', backgroundColor: 'transparent', fontWeight: '600' }}>
+                                    <button className="btn" style={{ border: '1px solid rgba(0,0,0,0.06)', backgroundColor: 'transparent', fontWeight: '600', borderRadius: 'var(--radius-full)', padding: '0.6rem 1.2rem', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {t.navRegister}
                                     </button>
                                 </Link>
                                 <Link href="/login">
-                                    <button className="btn btn-primary">
+                                    <button className="btn btn-primary" style={{ border: 'none', backgroundColor: 'var(--primary)', color: 'white', fontWeight: '700', borderRadius: 'var(--radius-full)', padding: '0.6rem 1.2rem', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {t.navLogin}
                                     </button>
                                 </Link>
@@ -636,6 +636,30 @@ export default function Navbar() {
                 </div>
             </div>
             <style jsx global>{`
+                .premium-nav-link {
+                    position: relative;
+                    color: var(--text-main);
+                    text-decoration: none;
+                    transition: color 0.3s ease;
+                }
+                .premium-nav-link::after {
+                    content: '';
+                    position: absolute;
+                    width: 100%;
+                    transform: scaleX(0);
+                    height: 1.5px;
+                    bottom: -6px;
+                    left: 0;
+                    background-color: var(--primary, #22c55e);
+                    transform-origin: bottom center;
+                    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+                }
+                .premium-nav-link:hover {
+                    color: var(--primary) !important;
+                }
+                .premium-nav-link:hover::after {
+                    transform: scaleX(1);
+                }
                 .cart-container:hover .cart-tooltip {
                     opacity: 1;
                     transform: translateY(0);

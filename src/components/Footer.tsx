@@ -48,7 +48,7 @@ export default function Footer() {
 
   return (
     <footer style={{ 
-      backgroundColor: '#0a1a0f', 
+      background: 'linear-gradient(180deg, #05130e 0%, #020a07 100%)', 
       color: '#F9FAFB', 
       padding: '1.5rem 0 1rem',
       borderTop: '1px solid rgba(255,255,255,0.05)'
@@ -58,7 +58,7 @@ export default function Footer() {
         {/* Compact Tracking in Footer */}
         <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.5rem', paddingBottom: '1rem' }}>
              <OrderTracking />
-        </div>
+         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '3rem', marginBottom: '3rem' }}>
           
@@ -80,7 +80,8 @@ export default function Footer() {
                   fontWeight: '900', 
                   marginBottom: '1rem', 
                   color: 'white',
-                  letterSpacing: '-0.04em'
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase'
                 }}>{appName}</h3>
             )}
             <p style={{ opacity: 0.7, lineHeight: 1.6, fontSize: '0.95rem' }}>
@@ -96,12 +97,13 @@ export default function Footer() {
               fontWeight: '800', 
               marginBottom: '1.2rem', 
               color: 'white',
-              letterSpacing: '-0.02em'
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase'
             }}>{t.quickLinks}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <li><Link href="/" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navHome}</Link></li>
-              <li><Link href="/catalog" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navCatalog}</Link></li>
-              <li><Link href="/b2b/register" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.95rem', transition: 'color 0.2s' }}>{t.navInstitutional}</Link></li>
+              <li><Link href="/" className="footer-link">{t.navHome}</Link></li>
+              <li><Link href="/catalog" className="footer-link">{t.navCatalog}</Link></li>
+              <li><Link href="/b2b/register" className="footer-link">{t.navInstitutional}</Link></li>
             </ul>
           </div>
 
@@ -113,7 +115,8 @@ export default function Footer() {
               fontWeight: '800', 
               marginBottom: '1.2rem', 
               color: 'white',
-              letterSpacing: '-0.02em'
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase'
             }}>{t.contact}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
@@ -133,6 +136,19 @@ export default function Footer() {
           © {new Date().getFullYear()} {appName}. {t.allRightsReserved}.
         </div>
       </div>
+      <style jsx>{`
+        .footer-link {
+          color: #94a3b8;
+          text-decoration: none;
+          font-size: 0.95rem;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          display: inline-block;
+        }
+        .footer-link:hover {
+          transform: translateX(4px);
+          color: #a7f3d0 !important;
+        }
+      `}</style>
     </footer>
   );
 }
