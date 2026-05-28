@@ -776,7 +776,9 @@ export default function PickingExecutionPage() {
                             {filteredTasks.map(task => (
                             <div key={task.company_name} style={{
                                 backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                                 borderLeft: `6px solid ${task.status === 'ready' ? '#0D7A57' : (task.status === 'partial' ? '#EAB308' : '#64748B')}`,
                                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
                                 opacity: task.status === 'ready' ? 0.6 : 1,
