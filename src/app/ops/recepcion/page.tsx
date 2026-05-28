@@ -172,9 +172,15 @@ export default function ReceptionPage() {
 
             if (error) throw error;
             setIncomingItems(data || []);
-        } catch (err) {
+        } catch (err: any) {
             if (isAbortError(err)) return;
-            console.error('Error fetching incoming items:', err);
+            console.error('Error fetching incoming items details:', {
+                message: err?.message,
+                code: err?.code,
+                details: err?.details,
+                hint: err?.hint,
+                raw: err
+            });
         } finally {
             setLoading(false);
         }
