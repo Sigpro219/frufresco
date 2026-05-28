@@ -4,6 +4,32 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { 
+  Calendar, 
+  BookOpen, 
+  ChevronUp, 
+  List, 
+  Apple, 
+  Package, 
+  X, 
+  LayoutGrid, 
+  RefreshCw, 
+  Sparkles, 
+  Building2, 
+  MapPin, 
+  Scale, 
+  Clock, 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle, 
+  Search, 
+  Check, 
+  Camera, 
+  PackageX, 
+  ThumbsDown, 
+  HelpCircle,
+  AlertOctagon
+} from 'lucide-react';
 
 interface Purchase {
     id: string;
@@ -500,8 +526,8 @@ purchases: groups[key]
                             style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
                         >
                             <span style={{ whiteSpace: "nowrap" }}>Recogidas <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
-                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
-                                📅 {formatDateFriendly(targetDateLabel) || "Cargando..."}
+                            <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                <Calendar size={14} /> {formatDateFriendly(targetDateLabel) || "Cargando..."}
                             </span>
                         </h1>
                     </div>
@@ -523,7 +549,7 @@ purchases: groups[key]
                                 gap: "4px",
                             }}
                         >
-                            🎓 TUTOR
+                            <BookOpen size={14} /> TUTOR
                         </button>
                     </div>
                 </div>
@@ -747,7 +773,7 @@ purchases: groups[key]
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
                                 >
-                                    ▲
+                                    <ChevronUp size={16} />
                                 </button>
                             </div>
                         </div>
@@ -777,14 +803,21 @@ purchases: groups[key]
                             justifyContent: "space-between",
                         }}
                     >
-                        <span>
-                            {selectedSection === "Ver Todo"
-                                ? "📋 Ver Todo"
-                                : (() => {
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            {selectedSection === "Ver Todo" ? (
+                                <><List size={14} /> Ver Todo</>
+                            ) : (
+                                (() => {
                                     const s = stats.find(s => s.name === selectedSection);
-                                    const icon = selectedSection === "Frutas" ? "🍊" : "📦";
-                                    return `${icon} ${selectedSection}${s ? ` · ${s.percentage}%` : ""}`;
-                                })()}
+                                    return (
+                                        <>
+                                            {selectedSection === "Frutas" ? <Apple size={14} /> : <Package size={14} />}
+                                            {selectedSection}
+                                            {s ? ` · ${s.percentage}%` : ""}
+                                        </>
+                                    );
+                                })()
+                            )}
                         </span>
                         {selectedSection !== "Ver Todo" && (
                             <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
@@ -811,7 +844,7 @@ purchases: groups[key]
                             transition: "all 0.2s ease",
                         }}
                     >
-                        {showFilterGrid ? "✕" : "⊞"}
+                        {showFilterGrid ? <X size={16} /> : <LayoutGrid size={16} />}
                     </button>
                 </div>
 
@@ -861,8 +894,9 @@ purchases: groups[key]
                                         transition: "all 0.15s ease",
                                     }}
                                 >
-                                    <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
-                                        {cat === "Ver Todo" ? "📋 Ver Todo" : cat === "Frutas" ? "🍊 Frutas" : "📦 Otros"}
+                                    <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                        {cat === "Ver Todo" ? <List size={12} /> : cat === "Frutas" ? <Apple size={12} /> : <Package size={12} />}
+                                        {cat === "Ver Todo" ? "Ver Todo" : cat === "Frutas" ? "Frutas" : "Otros"}
                                     </span>
                                     {pct !== null && (
                                         <span
@@ -887,8 +921,8 @@ purchases: groups[key]
 
             {/* Tasks List */}
             {loading ? (
-                <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite" }}>
-                    <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🔄</div>
+                <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                    <RefreshCw size={36} className="animate-spin" style={{ color: "var(--ops-primary)", animation: "spin 2s linear infinite" }} />
                     <p style={{ color: "var(--ops-text-muted)", fontWeight: "700", letterSpacing: "0.05em" }}>
                         CARGANDO RECOGIDAS...
                     </p>
@@ -902,7 +936,9 @@ purchases: groups[key]
                     border: "1px dashed rgba(16, 185, 129, 0.2)",
                     margin: "0 0.5rem"
                 }}>
-                    <div style={{ fontSize: "3.5rem", marginBottom: "1.5rem" }}>✨</div>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
+                        <Sparkles size={48} style={{ color: "var(--ops-primary)" }} />
+                    </div>
                     <h3 style={{ color: "var(--ops-primary)", fontSize: "1.5rem", fontWeight: "900", margin: "0 0 0.5rem 0" }}>
                         ¡Todo bajo control!
                     </h3>
@@ -945,7 +981,7 @@ purchases: groups[key]
                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
-                            🏢 Por Proveedor
+                            <Building2 size={14} /> Por Proveedor
                         </button>
                         <button
                             onClick={() => setGroupMode('bodega')}
@@ -965,7 +1001,7 @@ purchases: groups[key]
                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
-                            📍 Por Bodega
+                            <MapPin size={14} /> Por Bodega
                         </button>
                     </div>
 
@@ -1004,7 +1040,7 @@ purchases: groups[key]
                                                 alignItems: 'center',
                                                 gap: '0.4rem'
                                             }}>
-                                                {groupMode === 'provider' ? '🏢' : '📍'} {group.key}
+                                                {groupMode === 'provider' ? <Building2 size={18} style={{ color: 'var(--ops-primary)' }} /> : <MapPin size={18} style={{ color: 'var(--ops-primary)' }} />} {group.key}
                                             </h2>
                                             <span style={{
                                                 fontSize: '0.75rem',
@@ -1029,7 +1065,7 @@ purchases: groups[key]
                                                     fontWeight: '900',
                                                     color: 'var(--ops-primary)'
                                                 }}>
-                                                    ⚖️ {stats.pickedUpKg} / {stats.totalKg} Kg
+                                                    <Scale size={14} style={{ marginRight: '4px' }} /> {stats.pickedUpKg} / {stats.totalKg} Kg
                                                 </span>
                                             </div>
                                             {/* Other units breakdown */}
@@ -1117,7 +1153,7 @@ purchases: groups[key]
                                                         {p.product?.image_url ? (
                                                             <img src={p.product.image_url} alt={p.product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                         ) : (
-                                                            <span style={{ fontSize: '1.6rem', opacity: 0.6 }}>📦</span>
+                                                            <Package size={24} style={{ opacity: 0.6, color: 'var(--ops-text-muted)' }} />
                                                         )}
                                                     </div>
 
@@ -1153,12 +1189,12 @@ purchases: groups[key]
                                                         {/* Show provider if grouped by bodega; show bodega if grouped by provider */}
                                                         {groupMode === 'bodega' ? (
                                                             <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
-                                                                🏢 <span>{p.provider?.name || 'Proveedor desconocido'}</span>
+                                                                <Building2 size={14} /> <span>{p.provider?.name || 'Proveedor desconocido'}</span>
                                                             </div>
                                                         ) : null}
 
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
-                                                            📍 
+                                                            <MapPin size={14} /> 
                                                             {p.pickup_location ? (
                                                                 <span style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>
                                                                     {p.pickup_location.split(/(\[BODEGA\]|\[PUESTO\])/g).map((part: string, i: number) => {
@@ -1224,7 +1260,7 @@ purchases: groups[key]
                                                                                 </>
                                                                             ) : (
                                                                                 <>
-                                                                                    <span>⏳</span>
+                                                                                    <Clock size={12} />
                                                                                     en {diffMins} min
                                                                                 </>
                                                                             )}
@@ -1269,8 +1305,8 @@ purchases: groups[key]
                                 border: `1px solid ${selectedPurchase.status === 'picked_up' ? 'var(--ops-primary)' : '#EF4444'}`,
                                 borderRadius: '16px'
                             }}>
-                                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>
-                                    {selectedPurchase.status === 'picked_up' ? '✅' : '🚫'}
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                                    {selectedPurchase.status === 'picked_up' ? <CheckCircle size={48} style={{ color: 'var(--ops-primary)' }} /> : <XCircle size={48} style={{ color: '#EF4444' }} />}
                                 </div>
                                 <h3 style={{
                                     color: selectedPurchase.status === 'picked_up' ? 'var(--ops-primary)' : '#EF4444',
@@ -1340,7 +1376,7 @@ purchases: groups[key]
                                             );
                                         })()}
                                     </div>
-                                    <button onClick={() => setSelectedPurchase(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--ops-text-muted)', cursor: 'pointer' }}>✕</button>
+                                    <button onClick={() => setSelectedPurchase(null)} style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ops-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
                                 </div>
 
                                 {!showRejectionOptions ? (
@@ -1350,7 +1386,7 @@ purchases: groups[key]
                                             <div style={{ marginBottom: '1.5rem', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--ops-border)', cursor: 'zoom-in' }} onClick={() => setShowVoucherZoom(true)}>
                                                 <img src={selectedPurchase.voucher_image_url} alt="Vale" style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', backgroundColor: 'var(--ops-bg)' }} />
                                                 <div style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--ops-primary)', fontWeight: 'bold', backgroundColor: 'var(--ops-bg)' }}>
-                                                    🔍 Tocar para ampliar foto del vale
+                                                    <Search size={14} style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }} /> Tocar para ampliar foto del vale
                                                 </div>
                                             </div>
                                         )}
@@ -1360,8 +1396,8 @@ purchases: groups[key]
                                             <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.5rem', color: 'var(--ops-text-muted)' }}>
                                                 Cantidad en este acarreo ({selectedPurchase.purchase_unit})
                                                 {selectedPurchase.picked_up_quantity && selectedPurchase.picked_up_quantity > 0 ? (
-                                                    <span style={{ color: 'var(--ops-primary)', fontSize: '0.85rem', display: 'block', marginTop: '0.2rem', fontWeight: '900' }}>
-                                                        ⏳ Historial: Recogido {selectedPurchase.picked_up_quantity} de {selectedPurchase.quantity} {selectedPurchase.purchase_unit}
+                                                    <span style={{ color: 'var(--ops-primary)', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '0.2rem', fontWeight: '900' }}>
+                                                        <Clock size={14} /> Historial: Recogido {selectedPurchase.picked_up_quantity} de {selectedPurchase.quantity} {selectedPurchase.purchase_unit}
                                                     </span>
                                                 ) : null}
                                             </label>
@@ -1401,7 +1437,7 @@ purchases: groups[key]
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    ✔
+                                                    <Check size={20} />
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -1418,7 +1454,7 @@ purchases: groups[key]
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    ⚠
+                                                    <AlertTriangle size={20} />
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -1435,7 +1471,7 @@ purchases: groups[key]
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    ✖
+                                                    <X size={20} />
                                                 </button>
                                             </div>
                                             <div style={{ textAlign: 'center', marginTop: '0.5rem', fontWeight: '600', color: quality === 'green' ? '#10B981' : quality === 'yellow' ? '#F59E0B' : '#EF4444' }}>
@@ -1476,7 +1512,7 @@ purchases: groups[key]
                                                 color: '#EF4444', fontWeight: 'bold', textAlign: 'center', marginBottom: '1rem',
                                                 fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
                                             }}>
-                                                <span>⚠</span> {formError}
+                                                <AlertTriangle size={14} /> {formError}
                                             </div>
                                         )}
 
@@ -1551,7 +1587,7 @@ purchases: groups[key]
                                                 <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--ops-border)', backgroundColor: '#000' }}>
                                                     <img src={rejectionPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                                     <div style={{ position: 'absolute', bottom: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                                                        <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}>🔄 Cambiar Foto</button>
+                                                        <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -1573,7 +1609,7 @@ purchases: groups[key]
                                                         animation: 'pulse-red-border 2s infinite'
                                                     }}
                                                 >
-                                                    <span style={{ fontSize: '2rem' }}>📸</span>
+                                                    <Camera size={32} />
                                                     <span style={{ fontSize: '0.85rem', fontWeight: '900', marginTop: '0.3rem' }}>FOTO OBLIGATORIA — TAP PARA AGREGAR</span>
                                                     <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: 0.8 }}>Sin foto no se puede rechazar</span>
                                                 </div>
@@ -1583,23 +1619,23 @@ purchases: groups[key]
                                         {/* Rejection Buttons */}
                                         {!rejectionFile && (
                                             <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                                <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '800' }}>📸 Agrega la foto antes de seleccionar el motivo</span>
+                                                <span style={{ fontSize: '0.8rem', color: '#EF4444', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}><Camera size={14} /> Agrega la foto antes de seleccionar el motivo</span>
                                             </div>
                                         )}
                                         <div style={{ display: 'grid', gap: '0.8rem' }}>
                                             <button
                                                 onClick={() => handlePickupSubmit('rejected', 'Sin Stock')}
                                                 disabled={!rejectionFile}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5, display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
                                             >
-                                                📦 Proveedor Sin Stock
+                                                <PackageX size={14} /> Proveedor Sin Stock
                                             </button>
                                             <button
                                                 onClick={() => handlePickupSubmit('rejected', 'Mala Calidad')}
                                                 disabled={!rejectionFile}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? '#EF4444' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'rgba(239, 68, 68, 0.3)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5, display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
                                             >
-                                                🥀 Mala Calidad / Feo
+                                                <ThumbsDown size={14} /> Mala Calidad / Feo
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -1608,9 +1644,9 @@ purchases: groups[key]
                                                     if (reason) handlePickupSubmit('rejected', reason);
                                                 }}
                                                 disabled={!rejectionFile}
-                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'var(--ops-bg)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? 'var(--ops-text)' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'var(--ops-border)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5 }}
+                                                style={{ padding: '1rem', borderRadius: '12px', backgroundColor: rejectionFile ? 'var(--ops-bg)' : 'rgba(100,116,139,0.1)', color: rejectionFile ? 'var(--ops-text)' : 'var(--ops-text-muted)', border: `1px solid ${rejectionFile ? 'var(--ops-border)' : 'var(--ops-border)'}`, fontWeight: 'bold', cursor: rejectionFile ? 'pointer' : 'not-allowed', opacity: rejectionFile ? 1 : 0.5, display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
                                             >
-                                                ✏️ Otro Motivo...
+                                                <HelpCircle size={14} /> Otro Motivo...
                                             </button>
                                             <button
                                                 onClick={() => setShowRejectionOptions(false)}
@@ -1796,7 +1832,7 @@ purchases: groups[key]
                             <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', lineHeight: '1.5', minHeight: '60px' }}>
                                 {guideStep === 0 && "Esta interfaz te permite ver qué productos debes recoger y validar hoy de tus proveedores o bodegas programados para el turno."}
                                 {guideStep === 1 && "Alterna rápidamente entre las vistas 'Por Proveedor' o 'Por Bodega'. El selector estilo pestaña optimiza el espacio en tu pantalla móvil."}
-                                {guideStep === 2 && "Presiona en cualquier producto para abrir el formulario, confirmar cantidades y registrar la calidad: Verde (🟢), Amarillo (🟡) o Rojo (🔴)."}
+                                {guideStep === 2 && "Presiona en cualquier producto para abrir el formulario, confirmar cantidades y registrar la calidad: Verde (Conforme), Amarillo (Para Revisión) o Rojo (No Conforme)."}
                                 {guideStep === 3 && "Si rechazas un producto (Rojo), la app bloqueará la confirmación hasta que subas una foto de evidencia para respaldar la novedad."}
                             </p>
 
@@ -1860,7 +1896,7 @@ purchases: groups[key]
                                             boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
                                         }}
                                     >
-                                        Comenzar 🚀
+                                        Comenzar
                                     </button>
                                 )}
                             </div>
