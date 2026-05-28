@@ -525,8 +525,6 @@ export default function PickingExecutionPage() {
                     </div>
                 </div>
             </div>
-
-            {/* STICKY CONTAINER (Barra de progreso + Dashboard de estados) */}
             {totalTasks > 0 && (
                 <div
                     className="no-print"
@@ -568,6 +566,7 @@ export default function PickingExecutionPage() {
                             display: "flex",
                             justifyContent: "space-evenly",
                             alignItems: "center",
+                            marginBottom: "1rem"
                         }}
                     >
                         {/* Pendiente */}
@@ -665,188 +664,190 @@ export default function PickingExecutionPage() {
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* FILTERS CONTAINER */}
-            <div style={{ padding: "0 1rem", marginBottom: "1rem" }}>
-                {/* Category Filter — Colapsable */}
-                <div style={{ marginBottom: "0.6rem" }}>
-                    {/* Barra activa: siempre visible */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {/* Pill de categoría activa */}
-                        <div
-                            style={{
-                                flex: 1,
-                                padding: "0.5rem 1rem",
-                                borderRadius: "12px",
-                                backgroundColor: "rgba(13, 122, 87, 0.12)",
-                                border: "1px solid #0D7A57",
-                                color: "white",
-                                fontSize: "0.75rem",
-                                fontWeight: "800",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                            }}
-                        >
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                                <ClipboardList size={14} />
-                                {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
-                            </span>
-                            <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
+                    {/* Category Filter — Colapsable */}
+                    <div style={{ marginBottom: "0.6rem" }}>
+                        {/* Barra activa: siempre visible */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            {/* Pill de categoría activa */}
+                            <div
+                                style={{
+                                    flex: 1,
+                                    height: "40px",
+                                    boxSizing: "border-box",
+                                    padding: "0 1rem",
+                                    borderRadius: "12px",
+                                    backgroundColor: "rgba(13, 122, 87, 0.12)",
+                                    border: "1px solid #0D7A57",
+                                    color: "white",
+                                    fontSize: "0.75rem",
+                                    fontWeight: "800",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                }}
+                            >
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                    <ClipboardList size={14} />
+                                    {selectedCategory ? selectedCategory.toUpperCase() : 'SELECCIONAR EQUIPO'}
+                                </span>
+                                <span style={{ opacity: 0.7, fontSize: "0.65rem" }}>activo</span>
+                            </div>
+
+                            {/* Botón toggle del grid */}
+                            <button
+                                onClick={() => setShowFilterGrid(v => !v)}
+                                title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
+                                style={{
+                                    width: "40px",
+                                    height: "40px",
+                                    borderRadius: "12px",
+                                    border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
+                                    backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "#121D2D",
+                                    color: showFilterGrid ? "#0D7A57" : "#94A3B8",
+                                    fontSize: "1rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    flexShrink: 0,
+                                    transition: "all 0.2s ease",
+                                }}
+                            >
+                                {showFilterGrid ? <X size={16} /> : <Grid size={16} />}
+                            </button>
                         </div>
 
-                        {/* Botón toggle del grid */}
-                        <button
-                            onClick={() => setShowFilterGrid(v => !v)}
-                            title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
-                            style={{
-                                width: "40px",
-                                height: "40px",
-                                borderRadius: "12px",
-                                border: `1px solid ${showFilterGrid ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
-                                backgroundColor: showFilterGrid ? "rgba(13, 122, 87, 0.15)" : "#121D2D",
-                                color: showFilterGrid ? "#0D7A57" : "#94A3B8",
-                                fontSize: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                flexShrink: 0,
-                                transition: "all 0.2s ease",
-                            }}
-                        >
-                            {showFilterGrid ? <X size={16} /> : <Grid size={16} />}
-                        </button>
+                        {/* Grid de Filtros */}
+                        {showFilterGrid && (
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    gap: "0.4rem",
+                                    marginTop: "0.5rem",
+                                    animation: "slideDown 0.18s ease-out",
+                                }}
+                            >
+                                {categories.map((cat) => {
+                                    const isActive = selectedCategory === cat;
+                                    return (
+                                        <button
+                                            key={cat}
+                                            onClick={() => {
+                                                setSelectedCategory(cat);
+                                                setShowFilterGrid(false);
+                                            }}
+                                            style={{
+                                                padding: "0.55rem 0.75rem",
+                                                borderRadius: "10px",
+                                                border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
+                                                backgroundColor: isActive
+                                                    ? "rgba(13, 122, 87, 0.12)"
+                                                    : "#121D2D",
+                                                color: isActive ? "white" : "#94A3B8",
+                                                fontSize: "0.7rem",
+                                                fontWeight: "700",
+                                                textAlign: "left",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                flexDirection: "column",
+                                                gap: "2px",
+                                                transition: "all 0.15s ease",
+                                            }}
+                                        >
+                                            <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
+                                                {cat}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Grid de Filtros */}
-                    {showFilterGrid && (
-                        <div
+                    {/* Intelligent Search Bar */}
+                    <div style={{ position: 'relative', marginBottom: '0.65rem' }}>
+                        <input 
+                            type="text"
+                            placeholder={viewMode === 'client' ? "Buscar cliente o espacio..." : "Buscar producto..."}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr",
-                                gap: "0.4rem",
-                                marginTop: "0.5rem",
-                                animation: "slideDown 0.18s ease-out",
+                                width: '100%', height: '40px', padding: '0 1rem 0 2.5rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)',
+                                backgroundColor: '#121D2D', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s',
+                                boxSizing: 'border-box'
+                            }}
+                        />
+                        <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, color: '#94A3B8' }} />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Sub-filter row (Cubículo & Suministro) */}
+                    <div style={{ 
+                        background: 'rgba(18, 29, 45, 0.6)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        padding: '4px',
+                        borderRadius: '12px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+                    }}>
+                        <button
+                            onClick={() => setViewMode('client')}
+                            style={{
+                                height: '32px',
+                                boxSizing: 'border-box',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: viewMode === 'client' ? '#0D7A57' : 'transparent',
+                                color: viewMode === 'client' ? 'white' : '#94A3B8',
+                                fontWeight: '900',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.4rem',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
-                            {categories.map((cat) => {
-                                const isActive = selectedCategory === cat;
-                                return (
-                                    <button
-                                        key={cat}
-                                        onClick={() => {
-                                            setSelectedCategory(cat);
-                                            setShowFilterGrid(false);
-                                        }}
-                                        style={{
-                                            padding: "0.55rem 0.75rem",
-                                            borderRadius: "10px",
-                                            border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
-                                            backgroundColor: isActive
-                                                ? "rgba(13, 122, 87, 0.12)"
-                                                : "#121D2D",
-                                            color: isActive ? "white" : "#94A3B8",
-                                            fontSize: "0.7rem",
-                                            fontWeight: "700",
-                                            textAlign: "left",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "2px",
-                                            transition: "all 0.15s ease",
-                                        }}
-                                    >
-                                        <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
-                                            {cat}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Intelligent Search Bar */}
-                <div style={{ position: 'relative', marginBottom: '0.65rem' }}>
-                    <input 
-                        type="text"
-                        placeholder={viewMode === 'client' ? "Buscar cliente o espacio..." : "Buscar producto..."}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%', padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)',
-                            backgroundColor: '#121D2D', color: 'white', fontSize: '0.9rem', outline: 'none', transition: 'all 0.2s'
-                        }}
-                    />
-                    <Search size={16} strokeWidth={2.5} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5, color: '#94A3B8' }} />
-                    {searchTerm && (
-                        <button 
-                            onClick={() => setSearchTerm('')}
-                            style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            <X size={16} />
+                            <User size={14} strokeWidth={2.5} /> Cubículo
                         </button>
-                    )}
+                        <button
+                            onClick={() => setViewMode('product')}
+                            style={{
+                                height: '32px',
+                                boxSizing: 'border-box',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: viewMode === 'product' ? '#0D7A57' : 'transparent',
+                                color: viewMode === 'product' ? 'white' : '#94A3B8',
+                                fontWeight: '900',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.4rem',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            }}
+                        >
+                            <Layers size={14} strokeWidth={2.5} /> Suministro
+                        </button>
+                    </div>
                 </div>
-
-                {/* Sub-filter row (Cubículo & Suministro) */}
-                <div style={{ 
-                    background: 'rgba(18, 29, 45, 0.6)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    padding: '4px',
-                    borderRadius: '12px',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
-                }}>
-                    <button
-                        onClick={() => setViewMode('client')}
-                        style={{
-                            padding: '0.45rem 0.2rem',
-                            borderRadius: '8px',
-                            border: 'none',
-                            backgroundColor: viewMode === 'client' ? '#0D7A57' : 'transparent',
-                            color: viewMode === 'client' ? 'white' : '#94A3B8',
-                            fontWeight: '900',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.4rem',
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        }}
-                    >
-                        <User size={14} strokeWidth={2.5} /> Cubículo
-                    </button>
-                    <button
-                        onClick={() => setViewMode('product')}
-                        style={{
-                            padding: '0.45rem 0.2rem',
-                            borderRadius: '8px',
-                            border: 'none',
-                            backgroundColor: viewMode === 'product' ? '#0D7A57' : 'transparent',
-                            color: viewMode === 'product' ? 'white' : '#94A3B8',
-                            fontWeight: '900',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '0.4rem',
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        }}
-                    >
-                        <Layers size={14} strokeWidth={2.5} /> Suministro
-                    </button>
-                </div>
-            </div>
+            )}
 
             {/* MAIN CONTENT AREA */}
             <div style={{ padding: '0.5rem 1rem' }}>
