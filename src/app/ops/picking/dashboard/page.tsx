@@ -559,15 +559,68 @@ export default function PickingDashboard() {
             overflow: 'hidden'
         }}>
             <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+            
+            <style>{`
+                @keyframes pulse-live {
+                    0% {
+                        transform: scale(0.85);
+                        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+                    }
+                    70% {
+                        transform: scale(1);
+                        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+                    }
+                    100% {
+                        transform: scale(0.85);
+                        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+                    }
+                }
+                .live-pulse {
+                    animation: pulse-live 1.8s infinite ease-in-out;
+                }
+                .live-badge-glow {
+                    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+                    transition: all 0.3s ease;
+                }
+                .density-btn {
+                    max-width: 32px;
+                    height: 32px;
+                    padding: 0 !important;
+                    justify-content: center;
+                    overflow: hidden;
+                    transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, background-color 0.2s !important;
+                    white-space: nowrap;
+                    display: inline-flex;
+                    align-items: center;
+                }
+                .density-btn span {
+                    opacity: 0;
+                    width: 0;
+                    overflow: hidden;
+                    transition: opacity 0.2s ease, width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    display: inline-block;
+                    font-size: 0.75rem;
+                }
+                .density-btn:hover {
+                    max-width: 140px;
+                    padding: 0 12px !important;
+                    justify-content: flex-start;
+                }
+                .density-btn:hover span {
+                    opacity: 1;
+                    width: auto;
+                    margin-left: 6px;
+                }
+            `}</style>
 
             {/* TOP HEADER */}
             <header style={{
-                height: density === 'tv' ? '55px' : '75px',
+                height: density === 'tv' ? '60px' : '75px',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: density === 'tv' ? '0 0.75rem' : '0 2rem',
+                padding: density === 'tv' ? '0 1rem' : '0 2rem',
                 background: 'rgba(15, 23, 42, 0.6)',
                 backdropFilter: 'blur(12px)',
                 zIndex: 50
@@ -615,9 +668,9 @@ export default function PickingDashboard() {
                     )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: density === 'tv' ? '1rem' : '2.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: density === 'tv' ? '1.2rem' : '2.5rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: density === 'tv' ? '240px' : '400px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: density === 'tv' ? '550px' : '450px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
                             <span>PRODUCCIÓN DE ALISTAMIENTO</span>
                             <span>{totalGlobalPicked} / {totalGlobalOrdered} Und</span>
@@ -674,95 +727,94 @@ export default function PickingDashboard() {
                         borderRadius: '8px', 
                         border: '1px solid rgba(255,255,255,0.08)',
                         marginRight: '5px',
-                        gap: '2px'
+                        gap: '4px'
                     }}>
                         <button 
                             onClick={() => changeDensity('standard')}
+                            className="density-btn"
                             style={{
-                                padding: '6px 10px', 
                                 borderRadius: '6px', 
                                 border: 'none', 
                                 cursor: 'pointer',
                                 background: density === 'standard' ? '#10B981' : 'transparent',
                                 color: density === 'standard' ? '#020617' : '#94A3B8',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.75rem',
                                 fontWeight: '700',
-                                transition: 'all 0.2s'
                             }} 
                             title="Estándar (PC)"
                         >
-                            <Monitor size={13} strokeWidth={2.5} />
-                            <span>PC Standard</span>
+                            <Monitor size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                            <span>Standard</span>
                         </button>
                         <button 
                             onClick={() => changeDensity('high')}
+                            className="density-btn"
                             style={{
-                                padding: '6px 10px', 
                                 borderRadius: '6px', 
                                 border: 'none', 
                                 cursor: 'pointer',
                                 background: density === 'high' ? '#10B981' : 'transparent',
                                 color: density === 'high' ? '#020617' : '#94A3B8',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.75rem',
                                 fontWeight: '700',
-                                transition: 'all 0.2s'
                             }} 
                             title="Alta Densidad (PC)"
                         >
-                            <LayoutGrid size={13} strokeWidth={2.5} />
-                            <span>PC Compact</span>
+                            <LayoutGrid size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                            <span>Compact</span>
                         </button>
                         <button 
                             onClick={() => changeDensity('tv')}
+                            className="density-btn"
                             style={{
-                                padding: '6px 10px', 
                                 borderRadius: '6px', 
                                 border: 'none', 
                                 cursor: 'pointer',
                                 background: density === 'tv' ? '#10B981' : 'transparent',
                                 color: density === 'tv' ? '#020617' : '#94A3B8',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.75rem',
                                 fontWeight: '700',
-                                transition: 'all 0.2s'
                             }} 
                             title="Televisor (TV)"
                         >
-                            <Tv size={13} strokeWidth={2.5} />
-                            <span>TV</span>
+                            <Tv size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                            <span>TV Mode</span>
                         </button>
                     </div>
 
                     {/* CLOCK & STATUS */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <div style={{
-                            padding: '5px 10px', borderRadius: '20px',
-                            background: isConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                            border: isConnected ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                            display: 'flex', alignItems: 'center', gap: '8px'
-                        }}>
-                            <Wifi size={14} className={isConnected ? "text-emerald-500" : "text-red-500"} />
+                        <div 
+                            className={isConnected ? "live-badge-glow" : ""}
+                            style={{
+                                padding: '5px 10px', borderRadius: '20px',
+                                background: isConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                border: isConnected ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                                display: 'flex', alignItems: 'center', gap: '6px'
+                            }}
+                        >
+                            {isConnected ? (
+                                <span style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#10B981',
+                                    display: 'inline-block'
+                                }} className="live-pulse" />
+                            ) : (
+                                <Wifi size={12} className="text-red-500" />
+                            )}
                             <span style={{ fontSize: '0.7rem', color: isConnected ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
                                 {isConnected ? 'LIVE' : 'DISCONNECTED'}
                             </span>
                         </div>
 
                         <div style={{ 
-                            fontSize: density === 'tv' ? '1.1rem' : '1.4rem', 
+                            fontSize: density === 'tv' ? '1.8rem' : '1.4rem', 
                             fontWeight: 'bold', 
                             fontFamily: 'Outfit, sans-serif', 
                             color: '#E2E8F0',
                             fontVariantNumeric: 'tabular-nums',
-                            minWidth: density === 'tv' ? '85px' : '110px',
-                            textAlign: 'right'
+                            minWidth: density === 'tv' ? '135px' : '110px',
+                            textAlign: 'right',
+                            lineHeight: 1
                         }}>{currentTime}</div>
                     </div>
                 </div>
