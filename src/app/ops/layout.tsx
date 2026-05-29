@@ -2,6 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   ShoppingBag, 
@@ -16,9 +17,38 @@ import {
 } from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
+    const pathname = usePathname();
+    const [hideLayout, setHideLayout] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appShortName, setAppShortName] = useState('FRUFRESCO');
+
+    useEffect(() => {
+        const saved = localStorage.getItem('picking_dashboard_density');
+        const isDashboard = pathname === '/ops/picking/dashboard';
+        if (isDashboard && saved === 'tv') {
+            setHideLayout(true);
+        } else {
+            setHideLayout(false);
+        }
+    }, [pathname]);
+
+    useEffect(() => {
+        const handleDensityChange = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const isDashboardNow = window.location.pathname.includes('/ops/picking/dashboard');
+            if (isDashboardNow && customEvent.detail === 'tv') {
+                setHideLayout(true);
+            } else {
+                setHideLayout(false);
+            }
+        };
+
+        window.addEventListener('picking-density-changed', handleDensityChange);
+        return () => {
+            window.removeEventListener('picking-density-changed', handleDensityChange);
+        };
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -49,110 +79,114 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             color: 'var(--ops-text)'
         }}>
             {/* Simple Top Bar */}
-            <header id="ops-main-header" style={{
-                backgroundColor: 'var(--ops-surface)',
-                padding: '0.75rem 1rem',
-                borderBottom: '1px solid var(--ops-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                position: 'sticky',
-                top: 0,
-                zIndex: 100
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 0 10px rgba(255,255,255,0.1)',
-                        padding: '3px',
-                        flexShrink: 0
-                    }}>
-                        <img 
-                            src={dynamicLogosymbol || "/logosimbolo.png"} 
-                            alt={appShortName} 
-                            style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
-                        />
-                    </div>
-                     <span style={{ fontWeight: '800', fontSize: '0.95rem', letterSpacing: '0.03em', color: 'var(--ops-text)' }}>
-                        {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
-                    </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Link href="/">
-                        <button style={{
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            border: '1px solid var(--ops-primary)',
-                            color: 'var(--ops-primary)',
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}>
-                            <Home size={14} /> <span className="desktop-text">Volver al Sitio</span><span className="mobile-text">Volver</span>
-                        </button>
-                    </Link>
-                    <button
-                        onClick={() => setIsDarkMode(!isDarkMode)}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: '6px',
+            {!hideLayout && (
+                <header id="ops-main-header" style={{
+                    backgroundColor: 'var(--ops-surface)',
+                    padding: '0.75rem 1rem',
+                    borderBottom: '1px solid var(--ops-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 100
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'var(--ops-text)'
-                        }}
-                        title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
-                    >
-                        {isDarkMode ? <Sun size={18} style={{ color: '#F59E0B' }} /> : <Moon size={18} style={{ color: 'var(--ops-primary)' }} />}
-                    </button>
-                    <div className="hide-mobile" style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)' }}>
-                        V1.0
+                            boxShadow: '0 0 10px rgba(255,255,255,0.1)',
+                            padding: '3px',
+                            flexShrink: 0
+                        }}>
+                            <img 
+                                src={dynamicLogosymbol || "/logosimbolo.png"} 
+                                alt={appShortName} 
+                                style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
+                            />
+                        </div>
+                         <span style={{ fontWeight: '800', fontSize: '0.95rem', letterSpacing: '0.03em', color: 'var(--ops-text)' }}>
+                            {appShortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
+                        </span>
                     </div>
-                </div>
-            </header>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Link href="/">
+                            <button style={{
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid var(--ops-primary)',
+                                color: 'var(--ops-primary)',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}>
+                                <Home size={14} /> <span className="desktop-text">Volver al Sitio</span><span className="mobile-text">Volver</span>
+                            </button>
+                        </Link>
+                        <button
+                            onClick={() => setIsDarkMode(!isDarkMode)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'var(--ops-text)'
+                            }}
+                            title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+                        >
+                            {isDarkMode ? <Sun size={18} style={{ color: '#F59E0B' }} /> : <Moon size={18} style={{ color: 'var(--ops-primary)' }} />}
+                        </button>
+                        <div className="hide-mobile" style={{ fontSize: '0.75rem', color: 'var(--ops-text-muted)' }}>
+                            V1.0
+                        </div>
+                    </div>
+                </header>
+            )}
 
-            <main style={{ paddingBottom: '90px' }}>
+            <main style={{ paddingBottom: hideLayout ? '0px' : '90px' }}>
                 {children}
             </main>
-
+ 
             {/* Bottom Navigation for Mobile Speed */}
-            <nav id="ops-main-footer" style={{
-                position: 'fixed',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: 'var(--ops-surface)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                borderTop: '1px solid var(--ops-border)',
-                display: 'flex',
-                justifyContent: 'space-around',
-                padding: '0.65rem 0',
-                paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))',
-                zIndex: 100,
-                boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
-            }}>
-                <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />
-                <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />
-                <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />
-                <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />
-                <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />
-                <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />
-                <NavItem href="/ops" icon={Home} label="INICIO" highlight />
-            </nav>
+            {!hideLayout && (
+                <nav id="ops-main-footer" style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'var(--ops-surface)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderTop: '1px solid var(--ops-border)',
+                    display: 'flex',
+                    justifyContent: 'space-around',
+                    padding: '0.65rem 0',
+                    paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))',
+                    zIndex: 100,
+                    boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
+                }}>
+                    <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />
+                    <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />
+                    <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />
+                    <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />
+                    <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />
+                    <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />
+                    <NavItem href="/ops" icon={Home} label="INICIO" highlight />
+                </nav>
+            )}
             <style jsx global>{`
                 :root {
                     --ops-bg: ${isDarkMode ? '#0a111c' : '#F3F4F6'};

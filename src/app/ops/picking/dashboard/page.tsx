@@ -56,12 +56,16 @@ export default function PickingDashboard() {
         const saved = localStorage.getItem('picking_dashboard_density');
         if (saved && (saved === 'standard' || saved === 'high' || saved === 'tv')) {
             setDensity(saved);
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('picking-density-changed', { detail: saved }));
+            }, 100);
         }
     }, []);
 
     const changeDensity = (val: 'standard' | 'high' | 'tv') => {
         setDensity(val);
         localStorage.setItem('picking_dashboard_density', val);
+        window.dispatchEvent(new CustomEvent('picking-density-changed', { detail: val }));
     };
 
     const DENSITY_CONFIG = {
@@ -541,12 +545,12 @@ export default function PickingDashboard() {
 
             {/* TOP HEADER */}
             <header style={{
-                height: '75px',
+                height: density === 'tv' ? '55px' : '75px',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0 2rem',
+                padding: density === 'tv' ? '0 0.75rem' : '0 2rem',
                 background: 'rgba(15, 23, 42, 0.6)',
                 backdropFilter: 'blur(12px)',
                 zIndex: 50
@@ -559,20 +563,24 @@ export default function PickingDashboard() {
                         gap: '0.75rem',
                         color: '#10B981',
                         fontWeight: '800',
-                        fontSize: '1.4rem',
+                        fontSize: density === 'tv' ? '1.1rem' : '1.4rem',
                         cursor: 'pointer',
                         fontFamily: 'Outfit, sans-serif'
                     }}
                 >
-                    <Package className="text-emerald-500 animate-pulse" size={24} />
+                    <Package className="text-emerald-500 animate-pulse" size={density === 'tv' ? 18 : 24} />
                     <span>LOGISTICS<span style={{ color: '#fff' }}>PRO</span></span>
-                    <span style={{ color: 'rgba(255, 255, 255, 0.15)' }}>|</span>
-                    <span style={{ color: '#94A3B8', fontWeight: '500', fontSize: '1.1rem' }}>PICKING BOARD</span>
+                    {density !== 'tv' && (
+                        <>
+                            <span style={{ color: 'rgba(255, 255, 255, 0.15)' }}>|</span>
+                            <span style={{ color: '#94A3B8', fontWeight: '500', fontSize: '1.1rem' }}>PICKING BOARD</span>
+                        </>
+                    )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: density === 'tv' ? '1rem' : '2.5rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '400px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: density === 'tv' ? '240px' : '400px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
                             <span>PRODUCCIÓN DE ALISTAMIENTO</span>
                             <span>{totalGlobalPicked} / {totalGlobalOrdered} Und</span>
