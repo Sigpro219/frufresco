@@ -40,6 +40,16 @@ function formatLifoSpaces(spaces: number[]): string {
     }
 }
 
+function cleanCategoryName(name: string): string {
+    return name
+        .toUpperCase()
+        .replace(/^ALISTAMIENTO DE\s+/, '')
+        .replace(/^ALISTAMIENTO EN SECO\s+/, '')
+        .replace(/^ALISTAMIENTO\s+/, '')
+        .replace(/^EQUIPO\s+[A-Z]\s+(DE\s+)?/, '')
+        .trim();
+}
+
 export default function PickingDashboard() {
     const router = useRouter();
     const isMounted = useRef(true);
@@ -997,7 +1007,7 @@ export default function PickingDashboard() {
                                             zIndex: 5
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
-                                                <span style={{ minWidth: '250px', display: 'inline-block', fontFamily: 'Outfit, sans-serif', letterSpacing: '0.5px' }}>{team.toUpperCase()}</span>
+                                                <span style={{ minWidth: '250px', display: 'inline-block', fontFamily: 'Outfit, sans-serif', letterSpacing: '0.5px' }}>{cleanCategoryName(team)}</span>
 
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     <div style={{ width: '100px', height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
