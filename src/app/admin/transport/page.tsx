@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
-import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';
 import RoutePlanner from '@/components/RoutePlanner';
@@ -53,6 +53,43 @@ interface ActiveRoute {
 }
 
 const MAP_ID = 'bf725916f72f2fd';
+
+function MapRoutePath({ points, color }: { points: { lat: number; lng: number }[]; color: string }) {
+    const map = useMap();
+    useEffect(() => {
+        const google = (window as any).google;
+        if (!google || !map || points.length < 2) return;
+        
+        // Reverse array to render path chronological: from oldest (points[last]) to newest (points[0])
+        const pathCoordinates = [...points].reverse();
+        
+        const path = new google.maps.Polyline({
+            path: pathCoordinates,
+            geodesic: true,
+            strokeColor: color,
+            strokeOpacity: 0.8,
+            strokeWeight: 4,
+            icons: [{
+                icon: {
+                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                    scale: 2.5,
+                    strokeColor: color,
+                    fillColor: color,
+                    fillOpacity: 1
+                },
+                offset: '100%',
+                repeat: '100px'
+            }],
+            map: map
+        });
+        
+        return () => {
+            path.setMap(null);
+        };
+    }, [map, points, color]);
+    
+    return null;
+}
 
 export default function TransportControlTower() {
     const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis'>('map');
@@ -331,7 +368,6 @@ export default function TransportControlTower() {
                                                     <Pin background={'#0F172A'} glyphColor={'white'} scale={1.2} />
                                                 </div>
                                             </AdvancedMarker>
-
                                             {/* Show ALL fleet vehicles for testing/monitoring */}
                                             {fleetData.map((v: any, i: number) => {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
@@ -342,40 +378,51 @@ export default function TransportControlTower() {
                                                     ? { lat: v.last_latitude, lng: v.last_longitude }
                                                     : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
 
+                                                const recentPoints = Array.isArray(v.recent_gps_points) 
+                                                    ? v.recent_gps_points.map((p: any) => ({ lat: p.lat, lng: p.lng }))
+                                                    : [];
+
+                                                const strokeColor = v.status === 'available' ? '#10B981' : '#0EA5E9';
+
                                                 return (
-                                                    <AdvancedMarker key={v.id} position={pos}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                            <div style={{ 
-                                                                width: '32px', 
-                                                                height: '32px', 
-                                                                borderRadius: '8px', 
-                                                                background: v.status === 'available' ? 'linear-gradient(135deg, #10B981 0%, #34D399 100%)' : 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)', 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                justifyContent: 'center', 
-                                                                color: 'white', 
-                                                                fontWeight: '900', 
-                                                                fontSize: '0.75rem',
-                                                                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
-                                                                border: '2px solid white'
-                                                            }}>
-                                                                {initials}
+                                                    <Fragment key={v.id}>
+                                                        {recentPoints.length >= 2 && (
+                                                            <MapRoutePath points={recentPoints} color={strokeColor} />
+                                                        )}
+                                                        <AdvancedMarker position={pos}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                                <div style={{ 
+                                                                    width: '32px', 
+                                                                    height: '32px', 
+                                                                    borderRadius: '8px', 
+                                                                    background: v.status === 'available' ? 'linear-gradient(135deg, #10B981 0%, #34D399 100%)' : 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    color: 'white', 
+                                                                    fontWeight: '900', 
+                                                                    fontSize: '0.75rem',
+                                                                    boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                                                                    border: '2px solid white'
+                                                                }}>
+                                                                    {initials}
+                                                                </div>
+                                                                <div style={{ 
+                                                                    backgroundColor: 'white', 
+                                                                    color: '#1E293B', 
+                                                                    padding: '1px 6px', 
+                                                                    borderRadius: '4px', 
+                                                                    fontSize: '0.5rem', 
+                                                                    fontWeight: '900', 
+                                                                    marginTop: '2px',
+                                                                    border: '1px solid #E2E8F0',
+                                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                                                }}>
+                                                                    {v.plate}
+                                                                </div>
                                                             </div>
-                                                            <div style={{ 
-                                                                backgroundColor: 'white', 
-                                                                color: '#1E293B', 
-                                                                padding: '1px 6px', 
-                                                                borderRadius: '4px', 
-                                                                fontSize: '0.5rem', 
-                                                                fontWeight: '900', 
-                                                                marginTop: '2px',
-                                                                border: '1px solid #E2E8F0',
-                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                                                            }}>
-                                                                {v.plate}
-                                                            </div>
-                                                        </div>
-                                                    </AdvancedMarker>
+                                                        </AdvancedMarker>
+                                                    </Fragment>
                                                 );
                                             })}
                                         </Map>

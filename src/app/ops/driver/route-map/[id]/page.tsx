@@ -27,8 +27,90 @@ export default function RouteExecutionPage() {
     const [plate, setPlate] = useState<string>('');
     const isMounted = useRef(true);
 
+    // Background Sync for Offline Deliveries
     useEffect(() => {
-        isMounted.current = true;
+        const syncOfflineDeliveries = async () => {
+            if (!navigator.onLine) return;
+            const queue = JSON.parse(localStorage.getItem('pending_delivery_sync') || '[]');
+            if (queue.length === 0) return;
+
+            console.log(`🔄 Sincronizando ${queue.length} entregas offline...`);
+            const remainingQueue = [];
+
+            for (const item of queue) {
+                try {
+                    // 1. Update stop status
+                    await supabase.from('route_stops').update({
+                        status: item.status,
+                        completion_time: item.timestamp
+                    }).eq('id', item.stopId);
+
+                    // 2. Record Events
+                    if (item.isTotalCancellation) {
+                        await supabase.from('delivery_events').insert({
+                            stop_id: item.stopId,
+                            order_id: item.items[0]?.id || null,
+                            event_type: 'cancellation',
+                            description: item.novedadReason,
+                            evidence_url: item.evidenceUrl
+                        });
+                    } else if (item.hasNovedad) {
+                        const partialReturns = item.items.filter((i: any) => i.returned_qty > 0);
+                        for (const pItem of partialReturns) {
+                            await supabase.from('delivery_events').insert({
+                                stop_id: item.stopId,
+                                event_type: 'partial_rejection',
+                                description: `PRODUCTO: ${pItem.product_name} | MOTIVO: ${pItem.return_reason || 'No especificado'} | CANT: ${pItem.returned_qty}`,
+                                evidence_url: pItem.return_evidence_url || item.evidenceUrl
+                            });
+                        }
+                    }
+
+                    // 3. Inventory Integration
+                    const returns = item.items.filter((i: any) => i.returned_qty > 0 || item.isTotalCancellation);
+                    if (returns.length > 0) {
+                        const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
+                        if (warehouseData) {
+                            const movementPromises = returns.map((pItem: any) => {
+                                const qtyToReturn = item.isTotalCancellation ? pItem.picked_quantity : pItem.returned_qty;
+                                return supabase.from('inventory_movements').insert([{
+                                    product_id: pItem.product_id,
+                                    warehouse_id: warehouseData.id,
+                                    quantity: qtyToReturn,
+                                    type: 'adjustment',
+                                    status_to: 'returned',
+                                    notes: `Sincronización Offline - Devolución: ${item.novedadReason || 'Novedad parcial'}`,
+                                    reference_type: 'delivery_return',
+                                    reference_id: item.stopId,
+                                    evidence_url: pItem.return_evidence_url || item.evidenceUrl
+                                }]);
+                            });
+                            await Promise.all(movementPromises);
+                        }
+                    }
+
+                    // 4. Record Canastillas movement
+                    if (item.canastillasDelivered > 0 || item.canastillasReceived > 0) {
+                        await supabase.from('asset_movements').insert({
+                            route_id: item.routeId,
+                            type: 'adjustment',
+                            quantity: item.canastillasDelivered - item.canastillasReceived,
+                            notes: `Sincronización Offline - Canastillas`
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error syncing delivery item, keeping in queue:', err);
+                    remainingQueue.push(item);
+                }
+            }
+
+            localStorage.setItem('pending_delivery_sync', JSON.stringify(remainingQueue));
+            if (remainingQueue.length === 0) {
+                alert('✅ Sincronización offline completada con éxito.');
+                // Refresh data from server
+                fetchStops();
+            }
+        };
 
         const fetchStops = async () => {
             try {
@@ -57,7 +139,10 @@ export default function RouteExecutionPage() {
                 }
 
                 const { data: routeInfo } = await supabase.from('routes').select('vehicle_plate').eq('id', id).single();
-                if (routeInfo) setPlate(routeInfo.vehicle_plate);
+                if (routeInfo) {
+                    setPlate(routeInfo.vehicle_plate);
+                    localStorage.setItem(`cached_route_plate_${id}`, routeInfo.vehicle_plate);
+                }
 
                 const { data, error } = await supabase
                     .from('route_stops')
@@ -91,24 +176,132 @@ export default function RouteExecutionPage() {
                         return stop;
                     });
                     setStops(mappedStops as unknown as RouteStop[]);
+                    localStorage.setItem(`cached_route_stops_${id}`, JSON.stringify(mappedStops));
                 }
             } catch (err: unknown) {
                 if (!isMounted.current) return;
                 
-                const error = err as { message?: string; code?: string; name?: string; details?: string; hint?: string };
+                // Offline fallback
+                const cachedStops = localStorage.getItem(`cached_route_stops_${id}`);
+                const cachedPlate = localStorage.getItem(`cached_route_plate_${id}`);
+                if (cachedStops) {
+                    setStops(JSON.parse(cachedStops));
+                    if (cachedPlate) setPlate(cachedPlate);
+                    console.log('🔌 Offline Mode: Loaded active route stops from local cache.');
+                }
 
+                const error = err as { message?: string };
                 if (isAbortError(err)) return;
-
-                console.error('Error fetching stops:', error.message || error);
+                console.error('Error fetching stops, loaded from cache:', error.message || error);
             } finally {
                 if (isMounted.current) setLoading(false);
             }
         };
 
-        if (id) fetchStops();
+        isMounted.current = true;
+        if (id) {
+            fetchStops();
+            syncOfflineDeliveries();
+        }
 
-        return () => { isMounted.current = false; };
+        window.addEventListener('online', syncOfflineDeliveries);
+        return () => {
+            isMounted.current = false;
+            window.removeEventListener('online', syncOfflineDeliveries);
+        };
     }, [id]);
+
+    // 5-Point Geolocation Watcher (45s / 50m throttled update)
+    useEffect(() => {
+        if (!plate || !id || (typeof id === 'string' && id.startsWith('mock'))) return;
+
+        let lastPosition: { lat: number; lng: number } | null = null;
+        let lastUpdateTime = 0;
+
+        const updateGPS = async (lat: number, lng: number) => {
+            try {
+                const { data: vehicle, error: vErr } = await supabase
+                    .from('fleet_vehicles')
+                    .select('recent_gps_points')
+                    .eq('plate', plate)
+                    .single();
+
+                if (vErr) {
+                    console.error('Error fetching recent GPS points:', vErr);
+                    return;
+                }
+
+                const currentPoints = Array.isArray(vehicle?.recent_gps_points) 
+                    ? vehicle.recent_gps_points 
+                    : [];
+
+                const newPoint = { lat, lng, timestamp: new Date().toISOString() };
+                const updatedPoints = [newPoint, ...currentPoints].slice(0, 5);
+
+                await supabase
+                    .from('fleet_vehicles')
+                    .update({
+                        last_latitude: lat,
+                        last_longitude: lng,
+                        recent_gps_points: updatedPoints,
+                        last_odometer_update: new Date().toISOString()
+                    })
+                    .eq('plate', plate);
+            } catch (err) {
+                console.error('Error updating GPS trace:', err);
+            }
+        };
+
+        const calculateDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+            const R = 6371e3; // metres
+            const phi1 = lat1 * Math.PI/180;
+            const phi2 = lat2 * Math.PI/180;
+            const deltaPhi = (lat2-lat1) * Math.PI/180;
+            const deltaLambda = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // in metres
+        };
+
+        const handleGeoUpdate = (position: GeolocationPosition) => {
+            const { latitude: lat, longitude: lng } = position.coords;
+            const now = Date.now();
+
+            if (!lastPosition) {
+                lastPosition = { lat, lng };
+                lastUpdateTime = now;
+                updateGPS(lat, lng);
+                return;
+            }
+
+            const timeDiff = now - lastUpdateTime;
+            const distDiff = calculateDistanceInMeters(lastPosition.lat, lastPosition.lng, lat, lng);
+
+            if (timeDiff >= 45000 || distDiff >= 50) {
+                lastPosition = { lat, lng };
+                lastUpdateTime = now;
+                updateGPS(lat, lng);
+            }
+        };
+
+        const handleGeoError = (error: GeolocationPositionError) => {
+            console.warn('GPS tracking error:', error.message);
+        };
+
+        const watchId = navigator.geolocation.watchPosition(
+            handleGeoUpdate,
+            handleGeoError,
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        );
+
+        return () => {
+            navigator.geolocation.clearWatch(watchId);
+        };
+    }, [plate, id]);
 
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: '#9CA3AF' }}>Cargando mapa de ruta...</div>;
 
