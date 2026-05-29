@@ -604,7 +604,7 @@ export default function PickingDashboard() {
                             onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
                         />
                     </div>
-                    <span>
+                    <span style={{ color: '#fff' }}>
                         {shortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
                     </span>
                     {density !== 'tv' && (
