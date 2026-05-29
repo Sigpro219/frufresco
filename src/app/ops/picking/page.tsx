@@ -94,23 +94,10 @@ export default function PickingExecutionPage() {
                 `)
                 .in('status', ['para_compra', 'approved', 'picking']);
 
-            // Check Global Cutoff Switch
-            const { data: settings } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', 'enable_cutoff_rules')
-                .single();
-            
-            const cutoffEnabled = settings?.value !== 'false';
-
-            if (cutoffEnabled) {
-                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-                const targetDate = now.toISOString().split('T')[0];
-                query = query.eq('delivery_date', targetDate);
-                console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
-            } else {
-                console.log("🛑 Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
-            }
+            const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+            const targetDate = now.toISOString().split('T')[0];
+            query = query.eq('delivery_date', targetDate);
+            console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
 
             if (signal) query = query.abortSignal(signal);
 
@@ -156,16 +143,67 @@ export default function PickingExecutionPage() {
                 }
             });
 
-            const clientList = Array.from(seenClients.values()).sort((a, b) => {
-                const zA = a.zone.toUpperCase();
-                const zB = b.zone.toUpperCase();
-                if (zA !== zB) return zA.localeCompare(zB);
-                return a.name.toUpperCase().localeCompare(b.name.toUpperCase());
+            // Fetch logistic parameters for LIFO space calculation
+            const { data: lpData } = await supabase.from('logistic_parameters').select('*');
+            let spaceCapacity = 36;
+            let avgKgPerCrate = 12.5;
+            if (lpData) {
+                const cap = lpData.find(x => x.id === 'space_capacity');
+                if (cap) spaceCapacity = parseInt(cap.value) || 36;
+                const avg = lpData.find(x => x.id === 'avg_kg_per_crate');
+                if (avg) avgKgPerCrate = parseFloat(avg.value) || 12.5;
+            }
+
+            // Fetch route stops to determine delivery sequence
+            const { data: routeStops } = await supabase
+                .from('route_stops')
+                .select('order_id, sequence_number, route_id, routes(vehicle_plate)')
+                .in('order_id', (activeOrders || []).map(o => o.id));
+
+            // Group stops by route
+            const routeGroups: Record<string, { plate: string; stops: any[] }> = {};
+            const routedOrderIds = new Set<string>();
+
+            (routeStops || []).forEach(rs => {
+                routedOrderIds.add(rs.order_id);
+                if (!routeGroups[rs.route_id]) {
+                    routeGroups[rs.route_id] = {
+                        plate: (rs.routes as any)?.vehicle_plate || 'Sin Placa',
+                        stops: []
+                    };
+                }
+                routeGroups[rs.route_id].stops.push(rs);
             });
 
+            let currentSpaceCounter = 1;
             const globalSpaceMap = new Map<string, number>();
-            clientList.forEach((client, index) => {
-                globalSpaceMap.set(client.name, index + 1);
+
+            // LIFO logic: For each route, sort stops by sequence_number in DESC order
+            Object.keys(routeGroups).forEach(routeId => {
+                const group = routeGroups[routeId];
+                group.stops.sort((a, b) => b.sequence_number - a.sequence_number);
+
+                group.stops.forEach(stop => {
+                    const order = (activeOrders || []).find(o => o.id === stop.order_id);
+                    if (!order) return;
+                    const clientName = getOrderName(order);
+                    const crates = Math.ceil((order.total_weight_kg || 0) / avgKgPerCrate);
+                    const spacesNeeded = Math.ceil(crates / spaceCapacity) || 1;
+                    
+                    if (!globalSpaceMap.has(clientName)) {
+                        globalSpaceMap.set(clientName, currentSpaceCounter);
+                        currentSpaceCounter += spacesNeeded;
+                    }
+                });
+            });
+
+            // Assign remaining spaces to unrouted orders
+            (activeOrders || []).forEach(order => {
+                const clientName = getOrderName(order);
+                if (clientName && !routedOrderIds.has(order.id) && !globalSpaceMap.has(clientName)) {
+                    globalSpaceMap.set(clientName, currentSpaceCounter);
+                    currentSpaceCounter += 1;
+                }
             });
 
             const formattedTasks: Record<string, PickingTask> = {};

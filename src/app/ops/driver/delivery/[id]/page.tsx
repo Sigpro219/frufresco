@@ -341,7 +341,7 @@ export default function DeliveryConfirmationPage() {
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: '#9CA3AF' }}>Preparando remisión...</div>;
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100vh', backgroundColor: '#090D16' }}>
+        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100%', backgroundColor: '#090D16' }}>
              <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button 
                     onClick={() => router.back()} 

@@ -177,7 +177,7 @@ export default function LoadVerificationPage() {
     const allLoaded = loadedStops.size === stops.length;
     
     return (
-        <div style={{ padding: '1rem', paddingBottom: '9rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16' }}>
+        <div style={{ padding: '1rem', paddingBottom: '9rem', maxWidth: '600px', margin: '0 auto', minHeight: '100%', backgroundColor: '#090D16' }}>
             <header style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
                     <button 

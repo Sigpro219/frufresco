@@ -153,6 +153,7 @@ export default function ReceptionPage() {
                 .from('purchases')
                 .select(`
                     *,
+                    procurement_tasks!inner(delivery_date),
                     product:products (
                         name,
                         unit_of_measure,
@@ -164,6 +165,7 @@ export default function ReceptionPage() {
                         name
                     )
                 `)
+                .eq('procurement_tasks.delivery_date', todayBogota)
                 .in('status', [
                     'picked_up', 'partial_pickup', 'receiving',
                     'received_ok', 'received_review', 'received_rejected', 'received_partial'
@@ -1349,7 +1351,7 @@ export default function ReceptionPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                             <input
                                                 type="number"
-                                                value={inputQty ?? ''}
+                                                value={inputQty || ''}
                                                 onChange={e => setInputQty(e.target.value)}
                                                 placeholder="0.00"
                                                 autoFocus

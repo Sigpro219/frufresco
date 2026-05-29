@@ -74,7 +74,8 @@ export default function RoutePlanner() {
         driver_break_mins: 45,
         fleet_start_time: '04:30',
         fleet_end_time: '19:00',
-        optimization_strategy: 'balanced'
+        optimization_strategy: 'balanced',
+        space_capacity: 36
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
     const isMounted = useRef(true);
@@ -958,6 +959,15 @@ export default function RoutePlanner() {
                                         type="number" 
                                         value={isNaN(params.driver_break_mins) ? '' : params.driver_break_mins} 
                                         onChange={(e) => updateParameter('driver_break_mins', parseFloat(e.target.value) || 0)}
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Capacidad de Canastillas por Espacio (LIFO)</label>
+                                    <input 
+                                        type="number" 
+                                        value={isNaN(params.space_capacity) ? '' : params.space_capacity} 
+                                        onChange={(e) => updateParameter('space_capacity', parseInt(e.target.value) || 36)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>

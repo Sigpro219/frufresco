@@ -245,7 +245,7 @@ export default function DriverDashboard() {
     };
 
     return (
-        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16' }}>
+        <div style={{ padding: '1.5rem', paddingBottom: '6rem', maxWidth: '600px', margin: '0 auto', minHeight: '100%', backgroundColor: '#090D16' }}>
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'white', letterSpacing: '-0.5px' }}>

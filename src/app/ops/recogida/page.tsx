@@ -169,6 +169,7 @@ export default function RecogidaPage() {
                 .from('purchases')
                 .select(`
                     *,
+                    procurement_tasks!inner(delivery_date),
                     product:products (
                         name,
                         unit_of_measure,
@@ -179,7 +180,8 @@ export default function RecogidaPage() {
                         name
                     )
                 `)
-                .or(`status.eq.pending_pickup,status.eq.partial_pickup,and(status.eq.picked_up,created_at.gte.${todayBogota}),and(status.eq.rejected,created_at.gte.${todayBogota})`)
+                .eq('procurement_tasks.delivery_date', todayBogota)
+                .in('status', ['pending_pickup', 'partial_pickup', 'picked_up', 'rejected'])
                 .order('estimated_pickup_time', { ascending: true });
 
             if (error) throw error;
@@ -453,8 +455,20 @@ export default function RecogidaPage() {
             const timeA = new Date(a.estimated_pickup_time).getTime();
             const timeB = new Date(b.estimated_pickup_time).getTime();
 
-            const isAvailA = now >= timeA;
-            const isAvailB = now >= timeB;
+            const diffA = now - timeA;
+            const diffB = now - timeB;
+
+            const isOverdueA = diffA >= 600000;
+            const isOverdueB = diffB >= 600000;
+
+            if (isOverdueA && !isOverdueB) return -1;
+            if (!isOverdueA && isOverdueB) return 1;
+            if (isOverdueA && isOverdueB) {
+                return timeA - timeB; // El más atrasado/vencido primero
+            }
+
+            const isAvailA = diffA >= 0;
+            const isAvailB = diffB >= 0;
 
             if (isAvailA && !isAvailB) return -1;
             if (!isAvailA && isAvailB) return 1;
@@ -605,8 +619,23 @@ purchases: groups[key]
 
                 {/* Dashboard de Estados (Semáforo) */}
                 {filteredPurchases.length > 0 && (() => {
-                    const pending = filteredPurchases.filter(p => p.status === 'pending_pickup').length;
-                    const partial = filteredPurchases.filter(p => p.status === 'partial_pickup').length;
+                    const now = new Date().getTime();
+                    
+                    const overdue = filteredPurchases.filter(p => 
+                        (p.status === 'pending_pickup' || p.status === 'partial_pickup') && 
+                        (now - new Date(p.estimated_pickup_time).getTime() >= 600000)
+                    ).length;
+
+                    const pending = filteredPurchases.filter(p => 
+                        p.status === 'pending_pickup' && 
+                        (now - new Date(p.estimated_pickup_time).getTime() < 600000)
+                    ).length;
+
+                    const partial = filteredPurchases.filter(p => 
+                        p.status === 'partial_pickup' && 
+                        (now - new Date(p.estimated_pickup_time).getTime() < 600000)
+                    ).length;
+
                     const done = filteredPurchases.filter(p => p.status === 'picked_up' || p.status === 'rejected').length;
                     const total = filteredPurchases.length;
                     const progress = total > 0 ? (done / total) * 100 : 0;
@@ -624,6 +653,42 @@ purchases: groups[key]
                                 alignItems: "center",
                             }}
                         >
+                            {/* Vencidos */}
+                            <div style={{ textAlign: "center", position: "relative" }}>
+                                <div
+                                    style={{
+                                        fontSize: "1.1rem",
+                                        fontWeight: "900",
+                                        color: "#EF4444",
+                                    }}
+                                >
+                                    {overdue}
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: "0.55rem",
+                                        fontWeight: "bold",
+                                        color: "#EF4444",
+                                        textTransform: "uppercase",
+                                    }}
+                                >
+                                    Vencidos
+                                </div>
+                                {overdue > 0 && (
+                                    <div
+                                        style={{
+                                            position: "absolute",
+                                            top: -4,
+                                            right: -4,
+                                            width: "5px",
+                                            height: "5px",
+                                            borderRadius: "50%",
+                                            background: "#EF4444",
+                                        }}
+                                    />
+                                )}
+                            </div>
+
                             {/* Pendientes */}
                             <div style={{ textAlign: "center" }}>
                                 <div
@@ -1128,8 +1193,9 @@ purchases: groups[key]
                                                         alignItems: 'center',
                                                         borderLeft: `5px solid ${
                                                             isDone ? 'var(--ops-primary)' :
-                                                            isPartial ? '#F59E0B' :
                                                             isRejected ? '#EF4444' :
+                                                            (p.status === 'pending_pickup' || p.status === 'partial_pickup') && (new Date().getTime() - new Date(p.estimated_pickup_time).getTime() >= 600000) ? '#EF4444' :
+                                                            isPartial ? '#F59E0B' :
                                                             'var(--ops-border)'
                                                         }`,
                                                         opacity: (isDone || isRejected) ? 0.75 : 1,
@@ -1156,7 +1222,7 @@ purchases: groups[key]
                                                             <Package size={24} style={{ opacity: 0.6, color: 'var(--ops-text-muted)' }} />
                                                         )}
                                                     </div>
-
+ 
                                                     {/* Info */}
                                                     <div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
@@ -1170,29 +1236,29 @@ purchases: groups[key]
                                                             </h3>
                                                             <span style={{ fontSize: '0.65rem', fontWeight: '900', color: statusColor }}>{statusText}</span>
                                                         </div>
-
+ 
                                                         {/* Progress Bar */}
                                                         {(isPartial || isDone) && (
                                                             <div style={{ marginBottom: '0.4rem' }}>
-                                                                <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--ops-border)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                                 <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--ops-border)', borderRadius: '3px', overflow: 'hidden' }}>
                                                                     <div style={{
-                                                                        width: `${Math.min(100, ((p.picked_up_quantity || 0) / p.quantity) * 100)}%`,
-                                                                        height: '100%',
-                                                                        backgroundColor: isDone ? 'var(--ops-primary)' : '#F59E0B',
-                                                                        borderRadius: '3px',
-                                                                        transition: 'width 0.3s ease'
+                                                                         width: `${Math.min(100, ((p.picked_up_quantity || 0) / p.quantity) * 100)}%`,
+                                                                         height: '100%',
+                                                                         backgroundColor: isDone ? 'var(--ops-primary)' : '#F59E0B',
+                                                                         borderRadius: '3px',
+                                                                         transition: 'width 0.3s ease'
                                                                     }} />
                                                                 </div>
                                                             </div>
                                                         )}
-
+ 
                                                         {/* Show provider if grouped by bodega; show bodega if grouped by provider */}
                                                         {groupMode === 'bodega' ? (
                                                             <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
                                                                 <Building2 size={14} /> <span>{p.provider?.name || 'Proveedor desconocido'}</span>
                                                             </div>
                                                         ) : null}
-
+ 
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
                                                             <MapPin size={14} /> 
                                                             {p.pickup_location ? (
@@ -1221,7 +1287,7 @@ purchases: groups[key]
                                                                 <span>Ubicación desconocida</span>
                                                             )}
                                                         </div>
-
+ 
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
                                                             <div style={{ fontSize: '0.9rem', color: 'var(--ops-text)' }}>
                                                                 <span style={{ fontWeight: '900' }}>
@@ -1235,37 +1301,89 @@ purchases: groups[key]
                                                                 {(() => {
                                                                     const diffMs = new Date().getTime() - new Date(p.estimated_pickup_time).getTime();
                                                                     const diffMins = Math.floor(Math.abs(diffMs) / 60000);
-                                                                    const isAvailable = diffMs >= 0;
-                                                                    return (
-                                                                        <div style={{ 
-                                                                            fontSize: '0.75rem', 
-                                                                            fontWeight: '800',
-                                                                            color: isAvailable ? 'var(--ops-primary)' : '#F59E0B',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '0.3rem',
-                                                                            padding: '0.15rem 0.4rem',
-                                                                            borderRadius: '5px',
-                                                                            backgroundColor: isAvailable ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)'
-                                                                        }}>
-                                                                            {isAvailable ? (
-                                                                                <>
-                                                                                    <span style={{ 
-                                                                                        width: '6px', height: '6px', borderRadius: '50%', 
-                                                                                        backgroundColor: 'var(--ops-primary)', 
-                                                                                        display: 'inline-block',
-                                                                                        animation: 'pulse 2s infinite' 
-                                                                                    }} />
-                                                                                    Disponible
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <Clock size={12} />
-                                                                                    en {diffMins} min
-                                                                                </>
-                                                                            )}
-                                                                        </div>
-                                                                    );
+                                                                    const isActive = p.status === 'pending_pickup' || p.status === 'partial_pickup';
+                                                                    
+                                                                    if (!isActive) return null;
+
+                                                                    if (diffMs >= 600000) {
+                                                                        return (
+                                                                            <div style={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                fontWeight: '800',
+                                                                                color: '#EF4444',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '0.3rem',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '5px',
+                                                                                backgroundColor: 'rgba(239, 68, 68, 0.08)'
+                                                                            }}>
+                                                                                <span style={{ 
+                                                                                    width: '6px', height: '6px', borderRadius: '50%', 
+                                                                                    backgroundColor: '#EF4444', 
+                                                                                    display: 'inline-block',
+                                                                                    animation: 'pulse-red 1.5s infinite' 
+                                                                                }} />
+                                                                                Vencido hace {diffMins} min
+                                                                            </div>
+                                                                        );
+                                                                    } else if (diffMs >= 0) {
+                                                                        return (
+                                                                            <div style={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                fontWeight: '800',
+                                                                                color: 'var(--ops-primary)',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '0.3rem',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '5px',
+                                                                                backgroundColor: 'rgba(16, 185, 129, 0.08)'
+                                                                            }}>
+                                                                                <span style={{ 
+                                                                                    width: '6px', height: '6px', borderRadius: '50%', 
+                                                                                    backgroundColor: 'var(--ops-primary)', 
+                                                                                    display: 'inline-block',
+                                                                                    animation: 'pulse-green 1.5s infinite' 
+                                                                                }} />
+                                                                                Disponible
+                                                                            </div>
+                                                                        );
+                                                                    } else if (diffMs >= -600000) {
+                                                                        return (
+                                                                            <div style={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                fontWeight: '800',
+                                                                                color: '#F97316',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '0.3rem',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '5px',
+                                                                                backgroundColor: 'rgba(249, 115, 22, 0.08)'
+                                                                            }}>
+                                                                                <Clock size={12} />
+                                                                                Próximo (en {diffMins} min)
+                                                                            </div>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <div style={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                fontWeight: '800',
+                                                                                color: '#F59E0B',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '0.3rem',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '5px',
+                                                                                backgroundColor: 'rgba(245, 158, 11, 0.08)'
+                                                                            }}>
+                                                                                <Clock size={12} />
+                                                                                en {diffMins} min
+                                                                            </div>
+                                                                        );
+                                                                    }
                                                                 })()}
                                                             </div>
                                                         </div>
@@ -1953,6 +2071,16 @@ purchases: groups[key]
                         @keyframes pulse-red-border {
                             0%, 100% { border-color: #EF4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
                             50% { border-color: #F87171; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+                        }
+                        @keyframes pulse-green {
+                            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+                            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                        }
+                        @keyframes pulse-red {
+                            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+                            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+                            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
                         }
                     `
                 }}

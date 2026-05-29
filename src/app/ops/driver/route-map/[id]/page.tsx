@@ -121,7 +121,7 @@ export default function RouteExecutionPage() {
     };
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', minHeight: '100vh', backgroundColor: '#090D16', color: 'white' }}>
+        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', minHeight: '100%', backgroundColor: '#090D16', color: 'white' }}>
             <header style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <button 

@@ -69,6 +69,17 @@ export default function MasterProductsPage() {
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const ITEMS_PER_PAGE = 50;
+    const [sortField, setSortField] = useState<'accounting_id' | 'name' | null>('accounting_id');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const handleSort = (field: 'accounting_id' | 'name') => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortOrder('asc');
+        }
+    };
 
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
         const win = window as unknown as { showToast?: (m: string, t: string) => void };
@@ -572,10 +583,28 @@ export default function MasterProductsPage() {
         });
     }, [products, searchQuery]);
 
+    const sortedFilteredProducts = useMemo(() => {
+        const items = [...filteredProducts];
+        if (sortField) {
+            items.sort((a, b) => {
+                let valA: any = a[sortField];
+                let valB: any = b[sortField];
+                
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+                
+                if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+                if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return items;
+    }, [filteredProducts, sortField, sortOrder]);
+
     const paginatedProducts = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    }, [filteredProducts, currentPage]);
+        return sortedFilteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [sortedFilteredProducts, currentPage]);
 
     const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
 
@@ -869,6 +898,47 @@ export default function MasterProductsPage() {
                         )}
                     </div>
 
+                    {/* Selector de Orden */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Ordenar:
+                        </span>
+                        <select
+                            value={`${sortField || 'accounting_id'}-${sortOrder}`}
+                            onChange={(e) => {
+                                const [field, order] = e.target.value.split('-');
+                                setSortField(field as 'accounting_id' | 'name');
+                                setSortOrder(order as 'asc' | 'desc');
+                            }}
+                            style={{
+                                padding: '0 2rem 0 0.75rem',
+                                borderRadius: THEME.radius.md,
+                                backgroundColor: THEME.colors.surface,
+                                color: THEME.colors.textMain,
+                                border: `1px solid ${THEME.colors.border}`,
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                height: '38px',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: THEME.shadow.sm,
+                                appearance: 'none',
+                                backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'right 8px center',
+                                backgroundSize: '16px'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = THEME.colors.primary}
+                            onBlur={(e) => e.target.style.borderColor = THEME.colors.border}
+                        >
+                            <option value="accounting_id-asc">ID (Menor a Mayor)</option>
+                            <option value="accounting_id-desc">ID (Mayor a Menor)</option>
+                            <option value="name-asc">Nombre (A - Z)</option>
+                            <option value="name-desc">Nombre (Z - A)</option>
+                        </select>
+                    </div>
+
                     {/* Contador de Productos Filtrados */}
                     <div style={{
                         padding: '0 1rem',
@@ -984,8 +1054,18 @@ export default function MasterProductsPage() {
                         <thead>
                             <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '60px' }}>Foto</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px' }}>SKU Código</th>
-                                <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Nombre Técnico</th>
+                                <th 
+                                    onClick={() => handleSort('accounting_id')}
+                                    style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', width: '140px', cursor: 'pointer', userSelect: 'none' }}
+                                >
+                                    SKU Código {sortField === 'accounting_id' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('name')}
+                                    style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
+                                >
+                                    Nombre Técnico {sortField === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                                </th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Categoría</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem' }}>Logística</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'center' }}>Unidad</th>
