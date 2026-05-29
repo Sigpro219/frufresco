@@ -111,6 +111,23 @@ export default function PickingDashboard() {
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
     const [isConnected, setIsConnected] = useState(false);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [shortName, setShortName] = useState('FRUFRESCO');
+
+    useEffect(() => {
+        supabase
+            .from('app_settings')
+            .select('key, value')
+            .in('key', ['app_logosymbol_url', 'app_short_name'])
+            .then(({ data, error }) => {
+                if (!error && data) {
+                    const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
+                    if (logo) setLogoUrl(logo);
+                    const name = data.find(s => s.key === 'app_short_name')?.value;
+                    if (name) setShortName(name.toUpperCase());
+                }
+            });
+    }, []);
 
     useEffect(() => {
         // Hydration fix for time
@@ -560,20 +577,40 @@ export default function PickingDashboard() {
                     style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.75rem',
+                        gap: '0.6rem',
                         color: '#10B981',
                         fontWeight: '800',
-                        fontSize: density === 'tv' ? '1.1rem' : '1.4rem',
+                        fontSize: density === 'tv' ? '1.1rem' : '1.3rem',
                         cursor: 'pointer',
                         fontFamily: 'Outfit, sans-serif'
                     }}
                 >
-                    <Package className="text-emerald-500 animate-pulse" size={density === 'tv' ? 18 : 24} />
-                    <span>LOGISTICS<span style={{ color: '#fff' }}>PRO</span></span>
+                    <div style={{
+                        backgroundColor: 'white',
+                        width: density === 'tv' ? '24px' : '32px',
+                        height: density === 'tv' ? '24px' : '32px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 0 10px rgba(255,255,255,0.1)',
+                        padding: '3px',
+                        flexShrink: 0
+                    }}>
+                        <img 
+                            src={logoUrl || "/logosimbolo.png"} 
+                            alt={shortName} 
+                            style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
+                        />
+                    </div>
+                    <span>
+                        {shortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
+                    </span>
                     {density !== 'tv' && (
                         <>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.15)' }}>|</span>
-                            <span style={{ color: '#94A3B8', fontWeight: '500', fontSize: '1.1rem' }}>PICKING BOARD</span>
+                            <span style={{ color: 'rgba(255, 255, 255, 0.15)', marginLeft: '4px' }}>|</span>
+                            <span style={{ color: '#94A3B8', fontWeight: '500', fontSize: '1rem', marginLeft: '4px' }}>TABLERO DE PICKING</span>
                         </>
                     )}
                 </div>
