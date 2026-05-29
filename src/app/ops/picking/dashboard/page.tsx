@@ -584,7 +584,7 @@ export default function PickingDashboard() {
                 }
                 .density-btn {
                     max-width: 32px;
-                    height: 32px;
+                    height: 28px;
                     padding: 0 !important;
                     justify-content: center;
                     overflow: hidden;
@@ -603,7 +603,7 @@ export default function PickingDashboard() {
                 }
                 .density-btn:hover {
                     max-width: 140px;
-                    padding: 0 12px !important;
+                    padding: 0 10px !important;
                     justify-content: flex-start;
                 }
                 .density-btn:hover span {
@@ -722,12 +722,13 @@ export default function PickingDashboard() {
                     {/* DENSITY SELECTOR */}
                     <div style={{ 
                         display: 'flex', 
+                        alignItems: 'center',
                         background: 'rgba(15, 23, 42, 0.8)', 
-                        padding: '3px', 
-                        borderRadius: '8px', 
+                        padding: '4px 6px', 
+                        borderRadius: '10px', 
                         border: '1px solid rgba(255,255,255,0.08)',
                         marginRight: '5px',
-                        gap: '4px'
+                        gap: '5px'
                     }}>
                         <button 
                             onClick={() => changeDensity('standard')}
