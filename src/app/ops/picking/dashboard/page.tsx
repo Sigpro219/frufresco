@@ -601,6 +601,16 @@ export default function PickingDashboard() {
                     display: inline-block;
                     font-size: 0.75rem;
                 }
+                .density-btn.active {
+                    max-width: 140px;
+                    padding: 0 10px !important;
+                    justify-content: flex-start;
+                }
+                .density-btn.active span {
+                    opacity: 1;
+                    width: auto;
+                    margin-left: 6px;
+                }
                 .density-btn:hover {
                     max-width: 140px;
                     padding: 0 10px !important;
@@ -732,7 +742,7 @@ export default function PickingDashboard() {
                     }}>
                         <button 
                             onClick={() => changeDensity('standard')}
-                            className="density-btn"
+                            className={`density-btn ${density === 'standard' ? 'active' : ''}`}
                             style={{
                                 borderRadius: '6px', 
                                 border: 'none', 
@@ -748,7 +758,7 @@ export default function PickingDashboard() {
                         </button>
                         <button 
                             onClick={() => changeDensity('high')}
-                            className="density-btn"
+                            className={`density-btn ${density === 'high' ? 'active' : ''}`}
                             style={{
                                 borderRadius: '6px', 
                                 border: 'none', 
@@ -764,7 +774,7 @@ export default function PickingDashboard() {
                         </button>
                         <button 
                             onClick={() => changeDensity('tv')}
-                            className="density-btn"
+                            className={`density-btn ${density === 'tv' ? 'active' : ''}`}
                             style={{
                                 borderRadius: '6px', 
                                 border: 'none', 
