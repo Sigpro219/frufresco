@@ -644,14 +644,23 @@ export default function PickingDashboard() {
                     </div>
 
                     {/* GLOBAL PROGRESS */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px',
+                        minWidth: density === 'tv' ? '100px' : '130px',
+                        justifyContent: 'flex-end'
+                    }}>
                         <span style={{ color: '#94A3B8', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'Outfit, sans-serif' }}>TOTAL</span>
                         <div style={{
                             fontSize: '2rem',
                             fontWeight: 'bold',
                             color: globalPercent === 100 ? '#10B981' : '#F59E0B',
                             textShadow: '0 0 15px rgba(245, 158, 11, 0.2)',
-                            fontFamily: 'Outfit, sans-serif'
+                            fontFamily: 'Outfit, sans-serif',
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: density === 'tv' ? '50px' : '65px',
+                            textAlign: 'right'
                         }}>
                             {globalPercent}%
                         </div>
@@ -746,7 +755,15 @@ export default function PickingDashboard() {
                             </span>
                         </div>
 
-                        <div style={{ fontSize: '1.4rem', fontWeight: 'bold', fontFamily: 'Outfit, sans-serif', color: '#E2E8F0' }}>{currentTime}</div>
+                        <div style={{ 
+                            fontSize: density === 'tv' ? '1.1rem' : '1.4rem', 
+                            fontWeight: 'bold', 
+                            fontFamily: 'Outfit, sans-serif', 
+                            color: '#E2E8F0',
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: density === 'tv' ? '85px' : '110px',
+                            textAlign: 'right'
+                        }}>{currentTime}</div>
                     </div>
                 </div>
             </header>
