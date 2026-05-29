@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Clock, Wifi, Package, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
+import { Clock, Wifi, Package, ArrowLeft, AlertCircle, RefreshCw, Monitor, LayoutGrid, Tv } from 'lucide-react';
 
 // Types
 type Product = {
@@ -50,6 +50,55 @@ export default function PickingDashboard() {
     }, []);
 
     // STATE
+    const [density, setDensity] = useState<'standard' | 'high' | 'tv'>('standard');
+
+    useEffect(() => {
+        const saved = localStorage.getItem('picking_dashboard_density');
+        if (saved && (saved === 'standard' || saved === 'high' || saved === 'tv')) {
+            setDensity(saved);
+        }
+    }, []);
+
+    const changeDensity = (val: 'standard' | 'high' | 'tv') => {
+        setDensity(val);
+        localStorage.setItem('picking_dashboard_density', val);
+    };
+
+    const DENSITY_CONFIG = {
+        standard: {
+            cellWidth: '50px',
+            cellHeight: '50px',
+            fontSize: '0.95rem',
+            clientFontSize: '0.7rem',
+            productFontSize: '0.85rem',
+            clientHeaderHeight: '100px',
+            productColWidth: '220px',
+            productColMaxWidth: '300px'
+        },
+        high: {
+            cellWidth: '40px',
+            cellHeight: '40px',
+            fontSize: '0.85rem',
+            clientFontSize: '0.6rem',
+            productFontSize: '0.75rem',
+            clientHeaderHeight: '85px',
+            productColWidth: '180px',
+            productColMaxWidth: '240px'
+        },
+        tv: {
+            cellWidth: '32px',
+            cellHeight: '32px',
+            fontSize: '0.75rem',
+            clientFontSize: '0.55rem',
+            productFontSize: '0.7rem',
+            clientHeaderHeight: '75px',
+            productColWidth: '150px',
+            productColMaxWidth: '200px'
+        }
+    };
+
+    const cfg = DENSITY_CONFIG[density];
+
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
     const [clients, setClients] = useState<{ id: string, company_name: string, zone_name: string }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -563,6 +612,81 @@ export default function PickingDashboard() {
                         </div>
                     </div>
 
+                    {/* DENSITY SELECTOR */}
+                    <div style={{ 
+                        display: 'flex', 
+                        background: 'rgba(15, 23, 42, 0.8)', 
+                        padding: '3px', 
+                        borderRadius: '8px', 
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        marginRight: '5px',
+                        gap: '2px'
+                    }}>
+                        <button 
+                            onClick={() => changeDensity('standard')}
+                            style={{
+                                padding: '6px 10px', 
+                                borderRadius: '6px', 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                background: density === 'standard' ? '#10B981' : 'transparent',
+                                color: density === 'standard' ? '#020617' : '#94A3B8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                transition: 'all 0.2s'
+                            }} 
+                            title="Estándar (PC)"
+                        >
+                            <Monitor size={13} strokeWidth={2.5} />
+                            <span>PC Standard</span>
+                        </button>
+                        <button 
+                            onClick={() => changeDensity('high')}
+                            style={{
+                                padding: '6px 10px', 
+                                borderRadius: '6px', 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                background: density === 'high' ? '#10B981' : 'transparent',
+                                color: density === 'high' ? '#020617' : '#94A3B8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                transition: 'all 0.2s'
+                            }} 
+                            title="Alta Densidad (PC)"
+                        >
+                            <LayoutGrid size={13} strokeWidth={2.5} />
+                            <span>PC Compact</span>
+                        </button>
+                        <button 
+                            onClick={() => changeDensity('tv')}
+                            style={{
+                                padding: '6px 10px', 
+                                borderRadius: '6px', 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                background: density === 'tv' ? '#10B981' : 'transparent',
+                                color: density === 'tv' ? '#020617' : '#94A3B8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                transition: 'all 0.2s'
+                            }} 
+                            title="Televisor (TV)"
+                        >
+                            <Tv size={13} strokeWidth={2.5} />
+                            <span>TV</span>
+                        </button>
+                    </div>
+
                     {/* CLOCK & STATUS */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <div style={{
@@ -667,11 +791,11 @@ export default function PickingDashboard() {
                                         background: complete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.95)',
                                         borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                                         borderRight: '1px solid rgba(255, 255, 255, 0.05)',
-                                        height: '100px',
+                                        height: cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
-                                        minWidth: '50px',
-                                        maxWidth: '50px',
+                                        minWidth: cfg.cellWidth,
+                                        maxWidth: cfg.cellWidth,
                                         overflow: 'hidden',
                                         backdropFilter: 'blur(8px)',
                                         transition: 'background-color 0.2s ease'
@@ -679,14 +803,14 @@ export default function PickingDashboard() {
                                         <div style={{
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            height: '100px',
+                                            height: cfg.clientHeaderHeight,
                                             alignItems: 'center',
                                             justifyContent: 'flex-start',
                                             overflow: 'hidden'
                                         }}>
                                             {/* LIFO Space Label instead of Index */}
                                             <div style={{
-                                                fontSize: '0.75rem',
+                                                fontSize: cfg.clientFontSize,
                                                 fontWeight: '700',
                                                 color: complete ? '#10B981' : '#38BDF8',
                                                 marginBottom: '4px',
@@ -701,13 +825,13 @@ export default function PickingDashboard() {
                                             }}>
                                                 {clientSpaces[client.company_name] || 'ESP -'}
                                             </div>
-
+ 
                                             {/* Vertical Name */}
                                             <div style={{
                                                 writingMode: 'vertical-rl',
                                                 transform: 'rotate(180deg)',
                                                 whiteSpace: 'nowrap',
-                                                fontSize: '0.7rem', 
+                                                fontSize: cfg.clientFontSize, 
                                                 fontWeight: '600',
                                                 letterSpacing: '0.5px',
                                                 color: complete ? '#A7F3D0' : '#E2E8F0',
@@ -725,7 +849,7 @@ export default function PickingDashboard() {
                                             </div>
                                         </div>
                                     </th>
-                                )
+                                );
                             })}
                         </tr>
                     </thead>
@@ -786,15 +910,15 @@ export default function PickingDashboard() {
                                                     background: '#090d16',
                                                     borderRight: '1px solid rgba(255, 255, 255, 0.08)',
                                                     borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                                                    padding: '0.6rem 1rem',
+                                                    padding: density === 'tv' ? '0.2rem 0.5rem' : '0.6rem 1rem',
                                                     color: '#E2E8F0', 
-                                                    fontSize: '0.85rem',
-                                                    minWidth: '220px', maxWidth: '300px',
+                                                    fontSize: cfg.productFontSize,
+                                                    minWidth: cfg.productColWidth, maxWidth: cfg.productColMaxWidth,
                                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                     fontFamily: 'Outfit, sans-serif'
                                                 }} title={product.name}>
                                                     {product.name}
-                                                    <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: '#64748B', fontFamily: 'Inter, sans-serif' }}>
+                                                    <span style={{ marginLeft: '8px', fontSize: cfg.clientFontSize, color: '#64748B', fontFamily: 'Inter, sans-serif' }}>
                                                         {product.unit_of_measure}
                                                     </span>
                                                 </td>
@@ -847,17 +971,17 @@ export default function PickingDashboard() {
                                                                 borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                                                                 borderRight: '1px solid rgba(255, 255, 255, 0.05)',
                                                                 textAlign: 'center', fontWeight: 'bold',
-                                                                fontSize: '0.95rem',
+                                                                fontSize: cfg.fontSize,
                                                                 cursor: 'pointer', transition: 'all 0.15s ease',
                                                                 position: 'relative',
-                                                                height: '50px',
+                                                                height: cfg.cellHeight,
                                                                 fontFamily: 'Inter, sans-serif'
                                                             }}
                                                         >
                                                             {isPartial ? (
                                                                 <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2', alignItems: 'center', justifyContent: 'center' }}>
-                                                                    <span style={{ color: fg, fontSize: '0.95rem' }}>{cell.picked}</span>
-                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B', borderTop: '1px solid rgba(255,255,255,0.1)', width: '60%', marginTop: '2px', paddingTop: '1px' }}>{cell.ordered}</span>
+                                                                    <span style={{ color: fg, fontSize: cfg.fontSize }}>{cell.picked}</span>
+                                                                    <span style={{ fontSize: cfg.clientFontSize, color: '#64748B', borderTop: '1px solid rgba(255,255,255,0.1)', width: '60%', marginTop: '2px', paddingTop: '1px' }}>{cell.ordered}</span>
                                                                 </div>
                                                             ) : (
                                                                 cell.ordered
