@@ -102,7 +102,7 @@ export default function Footer() {
             }}>{t.quickLinks}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <li><Link href="/" className="footer-link">{t.navHome}</Link></li>
-              <li><Link href="/catalog" className="footer-link">{t.navCatalog}</Link></li>
+              <li><Link href={`/#catalog${locale === 'en' ? '?lang=en' : ''}`} className="footer-link">{t.navCatalog}</Link></li>
               <li><Link href="/b2b/register" className="footer-link">{t.navInstitutional}</Link></li>
             </ul>
           </div>

@@ -8,27 +8,124 @@ const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { assignments, vehicles, isOptimized, theoreticalMetrics, params } = body;
+        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes } = body;
 
         if (!assignments || !vehicles) {
             return NextResponse.json({ error: 'Missing required data' }, { status: 400 });
         }
 
+        const allOrderIds: string[] = Object.values(assignments).flat() as string[];
+        if (allOrderIds.length === 0) {
+            return NextResponse.json({ error: 'No order assignments provided' }, { status: 400 });
+        }
+
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Fetch all orders to get total weight and delivery date
+        const { data: allOrders } = await supabase
+            .from('orders')
+            .select('*')
+            .in('id', allOrderIds);
+
+        if (!allOrders || allOrders.length === 0) {
+            return NextResponse.json({ error: 'No orders found matching the assignments' }, { status: 400 });
+        }
+
+        const deliveryDate = allOrders[0].delivery_date;
+
+        // Fetch existing route stops and their routes to map previously assigned spaces to routes
+        const { data: existingStops } = await supabase
+            .from('route_stops')
+            .select(`
+                order_id,
+                route_id,
+                order:orders!order_id (
+                    id,
+                    warehouse_spaces,
+                    crates_count,
+                    delivery_date
+                )
+            `);
+
+        // Filtrar paradas que pertenezcan a la fecha de entrega objetivo
+        const activeStops = (existingStops || []).filter((s: any) => s.order?.delivery_date === deliveryDate);
+
+        // Fetch the departure times of active routes on this date
+        const { data: activeRoutes } = await supabase
+            .from('routes')
+            .select('id, logic_parameters_snapshot, vehicle_plate, driver_id');
+
+        // Helper: Convert "HH:MM" to minutes from midnight
+        const timeToMinutes = (tStr: string): number => {
+            const [h, m] = tStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        // Regla: Ventana de preparación es [salida - 150 min, salida]
+        // Guardamos timeline de cada espacio físico (1-150): lista de intervalos { start: number, end: number }
+        const spacesTimeline: Record<number, { start: number, end: number }[]> = {};
+        for (let i = 1; i <= 150; i++) {
+            spacesTimeline[i] = [];
+        }
+
+        // Poblar la timeline con los pedidos ya confirmados
+        if (activeStops && activeStops.length > 0) {
+            activeStops.forEach(stop => {
+                const o = stop.order as any;
+                if (!o || !Array.isArray(o.warehouse_spaces)) return;
+                
+                // Tratar de buscar la hora de salida de su ruta
+                let departureMin = timeToMinutes('04:30'); // Default
+                const routeSnapshot = activeRoutes?.find(r => r.id === stop.route_id);
+                if (routeSnapshot?.logic_parameters_snapshot && typeof routeSnapshot.logic_parameters_snapshot === 'object') {
+                    const snap = routeSnapshot.logic_parameters_snapshot as Record<string, any>;
+                    if (snap.fleet_start_time) {
+                        departureMin = timeToMinutes(snap.fleet_start_time);
+                    }
+                }
+                const startMin = departureMin - 150;
+                const endMin = departureMin;
+
+                o.warehouse_spaces.forEach((s: number) => {
+                    if (s >= 1 && s <= 150) {
+                        spacesTimeline[s].push({ start: startMin, end: endMin });
+                    }
+                });
+            });
+        }
+
+        // Fetch avg_kg_per_crate parameter
+        let avg_kg_per_crate = 12.5;
+        const { data: dbParams } = await supabase.from('logistic_parameters').select('*');
+        if (dbParams) {
+            const avgParam = dbParams.find(p => p.id === 'avg_kg_per_crate')?.value;
+            if (avgParam) avg_kg_per_crate = parseFloat(avgParam);
+        }
+
+        // Ordenar vehículos / rutas que se van a procesar por hora de salida (ascendente)
+        const sortedVehicleIds = Object.keys(assignments).sort((a, b) => {
+            const timeA = timeToMinutes(routeStartTimes?.[a] || params?.fleet_start_time || '04:30');
+            const timeB = timeToMinutes(routeStartTimes?.[b] || params?.fleet_start_time || '04:30');
+            return timeA - timeB;
+        });
+
         const routeConfirmations = [];
 
-        for (const vehicleId of Object.keys(assignments)) {
+        for (const vehicleId of sortedVehicleIds) {
             const orderIds = assignments[vehicleId];
             if (orderIds.length === 0) continue;
 
             const vehicle = vehicles.find((v: any) => v.id === vehicleId);
+            const departureTimeStr = routeStartTimes?.[vehicleId] || params?.fleet_start_time || '04:30';
+            const departureMin = timeToMinutes(departureTimeStr);
+            const routeStartMin = departureMin - 150;
+            const routeEndMin = departureMin;
 
-            // Fetch orders to calculate load
-            const { data: routeOrders } = await supabase.from('orders').select('id, total_weight_kg').in('id', orderIds);
-            const totalKilos = routeOrders?.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0) || 0;
+            // Calculate load for vehicle
+            const vehicleOrders = allOrders.filter(o => orderIds.includes(o.id));
+            const totalKilos = vehicleOrders.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0) || 0;
             
             // Check if the driver_id from fleet_vehicles actually exists in profiles
-            // (There is a schema conflict where fleet_vehicles points to collaborators, but routes points to profiles)
             let validDriverId = null;
             if (vehicle?.driver_id) {
                 const { data: profileCheck } = await supabase.from('profiles').select('id').eq('id', vehicle.driver_id).single();
@@ -48,16 +145,20 @@ export async function POST(request: Request) {
                     stops_count: orderIds.length,
                     total_orders: orderIds.length,
                     total_kilos: totalKilos,
-                    logic_parameters_snapshot: params
+                    logic_parameters_snapshot: {
+                        ...params,
+                        fleet_start_time: departureTimeStr
+                    }
                 })
                 .select()
                 .single();
 
             if (rErr) throw rErr;
 
-            // 2. Create Route Stops & Update Orders
+            // 2. Create Route Stops, Allocate Spaces, and Update Orders
             for (let i = 0; i < orderIds.length; i++) {
                 const orderId = orderIds[i];
+                const orderDetail = allOrders.find(o => String(o.id).trim().toLowerCase() === String(orderId).trim().toLowerCase());
                 
                 await supabase.from('route_stops').insert({
                     route_id: route.id,
@@ -66,9 +167,43 @@ export async function POST(request: Request) {
                     status: 'pending'
                 });
 
-                await supabase.from('orders').update({
-                    status: 'picking'
+                // Allocate spaces (max 36 crates per space, dedicated spaces per order)
+                let cratesCount = 1;
+                let spacesAssigned: number[] = [];
+
+                if (orderDetail) {
+                    cratesCount = Math.ceil((orderDetail.total_weight_kg || 0) / avg_kg_per_crate) || 1;
+                    const spacesNeeded = Math.ceil(cratesCount / 36);
+                    console.log(`[SPACE ALLOC] Order ${orderId}: weight=${orderDetail.total_weight_kg}, crates=${cratesCount}, spacesNeeded=${spacesNeeded}, routeStartMin=${routeStartMin}, routeEndMin=${routeEndMin}`);
+                    
+                    let spaceCandidate = 1;
+                    while (spacesAssigned.length < spacesNeeded && spaceCandidate <= 150) {
+                        // Un espacio es libre para esta ruta si no hay traslape con sus intervalos ocupados.
+                        // Dos intervalos [A, B] y [C, D] se traslapan si: A < D y C < B.
+                        const hasOverlap = spacesTimeline[spaceCandidate].some(interval => {
+                            return routeStartMin < interval.end && interval.start < routeEndMin;
+                        });
+
+                        if (!hasOverlap) {
+                            spacesAssigned.push(spaceCandidate);
+                            // Marcar el intervalo como ocupado en la línea de tiempo de este espacio
+                            spacesTimeline[spaceCandidate].push({ start: routeStartMin, end: routeEndMin });
+                        }
+                        spaceCandidate++;
+                    }
+                    console.log(`[SPACE ALLOC] Assigned spaces for Order ${orderId}: [${spacesAssigned.join(', ')}]`);
+                }
+
+                const { error: updateErr } = await supabase.from('orders').update({
+                    status: 'picking',
+                    crates_count: cratesCount,
+                    warehouse_spaces: spacesAssigned
                 }).eq('id', orderId);
+
+                if (updateErr) {
+                    console.error(`[SPACE ALLOC ERROR] Failed to update order ${orderId}:`, updateErr);
+                    throw updateErr;
+                }
             }
             
             routeConfirmations.push(route.id);
@@ -81,3 +216,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message || 'Error al confirmar las rutas' }, { status: 500 });
     }
 }
+

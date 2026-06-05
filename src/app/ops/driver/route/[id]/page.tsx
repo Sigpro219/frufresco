@@ -14,6 +14,7 @@ interface RouteStop {
         id: string;
         customer_name: string;
         shipping_address: string;
+        warehouse_spaces: number[] | null;
         order_items: {
             id: string;
             products: { name: string; unit_of_measure: string };
@@ -51,7 +52,7 @@ export default function LoadVerificationPage() {
                     {
                         id: 's1', sequence_number: 1, status: 'pending',
                         orders: {
-                            id: 'o1', customer_name: 'Restaurante El Sabor (Mock)', shipping_address: 'Calle Falsa 123',
+                            id: 'o1', customer_name: 'Restaurante El Sabor (Mock)', shipping_address: 'Calle Falsa 123', warehouse_spaces: [12],
                             order_items: [
                                 { id: 'oi1', products: { name: 'Papa Sabanera', unit_of_measure: 'KG' }, quantity: 50, picked_quantity: 50 },
                                 { id: 'oi2', products: { name: 'Cebolla Cabezona', unit_of_measure: 'KG' }, quantity: 20, picked_quantity: 20 }
@@ -61,7 +62,7 @@ export default function LoadVerificationPage() {
                     {
                         id: 's2', sequence_number: 2, status: 'pending',
                         orders: {
-                            id: 'o2', customer_name: 'Piqueteadero Central (Mock)', shipping_address: 'Av Siempre Viva 742',
+                            id: 'o2', customer_name: 'Piqueteadero Central (Mock)', shipping_address: 'Av Siempre Viva 742', warehouse_spaces: [15],
                             order_items: [
                                 { id: 'oi3', products: { name: 'Tomate Chonto', unit_of_measure: 'KG' }, quantity: 30, picked_quantity: 30 }
                             ]
@@ -70,7 +71,7 @@ export default function LoadVerificationPage() {
                     {
                         id: 's3', sequence_number: 3, status: 'pending',
                         orders: {
-                            id: 'o3', customer_name: 'Frutería Express (Mock)', shipping_address: 'Carrera 15 #123',
+                            id: 'o3', customer_name: 'Frutería Express (Mock)', shipping_address: 'Carrera 15 #123', warehouse_spaces: [18, 19],
                             order_items: [
                                 { id: 'oi4', products: { name: 'Limón Tahití', unit_of_measure: 'KG' }, quantity: 15, picked_quantity: 15 }
                             ]
@@ -87,7 +88,7 @@ export default function LoadVerificationPage() {
                 .select(`
                     id, sequence_number, status,
                     orders:order_id (
-                        id, shipping_address,
+                        id, shipping_address, warehouse_spaces,
                         profiles:profile_id (
                             id, company_name, contact_name, role
                         ),
@@ -265,6 +266,22 @@ export default function LoadVerificationPage() {
                                 <div>
                                     <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{stop.orders?.customer_name}</div>
                                     <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '2px' }}>Parada #{stop.sequence_number} de la ruta</div>
+                                    {stop.orders?.warehouse_spaces && stop.orders.warehouse_spaces.length > 0 && (
+                                        <div style={{ 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            gap: '4px',
+                                            fontSize: '0.7rem', 
+                                            color: '#10B981', 
+                                            fontWeight: '800',
+                                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '6px',
+                                            marginTop: '6px'
+                                        }}>
+                                            UBICACIÓN: ESP {stop.orders.warehouse_spaces.join(', ')}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

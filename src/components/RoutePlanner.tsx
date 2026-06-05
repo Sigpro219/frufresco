@@ -375,6 +375,12 @@ export default function RoutePlanner() {
     const handleConfirmRoutes = async () => {
         try {
             setLoading(true);
+            // Construir un mapeo de vehículo -> hora de salida
+            const routeStartTimes: Record<string, string> = {};
+            Object.keys(assignments).forEach(vehicleId => {
+                routeStartTimes[vehicleId] = params.fleet_start_time || '04:30';
+            });
+
             const response = await fetch('/api/transport/confirm', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -383,7 +389,8 @@ export default function RoutePlanner() {
                     vehicles,
                     isOptimized,
                     theoreticalMetrics,
-                    params
+                    params,
+                    routeStartTimes // Pasar las horas de salida estimadas
                 })
             });
 

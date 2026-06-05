@@ -25,6 +25,7 @@ type Product = {
     id: string;
     name: string;
     category: string;
+    buying_team?: string | null;
     unit_of_measure: string;
     min_inventory_level?: number;
     current_stock?: number;
@@ -104,7 +105,7 @@ export default function PickingDashboard() {
 
     // STATE
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
-    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string }[]>([]);
+    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string, warehouse_spaces?: number[], crates_count?: number }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
@@ -125,7 +126,7 @@ export default function PickingDashboard() {
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, status,
+                    id, status, warehouse_spaces, crates_count, sequence_id,
                     profiles:profile_id (
                         id, company_name, contact_name, role, id_zr
                     ),
@@ -192,7 +193,9 @@ export default function PickingDashboard() {
                         id: order.id, 
                         company_name: baseName,
                         order_short: shortId,
-                        zone_name: plate
+                        zone_name: plate,
+                        warehouse_spaces: order.warehouse_spaces || [],
+                        crates_count: order.crates_count || 1
                     };
                 })
                 .sort((a, b) => {
@@ -204,6 +207,11 @@ export default function PickingDashboard() {
                         return zoneA.localeCompare(zoneB);
                     }
                     
+                    // Sort by first assigned space
+                    const spaceA = a.warehouse_spaces?.[0] || 999;
+                    const spaceB = b.warehouse_spaces?.[0] || 999;
+                    if (spaceA !== spaceB) return spaceA - spaceB;
+
                     const nameA = a.company_name.toUpperCase();
                     const nameB = b.company_name.toUpperCase();
                     return nameA.localeCompare(nameB);
@@ -215,10 +223,10 @@ export default function PickingDashboard() {
             const { data: prods } = await supabase
                 .from('products')
                 .select(`
-                    id, name, category, unit_of_measure, min_inventory_level,
+                    id, name, category, buying_team, unit_of_measure, min_inventory_level,
                     inventory_stocks (quantity, status)
                 `)
-                .order('category')
+                .order('buying_team')
                 .order('name')
                 .abortSignal(signal as any);
             
@@ -329,10 +337,11 @@ export default function PickingDashboard() {
         }
     };
 
-    // Group Products by Category
-    const productsByCategory = products.reduce((acc, p) => {
-        if (!acc[p.category]) acc[p.category] = [];
-        acc[p.category].push(p);
+    // Group Products by Alistamiento Category (buying_team)
+    const productsByBuyingTeam = products.reduce((acc, p) => {
+        const team = p.buying_team || 'SIN ASIGNAR';
+        if (!acc[team]) acc[team] = [];
+        acc[team].push(p);
         return acc;
     }, {} as Record<string, Product[]>);
 
@@ -817,8 +826,10 @@ export default function PickingDashboard() {
                                                 paddingBottom: '2px',
                                                 flexShrink: 0,
                                                 letterSpacing: '-1px'
-                                            }}>
-                                                {index + 1}
+                                            }} title={`Canastillas: ${client.crates_count || 1}`}>
+                                                {client.warehouse_spaces && client.warehouse_spaces.length > 0 
+                                                    ? client.warehouse_spaces.join(', ') 
+                                                    : '-'}
                                             </div>
 
                                             {/* Vertical Name */}
@@ -852,12 +863,12 @@ export default function PickingDashboard() {
                     </thead>
 
                     <tbody>
-                        {Object.entries(productsByCategory).map(([category, categoryProducts]) => {
-                            const catPercent = getCategoryPercent(category, categoryProducts);
+                        {Object.entries(productsByBuyingTeam).map(([team, categoryProducts]) => {
+                            const catPercent = getCategoryPercent(team, categoryProducts);
                             const isCatComplete = catPercent === 100;
 
                             return (
-                                <Fragment key={category}>
+                                <Fragment key={team}>
                                     {/* Category Header */}
                                     <tr>
                                         <td colSpan={clients.length + 1} style={{
@@ -867,7 +878,7 @@ export default function PickingDashboard() {
                                             position: 'sticky', left: 0
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
-                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{(CATEGORY_MAP[category] || category).toUpperCase()}</span>
+                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{team.toUpperCase()}</span>
 
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     {/* Mini Progress Bar Background */}

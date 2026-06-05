@@ -41,7 +41,7 @@ interface PickingItem {
 interface PickingTask {
     id: string; // client id
     company_name: string;
-    assigned_space: number | null;
+    assigned_space: string | null;
     zone: string;
     items: PickingItem[];
     status: 'pending' | 'partial' | 'ready';
@@ -85,7 +85,7 @@ export default function PickingExecutionPage() {
             let query = supabase
                 .from('orders')
                 .select(`
-                    id, status,
+                    id, status, warehouse_spaces, crates_count,
                     profiles:profiles(id, company_name, contact_name, role, id_zr),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
@@ -163,11 +163,6 @@ export default function PickingExecutionPage() {
                 return a.name.toUpperCase().localeCompare(b.name.toUpperCase());
             });
 
-            const globalSpaceMap = new Map<string, number>();
-            clientList.forEach((client, index) => {
-                globalSpaceMap.set(client.name, index + 1);
-            });
-
             const formattedTasks: Record<string, PickingTask> = {};
             (activeOrders || [])
                 .forEach(order => {
@@ -203,7 +198,9 @@ export default function PickingExecutionPage() {
                             formattedTasks[clientName] = {
                                 id: order.id,
                                 company_name: clientName,
-                                assigned_space: globalSpaceMap.get(clientName) || 0,
+                                assigned_space: order.warehouse_spaces && order.warehouse_spaces.length > 0
+                                    ? order.warehouse_spaces.join(', ')
+                                    : '-',
                                 zone: clientData?.zone || 'GENERAL',
                                 items: [],
                                 status: 'pending'
@@ -233,7 +230,10 @@ export default function PickingExecutionPage() {
                     if (!a.hasAlert && b.hasAlert) return 1;
                     if (a.status !== 'ready' && b.status === 'ready') return -1;
                     if (a.status === 'ready' && b.status !== 'ready') return 1;
-                    return (a.assigned_space || 999) - (b.assigned_space || 999);
+                    
+                    const spaceA = parseInt(a.assigned_space?.split(',')?.[0]) || 999;
+                    const spaceB = parseInt(b.assigned_space?.split(',')?.[0]) || 999;
+                    return spaceA - spaceB;
                 }));
             }
         } catch (err: unknown) {
@@ -319,7 +319,7 @@ export default function PickingExecutionPage() {
             id: string;
             order_id: string;
             company_name: string;
-            space: number;
+            space: string;
             quantity: number;
             picked_quantity: number;
             quality_status: 'green' | 'yellow' | 'red' | null;
@@ -350,7 +350,7 @@ export default function PickingExecutionPage() {
                     id: item.id,
                     order_id: task.id,
                     company_name: task.company_name,
-                    space: task.assigned_space || 0,
+                    space: task.assigned_space || '-',
                     quantity: item.quantity,
                     picked_quantity: item.picked_quantity,
                     quality_status: item.quality_status || null,
@@ -369,7 +369,9 @@ export default function PickingExecutionPage() {
                 if (a.quality_status !== 'yellow' && b.quality_status === 'yellow') return 1;
                 if (!a.isDone && b.isDone) return -1;
                 if (a.isDone && !b.isDone) return 1;
-                return (a.space || 0) - (b.space || 0);
+                const spaceA = parseInt(a.space?.split(',')?.[0]) || 999;
+                const spaceB = parseInt(b.space?.split(',')?.[0]) || 999;
+                return spaceA - spaceB;
             });
             productGroups.push(group);
         });
@@ -865,7 +867,7 @@ export default function PickingExecutionPage() {
                     const hasAnyTasks = tasks.length > 0;
                     const filteredTasks = tasks
                         .filter(t => (showCompleted || t.status !== 'ready'))
-                        .filter(t => !searchTerm || t.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) || t.assigned_space?.toString() === searchTerm);
+                        .filter(t => !searchTerm || t.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) || t.assigned_space?.toLowerCase().includes(searchTerm.toLowerCase()));
                     
                     if (filteredTasks.length === 0) {
                         return (
