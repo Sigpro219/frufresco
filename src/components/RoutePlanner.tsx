@@ -191,7 +191,27 @@ export default function RoutePlanner() {
                 let displaySlot = 'Flexible';
                 let slotType: 'manual' | 'profile' | 'b2c_slot' | 'flexible' = 'flexible';
 
-                if (resolvedIsB2B) {
+                if (o.is_manual_delivery && o.manual_delivery_time) {
+                    // Si tiene una hora específica en la cabecera (como los pedidos que generamos)
+                    // ej. 08:30 y margen 60 -> 07:30 - 09:30
+                    const margin = o.manual_delivery_margin || 60;
+                    const [h, m] = o.manual_delivery_time.split(':').map(Number);
+                    
+                    const pad = (n: number) => n.toString().padStart(2, '0');
+                    
+                    // Calcular hora de inicio
+                    const totalMinStart = (h * 60 + m - margin + 1440) % 1440;
+                    const startH = Math.floor(totalMinStart / 60);
+                    const startM = totalMinStart % 60;
+                    
+                    // Calcular hora de fin
+                    const totalMinEnd = (h * 60 + m + margin) % 1440;
+                    const endH = Math.floor(totalMinEnd / 60);
+                    const endM = totalMinEnd % 60;
+
+                    displaySlot = `${pad(startH)}:${pad(startM)} - ${pad(endH)}:${pad(endM)}`;
+                    slotType = 'manual';
+                } else if (resolvedIsB2B) {
                     if (o.is_manual_delivery && o.logistics_data?.windows?.[0]) {
                         const win = o.logistics_data.windows[0];
                         if (win.startTime && win.endTime) {
