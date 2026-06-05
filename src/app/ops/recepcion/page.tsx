@@ -164,10 +164,8 @@ export default function ReceptionPage() {
                         name
                     )
                 `)
-                .in('status', [
-                    'picked_up', 'partial_pickup', 'receiving',
-                    'received_ok', 'received_review', 'received_rejected', 'received_partial'
-                ])
+                .gte('created_at', todayBogota)
+                .in('status', ['picked_up', 'partial_pickup', 'receiving', 'received_ok', 'received_review', 'received_rejected', 'received_partial'])
                 .order('created_at', { ascending: false });
 
             if (error) throw error;

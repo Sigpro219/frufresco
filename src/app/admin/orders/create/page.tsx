@@ -181,6 +181,86 @@ function CreateOrderContent() {
             if (errorProds) console.error("Error cargando productos:", errorProds);
             if (prods) setProducts(prods);
 
+            // 3. Cargar Borrador de Correo si viene draft_id
+            const draftId = searchParams.get('draft_id');
+            if (draftId && prods) {
+                console.log("Cargando borrador de pedido:", draftId);
+                const { data: draft, error: draftErr } = await supabase
+                    .from('order_drafts')
+                    .select('*')
+                    .eq('id', draftId)
+                    .single();
+                
+                if (draftErr) {
+                    console.error("Error cargando borrador:", draftErr);
+                } else if (draft) {
+                    // Cargar observaciones
+                    if (draft.email_subject || draft.email_body) {
+                        setAdminNotes(`[PEDIDO CORREO] Asunto: ${draft.email_subject || ''}\n---\n${draft.email_body || ''}\n---\n`);
+                    }
+                    
+                    // Asociar cliente si existe
+                    if (draft.profile_id) {
+                        const b2bMatch = (resB2B.data || []).find(c => c.id === draft.profile_id);
+                        if (b2bMatch) {
+                            setClientType('B2B');
+                            setSelectedClient(b2bMatch.id);
+                            if (b2bMatch.latitude && b2bMatch.longitude) {
+                                setLatitude(b2bMatch.latitude);
+                                setLongitude(b2bMatch.longitude);
+                            }
+                        } else {
+                            const b2cMatch = (resB2C.data || []).find(c => c.id === draft.profile_id);
+                            if (b2cMatch) {
+                                setClientType('B2C');
+                                setB2CMode('search');
+                                setSelectedClientB2C(b2cMatch.id);
+                                setGuestInfo({
+                                    name: b2cMatch.contact_name || b2cMatch.company_name || '',
+                                    phone: b2cMatch.phone || b2cMatch.contact_phone || '',
+                                    address: b2cMatch.address || '',
+                                    city: b2cMatch.city || 'Bogotá',
+                                    email: b2cMatch.email || '',
+                                    nit: b2cMatch.nit || ''
+                                });
+                                if (b2cMatch.latitude && b2cMatch.longitude) {
+                                    setLatitude(b2cMatch.latitude);
+                                    setLongitude(b2cMatch.longitude);
+                                }
+                            }
+                        }
+                    } else {
+                        setClientType('B2C');
+                        setB2CMode('new');
+                        setGuestInfo(prev => ({
+                            ...prev,
+                            name: draft.client_detected_name || '',
+                            email: draft.source_email || ''
+                        }));
+                    }
+
+                    // Cargar productos al carrito
+                    if (draft.extracted_items && Array.isArray(draft.extracted_items)) {
+                        const newCartItems: any[] = [];
+                        draft.extracted_items.forEach((item: any) => {
+                            const matchedProd = prods.find((p: any) => 
+                                item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                                p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
+                            );
+                            if (matchedProd) {
+                                newCartItems.push({
+                                    product: matchedProd,
+                                    qty: item.quantity || 1,
+                                    variant_label: undefined,
+                                    selected_options: undefined
+                                });
+                            }
+                        });
+                        setCart(newCartItems);
+                    }
+                }
+            }
+
         } catch (e) {
             console.error("Excepción en loadData:", e);
         }
@@ -656,6 +736,59 @@ function CreateOrderContent() {
             if (itemsError) {
                 console.error('Order Items Insert Error Detail:', itemsError);
                 throw new Error(itemsError.message);
+            }
+
+            // 1. If processing a draft, update its status
+            const draftId = searchParams.get('draft_id');
+            if (draftId) {
+                await supabase
+                    .from('order_drafts')
+                    .update({ status: 'approved' })
+                    .eq('id', draftId);
+            }
+
+            // 2. Queue outbound email notification
+            let customerEmail = '';
+            let customerName = '';
+            if (clientType === 'B2B') {
+                const details = getSelectedClientDetails();
+                customerEmail = details?.email || '';
+                customerName = details?.company_name || details?.contact_name || 'Cliente';
+            } else {
+                if (b2cMode === 'new') {
+                    customerEmail = guestInfo.email || '';
+                    customerName = guestInfo.name || 'Cliente';
+                } else {
+                    const details = getSelectedB2CDetails();
+                    customerEmail = details?.email || '';
+                    customerName = details?.contact_name || details?.company_name || 'Cliente';
+                }
+            }
+
+            if (customerEmail) {
+                console.log(`[Outbound Mail] Enqueueing confirmation email to ${customerEmail}`);
+                const formattedItems = cart.map(item => {
+                    const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                    return {
+                        name: item.product.name + (item.variant_label ? ` (${item.variant_label})` : ''),
+                        quantity: qtyNum,
+                        price: formatNumber(item.product.base_price)
+                    };
+                });
+
+                await supabase.from('mail').insert({
+                    to_email: customerEmail,
+                    subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
+                    template: {
+                        name: 'order_confirmation',
+                        data: {
+                            client: customerName,
+                            order_number: order.id.slice(0, 6).toUpperCase(),
+                            total_amount: formatNumber(calculateTotal()),
+                            items: formattedItems
+                        }
+                    }
+                });
             }
 
             alert('Pedido creado exitosamente ✅');

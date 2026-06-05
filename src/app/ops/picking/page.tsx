@@ -36,6 +36,7 @@ interface PickingItem {
     unit: string;
     quality_status?: 'green' | 'yellow' | 'red' | null;
     quality_notes?: string;
+    category?: string;
 }
 
 interface PickingTask {
@@ -54,7 +55,7 @@ export default function PickingExecutionPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [categories, setCategories] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string>('');
+    const [selectedCategory, setSelectedCategory] = useState<string>('TODAS');
     const [showFilterGrid, setShowFilterGrid] = useState(false);
     const [tasks, setTasks] = useState<PickingTask[]>([]);
     
@@ -174,7 +175,7 @@ export default function PickingExecutionPage() {
                     const itemsInCategory = items
                         .filter(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
-                            return product?.buying_team === selectedCategory;
+                            return selectedCategory === 'TODAS' || product?.buying_team === selectedCategory;
                         })
                         .map(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
@@ -188,7 +189,8 @@ export default function PickingExecutionPage() {
                                 picked_quantity: item.picked_quantity || 0,
                                 quality_status: item.quality_status,
                                 quality_notes: item.quality_notes,
-                                unit: product?.unit_of_measure || 'un'
+                                unit: product?.unit_of_measure || 'un',
+                                category: product?.buying_team || 'SIN CATEGORÍA'
                             };
                         });
 
@@ -250,11 +252,6 @@ export default function PickingExecutionPage() {
             
             if (isMounted.current) {
                 setCategories(uniqueCats);
-                if (uniqueCats.length > 0 && !selectedCategory) {
-                    setSelectedCategory(uniqueCats[0]);
-                } else {
-                    await fetchTasks(signal);
-                }
             }
         } catch (err: unknown) {
             if (isAbortError(err)) return;
@@ -262,7 +259,7 @@ export default function PickingExecutionPage() {
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [fetchTasks, selectedCategory]);
+    }, []);
 
     useEffect(() => {
         isMounted.current = true;
@@ -315,6 +312,7 @@ export default function PickingExecutionPage() {
     interface ProductGroup {
         name: string;
         unit: string;
+        category?: string;
         clients: {
             id: string;
             order_id: string;
@@ -342,6 +340,7 @@ export default function PickingExecutionPage() {
                     tempGroups[item.product_name] = {
                         name: item.product_name,
                         unit: item.unit,
+                        category: item.category,
                         clients: []
                     };
                 }
@@ -733,7 +732,7 @@ export default function PickingExecutionPage() {
                                     animation: "slideDown 0.18s ease-out",
                                 }}
                             >
-                                {categories.map((cat) => {
+                                {['TODAS', ...categories].map((cat) => {
                                     const isActive = selectedCategory === cat;
                                     return (
                                         <button
@@ -760,8 +759,9 @@ export default function PickingExecutionPage() {
                                                 transition: "all 0.15s ease",
                                             }}
                                         >
-                                            <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2 }}>
-                                                {cat}
+                                            <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                {cat === 'TODAS' && <Sparkles size={12} style={{ color: '#FACC15' }} />}
+                                                {cat === 'TODAS' ? 'MOSTRAR TODAS' : cat}
                                             </span>
                                         </button>
                                     );
@@ -890,8 +890,8 @@ export default function PickingExecutionPage() {
                                 </h3>
                                 <p style={{ fontSize: '0.85rem', margin: 0 }}>
                                     {hasAnyTasks 
-                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory?.toUpperCase()}.` 
-                                        : `No hay pedidos para la categoría ${selectedCategory?.toUpperCase()} el día de hoy.`}
+                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory === 'TODAS' ? 'TODAS LAS CATEGORÍAS' : selectedCategory?.toUpperCase()}.` 
+                                        : `No hay pedidos para la categoría ${selectedCategory === 'TODAS' ? 'TODAS LAS CATEGORÍAS' : selectedCategory?.toUpperCase()} el día de hoy.`}
                                 </p>
                             </div>
                         );
@@ -934,8 +934,13 @@ export default function PickingExecutionPage() {
                                         return (
                                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                                                 <div onClick={() => openExceptionModal(item)} style={{ flex: 1, cursor: 'pointer' }}>
-                                                    <div style={{ fontSize: '0.95rem', fontWeight: '700', color: isDone ? '#94A3B8' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                    <div style={{ fontSize: '0.95rem', fontWeight: '700', color: isDone ? '#94A3B8' : '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                                                         {item.product_name} 
+                                                        {selectedCategory === 'TODAS' && item.category && (
+                                                            <span style={{ fontSize: '0.65rem', color: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                {item.category.toUpperCase()}
+                                                            </span>
+                                                        )}
                                                         {item.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertCircle size={10} /> RECHAZADO</span>}
                                                         {item.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertTriangle size={10} /> VERIFICAR</span>}
                                                     </div>
@@ -986,8 +991,8 @@ export default function PickingExecutionPage() {
                                 </h3>
                                 <p style={{ fontSize: '0.85rem', margin: 0 }}>
                                     {hasAnyGroups 
-                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory?.toUpperCase()}.` 
-                                        : `No hay pedidos para la categoría ${selectedCategory?.toUpperCase()} el día de hoy.`}
+                                        ? `Has completado todos los pedidos de la categoría ${selectedCategory === 'TODAS' ? 'TODAS LAS CATEGORÍAS' : selectedCategory?.toUpperCase()}.` 
+                                        : `No hay pedidos para la categoría ${selectedCategory === 'TODAS' ? 'TODAS LAS CATEGORÍAS' : selectedCategory?.toUpperCase()} el día de hoy.`}
                                 </p>
                             </div>
                         );
@@ -997,9 +1002,16 @@ export default function PickingExecutionPage() {
                         <div style={{ display: 'grid', gap: '1.5rem' }}>
                             {filteredProductGroups.map(group => (
                             <div key={group.name} style={{ backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}>
-                                <div style={{ padding: '1.2rem', backgroundColor: '#0D7A57', color: 'white' }}>
-                                    <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
-                                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.8 }}>REPARTIR A {group.clients.filter((c:any) => !c.isDone).length} RECINTOS</p>
+                                <div style={{ padding: '1.2rem', backgroundColor: '#0D7A57', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.8 }}>REPARTIR A {group.clients.filter((c:any) => !c.isDone).length} RECINTOS</p>
+                                    </div>
+                                    {selectedCategory === 'TODAS' && group.category && (
+                                        <span style={{ fontSize: '0.7rem', color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '4px 10px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+                                            {group.category}
+                                        </span>
+                                    )}
                                 </div>
                                 <div style={{ padding: '1rem' }}>
                                     {group.clients.map((target: any) => (

@@ -1233,6 +1233,27 @@ purchases: groups[key]
                                                             </div>
                                                             <div>
                                                                 {(() => {
+                                                                    const purchaseDate = p.estimated_pickup_time ? p.estimated_pickup_time.split('T')[0] : '';
+                                                                    const isOverdue = purchaseDate && purchaseDate < targetDateLabel;
+                                                                    if (isOverdue) {
+                                                                        const formattedPDate = formatDateFriendly(purchaseDate);
+                                                                        return (
+                                                                            <div style={{ 
+                                                                                fontSize: '0.75rem', 
+                                                                                fontWeight: '800',
+                                                                                color: '#EF4444',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '0.3rem',
+                                                                                padding: '0.15rem 0.4rem',
+                                                                                borderRadius: '5px',
+                                                                                backgroundColor: 'rgba(239, 68, 68, 0.08)'
+                                                                            }}>
+                                                                                <AlertTriangle size={12} />
+                                                                                HISTÓRICO - Pendiente {formattedPDate}
+                                                                            </div>
+                                                                        );
+                                                                    }
                                                                     const diffMs = new Date().getTime() - new Date(p.estimated_pickup_time).getTime();
                                                                     const diffMins = Math.floor(Math.abs(diffMs) / 60000);
                                                                     const isAvailable = diffMs >= 0;

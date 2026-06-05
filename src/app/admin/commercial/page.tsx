@@ -15,7 +15,8 @@ import {
     Sparkles, 
     Package, 
     Shuffle, 
-    BarChart2 
+    BarChart2,
+    Mail
 } from 'lucide-react';
 
 interface TrendItem {
@@ -57,6 +58,16 @@ export default function CommercialDashboard() {
         },
         loading: true
     });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get('tab');
+            if (tab) {
+                setActiveMainTab(tab);
+            }
+        }
+    }, []);
 
     const fetchDashboardData = useCallback(async () => {
         try {

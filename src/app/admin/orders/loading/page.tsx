@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import EmailDraftsModule from '@/components/EmailDraftsModule';
 import { 
     MessageSquare, 
     Phone, 
@@ -74,12 +75,26 @@ export default function OrderLoadingPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [pendingEmailCount, setPendingEmailCount] = useState(0);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [activeTab, setActiveTab] = useState<'orders' | 'emails'>('orders');
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
             setCurrentUser(user);
         });
     }, []);
+
+    useEffect(() => {
+        const fetchPendingEmailCount = async () => {
+            const { count } = await supabase
+                .from('order_drafts')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+            setPendingEmailCount(count || 0);
+        };
+        fetchPendingEmailCount();
+    }, [refreshTrigger]);
 
     const [selectedDate, setSelectedDate] = useState(() => {
         try {
@@ -93,8 +108,7 @@ export default function OrderLoadingPage() {
         } catch (e) {
             return new Date().toISOString().split('T')[0];
         }
-    });
-    const [refreshTrigger, setRefreshTrigger] = useState(0); 
+    }); 
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -718,7 +732,51 @@ export default function OrderLoadingPage() {
                     <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Info incompleta" />
                 </div>
 
-                {/* UNIFIED SLENDER CONTROL BAR */}
+                {/* TABS FOR ORDERS VS EMAILS */}
+                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.2rem', borderBottom: '1px solid #E5E7EB', paddingBottom: '2px' }}>
+                    <button 
+                        onClick={() => setActiveTab('orders')}
+                        style={{
+                            padding: '0.6rem 0.2rem',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeTab === 'orders' ? THEME.colors.primary : '#64748B',
+                            fontWeight: '700',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            borderBottom: activeTab === 'orders' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <Package size={16} /> Pedidos del Día
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('emails')}
+                        style={{
+                            padding: '0.6rem 0.2rem',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeTab === 'emails' ? '#7C3AED' : '#64748B',
+                            fontWeight: '700',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            borderBottom: activeTab === 'emails' ? '3px solid #7C3AED' : '3px solid transparent',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                    </button>
+                </div>
+
+                {activeTab === 'orders' ? (
+                    <>
+                        {/* UNIFIED SLENDER CONTROL BAR */}
                 <div style={{ 
                     display: 'flex', 
                     alignItems: 'center',
@@ -927,6 +985,26 @@ export default function OrderLoadingPage() {
                         </div>
 
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
+
+                        <button onClick={() => setActiveTab('emails')} style={{
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6',
+                            color: pendingEmailCount > 0 ? '#7C3AED' : '#4B5563',
+                            border: `1px solid ${pendingEmailCount > 0 ? '#DDD6FE' : '#E5E7EB'}`,
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            fontWeight: '800',
+                            fontSize: '0.75rem',
+                            transition: 'all 0.2s'
+                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#EDE9FE' : '#E5E7EB'; }}
+                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6'; }}>
+                            <Mail size={14} />
+                            <span>{pendingEmailCount} Pendientes Email</span>
+                        </button>
 
                         <Link href="/admin/orders/create" style={{ 
                             backgroundColor: THEME.colors.primary, 
@@ -1797,6 +1875,12 @@ export default function OrderLoadingPage() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                )}
+                    </>
+                ) : (
+                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem' }}>
+                        <EmailDraftsModule />
                     </div>
                 )}
             </div>

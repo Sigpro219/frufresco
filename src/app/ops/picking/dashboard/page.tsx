@@ -17,7 +17,8 @@ import {
     Check, 
     Calendar,
     X,
-    XCircle
+    XCircle,
+    Target
 } from 'lucide-react';
 
 // Types
@@ -45,17 +46,17 @@ const supabase = createClient();
 export default function PickingDashboard() {
     const router = useRouter();
     const isMounted = useRef(true);
-    const [density, setDensity] = useState<'standard' | 'high' | 'tv'>('standard');
+    const [density, setDensity] = useState<'standard' | 'high' | 'tv' | 'fids'>('standard');
 
     // Persistence for density preference
     useEffect(() => {
         const saved = localStorage.getItem('picking_dashboard_density');
-        if (saved === 'high' || saved === 'tv' || saved === 'standard') {
-            setDensity(saved);
+        if (saved === 'high' || saved === 'tv' || saved === 'standard' || saved === 'fids') {
+            setDensity(saved as any);
         }
     }, []);
 
-    const changeDensity = (val: 'standard' | 'high' | 'tv') => {
+    const changeDensity = (val: 'standard' | 'high' | 'tv' | 'fids') => {
         setDensity(val);
         localStorage.setItem('picking_dashboard_density', val);
     };
@@ -93,6 +94,17 @@ export default function PickingDashboard() {
             headerHeight: '60px',
             hideExternal: true,
             clientHeaderHeight: '120px'
+        },
+        fids: {
+            cellWidth: '22px',
+            cellHeight: '22px',
+            fontSize: '0.7rem',
+            laneFontSize: '0.85rem',
+            clientFontSize: '0.55rem',
+            productFontSize: '0.75rem',
+            headerHeight: '60px',
+            hideExternal: true,
+            clientHeaderHeight: '120px'
         }
     };
 
@@ -105,7 +117,7 @@ export default function PickingDashboard() {
 
     // STATE
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
-    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string, warehouse_spaces?: number[], crates_count?: number }[]>([]);
+    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string, warehouse_spaces?: number[], crates_count?: number, departure_time?: string }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
@@ -117,6 +129,26 @@ export default function PickingDashboard() {
         setCurrentTime(new Date().toLocaleTimeString());
         const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
         return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        // Lock window scroll when picking dashboard is mounted
+        const origHtmlOverflow = document.documentElement.style.overflow;
+        const origHtmlHeight = document.documentElement.style.height;
+        const origBodyOverflow = document.body.style.overflow;
+        const origBodyHeight = document.body.style.height;
+
+        document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+        document.documentElement.style.setProperty('height', '100vh', 'important');
+        document.body.style.setProperty('overflow', 'hidden', 'important');
+        document.body.style.setProperty('height', '100vh', 'important');
+
+        return () => {
+            document.documentElement.style.overflow = origHtmlOverflow;
+            document.documentElement.style.height = origHtmlHeight;
+            document.body.style.overflow = origBodyOverflow;
+            document.body.style.height = origBodyHeight;
+        };
     }, []);
 
     const loadData = useCallback(async (signal?: AbortSignal, silent = false) => {
@@ -156,7 +188,8 @@ export default function PickingDashboard() {
                 .select(`
                     order_id,
                     routes (
-                        vehicle_plate
+                        vehicle_plate,
+                        logic_parameters_snapshot
                     )
                 `)
                 .in('order_id', orderIds)
@@ -174,12 +207,17 @@ export default function PickingDashboard() {
             });
 
             const orderToPlate = new Map<string, string>();
+            const orderToTime = new Map<string, string>();
             (routeStops || []).forEach((stop: any) => {
                 if (stop.routes && stop.routes.vehicle_plate) {
                     const plate = stop.routes.vehicle_plate;
                     const driverName = plateToDriver.get(plate);
                     const displayName = driverName ? `${plate} (${driverName})` : plate;
                     orderToPlate.set(stop.order_id, displayName);
+
+                    const snap = stop.routes.logic_parameters_snapshot;
+                    const depTime = snap?.fleet_start_time || snap?.routeStartTimes?.[plate] || '';
+                    orderToTime.set(stop.order_id, depTime);
                 }
             });
 
@@ -189,13 +227,15 @@ export default function PickingDashboard() {
                     const plate = orderToPlate.get(order.id) || 'SIN ASIGNAR';
                     const baseName = getOrderName(order);
                     const shortId = order.sequence_id ? `#${order.sequence_id}` : `#${order.id.substring(0, 4)}`;
+                    const depTime = orderToTime.get(order.id) || '';
                     return {
                         id: order.id, 
                         company_name: baseName,
                         order_short: shortId,
                         zone_name: plate,
                         warehouse_spaces: order.warehouse_spaces || [],
-                        crates_count: order.crates_count || 1
+                        crates_count: order.crates_count || 1,
+                        departure_time: depTime
                     };
                 })
                 .sort((a, b) => {
@@ -436,6 +476,15 @@ export default function PickingDashboard() {
     }, [clients, isClientComplete]);
 
     const sortedClients = [...clients].sort((a, b) => {
+        // If density is fids, sort by departure_time primarily!
+        if (density === 'fids') {
+            const timeA = a.departure_time || '99:99';
+            const timeB = b.departure_time || '99:99';
+            if (timeA !== timeB) {
+                return timeA.localeCompare(timeB);
+            }
+        }
+
         const isZoneCompleteA = isZoneComplete(a.zone_name);
         const isZoneCompleteB = isZoneComplete(b.zone_name);
         if (isZoneCompleteA !== isZoneCompleteB) {
@@ -457,32 +506,48 @@ export default function PickingDashboard() {
         return a.company_name.localeCompare(b.company_name);
     });
 
-    const zoneHeaders: { name: string; count: number; color: string; percent: number }[] = [];
+    const isFidsMode = density === 'fids';
+
+    // In FIDS mode, hide completed clients.
+    const visibleClients = isFidsMode
+        ? sortedClients.filter(c => !isClientComplete(c.id))
+        : sortedClients;
+
+    // In FIDS mode, hide completed products.
+    const visibleProducts = isFidsMode
+        ? products.filter(p => !isProductComplete(p.id))
+        : products;
+
+    const zoneHeaders: { name: string; count: number; color: string; percent: number; departureTime?: string }[] = [];
     let currentZone = '';
     let currentCount = 0;
+    let currentDepTime = '';
 
-    sortedClients.forEach((client, index) => {
+    visibleClients.forEach((client, index) => {
         if (client.zone_name !== currentZone) {
             if (currentZone !== '') {
                 zoneHeaders.push({
                     name: currentZone,
                     count: currentCount,
                     color: getZoneColor(currentZone),
-                    percent: getZonePercent(currentZone)
+                    percent: getZonePercent(currentZone),
+                    departureTime: currentDepTime
                 });
             }
             currentZone = client.zone_name;
             currentCount = 1;
+            currentDepTime = client.departure_time || '';
         } else {
             currentCount++;
         }
 
-        if (index === sortedClients.length - 1) {
+        if (index === visibleClients.length - 1) {
             zoneHeaders.push({
                 name: currentZone,
                 count: currentCount,
                 color: getZoneColor(currentZone),
-                percent: getZonePercent(currentZone)
+                percent: getZonePercent(currentZone),
+                departureTime: currentDepTime
             });
         }
     });
@@ -661,7 +726,7 @@ export default function PickingDashboard() {
     const bannerText = bannerAlerts.map(a => a.msg).join(' ••• ');
 
     return (
-        <main style={{ backgroundColor: '#080D12', height: '100vh', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ backgroundColor: '#080D12', height: '100%', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* TOP HEADER */}
             <header style={{ 
@@ -672,7 +737,9 @@ export default function PickingDashboard() {
                 justifyContent: 'space-between', 
                 padding: density === 'tv' ? '0 1rem' : '0 2rem', 
                 background: '#0F1820',
-                flexShrink: 0
+                boxSizing: 'border-box',
+                flexShrink: 0,
+                zIndex: 10
             }}>
                 <div
                     onClick={() => router.push('/ops')}
@@ -757,7 +824,8 @@ export default function PickingDashboard() {
                             padding: '3px', 
                             borderRadius: '8px', 
                             border: '1px solid rgba(255,255,255,0.08)',
-                            marginLeft: '10px'
+                            marginLeft: '10px',
+                            gap: '2px'
                         }}>
                             <button 
                                 onClick={() => changeDensity('standard')}
@@ -786,10 +854,25 @@ export default function PickingDashboard() {
                                     transition: 'all 0.2s',
                                     display: 'flex', alignItems: 'center'
                                 }} title="Modo TV"><Tv size={14} strokeWidth={2.5} /></button>
+                            <button 
+                                onClick={() => changeDensity('fids')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'fids' ? '#0D7A57' : 'transparent',
+                                    color: density === 'fids' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center',
+                                    gap: '4px'
+                                }} title="Modo FIDS / Foco">
+                                <Target size={14} strokeWidth={2.5} />
+                                {density === 'fids' && <span style={{ fontSize: '0.65rem', fontWeight: 'bold' }}>FIDS</span>}
+                            </button>
                         </div>
                     </div>
                 </div>
             </header>
+
+            {/* TOP HEADER IS FLOW RELATIVE, NO SPACER REQUIRED */}
 
             {/* INVENTORY ALERT BANNER */}
             {inventoryAlerts && inventoryAlerts.length > 0 && (
@@ -869,7 +952,22 @@ export default function PickingDashboard() {
                                                 </span>
                                             </span>
                                         ) : (
-                                            <span>{zone.name.toUpperCase()}</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                                                <span>{zone.name.toUpperCase()}</span>
+                                                {zone.departureTime && (
+                                                    <span style={{ 
+                                                        background: 'rgba(255,255,255,0.08)', 
+                                                        color: '#E2E8F0', 
+                                                        fontSize: '0.75rem', 
+                                                        padding: '2px 6px', 
+                                                        borderRadius: '4px',
+                                                        fontWeight: 'bold',
+                                                        border: '1px solid rgba(255,255,255,0.1)'
+                                                    }}>
+                                                        ⏰ {zone.departureTime}
+                                                    </span>
+                                                )}
+                                            </span>
                                         )}
                                         <span style={{ color: '#fff', opacity: 0.7, marginLeft: '5px' }}>{zone.percent}%</span>
                                     </th>
@@ -912,7 +1010,7 @@ export default function PickingDashboard() {
                                 </div>
                             </th>
 
-                            {sortedClients.map((client, index) => {
+                            {visibleClients.map((client, index) => {
                                 const complete = isClientComplete(client.id);
                                 return (
                                     <th key={client.id} style={{
@@ -992,8 +1090,8 @@ export default function PickingDashboard() {
                     <tbody>
                         {Object.entries(productsByBuyingTeam)
                             .sort(([teamA, prodsA], [teamB, prodsB]) => {
-                                const hasActiveA = prodsA.some(p => sortedClients.some(c => matrix[p.id]?.[c.id]));
-                                const hasActiveB = prodsB.some(p => sortedClients.some(c => matrix[p.id]?.[c.id]));
+                                const hasActiveA = prodsA.some(p => visibleClients.some(c => matrix[p.id]?.[c.id]));
+                                const hasActiveB = prodsB.some(p => visibleClients.some(c => matrix[p.id]?.[c.id]));
                                 
                                 if (hasActiveA !== hasActiveB) {
                                     return hasActiveA ? -1 : 1; // Empty categories go to the very bottom
@@ -1018,7 +1116,7 @@ export default function PickingDashboard() {
                                     <Fragment key={team}>
                                         {/* Category Header */}
                                         <tr>
-                                            <td colSpan={sortedClients.length + 1} style={{
+                                            <td colSpan={visibleClients.length + 1} style={{
                                                 background: '#0F1820', color: '#94A3B8',
                                                 fontWeight: 'bold', fontSize: cfg.fontSize,
                                                 padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -1058,7 +1156,7 @@ export default function PickingDashboard() {
                                         </tr>
 
                                         {categoryProducts.map(product => {
-                                            const rowHasData = sortedClients.some(c => matrix[product.id]?.[c.id]);
+                                            const rowHasData = visibleClients.some(c => matrix[product.id]?.[c.id]);
                                             if (!rowHasData) return null;
 
                                             return (
@@ -1087,11 +1185,20 @@ export default function PickingDashboard() {
                                                     })()}
 
                                                     {/* Matrix Cells */}
-                                                    {sortedClients.map(client => {
+                                                    {visibleClients.map(client => {
                                                     const cell = matrix[product.id]?.[client.id];
 
-                                                    if (!cell) {
-                                                        return <td key={client.id} style={{ background: '#0B1319', borderBottom: '1px solid rgba(255,255,255,0.02)', borderRight: '1px solid rgba(255,255,255,0.02)' }}></td>;
+                                                    if (!cell || cell.ordered === 0) {
+                                                        return (
+                                                            <td 
+                                                                key={client.id} 
+                                                                style={{ 
+                                                                    background: isFidsMode ? 'transparent' : '#0B1319', 
+                                                                    borderBottom: isFidsMode ? '1px solid transparent' : '1px solid rgba(255,255,255,0.02)', 
+                                                                    borderRight: isFidsMode ? '1px solid transparent' : '1px solid rgba(255,255,255,0.02)' 
+                                                                }}
+                                                            />
+                                                        );
                                                     }
 
                                                     // State Logic
@@ -1167,9 +1274,6 @@ export default function PickingDashboard() {
             <div 
                 onClick={() => setShowBannerModal(true)}
                 style={{ 
-                    position: 'fixed',
-                    bottom: 0,
-                    left: 0,
                     width: '100%',
                     backgroundColor: bannerBg,
                     color: bannerFg,
@@ -1185,7 +1289,8 @@ export default function PickingDashboard() {
                     WebkitBackdropFilter: 'blur(8px)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '6px',
+                    flexShrink: 0
                 }}
                 title="Clic para ver detalles de alertas"
             >
@@ -1205,6 +1310,15 @@ export default function PickingDashboard() {
             <style jsx>{`
                 :global(#ops-main-header) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
                 :global(#ops-main-footer) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
+                :global(.ops-theme-wrapper) { height: 100vh !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+                :global(.ops-theme-wrapper > main) { 
+                    flex: 1 !important; 
+                    display: flex !important; 
+                    flex-direction: column !important; 
+                    overflow: hidden !important; 
+                    padding-bottom: ${cfg.hideExternal ? '0' : '60px'} !important; 
+                    height: 100% !important; 
+                }
 
                 @keyframes marqueeContinuous {
                     0% { transform: translateX(0); }
@@ -1298,6 +1412,6 @@ export default function PickingDashboard() {
                     </div>
                 </div>
             )}
-        </main>
+        </div>
     );
 }
