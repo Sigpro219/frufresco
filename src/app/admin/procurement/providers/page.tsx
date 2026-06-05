@@ -42,6 +42,21 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
+const STATUS_COLORS = {
+    credit: '#10B981',      // Verde éxito / crédito
+    creditBg: '#ECFDF5',
+    cash: '#F59E0B',        // Ámbar contado
+    cashBg: '#FEF3C7',
+    alert: '#EF4444',       // Rojo alerta
+    alertBg: '#FEF2F2',
+    info: '#2563EB',        // Azul info
+    infoBg: '#EFF6FF',
+    indigo: '#6366F1',      // Para KPIs o similares
+    indigoBg: '#EEF2FF',
+    neutral: '#64748B',     // Slate
+    neutralBg: '#F1F5F9',
+};
+
 export default function ProvidersPage() {
     const [mounted, setMounted] = useState(false);
     const [providers, setProviders] = useState<any[]>([]);
@@ -310,19 +325,19 @@ export default function ProvidersPage() {
     if (!mounted) return null;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F0F2F5', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 
                 {/* Header */}
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <h1 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>
-                            {showArchived ? 'Archivo de' : 'Directorio de'} <span style={{ color: '#0891B2' }}>Proveedores</span>
+                        <h1 style={{ fontSize: '1.6rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.03em' }}>
+                            {showArchived ? 'Archivo de' : 'Directorio de'} <span style={{ color: THEME.colors.primary }}>Proveedores</span>
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
-                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>COMPRAS 360</span>
-                             <span style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: '700' }}>/ MAESTRO DE PROVEEDORES</span>
+                             <span style={{ backgroundColor: THEME.colors.textMain, color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>COMPRAS 360</span>
+                             <span style={{ color: THEME.colors.textSecondary, fontSize: '0.65rem', fontWeight: '700' }}>/ MAESTRO DE PROVEEDORES</span>
                         </div>
                     </div>
                 </header>
@@ -334,11 +349,11 @@ export default function ProvidersPage() {
                     gap: '1.2rem', 
                     marginBottom: '1rem'
                 }}>
-                    <KPICard title="Total Proveedores" value={formatNumber(stats.total)} icon={<Building2 size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Proveedores registrados" />
-                    <KPICard title="Proveedores Crédito" value={formatNumber(stats.credit)} icon={<Wallet size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Facturación a plazo" />
-                    <KPICard title="Proveedores Contado" value={formatNumber(stats.cash)} icon={<Coins size={18} strokeWidth={1.5} />} color="#F59E0B" subtitle="Pago inmediato" />
-                    <KPICard title="Habilitados" value={formatNumber(stats.active)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color={THEME.colors.primary} subtitle="Activos para compra" />
-                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertCircle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Sin RUT o Teléfono" />
+                    <KPICard title="Total Proveedores" value={formatNumber(stats.total)} icon={<Building2 size={18} strokeWidth={1.5} />} subtitle="Proveedores registrados" />
+                    <KPICard title="Proveedores Crédito" value={formatNumber(stats.credit)} icon={<Wallet size={18} strokeWidth={1.5} />} subtitle="Facturación a plazo" />
+                    <KPICard title="Proveedores Contado" value={formatNumber(stats.cash)} icon={<Coins size={18} strokeWidth={1.5} />} subtitle="Pago inmediato" />
+                    <KPICard title="Habilitados" value={formatNumber(stats.active)} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} subtitle="Activos para compra" />
+                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertCircle size={18} strokeWidth={1.5} />} subtitle="Sin RUT o Teléfono" />
                 </div>
 
                 {/* UNIFIED SLENDER CONTROL BAR */}
@@ -557,7 +572,16 @@ export default function ProvidersPage() {
                 </div>
 
                 {/* Category Filter Pills */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '1.2rem' }}>
+                <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    background: THEME.colors.background,
+                    border: `1px solid ${THEME.colors.border}`,
+                    borderRadius: THEME.radius.lg,
+                    padding: '4px',
+                    gap: '2px',
+                    marginBottom: '1.2rem'
+                }}>
                     {[
                         { id: 'all', label: 'Todos' },
                         { id: 'products', label: 'Proveedores de Productos' },
@@ -570,15 +594,21 @@ export default function ProvidersPage() {
                                 onClick={() => setActiveCategoryFilter(tab.id as any)}
                                 style={{
                                     padding: '0.5rem 1.2rem',
-                                    borderRadius: '10px',
-                                    border: '1px solid' + (isActive ? ' transparent' : ` ${THEME.colors.border}`),
-                                    backgroundColor: isActive ? THEME.colors.primary : 'white',
+                                    borderRadius: THEME.radius.md,
+                                    border: 'none',
+                                    backgroundColor: isActive ? THEME.colors.primary : 'transparent',
                                     color: isActive ? 'white' : THEME.colors.textSecondary,
-                                    fontWeight: '600',
+                                    fontWeight: isActive ? '600' : '500',
                                     fontSize: '0.8rem',
                                     cursor: 'pointer',
-                                    boxShadow: isActive ? `0 4px 10px ${THEME.colors.primary}25` : 'none',
+                                    boxShadow: isActive ? '0 1px 4px rgba(13, 122, 87, 0.25)' : 'none',
                                     transition: 'all 0.2s ease-in-out'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isActive) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
                                 {tab.label}
@@ -592,16 +622,16 @@ export default function ProvidersPage() {
                     <div style={{ textAlign: 'center', padding: '10rem 0' }}>Consultando base de datos...</div>
                 ) : viewMode === 'list' ? (
                     /* Compact List View */
-                    <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)', border: '1px solid #E5E7EB' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                                <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Nombre del Proveedor</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Identificación</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Contacto</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Categoría</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>Tipo Pago</th>
-                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'right', width: '100px' }}>Acciones</th>
+                                <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Nombre del Proveedor</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Identificación</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Contacto</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Categoría</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Tipo Pago</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'right', width: '100px' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -609,21 +639,21 @@ export default function ProvidersPage() {
                                     <tr 
                                         key={p.id} 
                                         onClick={() => setSelectedProvider(p)}
-                                        style={{ borderBottom: '1px solid #F1F5F9', cursor: 'pointer', transition: 'all 0.1s' }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F9FAFB')}
+                                        style={{ borderBottom: `1px solid ${THEME.colors.border}`, cursor: 'pointer', transition: 'all 0.1s' }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
                                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                                     >
-                                                                        <td style={{ padding: '0.8rem 1rem' }}>
+                                                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
                                             <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '600', marginTop: '0.2rem' }}>{p.product || 'Sin producto'}</div>
                                         </td>
-                                        <td style={{ padding: '0.8rem 1rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '0.2rem 0.4rem', borderRadius: '6px' }}>{p.document_type || 'NIT'}</span>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '0.2rem 0.4rem', borderRadius: THEME.radius.sm }}>{p.document_type || 'NIT'}</span>
                                                 <span style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.tax_id}</span>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.8rem 1rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                                 {(p.phone || p.contact_phone) ? (
                                                     <span style={{ fontSize: '0.75rem', fontWeight: '500', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Smartphone size={12} strokeWidth={1.5} /> {p.phone || p.contact_phone}</span>
@@ -633,27 +663,48 @@ export default function ProvidersPage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.8rem 1rem' }}>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
                                             <div style={{ 
                                                 fontSize: '0.7rem', 
                                                 fontWeight: '600', 
                                                 color: (p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primary : THEME.colors.textSecondary, 
                                                 backgroundColor: (p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primaryLight : THEME.colors.background, 
                                                 padding: '0.25rem 0.5rem', 
-                                                borderRadius: '6px', 
+                                                borderRadius: THEME.radius.sm, 
                                                 border: '1px solid ' + ((p.category || '').toUpperCase() === 'PRODUCTOS' ? THEME.colors.primaryLight : THEME.colors.border), 
                                                 display: 'inline-block' 
                                             }}>
                                                 {p.category || 'GENERAL'}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.8rem 1rem' }}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: p.type === 'credito' ? '#10B981' : THEME.colors.primary }}>{p.type?.toUpperCase()}</span>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: p.type === 'credito' ? STATUS_COLORS.credit : THEME.colors.primary }}>{p.type?.toUpperCase()}</span>
                                         </td>
-                                        <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                                        <td style={{ padding: '0.65rem 1.25rem', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                                                <button onClick={(e) => toggleArchiveStatus(e, p.id, p.is_archived)} style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.4rem', color: p.is_archived ? '#10B981' : '#EF4444', cursor: 'pointer' }}>
-                                                    {p.is_archived ? <RotateCcw size={14} /> : <Archive size={14} />}
+                                                <button 
+                                                    onClick={(e) => toggleArchiveStatus(e, p.id, p.is_archived)} 
+                                                    style={{ 
+                                                        backgroundColor: 'transparent', 
+                                                        border: `1px solid ${THEME.colors.borderActive}`, 
+                                                        borderRadius: THEME.radius.md, 
+                                                        padding: '0.4rem', 
+                                                        color: p.is_archived ? STATUS_COLORS.credit : STATUS_COLORS.alert, 
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.borderColor = THEME.colors.textMain;
+                                                        e.currentTarget.style.color = p.is_archived ? THEME.colors.primaryHover : STATUS_COLORS.alert;
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                        e.currentTarget.style.color = p.is_archived ? STATUS_COLORS.credit : STATUS_COLORS.alert;
+                                                    }}
+                                                >
+                                                    {p.is_archived ? <RotateCcw size={14} strokeWidth={1.5} /> : <Archive size={14} strokeWidth={1.5} />}
                                                 </button>
                                             </div>
                                         </td>
@@ -667,12 +718,12 @@ export default function ProvidersPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.2rem', marginBottom: '2rem' }}>
                         {filteredProviders.map((p) => {
                             // Determine category colors
-                            let badgeColor = '#64748B'; // General
-                            let badgeBg = '#F1F5F9';
+                            let badgeColor = THEME.colors.textSecondary; // General
+                            let badgeBg = THEME.colors.background;
                             const cat = (p.category || '').toUpperCase();
                             if (cat === 'PRODUCTOS') {
-                                badgeColor = '#0891B2'; // Cyan
-                                badgeBg = '#ECFEFF';
+                                badgeColor = THEME.colors.primary;
+                                badgeBg = THEME.colors.primaryLight;
                             }
 
                             // Initial letters
@@ -683,27 +734,27 @@ export default function ProvidersPage() {
                                     key={p.id}
                                     onClick={() => setSelectedProvider(p)}
                                     style={{ 
-                                        backgroundColor: 'white', 
-                                        borderRadius: '16px', 
-                                        border: '1px solid #E2E8F0', 
+                                        backgroundColor: THEME.colors.surface, 
+                                        borderRadius: THEME.radius.lg, 
+                                        border: `1px solid ${THEME.colors.border}`, 
                                         padding: '1.2rem', 
                                         cursor: 'pointer', 
-                                        transition: 'all 0.2s ease-in-out', 
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
                                         display: 'flex', 
                                         flexDirection: 'column', 
                                         gap: '1rem',
                                         position: 'relative',
-                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)'
+                                        boxShadow: THEME.shadow.sm
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05)';
-                                        e.currentTarget.style.borderColor = THEME.colors.primary;
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                        e.currentTarget.style.boxShadow = THEME.shadow.lg;
+                                        e.currentTarget.style.borderColor = THEME.colors.borderActive;
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0px)';
-                                        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.03)';
-                                        e.currentTarget.style.borderColor = '#E2E8F0';
+                                        e.currentTarget.style.boxShadow = THEME.shadow.sm;
+                                        e.currentTarget.style.borderColor = THEME.colors.border;
                                     }}
                                 >
                                     {/* Card Top: Initials Avatar + Quick Badges */}
@@ -711,7 +762,7 @@ export default function ProvidersPage() {
                                         <div style={{ 
                                             width: '40px', 
                                             height: '40px', 
-                                            borderRadius: '12px', 
+                                            borderRadius: THEME.radius.md, 
                                             background: THEME.colors.primary, 
                                             color: 'white', 
                                             display: 'flex', 
@@ -726,10 +777,10 @@ export default function ProvidersPage() {
                                             <span style={{ 
                                                 fontSize: '0.65rem', 
                                                 fontWeight: '600', 
-                                                color: p.type === 'credito' ? '#10B981' : THEME.colors.primary, 
-                                                backgroundColor: p.type === 'credito' ? '#ECFDF5' : THEME.colors.primaryLight, 
+                                                color: p.type === 'credito' ? STATUS_COLORS.credit : THEME.colors.primary, 
+                                                backgroundColor: p.type === 'credito' ? STATUS_COLORS.creditBg : THEME.colors.primaryLight, 
                                                 padding: '0.2rem 0.5rem', 
-                                                borderRadius: '6px' 
+                                                borderRadius: THEME.radius.sm 
                                             }}>
                                                 {p.type?.toUpperCase()}
                                             </span>
@@ -739,27 +790,34 @@ export default function ProvidersPage() {
                                                     toggleArchiveStatus(e, p.id, p.is_archived);
                                                 }} 
                                                 style={{ 
-                                                    backgroundColor: '#F8FAFC', 
-                                                    border: '1px solid #E2E8F0', 
-                                                    borderRadius: '6px', 
+                                                    backgroundColor: 'transparent', 
+                                                    border: `1px solid ${THEME.colors.borderActive}`, 
+                                                    borderRadius: THEME.radius.sm, 
                                                     padding: '0.25rem', 
-                                                    color: p.is_archived ? '#10B981' : '#EF4444',
+                                                    color: p.is_archived ? STATUS_COLORS.credit : STATUS_COLORS.alert,
                                                     cursor: 'pointer',
                                                     display: 'flex',
-                                                    alignItems: 'center'
+                                                    alignItems: 'center',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.textMain;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
                                                 }}
                                             >
-                                                {p.is_archived ? <RotateCcw size={12} /> : <Archive size={12} />}
+                                                {p.is_archived ? <RotateCcw size={12} strokeWidth={1.5} /> : <Archive size={12} strokeWidth={1.5} />}
                                             </button>
                                         </div>
                                     </div>
 
                                     {/* Provider Info */}
                                     <div>
-                                        <h3 style={{ fontSize: '1rem', fontWeight: '900', color: '#0F172A', margin: 0, lineHeight: 1.3 }}>{p.name}</h3>
+                                        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, lineHeight: 1.3, fontFamily: THEME.typography.fontFamilyMain }}>{p.name}</h3>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.3rem' }}>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: '900', color: '#94A3B8', backgroundColor: '#F1F5F9', padding: '0.15rem 0.35rem', borderRadius: '4px' }}>{p.document_type || 'NIT'}</span>
-                                            <span style={{ fontWeight: '800', color: '#64748B', fontSize: '0.75rem' }}>{p.tax_id}</span>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '0.15rem 0.35rem', borderRadius: THEME.radius.sm }}>{p.document_type || 'NIT'}</span>
+                                            <span style={{ fontWeight: '600', color: THEME.colors.textSecondary, fontSize: '0.75rem' }}>{p.tax_id}</span>
                                         </div>
                                     </div>
 
@@ -768,17 +826,17 @@ export default function ProvidersPage() {
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                                             <span style={{ 
                                                 fontSize: '0.65rem', 
-                                                fontWeight: '900', 
+                                                fontWeight: '600', 
                                                 color: badgeColor, 
                                                 backgroundColor: badgeBg, 
                                                 padding: '0.15rem 0.4rem', 
-                                                borderRadius: '4px', 
-                                                border: '1px solid rgba(0,0,0,0.03)' 
+                                                borderRadius: THEME.radius.sm, 
+                                                border: `1px solid ${THEME.colors.border}` 
                                             }}>
                                                 {p.category || 'GENERAL'}
                                             </span>
                                         </div>
-                                        <p style={{ fontSize: '0.7rem', color: '#0891B2', fontWeight: '700', margin: 0 }}>
+                                        <p style={{ fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '600', margin: 0 }}>
                                             {p.product || 'Sin producto asignado'}
                                         </p>
                                     </div>
@@ -789,9 +847,9 @@ export default function ProvidersPage() {
                                             display: 'flex', 
                                             gap: '0.4rem', 
                                             padding: '0.4rem 0.6rem', 
-                                            backgroundColor: '#F8FAFC', 
-                                            borderRadius: '8px', 
-                                            border: '1px dashed #E2E8F0',
+                                            backgroundColor: THEME.colors.background, 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px dashed ${THEME.colors.borderActive}`,
                                             flexWrap: 'wrap'
                                         }}>
                                             {p.warehouse_location !== null && p.warehouse_location !== undefined && (
@@ -829,64 +887,64 @@ export default function ProvidersPage() {
 
                 {/* MODAL: Nuevo Proveedor */}
                 {showCreateModal && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '2rem' }} onClick={() => setShowCreateModal(false)}>
-                        <div style={{ backgroundColor: 'white', borderRadius: '40px', width: '100%', maxWidth: '1000px', maxHeight: '95vh', overflowY: 'auto', padding: '3.5rem', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => setShowCreateModal(false)} style={{ position: 'absolute', top: '2rem', right: '2.5rem', border: 'none', backgroundColor: '#F1F5F9', padding: '0.8rem', borderRadius: '50%', cursor: 'pointer' }}><X size={24} /></button>
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1.5rem' }} onClick={() => setShowCreateModal(false)}>
+                        <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', padding: '2rem', position: 'relative', boxShadow: THEME.shadow.lg }} onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => setShowCreateModal(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', backgroundColor: THEME.colors.background, padding: '0.6rem', borderRadius: THEME.radius.md, cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}><X size={18} /></button>
                             
-                            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '1.5rem', letterSpacing: '-0.02em' }}>
+                            <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '1.5rem', letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {editingId ? 'Editar' : 'Crear Nuevo'} <span style={{ color: THEME.colors.primary }}>Proveedor</span>
                             </h2>
                             
-                            <form onSubmit={handleSaveProvider} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <form onSubmit={handleSaveProvider} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                                 {/* Basic Info */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Identidad de Empresa</div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Nombre / Razón Social *</label>
-                                        <input required style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value.toUpperCase()})} />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.4rem', marginBottom: '0.4rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Identidad de Empresa</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Nombre / Razón Social *</label>
+                                        <input required style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.name} onChange={(e) => setNewProvider({...newProvider, name: e.target.value.toUpperCase()})} />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Tipo Doc.</label>
-                                            <select style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.document_type} onChange={(e) => setNewProvider({...newProvider, document_type: e.target.value})}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Tipo Doc.</label>
+                                            <select style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', height: '38px' }} value={newProvider.document_type} onChange={(e) => setNewProvider({...newProvider, document_type: e.target.value})}>
                                                 <option value="NIT">NIT</option>
                                                 <option value="CC">Cédula</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Identificación (NIT/CC) *</label>
-                                            <input required style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.tax_id} onChange={(e) => setNewProvider({...newProvider, tax_id: e.target.value})} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Identificación (NIT/CC) *</label>
+                                            <input required style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.tax_id} onChange={(e) => setNewProvider({...newProvider, tax_id: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Categoría</label>
-                                            <select style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.category} onChange={(e) => setNewProvider({...newProvider, category: e.target.value})}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Categoría</label>
+                                            <select style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', height: '38px' }} value={newProvider.category} onChange={(e) => setNewProvider({...newProvider, category: e.target.value})}>
                                                 <option value="GENERAL">GENERAL</option>
                                                 <option value="PRODUCTOS">PRODUCTOS</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Tipo Pago</label>
-                                            <select style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.type} onChange={(e) => setNewProvider({...newProvider, type: e.target.value})}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Tipo Pago</label>
+                                            <select style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', height: '38px' }} value={newProvider.type} onChange={(e) => setNewProvider({...newProvider, type: e.target.value})}>
                                                 <option value="contado">Contado (Inmediato)</option>
                                                 <option value="credito">Crédito (Facturación)</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Ubicación de Bodega (N°)</label>
-                                            <input type="number" placeholder="Ej: 12" style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.warehouse_location} onChange={(e) => setNewProvider({...newProvider, warehouse_location: e.target.value})} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Ubicación de Bodega (N°)</label>
+                                            <input type="number" placeholder="Ej: 12" style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.warehouse_location} onChange={(e) => setNewProvider({...newProvider, warehouse_location: e.target.value})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Puesto (Alfanumérico)</label>
-                                            <input placeholder="Ej: P-34" style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.puesto} onChange={(e) => setNewProvider({...newProvider, puesto: e.target.value.toUpperCase()})} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Puesto (Alfanumérico)</label>
+                                            <input placeholder="Ej: P-34" style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.puesto} onChange={(e) => setNewProvider({...newProvider, puesto: e.target.value.toUpperCase()})} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Productos / Líneas (Separados por coma)</label>
-                                        <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.product} onChange={(e) => {
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Productos / Líneas (Separados por coma)</label>
+                                        <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.product} onChange={(e) => {
                                             const val = e.target.value;
                                             setNewProvider({
                                                 ...newProvider,
@@ -895,97 +953,97 @@ export default function ProvidersPage() {
                                             });
                                         }} />
                                     </div>
-                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Contacto Directo</div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Nombre de Contacto</label>
-                                        <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.4rem', marginTop: '0.8rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contacto Directo</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Nombre de Contacto</label>
+                                        <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.contact_name} onChange={(e) => setNewProvider({...newProvider, contact_name: e.target.value.toUpperCase()})} />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Teléfono</label>
-                                            <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Teléfono</label>
+                                            <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.phone} onChange={(e) => setNewProvider({...newProvider, phone: e.target.value})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Correo Electrónico</label>
-                                            <input type="email" placeholder="ejemplo@correo.com" style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Correo Electrónico</label>
+                                            <input type="email" placeholder="ejemplo@correo.com" style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.email} onChange={(e) => setNewProvider({...newProvider, email: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Dirección / Oficina</label>
-                                        <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.address} onChange={(e) => setNewProvider({...newProvider, address: e.target.value.toUpperCase()})} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Dirección / Oficina</label>
+                                        <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.address} onChange={(e) => setNewProvider({...newProvider, address: e.target.value.toUpperCase()})} />
                                     </div>
                                 </div>
 
                                 {/* Financial Info */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginBottom: '0.5rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Información Financiera</div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Banco</label>
-                                            <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.bank_name} onChange={(e) => setNewProvider({...newProvider, bank_name: e.target.value.toUpperCase()})} />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.4rem', marginBottom: '0.4rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Información Financiera</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Banco</label>
+                                            <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.bank_name} onChange={(e) => setNewProvider({...newProvider, bank_name: e.target.value.toUpperCase()})} />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Tipo Cuenta</label>
-                                            <select style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.bank_account_type} onChange={(e) => setNewProvider({...newProvider, bank_account_type: e.target.value})}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Tipo Cuenta</label>
+                                            <select style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', height: '38px' }} value={newProvider.bank_account_type} onChange={(e) => setNewProvider({...newProvider, bank_account_type: e.target.value})}>
                                                 <option value="Ahorros">Ahorros</option>
                                                 <option value="Corriente">Corriente</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Número de Cuenta</label>
-                                        <input style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.bank_account_number} onChange={(e) => setNewProvider({...newProvider, bank_account_number: e.target.value})} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Número de Cuenta</label>
+                                        <input style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.bank_account_number} onChange={(e) => setNewProvider({...newProvider, bank_account_number: e.target.value})} />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Régimen Facturación</label>
-                                            <select style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.billing_type} onChange={(e) => setNewProvider({...newProvider, billing_type: e.target.value})}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Régimen Facturación</label>
+                                            <select style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', height: '38px' }} value={newProvider.billing_type} onChange={(e) => setNewProvider({...newProvider, billing_type: e.target.value})}>
                                                 <option value="soporte">Documento Soporte</option>
                                                 <option value="electronica">Factura Electrónica</option>
                                             </select>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Condición de Pago (Texto)</label>
-                                            <input placeholder="Ej: Crédito 30 Días" style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.payment_condition} onChange={(e) => setNewProvider({...newProvider, payment_condition: e.target.value})} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Condición de Pago (Texto)</label>
+                                            <input placeholder="Ej: Crédito 30 Días" style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.payment_condition} onChange={(e) => setNewProvider({...newProvider, payment_condition: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Plazo de Pago (Días)</label>
-                                        <input type="number" min="0" placeholder="Ej: 30" style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '700' }} value={newProvider.payment_terms_days} onChange={(e) => setNewProvider({...newProvider, payment_terms_days: parseInt(e.target.value, 10) || 0})} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Plazo de Pago (Días)</label>
+                                        <input type="number" min="0" placeholder="Ej: 30" style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem' }} value={newProvider.payment_terms_days} onChange={(e) => setNewProvider({...newProvider, payment_terms_days: parseInt(e.target.value, 10) || 0})} />
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.85rem', fontWeight: '800', color: '#64748B' }}>Observaciones Técnicas</label>
-                                        <textarea rows={2} style={{ padding: '1rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', outline: 'none', fontWeight: '600', resize: 'none' }} value={newProvider.observations} onChange={(e) => setNewProvider({...newProvider, observations: e.target.value})} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Observaciones Técnicas</label>
+                                        <textarea rows={2} style={{ padding: '0.65rem 1rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, outline: 'none', fontWeight: '600', fontSize: '0.85rem', resize: 'none' }} value={newProvider.observations} onChange={(e) => setNewProvider({...newProvider, observations: e.target.value})} />
                                     </div>
 
                                     {/* FILES SECTION */}
-                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.5rem', marginTop: '1rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.8rem', textTransform: 'uppercase' }}>Bóveda de Documentos (PDF)</div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.4rem', marginTop: '0.8rem', fontWeight: '600', color: THEME.colors.primary, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bóveda de Documentos (PDF)</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                         {/* RUT UPLOAD */}
                                         <div style={{ position: 'relative' }}>
-                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '0.4rem' }}>Registro RUT</label>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.3rem' }}>Registro RUT</label>
                                             <input type="file" accept=".pdf" id="rut-upload" hidden onChange={(e) => handleFileUpload(e, 'rut_url')} />
-                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.8rem', borderRadius: '14px', border: '1.5px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.rut_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.rut_url ? '#10B981' : '#64748B', fontWeight: '800', fontSize: '0.8rem' }}>
-                                                {uploading === 'rut_url' ? <Loader2 size={18} className="animate-spin" /> : newProvider.rut_url ? <CheckCircle2 size={18} /> : <Upload size={18} />}
+                                            <label htmlFor="rut-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.65rem', borderRadius: THEME.radius.md, border: `1.5px dashed ${THEME.colors.borderActive}`, cursor: 'pointer', backgroundColor: newProvider.rut_url ? STATUS_COLORS.creditBg : THEME.colors.background, color: newProvider.rut_url ? STATUS_COLORS.credit : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.8rem' }}>
+                                                {uploading === 'rut_url' ? <Loader2 size={16} className="animate-spin" /> : newProvider.rut_url ? <CheckCircle2 size={16} /> : <Upload size={16} />}
                                                 {newProvider.rut_url ? 'RUT Cargado' : 'Subir RUT'}
                                             </label>
                                         </div>
                                         {/* OTHER DOCS UPLOAD */}
                                         <div style={{ position: 'relative' }}>
-                                            <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#94A3B8', display: 'block', marginBottom: '0.4rem' }}>Otros Anexos</label>
+                                            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.3rem' }}>Otros Anexos</label>
                                             <input type="file" accept=".pdf" id="docs-upload" hidden onChange={(e) => handleFileUpload(e, 'additional_docs_url')} />
-                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.8rem', borderRadius: '14px', border: '1.5px dashed #E2E8F0', cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? '#ECFDF5' : '#F8FAFC', color: newProvider.additional_docs_url ? '#10B981' : '#64748B', fontWeight: '800', fontSize: '0.8rem' }}>
-                                                {uploading === 'additional_docs_url' ? <Loader2 size={18} className="animate-spin" /> : newProvider.additional_docs_url ? <CheckCircle2 size={18} /> : <Upload size={18} />}
+                                            <label htmlFor="docs-upload" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.65rem', borderRadius: THEME.radius.md, border: `1.5px dashed ${THEME.colors.borderActive}`, cursor: 'pointer', backgroundColor: newProvider.additional_docs_url ? STATUS_COLORS.creditBg : THEME.colors.background, color: newProvider.additional_docs_url ? STATUS_COLORS.credit : THEME.colors.textSecondary, fontWeight: '700', fontSize: '0.8rem' }}>
+                                                {uploading === 'additional_docs_url' ? <Loader2 size={16} className="animate-spin" /> : newProvider.additional_docs_url ? <CheckCircle2 size={16} /> : <Upload size={16} />}
                                                 {newProvider.additional_docs_url ? 'Doc Cargado' : 'Subir Anexos'}
                                             </label>
                                         </div>
                                     </div>
                                     
-                                    <button type="submit" style={{ marginTop: '1.5rem', padding: '0.85rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', fontSize: '1rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', transition: 'background-color 0.2s' }}
+                                    <button type="submit" style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', fontSize: '0.85rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', transition: 'background-color 0.2s' }}
                                     onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
                                     onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                                     >
-                                        <Save size={18} strokeWidth={1.5} /> Guardar Proveedor Maestro
+                                        <Save size={16} strokeWidth={1.5} /> Guardar Proveedor Maestro
                                     </button>
                                 </div>
                             </form>
@@ -998,7 +1056,7 @@ export default function ProvidersPage() {
                     <div 
                         style={{ 
                             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
-                            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(10px)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
                             padding: '1.5rem'
                         }}
@@ -1006,57 +1064,61 @@ export default function ProvidersPage() {
                     >
                         <div 
                             style={{ 
-                                backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '820px',
-                                maxHeight: '92vh', overflowY: 'auto', position: 'relative',
-                                boxShadow: '0 32px 64px -12px rgba(0,0,0,0.3)'
+                                backgroundColor: 'white', borderRadius: THEME.radius.lg, width: '100%', maxWidth: '820px',
+                                maxHeight: '85vh', overflowY: 'auto', position: 'relative',
+                                boxShadow: THEME.shadow.lg
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* ── HEADER ── */}
                             <div style={{
                                 backgroundColor: 'white',
-                                borderRadius: '32px 32px 0 0',
-                                padding: '2.5rem 2.5rem 1.5rem',
+                                borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                padding: '2rem 2rem 1.2rem',
                                 position: 'relative',
-                                borderBottom: '1px solid #F1F5F9'
+                                borderBottom: `1px solid ${THEME.colors.border}`
                             }}>
                                 <button 
                                     onClick={() => setSelectedProvider(null)}
-                                    style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '50%', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', transition: 'background-color 0.2s' }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                    style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', border: 'none', backgroundColor: THEME.colors.background, padding: '0.6rem', borderRadius: THEME.radius.md, cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', transition: 'background-color 0.2s' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.borderActive}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
                                 >
-                                    <X size={20} />
+                                    <X size={18} />
                                 </button>
 
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', paddingRight: '2.5rem' }}>
                                     {/* Avatar */}
                                     <div style={{
-                                        width: '64px', height: '64px', borderRadius: '20px',
-                                        backgroundColor: '#F8FAFC',
+                                        width: '64px', height: '64px', borderRadius: THEME.radius.md,
+                                        backgroundColor: THEME.colors.background,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontSize: '1.6rem', fontWeight: '900', color: THEME.colors.primary, flexShrink: 0,
-                                        border: '1px solid #E2E8F0',
+                                        border: `1px solid ${THEME.colors.border}`,
                                     }}>
                                         {selectedProvider.name?.split(' ').slice(0,2).map((n: string) => n[0]).join('') || '?'}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0, marginTop: '0.2rem' }}>
-                                        <h2 style={{ fontSize: '1.6rem', fontWeight: '950', color: '#0F172A', margin: '0 0 0.3rem', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                                        <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0 0 0.3rem', letterSpacing: '-0.02em', lineHeight: 1.2, fontFamily: THEME.typography.fontFamilyMain }}>
                                             {selectedProvider.name}
                                         </h2>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', backgroundColor: '#F1F5F9', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '0.2rem 0.5rem', borderRadius: THEME.radius.sm }}>
                                                 {selectedProvider.document_type || 'NIT'}
                                             </span>
-                                            <span style={{ fontSize: '1rem', fontWeight: '900', color: '#334155', letterSpacing: '0.02em' }}>
+                                            <span style={{ fontSize: '1rem', fontWeight: '700', color: THEME.colors.textMain, letterSpacing: '0.02em', fontFamily: THEME.typography.fontFamilySecondary }}>
                                                 {selectedProvider.tax_id}
                                             </span>
                                         </div>
                                     </div>
                                     {/* Tipo badge & Edit */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end', flexShrink: 0 }}>
-                                        <div style={{ backgroundColor: selectedProvider.type === 'credito' ? '#ECFDF5' : '#F0F9FF', color: selectedProvider.type === 'credito' ? '#059669' : '#0284C7', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '900' }}>
-                                            {selectedProvider.type === 'credito' ? '💳 CRÉDITO' : '💵 CONTADO'}
+                                        <div style={{ backgroundColor: selectedProvider.type === 'credito' ? STATUS_COLORS.creditBg : STATUS_COLORS.cashBg, color: selectedProvider.type === 'credito' ? STATUS_COLORS.credit : STATUS_COLORS.cash, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, fontSize: '0.75rem', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
+                                            {selectedProvider.type === 'credito' ? (
+                                                <><Wallet size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> CRÉDITO</>
+                                            ) : (
+                                                <><Coins size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> CONTADO</>
+                                            )}
                                         </div>
                                         <button 
                                             onClick={() => {
@@ -1089,38 +1151,38 @@ export default function ProvidersPage() {
                                                 setSelectedProvider(null);
                                                 setShowCreateModal(true);
                                             }}
-                                            style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', backgroundColor: 'white', color: THEME.colors.primary, border: '1.5px solid #E2E8F0', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.primary; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
+                                            style={{ padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, backgroundColor: 'white', color: THEME.colors.primary, border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = THEME.colors.border; }}
                                         >
-                                            <Edit2 size={14} /> Editar
+                                            <Edit2 size={14} strokeWidth={1.5} /> Editar
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
                             {/* ── BODY ── */}
-                            <div style={{ padding: '2rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
 
                                 {/* SECCIÓN 1: CONTACTO */}
                                 <section>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                         Contacto
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.8rem' }}>
                                         {/* Nombre Contacto */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <User size={10} /> Contacto
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <User size={10} strokeWidth={1.5} /> Contacto
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: selectedProvider.contact_name ? '#0F172A' : '#CBD5E1' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '600', color: selectedProvider.contact_name ? THEME.colors.textMain : THEME.colors.textSecondary }}>
                                                 {selectedProvider.contact_name || '—'}
                                             </div>
                                         </div>
                                         {/* Teléfono */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                                 <Smartphone size={10} strokeWidth={1.5} /> Teléfono
                                             </div>
@@ -1129,11 +1191,11 @@ export default function ProvidersPage() {
                                                     {selectedProvider.phone || selectedProvider.contact_phone}
                                                 </a>
                                             ) : (
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textSecondary }}>—</div>
                                             )}
                                         </div>
                                         {/* Email */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                                 <Mail size={10} strokeWidth={1.5} /> Correo
                                             </div>
@@ -1142,7 +1204,7 @@ export default function ProvidersPage() {
                                                     {selectedProvider.email}
                                                 </a>
                                             ) : (
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#CBD5E1' }}>—</div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textSecondary }}>—</div>
                                             )}
                                         </div>
                                     </div>
@@ -1150,47 +1212,47 @@ export default function ProvidersPage() {
 
                                 {/* SECCIÓN 2: UBICACIONES — dos conceptos distintos */}
                                 <section>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                         Ubicaciones
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                         {/* Dirección Comercial (empresa) */}
-                                        <div style={{ backgroundColor: '#FFFBEB', borderRadius: '14px', padding: '1rem 1.2rem', border: '1px solid #FDE68A' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                <Building size={10} /> Dirección Comercial
-                                                <span style={{ fontSize: '0.55rem', fontWeight: '700', color: '#B45309', backgroundColor: '#FEF3C7', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>EMPRESA</span>
+                                        <div style={{ backgroundColor: STATUS_COLORS.cashBg, borderRadius: THEME.radius.md, padding: '1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: STATUS_COLORS.cash, textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Building size={10} strokeWidth={1.5} /> Dirección Comercial
+                                                <span style={{ fontSize: '0.55rem', fontWeight: '600', color: STATUS_COLORS.cash, backgroundColor: '#FFFBEB', padding: '0.1rem 0.3rem', borderRadius: THEME.radius.sm }}>EMPRESA</span>
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: selectedProvider.address ? '#1C1917' : '#CBD5E1' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '600', color: selectedProvider.address ? THEME.colors.textMain : THEME.colors.textSecondary }}>
                                                 {selectedProvider.address || 'No registrada'}
                                             </div>
                                         </div>
                                         {/* Ubicación de Entrega (bodega/puesto) */}
-                                        <div style={{ backgroundColor: '#EFF6FF', borderRadius: '14px', padding: '1rem 1.2rem', border: '1px solid #BFDBFE' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#1E40AF', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                <MapPin size={10} /> Punto de Recogida
-                                                <span style={{ fontSize: '0.55rem', fontWeight: '700', color: '#1D4ED8', backgroundColor: '#DBEAFE', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>PLAZA / MERCADO</span>
+                                        <div style={{ backgroundColor: STATUS_COLORS.infoBg, borderRadius: THEME.radius.md, padding: '1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: STATUS_COLORS.info, textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <MapPin size={10} strokeWidth={1.5} /> Punto de Recogida
+                                                <span style={{ fontSize: '0.55rem', fontWeight: '600', color: STATUS_COLORS.info, backgroundColor: '#E0F2FE', padding: '0.1rem 0.3rem', borderRadius: THEME.radius.sm }}>PLAZA / MERCADO</span>
                                             </div>
                                             {(selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined) || selectedProvider.puesto ? (
                                                 <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
                                                     {selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                            <span style={{ fontSize: '0.72rem', color: '#3B82F6' }}>📦</span>
-                                                            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#1E40AF' }}>Bodega:</span>
-                                                            <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0F172A' }}>#{selectedProvider.warehouse_location}</span>
+                                                            <Package size={12} strokeWidth={1.5} style={{ color: STATUS_COLORS.info }} />
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: '600', color: STATUS_COLORS.info }}>Bodega:</span>
+                                                            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: THEME.colors.textMain }}>#{selectedProvider.warehouse_location}</span>
                                                         </div>
                                                     )}
                                                     {selectedProvider.puesto && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                            <span style={{ fontSize: '0.72rem', color: '#3B82F6' }}>🏪</span>
-                                                            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#1E40AF' }}>Puesto:</span>
-                                                            <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0F172A' }}>{selectedProvider.puesto}</span>
+                                                            <Building size={12} strokeWidth={1.5} style={{ color: STATUS_COLORS.info }} />
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: '600', color: STATUS_COLORS.info }}>Puesto:</span>
+                                                            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: THEME.colors.textMain }}>{selectedProvider.puesto}</span>
                                                         </div>
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#CBD5E1' }}>No registrado</div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textSecondary }}>No registrado</div>
                                             )}
                                         </div>
                                     </div>
@@ -1198,45 +1260,49 @@ export default function ProvidersPage() {
 
                                 {/* SECCIÓN 3: INFORMACIÓN COMERCIAL Y BANCARIA */}
                                 <section>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                         Comercial &amp; Bancario
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.8rem' }}>
                                         {/* Banco */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Wallet size={10} /> Banco
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Wallet size={10} strokeWidth={1.5} /> Banco
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: selectedProvider.bank_name ? '#0F172A' : '#CBD5E1' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '600', color: selectedProvider.bank_name ? THEME.colors.textMain : THEME.colors.textSecondary }}>
                                                 {selectedProvider.bank_name || '—'}
                                             </div>
                                             {selectedProvider.bank_account_number && (
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600', marginTop: '0.2rem' }}>
+                                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.2rem' }}>
                                                     #{selectedProvider.bank_account_number} · {selectedProvider.bank_account_type || 'Ahorro'}
                                                 </div>
                                             )}
                                         </div>
                                         {/* Facturación */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <FileCheck size={10} /> Facturación
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <FileCheck size={10} strokeWidth={1.5} /> Facturación
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#0F172A' }}>
-                                                {selectedProvider.billing_type === 'electronica' ? '⚡ Electrónica' : selectedProvider.billing_type === 'soporte' ? '📄 Doc. Soporte' : '—'}
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, display: 'flex', alignItems: 'center' }}>
+                                                {selectedProvider.billing_type === 'electronica' ? (
+                                                    <><FileCheck size={12} strokeWidth={1.5} style={{ marginRight: '4px', color: STATUS_COLORS.credit }} /> Electrónica</>
+                                                ) : selectedProvider.billing_type === 'soporte' ? (
+                                                    <><FileText size={12} strokeWidth={1.5} style={{ marginRight: '4px', color: THEME.colors.textSecondary }} /> Doc. Soporte</>
+                                                ) : '—'}
                                             </div>
                                         </div>
                                         {/* Condiciones de Pago */}
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '14px', padding: '0.9rem 1rem', border: '1px solid #E2E8F0' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Clock size={10} /> Cond. de Pago
+                                        <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.8rem 1rem', border: `1px solid ${THEME.colors.border}` }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <Clock size={10} strokeWidth={1.5} /> Cond. de Pago
                                             </div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: selectedProvider.payment_condition ? '#0F172A' : '#CBD5E1' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: '600', color: selectedProvider.payment_condition ? THEME.colors.textMain : THEME.colors.textSecondary }}>
                                                 {selectedProvider.payment_condition || '—'}
                                             </div>
                                             {selectedProvider.payment_terms_days !== undefined && selectedProvider.payment_terms_days !== null && (
-                                                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', marginTop: '0.2rem' }}>
+                                                <div style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, fontWeight: '600', marginTop: '0.2rem' }}>
                                                     {selectedProvider.payment_terms_days} días de crédito
                                                 </div>
                                             )}
@@ -1246,18 +1312,18 @@ export default function ProvidersPage() {
 
                                 {/* SECCIÓN 4: CLASIFICACIÓN OPERATIVA */}
                                 <section>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                         Clasificación Operativa
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                        <span style={{ backgroundColor: THEME.colors.primary, padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '600', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <span style={{ backgroundColor: THEME.colors.primary, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, fontSize: '0.8rem', fontWeight: '600', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                             <Tag size={14} strokeWidth={1.5} /> {selectedProvider.category?.toUpperCase() || 'GENERAL'}
                                         </span>
                                         {/* Líneas de producto */}
                                         {selectedProvider.product && selectedProvider.product.split(/[,\/]/).filter((s: string) => s.trim()).map((prod: string, idx: number) => (
-                                            <span key={idx} style={{ backgroundColor: '#F1F5F9', padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: '800', color: '#475569', border: '1px solid #E2E8F0' }}>
+                                            <span key={idx} style={{ backgroundColor: THEME.colors.background, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.sm, fontSize: '0.8rem', fontWeight: '600', color: THEME.colors.textMain, border: `1px solid ${THEME.colors.border}` }}>
                                                 {prod.trim()}
                                             </span>
                                         ))}
@@ -1266,36 +1332,38 @@ export default function ProvidersPage() {
 
                                 {/* SECCIÓN 5: DOCUMENTOS Y NOTAS */}
                                 <section>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '900', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                         Documentos &amp; Notas
-                                        <div style={{ height: '1px', flex: 1, backgroundColor: '#E2E8F0' }} />
+                                        <div style={{ height: '1px', flex: 1, backgroundColor: THEME.colors.border }} />
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1rem' }}>
                                         <button 
                                             onClick={() => selectedProvider.rut_url && window.open(selectedProvider.rut_url, '_blank')} 
-                                            style={{ flex: 1, backgroundColor: selectedProvider.rut_url ? '#EFF6FF' : '#F8FAFC', border: `1px solid ${selectedProvider.rut_url ? '#BFDBFE' : '#E2E8F0'}`, padding: '0.9rem', borderRadius: '14px', fontSize: '0.8rem', fontWeight: '900', color: selectedProvider.rut_url ? '#1D4ED8' : '#CBD5E1', cursor: selectedProvider.rut_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}
+                                            style={{ flex: 1, backgroundColor: selectedProvider.rut_url ? STATUS_COLORS.infoBg : THEME.colors.background, border: `1px solid ${selectedProvider.rut_url ? STATUS_COLORS.info : THEME.colors.border}`, padding: '0.75rem', borderRadius: THEME.radius.md, fontSize: '0.8rem', fontWeight: '600', color: selectedProvider.rut_url ? STATUS_COLORS.info : THEME.colors.textSecondary, cursor: selectedProvider.rut_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}
                                         >
-                                            <FileText size={16} /> RUT
-                                            {selectedProvider.rut_url ? ' ✓' : ' (sin archivo)'}
+                                            <FileText size={16} strokeWidth={1.5} /> RUT
+                                            {selectedProvider.rut_url ? <CheckCircle2 size={12} strokeWidth={1.5} style={{ display: 'inline-block', marginLeft: '4px' }} /> : ' (sin archivo)'}
                                         </button>
                                         <button 
                                             onClick={() => selectedProvider.additional_docs_url && window.open(selectedProvider.additional_docs_url, '_blank')} 
-                                            style={{ flex: 1, backgroundColor: selectedProvider.additional_docs_url ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${selectedProvider.additional_docs_url ? '#BBF7D0' : '#E2E8F0'}`, padding: '0.9rem', borderRadius: '14px', fontSize: '0.8rem', fontWeight: '900', color: selectedProvider.additional_docs_url ? '#166534' : '#CBD5E1', cursor: selectedProvider.additional_docs_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}
+                                            style={{ flex: 1, backgroundColor: selectedProvider.additional_docs_url ? STATUS_COLORS.creditBg : THEME.colors.background, border: `1px solid ${selectedProvider.additional_docs_url ? STATUS_COLORS.credit : THEME.colors.border}`, padding: '0.75rem', borderRadius: THEME.radius.md, fontSize: '0.8rem', fontWeight: '600', color: selectedProvider.additional_docs_url ? STATUS_COLORS.credit : THEME.colors.textSecondary, cursor: selectedProvider.additional_docs_url ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}
                                         >
-                                            <ExternalLink size={16} /> Otros Anexos
-                                            {selectedProvider.additional_docs_url ? ' ✓' : ' (sin archivo)'}
+                                            <ExternalLink size={16} strokeWidth={1.5} /> Otros Anexos
+                                            {selectedProvider.additional_docs_url ? <CheckCircle2 size={12} strokeWidth={1.5} style={{ display: 'inline-block', marginLeft: '4px' }} /> : ' (sin archivo)'}
                                         </button>
                                     </div>
                                     {(selectedProvider.observations || selectedProvider.notes) ? (
-                                        <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '14px', padding: '1rem 1.2rem' }}>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '900', color: '#92400E', textTransform: 'uppercase', marginBottom: '0.4rem' }}>📝 Notas del Expediente</div>
-                                            <p style={{ fontSize: '0.9rem', color: '#1C1917', margin: 0, lineHeight: 1.6 }}>
+                                        <div style={{ backgroundColor: STATUS_COLORS.cashBg, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: '1rem' }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '600', color: STATUS_COLORS.cash, textTransform: 'uppercase', marginBottom: '0.4rem', display: 'flex', alignItems: 'center' }}>
+                                                <FileText size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} /> Notas del Expediente
+                                            </div>
+                                            <p style={{ fontSize: '0.9rem', color: THEME.colors.textMain, margin: 0, lineHeight: 1.6 }}>
                                                 {selectedProvider.observations || selectedProvider.notes}
                                             </p>
                                         </div>
                                     ) : (
-                                        <div style={{ backgroundColor: '#F8FAFC', border: '1px dashed #E2E8F0', borderRadius: '14px', padding: '1rem 1.2rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                                        <div style={{ backgroundColor: THEME.colors.background, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: '1rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem', fontStyle: 'italic' }}>
                                             Sin anotaciones registradas en el expediente.
                                         </div>
                                     )}
@@ -1320,34 +1388,43 @@ export default function ProvidersPage() {
     );
 }
 
-function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, subtitle: string }) {
+function KPICard({ title, value, icon, subtitle }: { title: string, value: number | string, icon: React.ReactNode, subtitle: string }) {
     return (
         <div style={{
-            backgroundColor: 'white',
-            padding: '1.2rem',
+            backgroundColor: THEME.colors.surface,
+            padding: '1.25rem 1.5rem',
             borderRadius: THEME.radius.md,
             boxShadow: THEME.shadow.sm,
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
             border: `1px solid ${THEME.colors.border}`,
-            borderTop: `4px solid ${color}`,
-            transition: 'all 0.2s',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: 'pointer'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
             e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = THEME.shadow.sm;
         }}>
-            <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', color: color, flexShrink: 0 }}>
+            <div style={{
+                backgroundColor: THEME.colors.primaryLight,
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: THEME.colors.primary,
+                flexShrink: 0
+            }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: '750', color: THEME.colors.textMain, margin: '2px 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: THEME.typography.fontFamilySecondary }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '2px 0', lineHeight: 1, fontFamily: THEME.typography.fontFamilyMain }}>{value}</div>
+                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>{subtitle}</div>
             </div>
         </div>
     );

@@ -23,7 +23,10 @@ import {
   Inbox,
   Sparkles,
   Camera,
-  ArrowRight
+  ArrowRight,
+  QrCode,
+  Users,
+  Check
 } from 'lucide-react';
 
 // Types and Interfaces
@@ -74,14 +77,29 @@ interface DiscrepancyItem {
   };
 }
 
+interface CollaboratorProfile {
+  id: string;
+  contact_name: string;
+  role: string;
+  specialty?: string;
+  allowed_modules: string[];
+  document_id?: string;
+  is_active: boolean;
+  active_shift?: {
+    id: string;
+    started_at: string;
+  } | null;
+}
+
 export default function SupervisorDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'quarantine' | 'discrepancy'>('quarantine');
+  const [activeTab, setActiveTab] = useState<'quarantine' | 'discrepancy' | 'staff'>('quarantine');
   const [loading, setLoading] = useState(true);
   
   // Data lists
   const [quarantines, setQuarantines] = useState<PurchaseQuarantine[]>([]);
   const [discrepancies, setDiscrepancies] = useState<DiscrepancyItem[]>([]);
+  const [collaborators, setCollaborators] = useState<CollaboratorProfile[]>([]);
   
   // Filter search
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,6 +225,47 @@ export default function SupervisorDashboard() {
 
       if (discError) throw discError;
       setDiscrepancies(discData || []);
+
+      // 3. Fetch active floor collaborators and their current shifts
+      const { data: collabData, error: collabError } = await supabase
+        .from('collaborators')
+        .select(`
+          id,
+          contact_name,
+          role,
+          specialty,
+          allowed_modules,
+          document_id,
+          is_active
+        `)
+        .eq('is_active', true)
+        .order('contact_name', { ascending: true });
+
+      if (collabError) throw collabError;
+
+      // Fetch active shifts in parallel
+      const { data: activeShifts } = await supabase
+        .from('collaborator_shifts')
+        .select('id, collaborator_id, started_at')
+        .eq('status', 'active');
+
+      const shiftsMap: Record<string, { id: string; started_at: string }> = {};
+      if (activeShifts) {
+        activeShifts.forEach(shift => {
+          shiftsMap[shift.collaborator_id] = {
+            id: shift.id,
+            started_at: shift.started_at
+          };
+        });
+      }
+
+      const formattedCollabs = (collabData || []).map((c: any) => ({
+        ...c,
+        allowed_modules: c.allowed_modules || [],
+        active_shift: shiftsMap[c.id] || null
+      }));
+
+      setCollaborators(formattedCollabs);
 
     } catch (err: any) {
       if (!isAbortError(err)) {
@@ -506,6 +565,46 @@ export default function SupervisorDashboard() {
     }
   };
 
+  const toggleModuleAccess = async (collabId: string, moduleName: string, currentlyAllowed: boolean) => {
+    try {
+      const targetCollab = collaborators.find(c => c.id === collabId);
+      if (!targetCollab) return;
+
+      let updatedModules = [...targetCollab.allowed_modules];
+      if (currentlyAllowed) {
+        updatedModules = updatedModules.filter(m => m !== moduleName);
+      } else {
+        if (!updatedModules.includes(moduleName)) {
+          updatedModules.push(moduleName);
+        }
+      }
+
+      const { error } = await supabase
+        .from('collaborators')
+        .update({ allowed_modules: updatedModules })
+        .eq('id', collabId);
+
+      if (error) throw error;
+
+      // Log assignment change to audits
+      await supabase.from('audit_logs').insert([{
+        action: 'UPDATE_PERMISSIONS',
+        module: 'SUPERVISOR',
+        collaborator_id: collabId,
+        collaborator_name: targetCollab.contact_name,
+        details: { allowed_modules: updatedModules, changed_module: moduleName, operation: currentlyAllowed ? 'remove' : 'add' }
+      }]);
+
+      showToastMsg('Permisos actualizados correctamente');
+      
+      // Update local state instantly
+      setCollaborators(prev => prev.map(c => c.id === collabId ? { ...c, allowed_modules: updatedModules } : c));
+    } catch (err: any) {
+      console.error('Error updating permissions:', err);
+      showToastMsg('No se pudieron actualizar los permisos', 'error');
+    }
+  };
+
   // Filter items based on search input
   const filteredQuarantines = quarantines.filter(item => 
     item.product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -719,7 +818,25 @@ export default function SupervisorDashboard() {
             color: activeTab === 'discrepancy' ? 'white' : 'var(--ops-text-muted)'
           }}
         >
-          ⚖️ Excedentes / Sobrantes ({discrepancies.length})
+          ⚖️ Excedentes ({discrepancies.length})
+        </button>
+        <button 
+          onClick={() => { setActiveTab('staff'); setSearchQuery(''); }}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            borderRadius: '14px',
+            border: 'none',
+            fontSize: '0.9rem',
+            fontWeight: '700',
+            fontFamily: 'Outfit, sans-serif',
+            cursor: 'pointer',
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: activeTab === 'staff' ? 'var(--ops-primary)' : 'transparent',
+            color: activeTab === 'staff' ? 'white' : 'var(--ops-text-muted)'
+          }}
+        >
+          👥 Colaboradores ({collaborators.length})
         </button>
       </div>
 
@@ -915,7 +1032,7 @@ export default function SupervisorDashboard() {
             ))}
           </div>
         )
-      ) : (
+      ) : activeTab === 'discrepancy' ? (
         // LIST OF WEIGHT DISCREPANCIES
         filteredDiscrepancies.length === 0 ? (
           <div style={{ 
@@ -1076,6 +1193,138 @@ export default function SupervisorDashboard() {
             ))}
           </div>
         )
+      ) : (
+        // STAFF TAB VIEW
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {collaborators.filter(c => c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+            <div style={{ 
+              backgroundColor: 'var(--ops-surface)', 
+              border: '1px dashed var(--ops-border)', 
+              borderRadius: '16px', 
+              padding: '4rem 2rem', 
+              textAlign: 'center',
+              color: 'var(--ops-text-muted)' 
+            }}>
+              <Users size={48} style={{ margin: '0 auto 1rem auto', opacity: 0.6 }} />
+              <h3 style={{ margin: '0 0 6px 0', fontSize: '1.1rem', fontWeight: '800' }}>Sin Resultados</h3>
+              <p style={{ margin: 0, fontSize: '0.85rem' }}>No se encontraron colaboradores activos que coincidan con la búsqueda.</p>
+            </div>
+          ) : (
+            collaborators.filter(c => c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())).map(collab => {
+              const modules = [
+                { value: 'Compras', label: 'Compras' },
+                { value: 'Recogida', label: 'Recogida' },
+                { value: 'Recepción', label: 'Recepción' },
+                { value: 'Alistamiento', label: 'Picking' },
+                { value: 'Despacho', label: 'Despacho' },
+                { value: 'Inventarios', label: 'Inventario' }
+              ];
+              
+              return (
+                <div 
+                  key={collab.id}
+                  style={{
+                    backgroundColor: 'var(--ops-surface)',
+                    border: '1px solid var(--ops-border)',
+                    borderRadius: '16px',
+                    padding: '1.25rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 4px 0', fontSize: '1.1rem', fontWeight: '800', fontFamily: 'Outfit, sans-serif', color: 'var(--ops-text)' }}>
+                        {collab.contact_name}
+                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '900', color: 'var(--ops-primary)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                          {collab.role}
+                        </span>
+                        {collab.specialty && (
+                          <span style={{ fontSize: '0.65rem', fontWeight: '800', color: 'var(--ops-text-muted)' }}>
+                            📍 {collab.specialty}
+                          </span>
+                        )}
+                        {collab.document_id && (
+                          <span style={{ fontSize: '0.65rem', fontWeight: '600', color: 'var(--ops-text-muted)' }}>
+                            ID: {collab.document_id}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      {collab.active_shift ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10B981', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                          <span style={{ width: '6px', height: '6px', backgroundColor: '#10B981', borderRadius: '50%' }}></span>
+                          TURNO ACTIVO (Inició {new Date(collab.active_shift.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'rgba(0,0,0,0.04)', color: 'var(--ops-text-muted)', padding: '4px 10px', borderRadius: '8px' }}>
+                          SIN TURNO ACTIVO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Modules Selector Switches Grid */}
+                  <div style={{ 
+                    borderTop: '1px solid var(--ops-border)', 
+                    paddingTop: '0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
+                  }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--ops-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                      Módulos Operativos Autorizados
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                      {modules.map(mod => {
+                        const isAllowed = collab.allowed_modules.includes(mod.value);
+                        return (
+                          <label 
+                            key={mod.value}
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '8px', 
+                              padding: '8px 12px', 
+                              borderRadius: '10px', 
+                              backgroundColor: isAllowed ? 'rgba(16, 185, 129, 0.04)' : 'var(--ops-bg)', 
+                              border: `1px solid ${isAllowed ? 'rgba(16, 185, 129, 0.2)' : 'var(--ops-border)'}`,
+                              cursor: 'pointer',
+                              fontSize: '0.85rem',
+                              fontWeight: '700',
+                              color: isAllowed ? 'var(--ops-text)' : 'var(--ops-text-muted)',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={isAllowed}
+                              onChange={() => toggleModuleAccess(collab.id, mod.value, isAllowed)}
+                              style={{ 
+                                width: '16px', 
+                                height: '16px', 
+                                accentColor: 'var(--ops-primary)',
+                                cursor: 'pointer'
+                              }}
+                            />
+                            {mod.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
 
       {/* ====================================================

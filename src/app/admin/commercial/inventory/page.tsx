@@ -5,8 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
-import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList } from 'lucide-react';
+import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, AlertTriangle, TrendingUp, History, Download, ChevronRight, Scale, Tag, Calendar, Database, Sparkles, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, X } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 interface InventoryItem {
     id: string;
@@ -62,83 +63,24 @@ interface RandomTask {
     }[];
 }
 
-// --- NUMBER FORMATTING HELPERS ---
-function formatNumber(num: number | string | null | undefined, maxDecimals = 2): string {
-    if (num === null || num === undefined || isNaN(Number(num))) return '0';
-    const parsed = Number(num);
-    
-    // Check if it's an integer
-    if (parsed % 1 === 0) {
-        return parsed.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    }
-    
-    // Format to maxDecimals
-    const formatted = parsed.toFixed(maxDecimals);
-    const parts = formatted.split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    
-    // Remove trailing zeros in the decimal part
-    let decimalPart = parts[1] || '';
-    while (decimalPart.endsWith('0')) {
-        decimalPart = decimalPart.slice(0, -1);
-    }
-    
-    if (decimalPart.length > 0) {
-        return `${parts[0]},${decimalPart}`;
-    }
-    return parts[0];
-}
-
-function formatMoney(num: number | string | null | undefined): string {
-    if (num === null || num === undefined || isNaN(Number(num))) return '$0';
-    const parsed = Number(num);
-    const rounded = Math.round(parsed);
-    const formatted = rounded.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `$${formatted}`;
-}
-
-// --- UI THEME & STYLES ---
-const THEME = {
-    colors: {
-        bg: '#F4F7F6', // Refined slate/sage organic bg
-        surface: '#FFFFFF',
-        border: '#E2E7E4', // Fine border color matching the organic theme
-        textMain: '#1A231E', // Deep charcoal/green text
-        textSecondary: '#62726B', // Elegant slate/sage secondary text
-        primary: '#0D7A57', // Forest/albahaca green
-        primaryHover: '#0A5E43',
-        primaryLight: '#EDF5F1',
-        accent: '#111C17', // Deep slate green/dark accent
-        success: '#10B981',
-        successBg: '#E8FDF5',
-        successText: '#047857',
-        error: '#B91C1C',
-        errorBg: '#FEE2E2',
-        errorText: '#991B1B',
-        warning: '#F59E0B',
-        warningBg: '#FEF3C7',
-        warningText: '#B45309',
-        blueBg: '#EFF6FF',
-        blueText: '#1D4ED8',
-        purpleBg: '#F3E8FF',
-        purpleText: '#6D28D9'
-    },
-    radius: {
-        sm: '8px',
-        md: '10px',
-        lg: '12px',
-        xl: '16px'
-    },
-    shadow: {
-        sm: '0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04)',
-        md: '0 4px 12px -2px rgba(11, 28, 23, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
-        lg: '0 12px 24px -4px rgba(13, 122, 87, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
-        xl: '0 20px 32px -6px rgba(11, 28, 23, 0.15)'
-    }
+const STATUS_COLORS = {
+    success: '#10B981',
+    successBg: '#E8FDF5',
+    successText: '#047857',
+    error: '#B91C1C',
+    errorBg: '#FEE2E2',
+    errorText: '#991B1B',
+    warning: '#F59E0B',
+    warningBg: '#FEF3C7',
+    warningText: '#B45309',
+    blueBg: '#EFF6FF',
+    blueText: '#1D4ED8',
+    purpleBg: '#F3E8FF',
+    purpleText: '#6D28D9'
 };
 
 const styles = {
-    main: { minHeight: '100vh', backgroundColor: THEME.colors.bg, color: THEME.colors.textMain, fontFamily: 'var(--font-outfit), sans-serif' },
+    main: { minHeight: '100vh', backgroundColor: THEME.colors.background, color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain },
     container: { maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' },
     header: { display: 'flex' as const, justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
     titleArea: { flex: 1 },
@@ -171,21 +113,21 @@ const styles = {
         top: '-1px', 
         backgroundColor: '#F9FAFB', 
         zIndex: 10,
-        borderBottom: `1px solid #E5E7EB`
+        borderBottom: `1px solid ${THEME.colors.border}`
     },
     th: { 
         padding: '0.65rem 1.25rem', 
         textAlign: 'left' as const, 
         fontSize: '0.65rem', 
         color: THEME.colors.textSecondary, 
-        fontWeight: '700', 
+        fontWeight: '600', 
         textTransform: 'uppercase' as const, 
         letterSpacing: '0.05em' 
     },
     td: { 
         padding: '0.65rem 1.25rem', 
         fontSize: '0.85rem', 
-        borderBottom: `1px solid #E2E7E4`,
+        borderBottom: `1px solid ${THEME.colors.border}`,
         verticalAlign: 'middle' as const,
         color: THEME.colors.textMain
     },
@@ -224,6 +166,7 @@ const styles = {
         width: 'fit-content' as const
     })
 };
+
 
 export default function InventoryAdminPage() {
     const [stocks, setStocks] = useState<InventoryItem[]>([]);
@@ -711,7 +654,7 @@ export default function InventoryAdminPage() {
                                     transition: 'all 0.2s ease-in-out'
                                 }}
                                 onMouseEnter={(e) => { 
-                                    e.currentTarget.style.backgroundColor = '#F4F7F6'; 
+                                    e.currentTarget.style.backgroundColor = THEME.colors.background; 
                                     e.currentTarget.style.borderColor = THEME.colors.primary;
                                 }}
                                 onMouseLeave={(e) => { 
@@ -729,7 +672,7 @@ export default function InventoryAdminPage() {
                                     padding: '0.55rem 1.25rem', 
                                     borderRadius: '8px', 
                                     border: 'none', 
-                                    background: THEME.colors.accent, 
+                                    background: THEME.colors.primary, 
                                     color: 'white', 
                                     fontWeight: '700', 
                                     fontSize: '0.8rem', 
@@ -738,10 +681,12 @@ export default function InventoryAdminPage() {
                                     transition: 'all 0.2s ease-in-out'
                                 }}
                                 onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
                                     e.currentTarget.style.transform = 'translateY(-1px)';
                                     e.currentTarget.style.boxShadow = THEME.shadow.md;
                                 }}
                                 onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = THEME.colors.primary;
                                     e.currentTarget.style.transform = 'translateY(0)';
                                     e.currentTarget.style.boxShadow = THEME.shadow.sm;
                                 }}
@@ -764,20 +709,21 @@ export default function InventoryAdminPage() {
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
                     marginBottom: '1.5rem', 
-                    backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+                    backgroundColor: THEME.colors.surface, 
                     padding: '0.5rem 1rem', 
-                    borderRadius: '16px', 
+                    borderRadius: THEME.radius.lg, 
                     border: `1px solid ${THEME.colors.border}`, 
                     gap: '1rem',
                     boxShadow: THEME.shadow.sm
                 }}>
                     <div style={{ 
                         display: 'flex', 
-                        gap: '0.25rem', 
+                        gap: '2px', 
                         flexShrink: 0,
-                        backgroundColor: '#EDF1EE',
-                        padding: '3px',
-                        borderRadius: '10px'
+                        backgroundColor: THEME.colors.background,
+                        border: `1px solid ${THEME.colors.border}`,
+                        padding: '4px',
+                        borderRadius: THEME.radius.lg
                     }}>
                         <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} label="Consolidado" />
                         <TabButton active={activeTab === 'movements'} onClick={() => setActiveTab('movements')} label="Movimientos" />
@@ -798,11 +744,11 @@ export default function InventoryAdminPage() {
                             style={{ 
                                 width: '100%', 
                                 padding: '0.65rem 2.8rem 0.65rem 2.5rem', 
-                                borderRadius: '12px', 
+                                borderRadius: THEME.radius.lg, 
                                 border: `1px solid ${THEME.colors.border}`, 
                                 fontSize: '0.85rem', 
                                 fontWeight: '500',
-                                backgroundColor: '#F8FAF9',
+                                backgroundColor: THEME.colors.background,
                                 color: THEME.colors.textMain,
                                 outline: 'none',
                                 transition: 'all 0.2s ease-in-out'
@@ -814,7 +760,7 @@ export default function InventoryAdminPage() {
                             }}
                             onBlur={(e) => {
                                 e.currentTarget.style.borderColor = THEME.colors.border;
-                                e.currentTarget.style.backgroundColor = '#F8FAF9';
+                                e.currentTarget.style.backgroundColor = THEME.colors.background;
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
                         />
@@ -830,17 +776,16 @@ export default function InventoryAdminPage() {
                                     background: 'none', 
                                     border: 'none', 
                                     cursor: 'pointer', 
-                                    fontSize: '0.85rem', 
                                     color: THEME.colors.textSecondary,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    padding: '2px',
+                                    padding: '4px',
                                     borderRadius: '50%',
-                                    backgroundColor: '#EAEFEA'
+                                    backgroundColor: THEME.colors.primaryLight
                                 }}
                             >
-                                ✕
+                                <X size={14} strokeWidth={1.5} />
                             </button>
                         )}
                         
@@ -1009,8 +954,8 @@ export default function InventoryAdminPage() {
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                             <span style={styles.badge(
-                                                                item.status === 'available' ? THEME.colors.successBg : item.status === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                                item.status === 'available' ? THEME.colors.successText : item.status === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                                item.status === 'available' ? STATUS_COLORS.successBg : item.status === 'returned' ? STATUS_COLORS.blueBg : STATUS_COLORS.purpleBg,
+                                                                item.status === 'available' ? STATUS_COLORS.successText : item.status === 'returned' ? STATUS_COLORS.blueText : STATUS_COLORS.purpleText
                                                             )}>
                                                                 {item.status.toUpperCase()}
                                                             </span>
@@ -1081,24 +1026,24 @@ export default function InventoryAdminPage() {
                                                             onClick={() => { setSelectedProduct({id: item.product_id, name: item.products?.name || 'Desconocido'}); setIsMovementModalOpen(true); }}
                                                             style={{ 
                                                                 backgroundColor: 'transparent', 
-                                                                color: '#4B5563',
-                                                                border: '1px solid #D1D5DB', 
+                                                                color: THEME.colors.textSecondary,
+                                                                border: `1px solid ${THEME.colors.borderActive}`, 
                                                                 padding: '0.35rem 0.75rem', 
-                                                                borderRadius: '6px', 
-                                                                fontWeight: '500', 
+                                                                borderRadius: THEME.radius.sm, 
+                                                                fontWeight: '600', 
                                                                 cursor: 'pointer',
                                                                 transition: 'all 0.2s ease-in-out',
                                                                 fontSize: '0.75rem'
                                                             }}
                                                             onMouseEnter={(e) => {
-                                                                e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                                                e.currentTarget.style.borderColor = '#9CA3AF';
-                                                                e.currentTarget.style.color = '#111827';
+                                                                e.currentTarget.style.backgroundColor = THEME.colors.background;
+                                                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                                e.currentTarget.style.color = THEME.colors.textMain;
                                                             }}
                                                             onMouseLeave={(e) => {
                                                                 e.currentTarget.style.backgroundColor = 'transparent';
-                                                                e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                e.currentTarget.style.color = '#4B5563';
+                                                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                                e.currentTarget.style.color = THEME.colors.textSecondary;
                                                             }}
                                                         >
                                                             Ajustar
@@ -1131,16 +1076,16 @@ export default function InventoryAdminPage() {
                                                     <td style={styles.td}><strong>{m.products?.name || 'Producto Desconocido'}</strong></td>
                                                     <td style={styles.td}>
                                                         <span style={styles.badge(
-                                                            m.quantity > 0 ? THEME.colors.successBg : '#FEE2E2', 
-                                                            m.quantity > 0 ? THEME.colors.successText : '#B91C1C'
+                                                            m.quantity > 0 ? STATUS_COLORS.successBg : '#FEE2E2', 
+                                                            m.quantity > 0 ? STATUS_COLORS.successText : '#B91C1C'
                                                         )}>
                                                             {m.type.toUpperCase()}
                                                         </span>
                                                     </td>
                                                     <td style={styles.td}>
                                                         <span style={styles.badge(
-                                                            m.status_to === 'available' ? THEME.colors.successBg : m.status_to === 'returned' ? THEME.colors.blueBg : THEME.colors.purpleBg,
-                                                            m.status_to === 'available' ? THEME.colors.successText : m.status_to === 'returned' ? THEME.colors.blueText : THEME.colors.purpleText
+                                                            m.status_to === 'available' ? STATUS_COLORS.successBg : m.status_to === 'returned' ? STATUS_COLORS.blueBg : STATUS_COLORS.purpleBg,
+                                                            m.status_to === 'available' ? STATUS_COLORS.successText : m.status_to === 'returned' ? STATUS_COLORS.blueText : STATUS_COLORS.purpleText
                                                         )}>
                                                             {(m.status_to || 'available').toUpperCase()}
                                                         </span>
@@ -1242,8 +1187,8 @@ export default function InventoryAdminPage() {
                                                          <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.05rem', marginTop: '0.15rem' }}>Auditoría Aleatoria #{task.id.split('-')[0]}</div>
                                                      </div>
                                                      <span style={styles.badge(
-                                                         task.status === 'completed' ? THEME.colors.successBg : THEME.colors.warningBg, 
-                                                         task.status === 'completed' ? THEME.colors.successText : THEME.colors.warningText
+                                                         task.status === 'completed' ? STATUS_COLORS.successBg : STATUS_COLORS.warningBg, 
+                                                         task.status === 'completed' ? STATUS_COLORS.successText : STATUS_COLORS.warningText
                                                      )}>
                                                          {task.status.toUpperCase()}
                                                      </span>
@@ -1261,7 +1206,7 @@ export default function InventoryAdminPage() {
                                                      <tbody>
                                                          {task.items.map(item => (
                                                              <tr key={item.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                                 <td style={styles.td}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
+                                                    <td style={styles.td}><strong>{item.products?.name || 'Producto Desconocido'}</strong></td>
                                                                  <td style={{ ...styles.td, textAlign: 'center' }}>{formatNumber(item.expected_qty)}</td>
                                                                  <td style={{ ...styles.td, textAlign: 'center' }}>
                                                                      {item.actual_qty !== null ? (
@@ -1269,24 +1214,24 @@ export default function InventoryAdminPage() {
                                                                      ) : (
                                                                          <button style={{ 
                                                                              padding: '0.35rem 0.75rem', 
-                                                                             borderRadius: '6px', 
-                                                                             border: '1px solid #D1D5DB', 
+                                                                             borderRadius: THEME.radius.sm, 
+                                                                             border: `1px solid ${THEME.colors.borderActive}`, 
                                                                              background: 'transparent', 
                                                                              fontSize: '0.75rem', 
-                                                                             fontWeight: '500', 
-                                                                             color: '#4B5563',
+                                                                             fontWeight: '600', 
+                                                                             color: THEME.colors.textSecondary,
                                                                              cursor: 'pointer',
                                                                              transition: 'all 0.2s'
                                                                          }}
                                                                          onMouseEnter={(e) => {
-                                                                             e.currentTarget.style.backgroundColor = '#F9FAFB';
-                                                                             e.currentTarget.style.borderColor = '#9CA3AF';
-                                                                             e.currentTarget.style.color = '#111827';
+                                                                             e.currentTarget.style.backgroundColor = THEME.colors.background;
+                                                                             e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                                             e.currentTarget.style.color = THEME.colors.textMain;
                                                                          }}
                                                                          onMouseLeave={(e) => {
                                                                              e.currentTarget.style.backgroundColor = 'transparent';
-                                                                             e.currentTarget.style.borderColor = '#D1D5DB';
-                                                                             e.currentTarget.style.color = '#4B5563';
+                                                                             e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                                             e.currentTarget.style.color = THEME.colors.textSecondary;
                                                                          }}>
                                                                              Ingresar Conteo
                                                                          </button>
@@ -1309,8 +1254,8 @@ export default function InventoryAdminPage() {
                                                                          borderRadius: '6px', 
                                                                          fontSize: '0.7rem', 
                                                                          fontWeight: '700',
-                                                                         backgroundColor: item.difference_percent > auditPolicy.alertThreshold ? '#FEE2E2' : item.actual_qty !== null ? THEME.colors.successBg : '#EDF1EE',
-                                                                         color: item.difference_percent > auditPolicy.alertThreshold ? '#991B1B' : item.actual_qty !== null ? THEME.colors.successText : THEME.colors.textSecondary
+                                                                         backgroundColor: item.difference_percent > auditPolicy.alertThreshold ? '#FEE2E2' : item.actual_qty !== null ? STATUS_COLORS.successBg : '#EDF1EE',
+                                                                         color: item.difference_percent > auditPolicy.alertThreshold ? '#991B1B' : item.actual_qty !== null ? STATUS_COLORS.successText : THEME.colors.textSecondary
                                                                      }}>
                                                                          {item.difference_percent > auditPolicy.alertThreshold ? 'DESCUADRE' : item.actual_qty !== null ? 'OK' : 'PENDIENTE'}
                                                                      </span>
@@ -1510,8 +1455,8 @@ export default function InventoryAdminPage() {
                                                      <td style={styles.td}>
                                                          {m.admin_decision ? (
                                                              <span style={styles.badge(
-                                                                 m.admin_decision === 'inventory' ? THEME.colors.successBg : m.admin_decision === 'waste' ? '#FEE2E2' : THEME.colors.blueBg,
-                                                                 m.admin_decision === 'inventory' ? THEME.colors.successText : m.admin_decision === 'waste' ? '#991B1B' : m.admin_decision === 'reprocess' ? THEME.colors.blueText : THEME.colors.textSecondary
+                                                                 m.admin_decision === 'inventory' ? STATUS_COLORS.successBg : m.admin_decision === 'waste' ? '#FEE2E2' : STATUS_COLORS.blueBg,
+                                                                 m.admin_decision === 'inventory' ? STATUS_COLORS.successText : m.admin_decision === 'waste' ? '#991B1B' : m.admin_decision === 'reprocess' ? STATUS_COLORS.blueText : THEME.colors.textSecondary
                                                              )}>
                                                                  {m.admin_decision.toUpperCase()}
                                                              </span>
@@ -1626,7 +1571,7 @@ export default function InventoryAdminPage() {
                         width: '100%', 
                         maxWidth: '460px', 
                         padding: '2rem', 
-                        boxShadow: THEME.shadow.xl,
+                        boxShadow: THEME.shadow.lg,
                         border: `1px solid ${THEME.colors.border}`
                     }}>
                         <h2 style={{ margin: 0, fontWeight: '800', fontSize: '1.4rem', color: THEME.colors.textMain, letterSpacing: '-0.02em' }}>Ajuste de Inventario</h2>
@@ -1768,8 +1713,8 @@ function KPICard({ title, value, color, subtitle }: { title: string, value: stri
             backgroundColor: THEME.colors.surface, 
             padding: '0.75rem 1rem', 
             borderRadius: '12px', 
-            border: `1px solid #E5E7EB`,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+            border: `1px solid ${THEME.colors.border}`,
+            boxShadow: THEME.shadow.md,
             display: 'flex',
             flexDirection: 'column',
             gap: '0.25rem',
@@ -1778,10 +1723,10 @@ function KPICard({ title, value, color, subtitle }: { title: string, value: stri
             overflow: 'hidden'
         }} onMouseEnter={(e) => { 
             e.currentTarget.style.transform = 'translateY(-1px)'; 
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.06)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => { 
             e.currentTarget.style.transform = 'translateY(0)'; 
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
+            e.currentTarget.style.boxShadow = THEME.shadow.md;
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ 
@@ -1835,20 +1780,20 @@ function TabButton({ active, onClick, label, icon }: { active: boolean, onClick:
                 display: 'flex', 
                 alignItems: 'center', 
                 padding: '0.5rem 1rem', 
-                borderRadius: '8px', 
+                borderRadius: THEME.radius.md, 
                 border: 'none', 
                 backgroundColor: active ? THEME.colors.primary : 'transparent', 
                 color: active ? '#FFFFFF' : THEME.colors.textSecondary, 
-                fontWeight: '700', 
+                fontWeight: active ? '600' : '500', 
                 cursor: 'pointer', 
                 transition: 'all 0.2s ease-in-out',
                 fontSize: '0.8rem',
                 whiteSpace: 'nowrap',
-                boxShadow: active ? '0 4px 10px rgba(13, 122, 87, 0.2)' : 'none'
+                boxShadow: active ? '0 1px 4px rgba(13,122,87,0.25)' : 'none'
             }}
             onMouseEnter={(e) => { 
                 if(!active) {
-                    e.currentTarget.style.backgroundColor = '#EAEFEA'; 
+                    e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; 
                     e.currentTarget.style.color = THEME.colors.textMain;
                 }
             }}

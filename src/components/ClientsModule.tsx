@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
-import { THEME } from '@/lib/adminTheme';
+import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import {
     AlertTriangle,
     Check,
@@ -23,6 +23,27 @@ import {
     Sparkles,
     Trash2,
     X,
+    Building2,
+    Users,
+    Flag,
+    TrendingUp,
+    BarChart3,
+    Plus,
+    UserPlus,
+    List,
+    LayoutGrid,
+    Info,
+    Trophy,
+    MessageCircle,
+    Landmark,
+    User,
+    Globe,
+    Settings,
+    ShoppingCart,
+    Calendar,
+    Scale,
+    Compass,
+    CreditCard
 } from 'lucide-react';
 
 declare global {
@@ -323,10 +344,10 @@ export default function ClientsModule() {
     };
 
     const tabs = [
-        { id: 'dashboard', label: '📊 Resumen', icon: '📈' },
-        { id: 'b2b', label: '🏢 Institucionales', icon: '🏛️' },
-        { id: 'b2c', label: '🏠 Hogar', icon: '👤' },
-        { id: 'leads', label: '🔔 Prospectos', icon: '🔥' },
+        { id: 'dashboard', label: 'Resumen', icon: BarChart3 },
+        { id: 'b2b', label: 'Institucionales', icon: Building2 },
+        { id: 'b2c', label: 'Hogar', icon: Users },
+        { id: 'leads', label: 'Prospectos', icon: Sparkles },
     ];
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
@@ -346,7 +367,7 @@ export default function ClientsModule() {
     };
 
     return (
-        <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
+        <div style={{ backgroundColor: THEME.colors.background, height: '100%', fontFamily: THEME.typography.fontFamilySecondary }}>
             <Toast />
 
 
@@ -387,43 +408,47 @@ export default function ClientsModule() {
                     paddingBottom: '1rem'
                 }}>
                     <div>
-                        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1A202C', margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: '#0891B2' }}>Clientes</span></h1>
-                        <p style={{ color: '#4A5568', fontSize: '0.9rem', marginTop: '0.2rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
+                        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.05rem', fontFamily: THEME.typography.fontFamilyMain }}>Core de <span style={{ color: THEME.colors.primary }}>Clientes</span></h1>
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
                     </div>
 
                     {/* TABS MOVIDAS ARRIBA */}
                     <div style={{ 
                         display: 'flex', 
                         gap: '0.3rem', 
-                        backgroundColor: '#F1F5F9', 
+                        backgroundColor: '#EAEFEA', 
                         padding: '4px', 
                         borderRadius: '16px', 
-                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                     }}>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                                style={{
-                                    padding: '0.6rem 1.2rem',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    background: activeTab === tab.id ? 'white' : 'transparent',
-                                    color: activeTab === tab.id ? '#0891B2' : '#64748B',
-                                    fontWeight: activeTab === tab.id ? '800' : '600',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.85rem',
-                                    boxShadow: activeTab === tab.id ? '0 4px 6px rgba(0,0,0,0.05)' : 'none'
-                                }}
-                            >
-                                <span style={{ fontSize: '1rem' }}>{tab.icon}</span>
-                                {tab.label.split(' ')[1] || tab.label}
-                            </button>
-                        ))}
+                        {tabs.map(tab => {
+                            const IconComponent = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                                    style={{
+                                        padding: '0.6rem 1.2rem',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        background: isActive ? THEME.colors.primary : 'transparent',
+                                        color: isActive ? 'white' : THEME.colors.textSecondary,
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        fontSize: '0.85rem',
+                                        boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.2)' : 'none'
+                                    }}
+                                >
+                                    <IconComponent size={16} strokeWidth={isActive ? 2 : 1.5} />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </header>
 
@@ -445,14 +470,14 @@ export default function ClientsModule() {
                             <button 
                                 onClick={() => handleCreateClient('b2b_client')}
                                 style={{ 
-                                    backgroundColor: '#0891B2', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
-                                    fontWeight: '800', 
+                                    fontWeight: '700', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(8, 145, 178, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
@@ -460,22 +485,24 @@ export default function ClientsModule() {
                                     height: '40px',
                                     fontSize: '0.85rem'
                                 }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                <span>➕</span> Nuevo Institucional
+                                <Plus size={16} strokeWidth={2} /> Nuevo Institucional
                             </button>
                         )}
                         {activeTab === 'b2c' && (
                             <button 
                                 onClick={() => handleCreateClient('b2c_client')}
                                 style={{ 
-                                    backgroundColor: '#10B981', 
+                                    backgroundColor: THEME.colors.primary, 
                                     color: 'white', 
                                     padding: '0 1.2rem', 
                                     borderRadius: '10px', 
                                     border: 'none', 
-                                    fontWeight: '800', 
+                                    fontWeight: '700', 
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    boxShadow: '0 4px 12px rgba(13, 122, 87, 0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
@@ -483,8 +510,10 @@ export default function ClientsModule() {
                                     height: '40px',
                                     fontSize: '0.85rem'
                                 }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
-                                <span>👤</span> Nuevo Cliente Hogar
+                                <UserPlus size={16} strokeWidth={2} /> Nuevo Cliente Hogar
                             </button>
                         )}
 
@@ -507,10 +536,15 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '32px',
+                                    width: '32px'
                                 }}
+                                title="Vista de Lista"
                             >
-                                📋
+                                <List size={16} style={{ color: viewMode === 'list' ? THEME.colors.primary : THEME.colors.textSecondary }} />
                             </button>
                             <button 
                                 onClick={() => setViewMode('grid')}
@@ -521,16 +555,23 @@ export default function ClientsModule() {
                                     backgroundColor: viewMode === 'grid' ? 'white' : 'transparent',
                                     boxShadow: viewMode === 'grid' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.9rem'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '32px',
+                                    width: '32px'
                                 }}
+                                title="Vista de Cuadrícula"
                             >
-                                🔲
+                                <LayoutGrid size={16} style={{ color: viewMode === 'grid' ? THEME.colors.primary : THEME.colors.textSecondary }} />
                             </button>
                         </div>
 
                         {/* BUSCADOR ESTÁNDAR FLEXIBLE (OCUPANDO TODO EL ESPACIO) */}
                         <div style={{ position: 'relative', flex: 1 }}>
-                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
+                            <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                <Search size={16} style={{ color: THEME.colors.textSecondary }} />
+                            </span>
                             <input 
                                 placeholder={`Buscar ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
                                 value={searchTerm}
@@ -549,8 +590,8 @@ export default function ClientsModule() {
                                 }}
                                 onFocus={(e) => {
                                     e.target.style.backgroundColor = 'white';
-                                    e.target.style.borderColor = '#0891B2';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                    e.target.style.borderColor = THEME.colors.primary;
+                                    e.target.style.boxShadow = `0 0 0 3px rgba(13, 122, 87, 0.1)`;
                                 }}
                                 onBlur={(e) => {
                                     e.target.style.backgroundColor = '#F8FAFC';
@@ -574,11 +615,11 @@ export default function ClientsModule() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 'bold'
+                                        cursor: 'pointer'
                                     }}
-                                >✕</button>
+                                >
+                                    <X size={12} />
+                                </button>
                             )}
                         </div>
 
@@ -591,20 +632,18 @@ export default function ClientsModule() {
                                 width: '40px', 
                                 height: '40px', 
                                 borderRadius: '10px', 
-                                backgroundColor: '#EFF6FF', 
-                                color: '#2563EB', 
+                                backgroundColor: THEME.colors.primaryLight, 
+                                color: THEME.colors.primary, 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
                                 cursor: 'help',
-                                border: '1px solid #DBEAFE',
-                                fontSize: '1rem',
-                                fontWeight: '900',
+                                border: `1px solid rgba(13, 122, 87, 0.2)`,
                                 flexShrink: 0,
                                 transition: 'all 0.2s'
                             }}
                         >
-                            i
+                            <Info size={18} strokeWidth={1.5} />
                             {showHelpTooltip && (
                                 <div style={{
                                     position: 'absolute',
@@ -622,8 +661,8 @@ export default function ClientsModule() {
                                     pointerEvents: 'none',
                                     animation: 'fadeInDown 0.2s ease-out'
                                 }}>
-                                    <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                                        🚀 COMANDOS CRM (@)
+                                    <div style={{ fontWeight: '900', color: '#4ADE80', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                                        <Sparkles size={14} /> COMANDOS CRM (@)
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                                         <div>
@@ -651,58 +690,74 @@ export default function ClientsModule() {
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '10rem' }}>
-                        <div style={{ fontSize: '4rem', animation: 'bounce 1s infinite' }}>📦</div>
-                        <p style={{ fontWeight: '700', color: '#718096', marginTop: '1rem' }}>Sincronizando base de datos...</p>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            <Loader2 size={48} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                        </div>
+                        <p style={{ fontWeight: '700', color: THEME.colors.textSecondary, marginTop: '1rem', fontFamily: THEME.typography.fontFamilySecondary }}>Sincronizando base de datos...</p>
                     </div>
                 ) : (
                     <>
                         {/* DASHBOARD VIEW */}
                         {activeTab === 'dashboard' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 {/* Top Row: Main KPIs */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-                                    <KPICard title="Clientes B2B" value={clientsB2B.length} icon="🏛️" color="#E0F2FE" textColor="#0369A1" subtitle="Empresas operativas" />
-                                    <KPICard title="Clientes Hogar" value={clientsB2C.length} icon="👥" color="#DCFCE7" textColor="#15803D" subtitle="Clientes Hogar activos" />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                                    <KPICard 
+                                        title="Clientes B2B" 
+                                        value={clientsB2B.length} 
+                                        icon={Building2} 
+                                        color={THEME.colors.primaryLight} 
+                                        iconColor={THEME.colors.primary} 
+                                        subtitle="Empresas operativas" 
+                                    />
+                                    <KPICard 
+                                        title="Clientes Hogar" 
+                                        value={clientsB2C.length} 
+                                        icon={Users} 
+                                        color={THEME.colors.primaryLight} 
+                                        iconColor={THEME.colors.primary} 
+                                        subtitle="Clientes Hogar activos" 
+                                    />
                                     <KPICard 
                                         title="Tareas Críticas" 
                                         value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
-                                        icon="🚩" 
+                                        icon={Flag} 
                                         color="#FEE2E2" 
-                                        textColor="#991B1B" 
+                                        iconColor="#EF4444" 
                                         subtitle="Atención prioritaria" 
                                     />
                                     <KPICard 
                                         title="Tasa Conversión" 
-                                        value={leads.length > 0 ? `${Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)}%` : '0%'} 
-                                        icon="💎" 
+                                        value={leads.length > 0 ? (Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100) + "%") : "0%"} 
+                                        icon={TrendingUp} 
                                         color="#F3E8FF" 
-                                        textColor="#7E22CE" 
+                                        iconColor="#7E22CE" 
                                         subtitle="Éxito comercial" 
                                     />
                                 </div>
 
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
                                     {/* Funnel Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #E5E7EB' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                             <div>
-                                                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>🌪️ Embudo Comercial</h3>
-                                                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Trayectoria desde prospecto a cliente</p>
+                                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain }}>Embudo Comercial</h3>
+                                                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Trayectoria desde prospecto a cliente</p>
                                             </div>
-                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', textAlign: 'right' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Oportunidades</div>
-                                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A' }}>{leads.length}</div>
+                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'right' }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>Oportunidades</div>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#0F172A' }}>{leads.length}</div>
                                             </div>
                                         </div>
                                         <FunnelGraphic leads={leads} />
                                     </div>
 
                                     {/* Sales Distribution Pie Chart */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ marginBottom: '2.5rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>💰 Distribución de Ventas</h3>
-                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Balance Institucional vs Hogar (Histórico)</p>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #E5E7EB' }}>
+                                        <div style={{ marginBottom: '1.5rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain }}>Distribución de Ventas</h3>
+                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Balance Institucional vs Hogar (Histórico)</p>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '180px' }}>
                                             <SalesPieChart 
@@ -713,12 +768,12 @@ export default function ClientsModule() {
                                     </div>
 
                                     {/* Task Box */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#111827' }}>⚡ Alertas de Seguimiento</h3>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#EF4444', backgroundColor: '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '20px' }}>VENCIDAS</span>
+                                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: THEME.colors.textMain }}>Alertas de Seguimiento</h3>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#EF4444', backgroundColor: '#FEF2F2', padding: '0.3rem 0.6rem', borderRadius: '12px' }}>VENCIDAS</span>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.5rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.5rem' }}>
                                             {leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length > 0 ? (
                                                 leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date())
                                                     .sort((a, b) => new Date(a.next_contact_date!).getTime() - new Date(b.next_contact_date!).getTime())
@@ -733,10 +788,10 @@ export default function ClientsModule() {
                                                         />
                                                     ))
                                             ) : (
-                                                <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: '#F0FDF4', borderRadius: '32px', border: '2px dashed #DCFCE7' }}>
-                                                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏆</div>
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#166534' }}>¡Gran trabajo comercial!</h4>
-                                                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#15803D', fontWeight: '600' }}>No tienes tareas pendientes vencidas en este momento.</p>
+                                                <div style={{ textAlign: 'center', padding: '2rem 1.5rem', backgroundColor: '#F0FDF4', borderRadius: '16px', border: '1px dashed #DCFCE7' }}>
+                                                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏆</div>
+                                                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: '#166534' }}>¡Gran trabajo comercial!</h4>
+                                                    <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.8rem', color: '#15803D', fontWeight: '500' }}>No tienes tareas pendientes vencidas en este momento.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -892,33 +947,56 @@ export default function ClientsModule() {
 
 
 
-function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: string, color: string, textColor: string, subtitle: string }) {
+function KPICard({ 
+    title, 
+    value, 
+    icon: IconComponent, 
+    color, 
+    iconColor, 
+    subtitle 
+}: { 
+    title: string, 
+    value: number | string, 
+    icon: React.ComponentType<any>, 
+    color: string, 
+    iconColor: string, 
+    subtitle: string 
+}) {
     return (
         <div style={{
-            backgroundColor: 'white',
-            padding: '2.2rem',
-            borderRadius: '28px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.03)',
+            backgroundColor: THEME.colors.surface,
+            padding: '1.5rem',
+            borderRadius: THEME.radius.lg,
+            boxShadow: THEME.shadow.md,
             display: 'flex',
             alignItems: 'center',
-            gap: '1.8rem',
-            border: '1px solid #F0F2F5',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            gap: '1.2rem',
+            border: `1px solid ${THEME.colors.border}`,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: 'default'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-8px)';
-            e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.08)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = THEME.shadow.lg;
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.03)';
+            e.currentTarget.style.boxShadow = THEME.shadow.md;
         }}>
-            <div style={{ backgroundColor: color, width: '72px', height: '72px', borderRadius: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>
-                {icon}
+            <div style={{ 
+                backgroundColor: color, 
+                width: '48px', 
+                height: '48px', 
+                borderRadius: '50%', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flexShrink: 0 
+            }}>
+                <IconComponent size={18} strokeWidth={1.5} style={{ color: iconColor }} />
             </div>
             <div>
-                <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08rem' }}>{title}</div>
-                <div style={{ fontSize: '2.2rem', fontWeight: '900', color: textColor, margin: '0.3rem 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '700' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05rem', fontFamily: THEME.typography.fontFamilySecondary }}>{title}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '0.2rem 0', lineHeight: 1, fontFamily: THEME.typography.fontFamilyMain }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>{subtitle}</div>
             </div>
         </div>
     );
@@ -930,13 +1008,13 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
     const b2cPercent = total > 0 ? (totalB2C / total) * 100 : 0;
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem', width: '100%', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', width: '100%', justifyContent: 'center' }}>
             <div style={{
-                width: '160px',
-                height: '160px',
+                width: '130px',
+                height: '130px',
                 borderRadius: '50%',
-                background: `conic-gradient(#0369A1 ${b2bPercent}%, #15803D 0)`,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                background: 'conic-gradient(' + THEME.colors.primary + ' ' + b2bPercent + '%, ' + THEME.colors.primaryLight + ' 0)',
+                boxShadow: THEME.shadow.md,
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
@@ -944,35 +1022,35 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                 flexShrink: 0
             }}>
                 <div style={{
-                    width: '100px',
-                    height: '100px',
+                    width: '85px',
+                    height: '85px',
                     backgroundColor: 'white',
                     borderRadius: '50%',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: 'inset 0 4px 15px rgba(0,0,0,0.08)'
+                    boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.05)'
                 }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8' }}>TOTAL</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B' }}>${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: '0.6rem', fontWeight: '700', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>TOTAL</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>{formatMoney(total)}</span>
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0369A1' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: THEME.colors.primary }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Institucional</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0369A1' }}>${totalB2B.toLocaleString()}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2bPercent)}% del total</div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Canal B2B</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: '700', color: THEME.colors.primary }}>{formatMoney(totalB2B)}</div>
+                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>{Math.round(b2bPercent)}% del total</div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#15803D' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: THEME.colors.primaryLight, border: `1px solid ${THEME.colors.primary}` }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Hogar</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#15803D' }}>${totalB2C.toLocaleString()}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2cPercent)}% del total</div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Canal Hogar</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: '700', color: THEME.colors.textMain }}>{formatMoney(totalB2C)}</div>
+                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>{Math.round(b2cPercent)}% del total</div>
                     </div>
                 </div>
             </div>
@@ -984,39 +1062,35 @@ function FunnelGraphic({ leads }: { leads: Lead[] }) {
     const stages = [
         { label: 'Prospectos (Nuevos)', status: 'new', color: '#6366F1' },
         { label: 'En Contacto / Gestión', status: 'contacted', color: '#F59E0B' },
-        { label: 'Convertidos a Clientes', status: 'converted', color: '#10B981' },
+        { label: 'Convertidos a Clientes', status: 'converted', color: '#0D7A57' },
         { label: 'Descartados', status: 'rejected', color: '#EF4444' }
     ];
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', alignItems: 'center' }}>
             {stages.map((stage) => {
                 const count = leads.filter(l => l.status === stage.status).length;
                 const percent = leads.length > 0 ? (count / leads.length) * 100 : 0;
                 return (
-                    <div key={stage.status} style={{ width: '100%', maxWidth: '400px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '0.8rem', fontSize: '0.9rem', fontWeight: '800', color: '#4A5568' }}>
-                            <div style={{ textTransform: 'uppercase', letterSpacing: '0.05rem', fontSize: '0.75rem', color: '#94A3B8', marginBottom: '0.2rem' }}>{stage.label}</div>
-                            <div style={{ color: stage.color, fontSize: '1.1rem' }}>{count} <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>({Math.round(percent)}%)</span></div>
+                    <div key={stage.status} style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem', fontSize: '0.8rem', fontWeight: '700', color: '#4A5568' }}>
+                            <span style={{ textTransform: 'uppercase', letterSpacing: '0.03rem', fontSize: '0.7rem', color: '#94A3B8' }}>{stage.label}</span>
+                            <span style={{ color: stage.color }}>{count} <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>({Math.round(percent)}%)</span></span>
                         </div>
                         <div style={{ 
-                            height: '24px', 
+                            height: '12px', 
                             backgroundColor: '#F8FAFC', 
-                            borderRadius: '12px', 
+                            borderRadius: '6px', 
                             border: '1px solid #E2E8F0',
                             display: 'flex',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                            overflow: 'hidden'
                         }}>
                             <div style={{ 
                                 height: '100%', 
-                                width: `${percent}%`, 
+                                width: percent + '%', 
                                 backgroundColor: stage.color, 
-                                borderRadius: '12px',
-                                transition: 'all 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: `0 4px 12px ${stage.color}33`,
-                                border: `2px solid ${stage.color}`
+                                borderRadius: '6px',
+                                transition: 'all 1s cubic-bezier(0.4, 0, 0.2, 1)'
                             }} />
                         </div>
                     </div>
@@ -1033,45 +1107,45 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     return (
         <div style={{ 
             backgroundColor: '#FFF1F2', 
-            padding: '1.4rem', 
-            borderRadius: '20px', 
+            padding: '1rem', 
+            borderRadius: '12px', 
             border: '1px solid #FFE4E6', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between',
-            gap: '1.2rem',
-            boxShadow: '0 4px 10px rgba(159, 18, 57, 0.05)',
+            gap: '1rem',
+            boxShadow: '0 1px 3px rgba(159, 18, 57, 0.02)',
             transition: 'all 0.2s ease'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateX(5px)';
+            e.currentTarget.style.transform = 'translateX(2px)';
             e.currentTarget.style.borderColor = '#FDA4AF';
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateX(0)';
             e.currentTarget.style.borderColor = '#FFE4E6';
         }}>
             <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '900', color: '#9F1239', fontSize: '1rem', marginBottom: '0.2rem' }}>{lead.company_name || lead.contact_name}</div>
+                <div style={{ fontWeight: '700', color: '#9F1239', fontSize: '0.9rem', marginBottom: '0.1rem' }}>{lead.company_name || lead.contact_name}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', backgroundColor: '#BE123C', color: 'white', borderRadius: '6px', fontWeight: '900' }}>⚠️ VENCIDA</span>
-                    <span style={{ fontSize: '0.8rem', color: '#E11D48', fontWeight: '700' }}>
-                        {overdueDays <= 0 ? 'Para hoy' : `Hace ${overdueDays} días`}
+                    <span style={{ fontSize: '0.6rem', padding: '0.15rem 0.4rem', backgroundColor: '#BE123C', color: 'white', borderRadius: '4px', fontWeight: '700' }}>VENCIDA</span>
+                    <span style={{ fontSize: '0.75rem', color: '#E11D48', fontWeight: '500' }}>
+                        {overdueDays <= 0 ? 'Para hoy' : 'Hace ' + overdueDays + ' d'}
                     </span>
                 </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button 
                     onClick={() => {
                         const cleanPhone = lead.phone.replace(/\D/g, '');
-                        window.open(`https://wa.me/57${cleanPhone}?text=Hola ${lead.contact_name}, te escribimos de Frubana Express...`, '_blank');
+                        window.open('https://wa.me/57' + cleanPhone + '?text=Hola ' + lead.contact_name + ', te escribimos de Frubana Express...', '_blank');
                     }}
-                    style={{ backgroundColor: '#10B981', color: 'white', border: 'none', width: '42px', height: '42px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)' }}
+                    style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     title="WhatsApp Directo"
                 >
-                    💬
+                    <MessageCircle size={16} strokeWidth={1.5} />
                 </button>
                 <button 
                     onClick={onWaitlist}
-                    style={{ backgroundColor: 'white', color: '#9F1239', border: '2px solid #FFE4E6', padding: '0 1.2rem', borderRadius: '12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '800', height: '42px' }}
+                    style={{ backgroundColor: 'white', color: '#9F1239', border: '1px solid #FFE4E6', padding: '0 0.8rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', height: '32px' }}
                 >
                     Gestionar
                 </button>
@@ -1113,17 +1187,26 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
         <div 
             onClick={onViewDetails}
             style={{ 
-                backgroundColor: 'white', 
-                borderRadius: '24px', 
+                backgroundColor: THEME.colors.surface, 
+                borderRadius: THEME.radius.xl, 
                 padding: '2rem', 
-                boxShadow: '0 8px 30px rgba(0,0,0,0.04)',
-                border: '1px solid #F0F2F5',
+                boxShadow: THEME.shadow.md,
+                border: `1px solid ${THEME.colors.border}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1.5rem',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = THEME.shadow.lg;
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = THEME.shadow.md;
             }}
         >
             {/* Tag / Status Area */}
@@ -1144,9 +1227,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                     padding: '0.4rem 0.8rem',
                     borderRadius: '8px',
                     fontSize: '0.7rem',
-                    fontWeight: '900',
-                    backgroundColor: isB2B ? '#E0F2FE' : isB2C ? '#DCFCE7' : '#FEE2E2',
-                    color: isB2B ? '#0369A1' : isB2C ? '#15803D' : '#991B1B',
+                    fontWeight: '800',
+                    backgroundColor: isB2B ? THEME.colors.primaryLight : isB2C ? '#E6F4EA' : '#FCE8E6',
+                    color: isB2B ? THEME.colors.primary : isB2C ? '#137333' : '#C5221F',
                     textTransform: 'uppercase'
                 }}>
                     {isB2B ? 'Institucional' : isB2C ? 'Hogar' : 'Prospecto'}
@@ -1161,7 +1244,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         backgroundColor: 'rgba(248, 250, 252, 0.9)',
                         padding: '4px 10px',
                         borderRadius: '10px',
-                        border: '1px solid #E2E8F0',
+                        border: `1px solid ${THEME.colors.border}`,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
                         <div style={{
@@ -1169,14 +1252,14 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             height: '10px',
                             borderRadius: '50%',
                             backgroundColor: 
-                                agreementStatus === 'active' ? '#10B981' : 
-                                agreementStatus === 'warning' ? '#F59E0B' : '#94A3B8',
-                            boxShadow: agreementStatus !== 'none' ? `0 0 8px ${agreementStatus === 'active' ? '#10B98166' : '#F59E0B66'}` : 'none'
+                                agreementStatus === 'active' ? THEME.colors.primary : 
+                                agreementStatus === 'warning' ? '#F59E0B' : THEME.colors.textSecondary,
+                            boxShadow: agreementStatus !== 'none' ? `0 0 8px ${agreementStatus === 'active' ? 'rgba(13,122,87,0.4)' : 'rgba(245,158,11,0.4)'}` : 'none'
                         }} />
                         <span style={{ 
                             fontSize: '0.6rem', 
                             fontWeight: '800', 
-                            color: '#475569',
+                            color: THEME.colors.textSecondary,
                             textTransform: 'uppercase',
                             letterSpacing: '0.02rem'
                         }}>
@@ -1203,13 +1286,13 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: (profileData?.latitude && profileData?.longitude) ? '#10B981' : '#EF4444',
-                            boxShadow: `0 0 6px ${(profileData?.latitude && profileData?.longitude) ? '#10B98188' : '#EF444488'}`
+                            backgroundColor: (profileData?.latitude && profileData?.longitude) ? THEME.colors.primary : '#EF4444',
+                            boxShadow: `0 0 6px ${(profileData?.latitude && profileData?.longitude) ? 'rgba(13,122,87,0.4)' : 'rgba(239,68,68,0.4)'}`
                         }} />
                         <span style={{ 
                             fontSize: '0.6rem', 
-                            fontWeight: '900', 
-                            color: (profileData?.latitude && profileData?.longitude) ? '#059669' : '#B91C1C',
+                            fontWeight: '800', 
+                            color: (profileData?.latitude && profileData?.longitude) ? THEME.colors.primary : '#B91C1C',
                             textTransform: 'uppercase',
                             letterSpacing: '0.02rem'
                         }}>
@@ -1224,18 +1307,18 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        backgroundColor: profileData.is_corporate_parent ? '#F0F9FF' : '#FFF7ED',
+                        backgroundColor: profileData.is_corporate_parent ? THEME.colors.primaryLight : '#FFF7ED',
                         padding: '4px 10px',
                         borderRadius: '10px',
                         border: '1px solid',
                         borderColor: profileData.is_corporate_parent ? '#BAE6FD' : '#FFEDD5',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                     }}>
-                        <span style={{ fontSize: '0.8rem' }}>{profileData.is_corporate_parent ? '🏰' : '📍'}</span>
+                        {profileData.is_corporate_parent ? <Building2 size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> : <MapPin size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />}
                         <span style={{ 
                             fontSize: '0.6rem', 
-                            fontWeight: '900', 
-                            color: profileData.is_corporate_parent ? '#0369A1' : '#C2410C',
+                            fontWeight: '800', 
+                            color: profileData.is_corporate_parent ? THEME.colors.primary : '#C2410C',
                             textTransform: 'uppercase',
                             letterSpacing: '0.02rem'
                         }}>
@@ -1247,40 +1330,46 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
             {/* Header Info */}
             <div style={{ marginTop: '0.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#1A202C', paddingRight: '100px', lineHeight: '1.3' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '700', color: THEME.colors.textMain, paddingRight: '100px', lineHeight: '1.3', fontFamily: THEME.typography.fontFamilyMain }}>
                     {isB2B ? profileData?.company_name : isB2C ? profileData?.contact_name : leadData?.company_name}
                 </h3>
-                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: '#718096', fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
-                {(isB2B || isLead) && <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: '#4A5568', fontWeight: '700' }}>👤 {isB2B ? profileData?.contact_name : leadData?.contact_name}</p>}
+                {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
+                {(isB2B || isLead) && (
+                    <p style={{ margin: '0.4rem 0', fontSize: '0.8rem', color: THEME.colors.textMain, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <User size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {isB2B ? profileData?.contact_name : leadData?.contact_name}
+                    </p>
+                )}
             </div>
 
             {/* Content Fields */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📞" label="Contacto" value={data.phone} />
+                    <InfoRow icon={<Phone size={14} strokeWidth={1.5} />} label="Contacto" value={data.phone} />
                 )}
                 {(isB2B || isLead || isB2C) && (
-                    <InfoRow icon="📧" label="Email" value={data.email} />
+                    <InfoRow icon={<Mail size={14} strokeWidth={1.5} />} label="Email" value={data.email} />
                 )}
                 {isB2B && profileData?.nit && (
-                    <InfoRow icon="🆔" label="NIT" value={profileData.nit} />
+                    <InfoRow icon={<FileText size={14} strokeWidth={1.5} />} label="NIT" value={profileData.nit} />
                 )}
                 {(isB2B || isB2C) && profileData && (
                     <InfoRow 
-                        icon="📍" 
+                        icon={<MapPin size={14} strokeWidth={1.5} />} 
                         label="Ubicación" 
                         value={`${profileData.address || ''}${profileData.municipality || profileData.city ? `, ${profileData.municipality || profileData.city}` : ''}${profileData.department ? `, ${profileData.department}` : ''}`} 
                     />
                 )}
                 {(isB2B || isB2C) && profileData && profileData.latitude && profileData.longitude && (
-                    <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '700', paddingLeft: '1.5rem' }}>
-                        🌐 {profileData.latitude.toFixed(4)}, {profileData.longitude.toFixed(4)} 
-                        <span style={{ marginLeft: '8px', color: '#059669' }}>✓ Geo</span>
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700', paddingLeft: '1.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Globe size={12} strokeWidth={1.5} /> {profileData.latitude.toFixed(4)}, {profileData.longitude.toFixed(4)} 
+                        <span style={{ marginLeft: '8px', color: THEME.colors.primary }}>✓ Geo</span>
                     </div>
                 )}
                 {isB2B && profileData && (
-                    <div style={{ padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.6rem' }}>⚙️ MODELO DE COTIZACIÓN</label>
+                    <div style={{ padding: '1rem', backgroundColor: THEME.colors.background, borderRadius: '16px', border: `1px solid ${THEME.colors.border}` }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.6rem' }}>
+                            <Settings size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> MODELO DE COTIZACIÓN
+                        </label>
                         <select 
                             value={profileData.pricing_model_id || ''} 
                             onChange={(e) => onUpdatePricingModel && onUpdatePricingModel(profileData.id, e.target.value)}
@@ -1288,11 +1377,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 width: '100%', 
                                 padding: '0.6rem', 
                                 borderRadius: '10px', 
-                                border: '1px solid #CBD5E0', 
+                                border: `1px solid ${THEME.colors.borderActive}`, 
                                 fontSize: '0.85rem', 
                                 fontWeight: '700',
-                                backgroundColor: profileData.pricing_model_id ? '#EFF6FF' : 'white',
-                                color: profileData.pricing_model_id ? '#1D4ED8' : '#4A5568'
+                                backgroundColor: profileData.pricing_model_id ? THEME.colors.primaryLight : 'white',
+                                color: profileData.pricing_model_id ? THEME.colors.primary : THEME.colors.textMain
                             }}
                         >
                             <option value="">-- Sin Modelo Asignado --</option>
@@ -1303,12 +1392,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         {selectedModel && (
                             <div style={{ marginTop: '0.8rem' }}>
                                 {selectedModel.description && (
-                                    <p style={{ margin: '0 0 0.4rem 0', fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic', lineHeight: '1.2' }}>
+                                    <p style={{ margin: '0 0 0.4rem 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>
                                         &quot;{selectedModel.description}&quot;
                                     </p>
                                 )}
-                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>
-                                    Margen base: <span style={{ color: '#059669', fontWeight: '800' }}>{selectedModel.base_margin_percent}%</span>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                    Margen base: <span style={{ color: THEME.colors.primary, fontWeight: '800' }}>{selectedModel.base_margin_percent}%</span>
                                 </p>
                             </div>
                         )}
@@ -1318,12 +1407,12 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isB2C) && profileData && (
                     <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                         {profileData.needs_crates && (
-                            <div style={{ backgroundColor: '#F0F9FF', color: '#0369A1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #BAE6FD', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span>🧺</span> CON CANASTAS
+                            <div style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', border: `1px solid ${THEME.colors.primary}33`, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Package size={12} strokeWidth={1.5} /> CON CANASTAS
                             </div>
                         )}
-                        <div style={{ backgroundColor: '#F8FAFC', color: '#475569', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>📄</span> {
+                        <div style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textMain, padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', border: `1px solid ${THEME.colors.border}`, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <FileText size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {
                                 profileData.document_type === 'invoice' 
                                     ? (profileData.print_invoice ? 'FACTURA IMPRESA' : 'FACTURA DIGITAL')
                                     : (profileData.remission_with_prices ? 'REMISIÓN ($)' : 'REMISIÓN (Sin $)')
@@ -1334,7 +1423,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
 
                 {isB2B && profileData && profileData.delivery_restrictions && (
                     <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'block', marginBottom: '0.2rem' }}>⚠️ RESTRICCIONES</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.2rem' }}>
+                            <AlertTriangle size={14} strokeWidth={1.5} /> RESTRICCIONES
+                        </span>
                         <span style={{ fontSize: '0.8rem', color: '#92400E', display: 'block', marginBottom: '0.4rem' }}>{profileData.delivery_restrictions}</span>
                         
                         {profileData.logistics_data && profileData.logistics_data.windows && profileData.logistics_data.windows.length > 0 && (
@@ -1348,7 +1439,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                 gap: '8px',
                                 marginTop: '0.5rem'
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>🤖</span>
+                                <Cpu size={14} strokeWidth={1.5} style={{ color: '#B45309' }} />
                                 <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#92400E', lineHeight: '1.2' }}>
                                     FRANJA ESTRUCTURADA: {formatTimeWindow(profileData.logistics_data)}
                                 </span>
@@ -1358,32 +1449,34 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 )}
                 {isB2C && profileData && profileData.total_orders !== undefined && (
                     <>
-                        <InfoRow icon="🛒" label="Actividad" value={`${profileData.total_orders || 0} Pedidos | $${(profileData.total_spent || 0).toLocaleString()} totales`} />
-                        {profileData.last_order && <InfoRow icon="📅" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
+                        <InfoRow icon={<ShoppingCart size={14} strokeWidth={1.5} />} label="Actividad" value={`${profileData.total_orders || 0} Pedidos | ${formatMoney(profileData.total_spent || 0)} totales`} />
+                        {profileData.last_order && <InfoRow icon={<Calendar size={14} strokeWidth={1.5} />} label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
                     </>
                 )}
                 {isLead && leadData && (
                     <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', backgroundColor: THEME.colors.background, padding: '1rem', borderRadius: '16px', border: `1px solid ${THEME.colors.border}` }}>
                             <div>
-                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tipo Negocio</label>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>{leadData.business_type || 'No especificado'}</div>
+                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', textTransform: 'uppercase' }}>Tipo Negocio</label>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain }}>{leadData.business_type || 'No especificado'}</div>
                             </div>
                             <div>
-                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño</label>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>{leadData.business_size || 'No especificado'}</div>
+                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', textTransform: 'uppercase' }}>Tamaño</label>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain }}>{leadData.business_size || 'No especificado'}</div>
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', backgroundColor: '#F1F5F9', borderRadius: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px' }}>
                             <div style={{ flex: 1 }}>
-                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block' }}>CONTACTOS</label>
-                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1E293B' }}>📞 {leadData.contact_count || 0} veces</div>
+                                <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block' }}>CONTACTOS</label>
+                                <div style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <Phone size={14} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {leadData.contact_count || 0} veces
+                                </div>
                             </div>
                             {leadData.last_contact_date && (
                                 <div style={{ flex: 2 }}>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block' }}>ÚLTIMO CONTACTO</label>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{new Date(leadData.last_contact_date as string).toLocaleDateString()}</div>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block' }}>ÚLTIMO CONTACTO</label>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: THEME.colors.textMain }}>{new Date(leadData.last_contact_date as string).toLocaleDateString()}</div>
                                 </div>
                             )}
                         </div>
@@ -1392,18 +1485,20 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             <div style={{ 
                                 padding: '0.8rem', 
                                 borderRadius: '12px', 
-                                backgroundColor: new Date(leadData.next_contact_date as string) < new Date() ? '#FEF2F2' : '#F0FDF4',
-                                border: `1px solid ${new Date(leadData.next_contact_date as string) < new Date() ? '#FEE2E2' : '#DCFCE7'}`,
+                                backgroundColor: new Date(leadData.next_contact_date as string) < new Date() ? '#FEF2F2' : THEME.colors.primaryLight,
+                                border: `1px solid ${new Date(leadData.next_contact_date as string) < new Date() ? '#FEE2E2' : 'rgba(13,122,87,0.2)'}`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '10px'
                             }}>
-                                <span style={{ fontSize: '1.2rem' }}>{new Date(leadData.next_contact_date as string) < new Date() ? '⚠️' : '📅'}</span>
+                                <span style={{ display: 'flex', alignItems: 'center' }}>
+                                    {new Date(leadData.next_contact_date as string) < new Date() ? <AlertTriangle size={16} strokeWidth={1.5} style={{ color: '#B91C1C' }} /> : <Calendar size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />}
+                                </span>
                                 <div>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#991B1B' : '#166534', display: 'block' }}>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#991B1B' : THEME.colors.primary, display: 'block' }}>
                                         {new Date(leadData.next_contact_date as string) < new Date() ? 'TAREA VENCIDA' : 'SIGUIENTE CONTACTO'}
                                     </label>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#B91C1C' : '#15803D' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#B91C1C' : THEME.colors.primary }}>
                                         {new Date(leadData.next_contact_date as string).toLocaleDateString()}
                                     </div>
                                 </div>
@@ -1411,7 +1506,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         )}
 
                         <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#718096', display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>ESTADO DE GESTIÓN</label>
                             <select
                                 value={leadData.status}
                                 onChange={(e) => onUpdateStatus && onUpdateStatus(leadData.id, e.target.value)}
@@ -1419,30 +1514,31 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                     width: '100%', 
                                     padding: '0.8rem', 
                                     borderRadius: '12px', 
-                                    border: '1px solid #E2E8F0',
+                                    border: `1px solid ${THEME.colors.border}`,
                                     fontWeight: '700',
-                                    backgroundColor: '#F8FAFC'
+                                    backgroundColor: THEME.colors.background,
+                                    color: THEME.colors.textMain
                                 }}
                             >
-                                <option value="new">🆕 Nuevo Contacto</option>
-                                <option value="contacted">📞 Contactado</option>
-                                <option value="converted">✅ Convertido a Cliente</option>
-                                <option value="rejected">❌ Descartado</option>
+                                <option value="new">Nuevo Contacto</option>
+                                <option value="contacted">Contactado</option>
+                                <option value="converted">Convertido a Cliente</option>
+                                <option value="rejected">Descartado</option>
                             </select>
                         </div>
 
                         {leadData.latitude && leadData.longitude ? (
-                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#F0FDF4', borderRadius: '12px', border: '1px solid #DCFCE7', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>📍</span>
+                            <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: THEME.colors.primaryLight, borderRadius: '12px', border: `1px solid ${THEME.colors.primary}33`, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <MapPin size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                 <div>
-                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#166534', display: 'block' }}>UBICACIÓN VERIFICADA</label>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#15803D' }}>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.primary, display: 'block' }}>UBICACIÓN VERIFICADA</label>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.primary }}>
                                         {leadData.latitude.toFixed(6)}, {leadData.longitude.toFixed(6)}
                                         <a 
                                             href={`https://www.google.com/maps?q=${leadData.latitude},${leadData.longitude}`} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            style={{ marginLeft: '10px', color: '#0891B2', textDecoration: 'none', fontSize: '0.75rem', fontWeight: '900' }}
+                                            style={{ marginLeft: '10px', color: THEME.colors.primary, textDecoration: 'none', fontSize: '0.75rem', fontWeight: '800' }}
                                         >
                                             Abrir Mapa ↗
                                         </a>
@@ -1451,7 +1547,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         ) : (
                             <div style={{ marginBottom: '1rem', padding: '0.8rem', backgroundColor: '#FEF2F2', borderRadius: '12px', border: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                <AlertTriangle size={16} strokeWidth={1.5} style={{ color: '#B91C1C' }} />
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#991B1B', display: 'block' }}>SIN UBICACIÓN GPS</label>
                                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#B91C1C' }}>
@@ -1461,9 +1557,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             </div>
                         )}
                         {leadData.notes && (
-                            <div style={{ backgroundColor: '#F0FDF4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #DCFCE7' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#15803D', display: 'block', marginBottom: '0.2rem' }}>📝 NOTA</span>
-                                <span style={{ fontSize: '0.8rem', color: '#166534' }}>{leadData.notes}</span>
+                            <div style={{ backgroundColor: THEME.colors.primaryLight, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.primary}33` }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '0.2rem' }}>
+                                    <FileText size={12} strokeWidth={1.5} /> NOTA
+                                </span>
+                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>{leadData.notes}</span>
                             </div>
                         )}
                     </>
@@ -1473,14 +1571,14 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
             {/* Actions */}
             <div 
                 onClick={(e) => e.stopPropagation()}
-                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #F0F2F5', display: 'flex', gap: '0.5rem' }}
+                style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', gap: '0.5rem' }}
             >
                 {onViewDetails && (
                     <button 
                         onClick={onViewDetails}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }} 
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'} 
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', color: THEME.colors.textSecondary, fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem' }} 
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; e.currentTarget.style.color = THEME.colors.textMain; }} 
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                     >
                         Ficha
                     </button>
@@ -1488,7 +1586,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {(isB2B || isB2C) && (
                     <button 
                         onClick={onEdit}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', color: THEME.colors.textSecondary, fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; e.currentTarget.style.color = THEME.colors.textMain; }} 
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                     >
                         Editar
                     </button>
@@ -1496,9 +1596,11 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {isLead && onRegisterContact && (
                     <button 
                         onClick={onRegisterContact}
-                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#10B981', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        style={{ flex: 1.5, padding: '0.8rem', borderRadius: '12px', border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.75rem', transition: 'all 0.2s' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                     >
-                        <span>✅</span> Registrar Contacto
+                        <Check size={14} strokeWidth={1.5} /> Registrar Contacto
                     </button>
                 )}
                 {isLead && onScheduleTask && (
@@ -1507,16 +1609,20 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', new Date(Date.now() + 86400000).toISOString().split('T')[0]);
                             if (date) onScheduleTask(date);
                         }}
-                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}
+                        style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', color: THEME.colors.textSecondary, fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.75rem', transition: 'all 0.2s' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; e.currentTarget.style.color = THEME.colors.textMain; }} 
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = THEME.colors.textSecondary; }}
                     >
-                        📅 Tarea
+                        <Calendar size={14} strokeWidth={1.5} /> Tarea
                     </button>
                 )}
                 <button 
                     onClick={handleWhatsApp}
-                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '700', cursor: 'pointer' }}
+                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: THEME.colors.primaryLight, color: THEME.colors.primary, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primary; e.currentTarget.style.color = 'white'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.color = THEME.colors.primary; }}
                 >
-                    WA
+                    <MessageCircle size={16} strokeWidth={1.5} />
                 </button>
             </div>
         </div>
@@ -1543,94 +1649,114 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
 
     return (
         <tr 
-            style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s', cursor: 'pointer' }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+            style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s', cursor: 'pointer' }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAF9')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             onClick={onViewDetails}
         >
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.9rem' }}>{client.company_name || client.contact_name}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>NIT: {client.nit || '---'}</div>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
-                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
+                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '4px', fontWeight: '800', textTransform: 'uppercase' }}>Matriz</span>}
+                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', textTransform: 'uppercase' }}>Sucursal</span>}
                     
                     {/* ICONOS OPERATIVOS ADICIONALES */}
                     {!isLead && (
                         <>
-                            {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0' }}>🧺 SI</span>}
-                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0' }}>
-                                📄 {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
+                            {client.needs_crates && (
+                                <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: `1px solid ${THEME.colors.primary}33`, display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                    <Package size={10} strokeWidth={1.5} /> SI
+                                </span>
+                            )}
+                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: THEME.colors.background, color: THEME.colors.textSecondary, padding: '1px 6px', borderRadius: '4px', fontWeight: '800', border: `1px solid ${THEME.colors.border}`, display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
                             </span>
                         </>
                     )}
                 </div>
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
-                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>📞 {client.phone}</div>
-                {client.email && <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '600', marginTop: '2px' }}>📧 {client.email}</div>}
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain }}>{client.contact_name}</div>
+                <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Phone size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {client.phone}
+                </div>
+                {client.email && (
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '500', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Mail size={12} strokeWidth={1.5} /> {client.email}
+                    </div>
+                )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{client.city} / {client.municipality}</div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{client.address}</div>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: THEME.colors.textMain }}>{client.city} / {client.municipality}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>{client.address}</div>
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 {isB2B ? (
                     <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0891B2' }}>{selectedModel?.name || 'Varios'}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Modelo de Precios</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.primary }}>{selectedModel?.name || 'Varios'}</div>
+                        <div style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary }}>Modelo de Precios</div>
                     </div>
                 ) : isLead ? (
                     <span style={{ 
                         fontSize: '0.7rem', 
                         padding: '4px 8px', 
                         borderRadius: '6px', 
-                        fontWeight: '900', 
+                        fontWeight: '800', 
                         textTransform: 'uppercase',
-                        backgroundColor: (client as any).status === 'new' ? '#EEF2FF' : '#FFFBEB',
-                        color: (client as any).status === 'new' ? '#4F46E5' : '#D97706'
+                        backgroundColor: (client as any).status === 'new' ? THEME.colors.primaryLight : '#FFFBEB',
+                        color: (client as any).status === 'new' ? THEME.colors.primary : '#D97706'
                     }}>
                         {(client as any).status}
                     </span>
                 ) : (
-                    <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>Hogar</span>
+                    <span style={{ fontSize: '0.85rem', color: THEME.colors.textSecondary }}>Hogar</span>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 {agreementStatus && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                         <div style={{ 
                             width: '8px', height: '8px', borderRadius: '50%', 
-                            backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
+                            backgroundColor: agreementStatus === 'active' ? THEME.colors.primary : agreementStatus === 'warning' ? '#F59E0B' : THEME.colors.textSecondary 
                         }} />
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
                     </div>
                 )}
                 {(client.latitude && client.longitude) ? (
-                    <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🛰️ GPS OK</div>
+                    <div style={{ fontSize: '0.7rem', color: THEME.colors.primary, fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                        <Globe size={12} strokeWidth={1.5} /> GPS OK
+                    </div>
                 ) : (
-                    <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                    <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                        <AlertTriangle size={12} strokeWidth={1.5} /> NO GPS
+                    </div>
                 )}
             </td>
-            <td style={{ padding: '1rem 1.2rem' }}>
+            <td style={{ padding: '0.65rem 1.25rem' }}>
                 <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                         onClick={onEdit} 
-                        style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        style={{ border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Editar"
-                    >✏️</button>
+                    >
+                        <Edit2 size={13} strokeWidth={1.5} />
+                    </button>
                     <button 
                         onClick={handleWhatsApp} 
-                        style={{ background: '#DCFCE7', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                        style={{ border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                         title="WhatsApp"
-                    >💬</button>
+                    >
+                        <MessageCircle size={13} strokeWidth={1.5} />
+                    </button>
                     {onRegisterContact && (
                         <button 
                             onClick={onRegisterContact} 
-                            style={{ background: '#F3E8FF', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            style={{ border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Registrar Contacto"
-                        >📞</button>
+                        >
+                            <Phone size={13} strokeWidth={1.5} />
+                        </button>
                     )}
                 </div>
             </td>
@@ -1638,13 +1764,13 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
     );
 }
 
-function InfoRow({ icon, label, value }: { icon: string, label: string, value: string | number | undefined | null }) {
+function InfoRow({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | number | undefined | null }) {
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem' }}>{icon}</span>
-            <div style={{ fontSize: '0.78rem' }}>
-                <span style={{ color: '#718096', fontWeight: '600' }}>{label}: </span>
-                <span style={{ color: '#1A202C', fontWeight: '800' }}>{value || 'N/A'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', color: THEME.colors.primary }}>{icon}</span>
+            <div style={{ fontSize: '0.78rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                <span style={{ color: THEME.colors.textSecondary, fontWeight: '600' }}>{label}: </span>
+                <span style={{ color: THEME.colors.textMain, fontWeight: '700' }}>{value || 'N/A'}</span>
             </div>
         </div>
     );
@@ -1652,9 +1778,9 @@ function InfoRow({ icon, label, value }: { icon: string, label: string, value: s
 
 function EmptyState({ text }: { text: string }) {
     return (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: '24px', border: '2px dashed #E2E8F0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔦</div>
-            <p style={{ color: '#718096', fontWeight: '700' }}>{text}</p>
+        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '5rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `2px dashed ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <Compass size={40} strokeWidth={1.5} style={{ color: THEME.colors.textSecondary, marginBottom: '1rem' }} />
+            <p style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>{text}</p>
         </div>
     );
 }
@@ -1978,14 +2104,14 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1.5rem' }}>
             <div style={{ 
-                backgroundColor: 'white', 
-                borderRadius: '32px', 
+                backgroundColor: THEME.colors.surface, 
+                borderRadius: THEME.radius.xl, 
                 width: '100%', 
                 maxWidth: '1200px', 
                 maxHeight: '92vh', 
                 overflowY: 'auto', 
-                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.4)',
-                border: '1px solid rgba(255,255,255,0.2)',
+                boxShadow: THEME.shadow.lg,
+                border: `1px solid ${THEME.colors.border}`,
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column'
@@ -2002,9 +2128,10 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 )}
                 {/* HEADER PREMIUM */}
                 <header style={{ 
-                    padding: '1.2rem 2.5rem', 
-                    background: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)', 
-                    borderBottom: '1px solid #E2E8F0',
+                    padding: '1.25rem 2.5rem', 
+                    background: THEME.colors.surface, 
+                    borderBottom: `1px solid ${THEME.colors.border}`,
+                    borderLeft: `3px solid ${THEME.colors.primary}`,
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
@@ -2014,72 +2141,80 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>{isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
-                            <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
+                            <span style={{ color: THEME.colors.primary, display: 'flex', alignItems: 'center' }}>
+                                {isReadOnly ? <FileText size={20} strokeWidth={1.5} /> : (isB2C ? <User size={20} strokeWidth={1.5} /> : (formData.is_corporate_parent ? <Building2 size={20} strokeWidth={1.5} /> : <MapPin size={20} strokeWidth={1.5} />))}
+                            </span>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>
                                 {isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
                             </h2>
                         </div>
-                        <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>
+                        <p style={{ color: THEME.colors.textSecondary, margin: 0, fontSize: '0.85rem', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
                             {isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
                         </p>
                     </div>
                     <button 
                         onClick={onClose} 
                         style={{ 
-                            border: 'none', 
-                            background: 'white', 
-                            width: '44px', 
-                            height: '44px', 
-                            borderRadius: '14px', 
+                            border: `1px solid ${THEME.colors.border}`, 
+                            background: THEME.colors.surface, 
+                            width: '36px', 
+                            height: '36px', 
+                            borderRadius: THEME.radius.md, 
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                            fontSize: '1.2rem',
-                            color: '#94A3B8',
+                            boxShadow: THEME.shadow.sm,
+                            color: THEME.colors.textSecondary,
                             transition: 'all 0.2s'
                         }}
-                    >✕</button>
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.surface; }}
+                    ><X size={18} strokeWidth={1.5} /></button>
                 </header>
 
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
                     
                     {/* SELECTOR DE TIPO DE ENTIDAD (SOLO CREACIÓN) - ULTRA COMPACTO */}
                     {!isEdit && !isReadOnly && (
-                        <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', backgroundColor: '#F1F5F9', padding: '6px', borderRadius: '16px', maxWidth: '600px', margin: '0 auto 2.5rem auto' }}>
+                        <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', backgroundColor: THEME.colors.background, padding: '6px', borderRadius: THEME.radius.lg, maxWidth: '600px', margin: '0 auto 2.5rem auto' }}>
                             {[
-                                { id: 'matriz', label: 'CASA MATRIZ', icon: '🏛️', sub: 'Legal / Fiscal', color: '#0891B2', active: formData.is_corporate_parent },
-                                { id: 'sucursal', label: 'SUCURSAL', icon: '📍', sub: 'Entrega / Picking', color: '#10B981', active: !formData.is_corporate_parent }
-                            ].map(type => (
-                                <div 
-                                    key={type.id}
-                                    onClick={() => setFormData({ ...formData, is_corporate_parent: type.id === 'matriz', parent_id: '', branch_id: '' })}
-                                    style={{ 
-                                        flex: 1, padding: '0.8rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
-                                        backgroundColor: type.active ? 'white' : 'transparent',
-                                        boxShadow: type.active ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                                        border: type.active ? `1px solid ${type.color}40` : '1px solid transparent'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '1.2rem' }}>{type.icon}</span>
-                                    <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: '900', color: type.active ? type.color : '#64748B' }}>{type.label}</div>
-                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: '#94A3B8' }}>{type.sub}</div>
+                                { id: 'matriz', label: 'CASA MATRIZ', icon: Building2, sub: 'Legal / Fiscal', color: THEME.colors.primary, active: formData.is_corporate_parent },
+                                { id: 'sucursal', label: 'SUCURSAL', icon: MapPin, sub: 'Entrega / Picking', color: THEME.colors.textSecondary, active: !formData.is_corporate_parent }
+                            ].map(type => {
+                                const IconComp = type.icon;
+                                return (
+                                    <div 
+                                        key={type.id}
+                                        onClick={() => setFormData({ ...formData, is_corporate_parent: type.id === 'matriz', parent_id: '', branch_id: '' })}
+                                        style={{ 
+                                            flex: 1, padding: '0.8rem', borderRadius: THEME.radius.md, cursor: 'pointer', transition: 'all 0.2s',
+                                            backgroundColor: type.active ? THEME.colors.surface : 'transparent',
+                                            boxShadow: type.active ? THEME.shadow.sm : 'none',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                            border: type.active ? `1px solid ${type.color}` : '1px solid transparent'
+                                        }}
+                                    >
+                                        <span style={{ color: type.active ? type.color : THEME.colors.textSecondary, display: 'flex', alignItems: 'center' }}>
+                                            <IconComp size={18} strokeWidth={1.5} />
+                                        </span>
+                                        <div style={{ textAlign: 'left' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '900', color: type.active ? type.color : THEME.colors.textSecondary }}>{type.label}</div>
+                                            <div style={{ fontSize: '0.6rem', fontWeight: '600', color: THEME.colors.textSecondary }}>{type.sub}</div>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
 
                     {isReadOnly && (
                         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                             <span style={{ 
-                                padding: '0.6rem 1.5rem', borderRadius: '50px', backgroundColor: formData.is_corporate_parent ? '#ECFEFF' : '#F0FDF4',
-                                color: formData.is_corporate_parent ? '#0891B2' : '#10B981', fontWeight: '900', fontSize: '0.75rem', border: `1px solid ${formData.is_corporate_parent ? '#0891B2' : '#10B981'}40`
+                                padding: '0.6rem 1.5rem', borderRadius: '50px', backgroundColor: THEME.colors.primaryLight,
+                                color: THEME.colors.primary, fontWeight: '900', fontSize: '0.75rem', border: `1px solid ${THEME.colors.primary}`
                             }}>
-                                {formData.is_corporate_parent ? '🏢 PERFIL DE CASA MATRIZ (FISCAL)' : '📍 PERFIL DE SUCURSAL (LOGÍSTICO)'}
+                                {formData.is_corporate_parent ? '🏠 PERFIL DE CASA MATRIZ (FISCAL)' : '📍 PERFIL DE SUCURSAL (LOGÍSTICO)'}
                             </span>
                         </div>
                     )}
@@ -2087,16 +2222,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                         
                         {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
-                        <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                        <section style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🆔</div>
-                                <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>IDENTIFICACIÓN Y VÍNCULOS</h4>
+                                <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                    <FileText size={16} strokeWidth={1.5} />
+                                </div>
+                                <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>IDENTIFICACIÓN Y VÍNCULOS</h4>
                             </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
                                     {!formData.is_corporate_parent && (
                                         <div style={{ position: 'relative' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: THEME.colors.textSecondary, marginBottom: '0.4rem', display: 'block', textTransform: 'uppercase' }}>VINCULAR A CASA MATRIZ</label>
                                             <div style={{ position: 'relative' }}>
                                                 <input 
                                                     type="text"
@@ -2110,18 +2247,18 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         setIsParentDropdownOpen(true);
                                                     }}
                                                     readOnly={isEdit || isReadOnly}
-                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? '#F8FAFC' : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
+                                                    style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '700', width: '100%', outline: 'none', backgroundColor: (isEdit || isReadOnly || formData.parent_id) ? THEME.colors.background : 'white', fontSize: '0.8rem', cursor: (isEdit || isReadOnly) ? 'default' : 'text' }}
                                                 />
                                                 {isParentDropdownOpen && !formData.parent_id && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, backgroundColor: 'white', borderRadius: '12px', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '6px', maxHeight: '220px', overflowY: 'auto' }}>
                                                         {potentialParents.filter(p => 
                                                             p.company_name?.toLowerCase().includes(parentSearch.toLowerCase()) || 
                                                             p.nit?.includes(parentSearch) ||
                                                             p.razon_social?.toLowerCase().includes(parentSearch.toLowerCase())
                                                         ).map(p => (
-                                                            <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
-                                                                <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{p.company_name}</div>
-                                                                <div style={{ fontSize: '0.65rem', color: '#94A3B8', display: 'flex', gap: '8px' }}>
+                                                            <div key={p.id} onClick={() => { handleParentSelection(p.id); setIsParentDropdownOpen(false); }} style={{ padding: '0.8rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                                <div style={{ fontWeight: '800', fontSize: '0.8rem', color: THEME.colors.textMain }}>{p.company_name}</div>
+                                                                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, display: 'flex', gap: '8px' }}>
                                                                     <span>NIT: {p.nit}</span>
                                                                     <span>•</span>
                                                                     <span style={{ fontStyle: 'italic' }}>{p.razon_social}</span>
@@ -2149,15 +2286,15 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
 
 
-                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginTop: '1.5rem' }}>
+                                    <div style={{ backgroundColor: THEME.colors.background, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1.5rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                            <span style={{ fontSize: '1rem' }}>📧</span>
-                                            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Configuración de Notificación de Factura</span>
+                                            <span style={{ color: THEME.colors.primary, display: 'flex', alignItems: 'center' }}><Mail size={16} strokeWidth={1.5} /></span>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Configuración de Notificación de Factura</span>
                                         </div>
                                         
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                                             {/* Email 1 */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
                                                 <input type="checkbox" checked={formData.notify_email_1} onChange={(e) => setFormData({...formData, notify_email_1: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
                                                 <div style={{ flex: 1 }}>
                                                     <FormField label="Email Principal" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} placeholder="correo@ejemplo.com" readOnly={isReadOnly} />
@@ -2165,7 +2302,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </div>
 
                                             {/* Email 2 */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
                                                 <input type="checkbox" checked={formData.notify_email_2} onChange={(e) => setFormData({...formData, notify_email_2: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
                                                 <div style={{ flex: 1 }}>
                                                     <FormField label="Email Secundario" value={formData.email_2} onChange={(v) => setFormData({...formData, email_2: v})} placeholder="correo2@ejemplo.com" readOnly={isReadOnly} />
@@ -2173,7 +2310,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </div>
 
                                             {/* Email 3 */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0.6rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
                                                 <input type="checkbox" checked={formData.notify_email_3} onChange={(e) => setFormData({...formData, notify_email_3: e.target.checked})} style={{ width: '18px', height: '18px', cursor: isReadOnly ? 'default' : 'pointer' }} disabled={isReadOnly} />
                                                 <div style={{ flex: 1 }}>
                                                     <FormField label="Email Terciario" value={formData.email_3} onChange={(v) => setFormData({...formData, email_3: v})} placeholder="correo3@ejemplo.com" readOnly={isReadOnly} />
@@ -2185,10 +2322,12 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                         {/* BLOQUE: CARTERA Y LEGAL (SOLO MATRIZ) */}
                         {formData.is_corporate_parent && (
-                            <section style={{ backgroundColor: '#F0F9FF', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BAE6FD' }}>
+                            <section style={{ backgroundColor: THEME.colors.background, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                    <div style={{ width: '32px', height: '32px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>⚖️</div>
-                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0369A1', margin: 0 }}>CARTERA, DOCUMENTACIÓN Y REFERENCIAS</h4>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                        <Sliders size={16} strokeWidth={1.5} />
+                                    </div>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0 }}>CARTERA, DOCUMENTACIÓN Y REFERENCIAS</h4>
                                 </div>
                                 
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.2rem' }}>
@@ -2198,8 +2337,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                 </div>
                                 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem', marginTop: '1.2rem' }}>
-                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E0F2FE' }}>
-                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 01</div>
+                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: `1px solid ${THEME.colors.border}` }}>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: THEME.colors.textSecondary, marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 01</div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.8rem' }}>
                                             <FormField label="Razón Social" value={formData.comm_ref_1_name} onChange={(v) => setFormData({...formData, comm_ref_1_name: v})} readOnly={isReadOnly} />
                                             <FormField label="NIT" value={formData.comm_ref_1_nit} onChange={(v) => setFormData({...formData, comm_ref_1_nit: v})} readOnly={isReadOnly} />
@@ -2209,8 +2348,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             <FormField label="Email" value={formData.comm_ref_1_email} onChange={(v) => setFormData({...formData, comm_ref_1_email: v})} readOnly={isReadOnly} />
                                         </div>
                                     </div>
-                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #E0F2FE' }}>
-                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 02</div>
+                                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '16px', border: `1px solid ${THEME.colors.border}` }}>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: '900', color: THEME.colors.textSecondary, marginBottom: '0.8rem', textTransform: 'uppercase' }}>Referencia Comercial 02</div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.8rem' }}>
                                             <FormField label="Razón Social" value={formData.comm_ref_2_name} onChange={(v) => setFormData({...formData, comm_ref_2_name: v})} readOnly={isReadOnly} />
                                             <FormField label="NIT" value={formData.comm_ref_2_nit} onChange={(v) => setFormData({...formData, comm_ref_2_nit: v})} readOnly={isReadOnly} />
@@ -2225,20 +2364,22 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         )}
 
                             {/* BLOQUE: CONFIGURACIÓN COMERCIAL (COMMON) */}
-                            <section style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '32px', border: '1px solid #E2E8F0' }}>
+                            <section style={{ backgroundColor: THEME.colors.surface, padding: '2rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-                                    <div style={{ width: '36px', height: '36px', backgroundColor: '#F8FAFC', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>💰</div>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>ESTRUCTURA COMERCIAL</h4>
+                                    <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.primary }}>
+                                        <CreditCard size={18} strokeWidth={1.5} />
+                                    </div>
+                                    <h4 style={{ fontSize: '1rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>ESTRUCTURA COMERCIAL</h4>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
+                                            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.02rem' }}>Modelo de Precios</label>
                                             <select 
                                                 value={formData.pricing_model_id} 
                                                 onChange={(e) => setFormData({...formData, pricing_model_id: e.target.value})} 
                                                 disabled={isReadOnly}
-                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? '#F8FAFC' : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
+                                                style={{ height: '34px', padding: '0 0.8rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, fontWeight: '700', fontSize: '0.8rem', backgroundColor: isReadOnly ? THEME.colors.background : 'white', outline: 'none', width: '100%', cursor: isReadOnly ? 'default' : 'pointer' }}
                                             >
                                                 <option value="">Seleccionar...</option>
                                                 {pricingModels.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
@@ -2257,9 +2398,9 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             </section>
 
               {/* BLOQUE: CONTACTO OPERATIVO (COMMON) */}
-                            <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}` }}>
+                            <section style={{ backgroundColor: THEME.colors.surface, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
+                                    <div style={{ width: '32px', height: '32px', backgroundColor: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /></div>
                                     <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, fontFamily: THEME.typography.fontFamilyMain }}>CONTACTO OPERATIVO</h4>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.2rem' }}>
@@ -2777,7 +2918,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 function FormField({ label, value, onChange, type = 'text', required = false, step = undefined, readOnly = false, placeholder = '' }: { label: string, value: string | number | undefined, onChange: (v: string) => void, type?: string, required?: boolean, step?: string, readOnly?: boolean, placeholder?: string }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.02rem' }}>
+            <label style={{ fontSize: '0.65rem', fontWeight: '900', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.02rem', fontFamily: THEME.typography.fontFamilySecondary }}>
                 {label} {required && <span style={{ color: '#EF4444' }}>*</span>}
             </label>
             <input 
@@ -2792,12 +2933,14 @@ function FormField({ label, value, onChange, type = 'text', required = false, st
                     width: '100%', 
                     height: '34px',
                     padding: '0 0.6rem', 
-                    borderRadius: '8px', 
-                    border: '1px solid #E2E8F0', 
+                    borderRadius: THEME.radius.sm, 
+                    border: `1px solid ${THEME.colors.border}`, 
                     outline: 'none', 
                     fontWeight: '600',
                     fontSize: '0.8rem',
-                    backgroundColor: readOnly ? '#F8FAFC' : 'white'
+                    backgroundColor: readOnly ? THEME.colors.background : 'white',
+                    fontFamily: THEME.typography.fontFamilySecondary,
+                    color: THEME.colors.textMain
                 }}
             />
         </div>
@@ -2840,7 +2983,7 @@ function DocumentUploadField({ label, url, onUpload, readOnly = false }: { label
     };
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: '#F8FAFC', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '28px', height: '28px', backgroundColor: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                     {url ? (
@@ -2943,13 +3086,21 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     };
 
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.xl, width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
-                <header style={{ padding: '2rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
+            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
+                <header style={{ 
+                    padding: '1.25rem 2rem', 
+                    borderBottom: `1px solid ${THEME.colors.border}`, 
+                    borderLeft: `3px solid ${THEME.colors.primary}`,
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    background: THEME.colors.surface
+                }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Sliders size={20} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain }}>
                                 {readOnly ? 'Consulta de Excepciones' : 'Excepciones Logísticas'}
                             </h3>
                         </div>
@@ -2958,19 +3109,20 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     <button 
                         onClick={onClose} 
                         style={{ 
-                            border: 'none', 
-                            background: '#F1F5F9', 
+                            border: `1px solid ${THEME.colors.border}`, 
+                            background: THEME.colors.surface, 
                             width: '32px', 
                             height: '32px', 
-                            borderRadius: '8px', 
+                            borderRadius: THEME.radius.md, 
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            boxShadow: THEME.shadow.sm,
                             transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#E2E8F0'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.surface}
                     >
                         <X size={16} style={{ color: THEME.colors.textSecondary }} />
                     </button>
@@ -2985,7 +3137,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 padding: '1rem', 
                                 borderRadius: THEME.radius.md, 
                                 border: `2px dashed ${THEME.colors.border}`, 
-                                background: '#F8FAFC', 
+                                background: THEME.colors.background, 
                                 color: THEME.colors.textSecondary, 
                                 fontWeight: '600', 
                                 cursor: 'pointer', 
@@ -2995,14 +3147,14 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 transition: 'all 0.2s'
                             }}
                             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; e.currentTarget.style.borderColor = THEME.colors.primary; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.border; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = THEME.colors.background; e.currentTarget.style.borderColor = THEME.colors.border; }}
                         >
                             + Agregar nueva regla personalizada
                         </button>
                     )}
 
                     {!readOnly && isAdding && (
-                        <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginBottom: '2rem' }}>
+                        <div style={{ backgroundColor: THEME.colors.background, padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginBottom: '2rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Producto Original (Buscador)</label>
@@ -3024,7 +3176,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     width: '100%', 
                                                     height: '38px', 
                                                     padding: '0 1rem 0 2.8rem', 
-                                                    borderRadius: '8px', 
+                                                    borderRadius: THEME.radius.md, 
                                                     border: `1px solid ${THEME.colors.border}`, 
                                                     fontWeight: '500',
                                                     fontSize: '0.85rem',
@@ -3047,7 +3199,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         {showResults && searchTerm.length > 0 && (
                                             <div style={{ 
                                                 position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, 
                                                 boxShadow: THEME.shadow.lg, 
                                                 zIndex: 10, marginTop: '8px', maxHeight: '250px', overflowY: 'auto' 
                                             }}>
@@ -3070,7 +3222,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                                                 transition: 'background 0.2s'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'}
                                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -3105,13 +3257,59 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     />
                                 </div>
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                    <button onClick={() => {
-                                        setIsAdding(false);
-                                        setEditingId(null);
-                                        setNewException({ product_id: '', nickname: '', picking_note: '' });
-                                        setSearchTerm('');
-                                    }} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary, fontSize: '0.8rem' }}>Cancelar</button>
-                                    <button onClick={handleSave} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.8rem' }}>Guardar Regla</button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            setIsAdding(false);
+                                            setEditingId(null);
+                                            setNewException({ product_id: '', nickname: '', picking_note: '' });
+                                            setSearchTerm('');
+                                        }} 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '0.6rem', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1px solid ${THEME.colors.borderActive}`, 
+                                            background: 'transparent', 
+                                            color: THEME.colors.textSecondary, 
+                                            fontWeight: '600', 
+                                            cursor: 'pointer', 
+                                            fontFamily: THEME.typography.fontFamilySecondary, 
+                                            fontSize: '0.75rem',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = THEME.colors.textSecondary;
+                                            e.currentTarget.style.color = THEME.colors.textMain;
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                            e.currentTarget.style.color = THEME.colors.textSecondary;
+                                        }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={handleSave} 
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: '0.6rem', 
+                                            borderRadius: THEME.radius.md, 
+                                            border: 'none', 
+                                            background: THEME.colors.primary, 
+                                            color: 'white', 
+                                            fontWeight: '600', 
+                                            cursor: 'pointer', 
+                                            fontFamily: THEME.typography.fontFamilyMain, 
+                                            fontSize: '0.8rem',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                    >
+                                        Guardar Regla
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -3154,19 +3352,33 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     setSearchTerm(`[${exc.products?.sku}] ${exc.products?.name}`);
                                                     setIsAdding(true);
                                                 }} 
-                                                style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                style={{ border: `1px solid ${THEME.colors.borderActive}`, background: 'transparent', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: THEME.radius.md, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                                    e.currentTarget.style.borderColor = THEME.colors.primary;
+                                                    e.currentTarget.style.color = THEME.colors.primary;
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                    e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                                    e.currentTarget.style.color = THEME.colors.textSecondary;
+                                                }}
                                             >
-                                                <Edit2 size={14} />
+                                                <Edit2 size={14} style={{ strokeWidth: 1.5 }} />
                                             </button>
                                             <button 
                                                 onClick={() => handleDelete(exc.id)} 
-                                                style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: THEME.radius.md, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#FEE2E2';
+                                                    e.currentTarget.style.borderColor = '#EF4444';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                                    e.currentTarget.style.borderColor = '#FCA5A5';
+                                                }}
                                             >
-                                                <Trash2 size={14} />
+                                                <Trash2 size={14} style={{ strokeWidth: 1.5 }} />
                                             </button>
                                         </div>
                                     )}
