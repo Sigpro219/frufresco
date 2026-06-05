@@ -237,7 +237,7 @@ export async function POST(request: Request) {
                         loadLimits: {
                             "weight": { "maxLoad": String(v.capacity_kg) },
                             "crates": { "maxLoad": String(v.max_crates_capacity || 483) },
-                            "refrigerated": { "maxLoad": "0" } // All active vehicles default to dry, i.e. 0 refrigerated capacity
+                            "refrigerated": { "maxLoad": "999" } // Permitir capacidad refrigerada para que Google no descarte pedidos con refrigerados
                         },
                         fixedCost: vehicleFixedCost,
                         startTimeWindows: [

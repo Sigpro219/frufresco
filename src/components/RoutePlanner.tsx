@@ -1029,10 +1029,31 @@ export default function RoutePlanner() {
                 }}>
                     {[...vehicles]
                         .sort((a, b) => {
-                            const aAssigned = (assignments[a.id] || []).length;
-                            const bAssigned = (assignments[b.id] || []).length;
-                            if (aAssigned > 0 && bAssigned === 0) return -1;
-                            if (bAssigned > 0 && aAssigned === 0) return 1;
+                            const aOrders = assignments[a.id] || [];
+                            const bOrders = assignments[b.id] || [];
+                            
+                            // 1. Mostrar vehículos asignados primero
+                            if (aOrders.length > 0 && bOrders.length === 0) return -1;
+                            if (bOrders.length > 0 && aOrders.length === 0) return 1;
+                            
+                            // 2. Si ambos están asignados, ordenar por la ventana horaria del primer pedido (Parada 1)
+                            if (aOrders.length > 0 && bOrders.length > 0) {
+                                const getFirstOrderMin = (vId: string) => {
+                                    const firstOrderId = assignments[vId][0];
+                                    const order = orders.find(o => o.id === firstOrderId);
+                                    if (order && order.display_slot && order.display_slot !== 'Flexible') {
+                                        const startTimeStr = order.display_slot.split(' - ')[0];
+                                        const [h, m] = startTimeStr.split(':').map(Number);
+                                        return h * 60 + m;
+                                    }
+                                    return 9999; // Mandar flexibles al final
+                                };
+                                const minA = getFirstOrderMin(a.id);
+                                const minB = getFirstOrderMin(b.id);
+                                if (minA !== minB) return minA - minB;
+                            }
+                            
+                            // 3. Fallback: Orden alfabético por placa
                             return a.plate.localeCompare(b.plate);
                         })
                         .map(vehicle => {
@@ -1284,67 +1305,7 @@ export default function RoutePlanner() {
             `}</style>
 
             {optimizing && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(8px)',
-                    zIndex: 9999,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontFamily: 'Inter, system-ui, sans-serif'
-                }}>
-                    <div style={{
-                        backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        padding: '3rem',
-                        borderRadius: '24px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                        textAlign: 'center',
-                        maxWidth: '450px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '1.5rem'
-                    }}>
-                        <div style={{ position: 'relative', width: '80px', height: '80px' }}>
-                            {/* Circular spinning border */}
-                            <div style={{
-                                width: '100%',
-                                height: '100%',
-                                borderRadius: '50%',
-                                border: '4px solid rgba(99, 102, 241, 0.15)',
-                                borderTop: '4px solid #6366F1',
-                                animation: 'spin 1s linear infinite'
-                            }} />
-                            {/* AI Pulse Dot inside */}
-                            <div style={{
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                fontSize: '2rem',
-                                animation: 'pulse 1.5s ease-in-out infinite'
-                            }}>
-                                🤖
-                            </div>
-                        </div>
-                        <div>
-                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '800', background: 'linear-gradient(135deg, #A5B4FC, #818CF8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                Inteligencia Artificial & Google Engine
-                            </h3>
-                            <p style={{ margin: 0, fontSize: '0.875rem', color: '#94A3B8', lineHeight: '1.4' }}>
-                                Calculando el plan de distribución óptimo, consolidando capacidad de flota y respetando ventanas horarias...
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <OptimizingModal />
             )}
 
             {showAiModal && (
@@ -1461,6 +1422,79 @@ export default function RoutePlanner() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function OptimizingModal() {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
+        return () => clearInterval(timer);
+    }, []);
+    const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const secs = (elapsed % 60).toString().padStart(2, '0');
+
+    return (
+        <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+            <div style={{
+                backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '3rem',
+                borderRadius: '24px',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                textAlign: 'center',
+                maxWidth: '450px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1.5rem'
+            }}>
+                <div style={{ position: 'relative', width: '80px', height: '80px' }}>
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        border: '4px solid rgba(99, 102, 241, 0.15)',
+                        borderTop: '4px solid #6366F1',
+                        animation: 'spin 1s linear infinite'
+                    }} />
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        fontSize: '2rem',
+                        animation: 'pulse 1.5s ease-in-out infinite'
+                    }}>
+                        🤖
+                    </div>
+                </div>
+                <div>
+                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: '800', background: 'linear-gradient(135deg, #A5B4FC, #818CF8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                        Inteligencia Artificial & Google Engine
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#94A3B8', lineHeight: '1.4' }}>
+                        Calculando el plan de distribución óptimo...<br/>
+                        <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#fff' }}>{mins}:{secs}</span>
+                    </p>
+                </div>
+            </div>
         </div>
     );
 }

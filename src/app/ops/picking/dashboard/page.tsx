@@ -278,6 +278,17 @@ export default function PickingDashboard() {
         }
     }, []);
 
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const debouncedLoadData = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+            loadData(undefined, true);
+        }, 2500);
+    }, [loadData]);
+
     useEffect(() => {
         loadData();
 
@@ -288,12 +299,12 @@ export default function PickingDashboard() {
             }
         })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, (payload) => {
-                console.log('⚡ DB Update:', payload);
-                loadData(undefined, true);
+                console.log('⚡ DB Update (Debouncing...):', payload);
+                debouncedLoadData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-                console.log('⚡ Order Update:', payload);
-                loadData(undefined, true);
+                console.log('⚡ Order Update (Debouncing...):', payload);
+                debouncedLoadData();
             })
             .on('broadcast', { event: 'refresh' }, (payload) => {
                 console.log('🚀 INSTANT BROADCAST RECEIVED:', payload);
@@ -305,9 +316,12 @@ export default function PickingDashboard() {
             });
 
         return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
             supabase.removeChannel(channel);
         };
-    }, [loadData]);
+    }, [loadData, debouncedLoadData]);
 
     const handleCellClick = async (product: Product, clientId: string, clientName: string, cellData: CellData) => {
         if (!cellData || cellData.ordered === 0) return;
@@ -361,10 +375,7 @@ export default function PickingDashboard() {
         return name.toUpperCase().replace('RESTAURANTE', '').replace('CORPORACION', '').trim();
     };
 
-    // --- Header Grouping Logic ---
-    const zoneHeaders: { name: string; count: number; color: string; percent: number }[] = [];
-    let currentZone = '';
-    let currentCount = 0;
+
 
     // Helper to calculate zone percent
     const getZonePercent = (zoneName: string) => {
@@ -374,8 +385,9 @@ export default function PickingDashboard() {
         const zoneClients = clients.filter(c => c.zone_name === zoneName);
 
         zoneClients.forEach(c => {
-            Object.values(matrix).forEach(prodRow => {
-                const cell = prodRow[c.id];
+            products.forEach(product => {
+                const prodRow = matrix[product.id];
+                const cell = prodRow?.[c.id];
                 if (cell) {
                     total += cell.ordered;
                     picked += Math.min(cell.ordered, cell.picked);
@@ -388,7 +400,68 @@ export default function PickingDashboard() {
         return percent >= 100 ? 100 : Math.floor(percent);
     };
 
-    clients.forEach((client, index) => {
+
+
+    // Helper for Client Completion
+    const isClientComplete = useCallback((clientId: string) => {
+        let hasOrders = false;
+        let allItemsPicked = true;
+
+        products.forEach(product => {
+            const prodRow = matrix[product.id];
+            const cell = prodRow?.[clientId];
+            if (cell && cell.ordered > 0) {
+                hasOrders = true;
+                if (cell.picked < cell.ordered) {
+                    allItemsPicked = false;
+                }
+            }
+        });
+
+        return hasOrders && allItemsPicked;
+    }, [matrix, products]);
+
+    const isProductComplete = useCallback((productId: string) => {
+        const prodRow = matrix[productId];
+        if (!prodRow) return false;
+        const cells = Object.values(prodRow);
+        if (cells.length === 0) return false;
+        return cells.every(cell => cell.ordered === 0 || cell.picked >= cell.ordered);
+    }, [matrix]);
+
+    const isZoneComplete = useCallback((zoneName: string) => {
+        const zoneClients = clients.filter(c => c.zone_name === zoneName);
+        if (zoneClients.length === 0) return false;
+        return zoneClients.every(c => isClientComplete(c.id));
+    }, [clients, isClientComplete]);
+
+    const sortedClients = [...clients].sort((a, b) => {
+        const isZoneCompleteA = isZoneComplete(a.zone_name);
+        const isZoneCompleteB = isZoneComplete(b.zone_name);
+        if (isZoneCompleteA !== isZoneCompleteB) {
+            return isZoneCompleteA ? 1 : -1; // Complete to the right (end)
+        }
+        
+        const zoneA = a.zone_name.toUpperCase();
+        const zoneB = b.zone_name.toUpperCase();
+        if (zoneA !== zoneB) {
+            if (zoneA === 'SIN ASIGNAR') return 1;
+            if (zoneB === 'SIN ASIGNAR') return -1;
+            return zoneA.localeCompare(zoneB);
+        }
+        
+        const spaceA = a.warehouse_spaces?.[0] || 999;
+        const spaceB = b.warehouse_spaces?.[0] || 999;
+        if (spaceA !== spaceB) return spaceA - spaceB;
+        
+        return a.company_name.localeCompare(b.company_name);
+    });
+
+    const zoneHeaders: { name: string; count: number; color: string; percent: number }[] = [];
+    let currentZone = '';
+    let currentCount = 0;
+
+    sortedClients.forEach((client, index) => {
         if (client.zone_name !== currentZone) {
             if (currentZone !== '') {
                 zoneHeaders.push({
@@ -404,7 +477,7 @@ export default function PickingDashboard() {
             currentCount++;
         }
 
-        if (index === clients.length - 1) {
+        if (index === sortedClients.length - 1) {
             zoneHeaders.push({
                 name: currentZone,
                 count: currentCount,
@@ -413,24 +486,6 @@ export default function PickingDashboard() {
             });
         }
     });
-
-    // Helper for Client Completion
-    const isClientComplete = useCallback((clientId: string) => {
-        let hasOrders = false;
-        let allItemsPicked = true;
-
-        Object.values(matrix).forEach(prodRow => {
-            const cell = prodRow[clientId];
-            if (cell && cell.ordered > 0) {
-                hasOrders = true;
-                if (cell.picked < cell.ordered) {
-                    allItemsPicked = false;
-                }
-            }
-        });
-
-        return hasOrders && allItemsPicked;
-    }, [matrix]);
 
     // Helper for Category Progress
     const getCategoryPercent = (categoryName: string, products: Product[]) => {
@@ -483,28 +538,39 @@ export default function PickingDashboard() {
     // --- Global Progress Logic ---
     let totalGlobalOrdered = 0;
     let totalGlobalPicked = 0;
-    let totalCompletedUnits = 0;
-    let totalPartialUnits = 0;
+    let totalGlobalPickedForProgress = 0;
+    let totalCompletedUnitsForProgress = 0;
+    let totalPartialUnitsForProgress = 0;
 
     Object.values(matrix).forEach(prodRow => {
         Object.values(prodRow).forEach(cell => {
             totalGlobalOrdered += cell.ordered;
             totalGlobalPicked += cell.picked;
 
-            if (cell.picked >= cell.ordered && cell.ordered > 0) {
-                totalCompletedUnits += cell.picked;
-            } else {
-                totalPartialUnits += cell.picked;
+            const pickedForProgress = Math.min(cell.ordered, cell.picked);
+            totalGlobalPickedForProgress += pickedForProgress;
+
+            if (cell.ordered > 0) {
+                if (cell.picked >= cell.ordered) {
+                    totalCompletedUnitsForProgress += cell.ordered;
+                } else {
+                    totalPartialUnitsForProgress += cell.picked;
+                }
             }
         });
     });
 
     const globalPercent = totalGlobalOrdered > 0
-        ? Math.round((totalGlobalPicked / totalGlobalOrdered) * 100)
+        ? Math.min(100, Math.round((totalGlobalPickedForProgress / totalGlobalOrdered) * 100))
         : 0;
 
-    const percentComplete = totalGlobalOrdered > 0 ? Math.round((totalCompletedUnits / totalGlobalOrdered) * 100) : 0;
-    const percentPartial = totalGlobalOrdered > 0 ? Math.round((totalPartialUnits / totalGlobalOrdered) * 100) : 0;
+    const percentComplete = totalGlobalOrdered > 0 
+        ? Math.min(100, Math.round((totalCompletedUnitsForProgress / totalGlobalOrdered) * 100)) 
+        : 0;
+        
+    const percentPartial = totalGlobalOrdered > 0 
+        ? Math.min(100 - percentComplete, Math.round((totalPartialUnitsForProgress / totalGlobalOrdered) * 100)) 
+        : 0;
 
     // Crosshair Highlighting Logic
     const clientsWithAlerts = new Set<string>();
@@ -532,6 +598,15 @@ export default function PickingDashboard() {
 
     // --- SMART BANNER LOGIC ---
     const bannerAlerts: { type: 'critical' | 'warning' | 'info', msg: string }[] = [];
+
+    // Add alerts for fully completed trucks
+    const completedZones = zoneHeaders.filter(z => z.percent === 100);
+    completedZones.forEach(zone => {
+        bannerAlerts.push({
+            type: 'critical',
+            msg: `🚨 ¡CAMIÓN ${zone.name.toUpperCase()} AL 100%! PROCEDER CON DESPACHO INMEDIATO 🚨`
+        });
+    });
 
     if (!isConnected) {
         bannerAlerts.push({ type: 'critical', msg: 'CONEXIÓN PERDIDA - Intentando reconectar...' });
@@ -586,17 +661,17 @@ export default function PickingDashboard() {
     const bannerText = bannerAlerts.map(a => a.msg).join(' ••• ');
 
     return (
-        <main style={{ backgroundColor: '#0A111C', height: '100vh', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <main style={{ backgroundColor: '#080D12', height: '100vh', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* TOP HEADER */}
             <header style={{ 
                 height: cfg.headerHeight, 
-                borderBottom: '1px solid rgba(255,255,255,0.08)', 
+                borderBottom: '1px solid rgba(255,255,255,0.05)', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'space-between', 
                 padding: density === 'tv' ? '0 1rem' : '0 2rem', 
-                background: '#121D2D',
+                background: '#0F1820',
                 flexShrink: 0
             }}>
                 <div
@@ -757,46 +832,94 @@ export default function PickingDashboard() {
                         <tr>
                             <th style={{
                                 position: 'sticky', top: 0, left: 0, zIndex: 40,
-                                background: '#0A111C', minWidth: '200px',
-                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
+                                background: '#080D12', minWidth: '200px',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
                                 height: '44px'
                             }}></th>
 
-                            {zoneHeaders.map((zone, i) => (
-                                <th key={i} colSpan={zone.count} style={{
-                                    position: 'sticky', top: 0, zIndex: 30,
-                                    background: '#121D2D',
-                                    color: zone.percent === 100 ? '#0D7A57' : zone.color,
-                                    borderBottom: `4px solid ${zone.percent === 100 ? '#0D7A57' : zone.color}`,
-                                    borderRight: '1px solid rgba(255,255,255,0.08)',
-                                    textAlign: 'center',
-                                    fontWeight: 'bold',
-                                    fontSize: '1rem',
-                                    padding: '0.5rem 0'
-                                }}>
-                                    {zone.name.toUpperCase()} <span style={{ color: '#fff', opacity: 0.7, marginLeft: '5px' }}>{zone.percent}%</span>
-                                </th>
-                            ))}
+                            {zoneHeaders.map((zone, i) => {
+                                const complete = zone.percent === 100;
+                                return (
+                                    <th key={i} colSpan={zone.count} style={{
+                                        position: 'sticky', top: 0, zIndex: 30,
+                                        background: '#0F1820',
+                                        color: complete ? '#34D399' : zone.color,
+                                        borderBottom: `4px solid ${complete ? '#10B981' : zone.color}`,
+                                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                                        textAlign: 'center',
+                                        fontWeight: 'bold',
+                                        fontSize: '1rem',
+                                        padding: '0.5rem 0'
+                                    }}>
+                                        {complete ? (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                                                <span>✓ {zone.name.toUpperCase()}</span>
+                                                <span style={{
+                                                    background: '#EF4444',
+                                                    color: '#fff',
+                                                    fontSize: '0.7rem',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    marginLeft: '8px',
+                                                    animation: 'pulseAlert 1s infinite',
+                                                    fontWeight: '900',
+                                                    letterSpacing: '0.5px'
+                                                }}>
+                                                    DESPACHAR YA 🚚💨
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span>{zone.name.toUpperCase()}</span>
+                                        )}
+                                        <span style={{ color: '#fff', opacity: 0.7, marginLeft: '5px' }}>{zone.percent}%</span>
+                                    </th>
+                                );
+                            })}
                         </tr>
 
                         {/* ROW 2: CLIENT NAMES (Vertical) */}
                         <tr>
                             <th style={{
                                 position: 'sticky', top: '44px', left: 0, zIndex: 40,
-                                background: '#0A111C',
-                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
-                                color: '#94A3B8', textAlign: 'right', padding: '1rem',
-                                fontSize: cfg.fontSize
-                            }}>PRODUCTO</th>
+                                background: '#080D12',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
+                                height: cfg.clientHeaderHeight,
+                                padding: '12px 16px',
+                                boxSizing: 'border-box'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    height: '100%',
+                                    fontSize: '0.65rem',
+                                    fontWeight: '800',
+                                    letterSpacing: '1px'
+                                }}>
+                                    <div style={{ 
+                                        textAlign: 'right', 
+                                        color: '#94A3B8',
+                                        opacity: 0.8 
+                                    }}>
+                                        RUTAS / CLIENTES ➔
+                                    </div>
+                                    <div style={{ 
+                                        textAlign: 'left', 
+                                        color: '#34D399'
+                                    }}>
+                                        ▼ PRODUCTOS
+                                    </div>
+                                </div>
+                            </th>
 
-                            {clients.map((client, index) => {
+                            {sortedClients.map((client, index) => {
                                 const complete = isClientComplete(client.id);
                                 return (
                                     <th key={client.id} style={{
                                         position: 'sticky', top: '44px', zIndex: 20,
-                                        background: complete ? 'rgba(13, 122, 87, 0.2)' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#0A111C'),
-                                        borderBottom: '1px solid rgba(255,255,255,0.08)',
-                                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                                        background: complete ? 'rgba(16, 185, 129, 0.15)' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#0B1319'),
+                                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                        borderRight: '1px solid rgba(255,255,255,0.04)',
                                         height: cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
@@ -840,7 +963,7 @@ export default function PickingDashboard() {
                                                 fontSize: cfg.clientFontSize, 
                                                 fontWeight: '800',
                                                 letterSpacing: '0.5px',
-                                                color: complete ? '#A7F3D0' : '#fff',
+                                                color: complete ? '#34D399' : '#fff',
                                                 textAlign: 'left',
                                                 width: '100%',
                                                 flex: 1,
@@ -849,10 +972,14 @@ export default function PickingDashboard() {
                                                 alignItems: 'center',
                                                 justifyContent: 'flex-start'
                                             }}>
-                                                <div style={{ animation: 'slideClientName 15s linear infinite', whiteSpace: 'nowrap' }}>
-                                                    {getClientShortName(client.company_name)}
+                                                <div style={{ 
+                                                    animation: 'slideClientName 15s linear infinite', 
+                                                    whiteSpace: 'nowrap',
+                                                    color: complete ? '#34D399' : '#fff'
+                                                }}>
+                                                    {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
                                                     <span style={{ opacity: 0 }}>------</span>
-                                                    {getClientShortName(client.company_name)}
+                                                    {complete ? '✓ ' : ''}{getClientShortName(client.company_name)}
                                                 </div>
                                             </div>
                                         </div>
@@ -863,98 +990,129 @@ export default function PickingDashboard() {
                     </thead>
 
                     <tbody>
-                        {Object.entries(productsByBuyingTeam).map(([team, categoryProducts]) => {
-                            const catPercent = getCategoryPercent(team, categoryProducts);
-                            const isCatComplete = catPercent === 100;
+                        {Object.entries(productsByBuyingTeam)
+                            .sort(([teamA, prodsA], [teamB, prodsB]) => {
+                                const hasActiveA = prodsA.some(p => sortedClients.some(c => matrix[p.id]?.[c.id]));
+                                const hasActiveB = prodsB.some(p => sortedClients.some(c => matrix[p.id]?.[c.id]));
+                                
+                                if (hasActiveA !== hasActiveB) {
+                                    return hasActiveA ? -1 : 1; // Empty categories go to the very bottom
+                                }
+                                
+                                const percentA = getCategoryPercent(teamA, prodsA);
+                                const percentB = getCategoryPercent(teamB, prodsB);
+                                const completeA = percentA === 100;
+                                const completeB = percentB === 100;
+                                
+                                if (completeA !== completeB) {
+                                    return completeA ? 1 : -1; // Completed categories go below in-progress
+                                }
+                                
+                                return teamA.localeCompare(teamB);
+                            })
+                            .map(([team, categoryProducts]) => {
+                                const catPercent = getCategoryPercent(team, categoryProducts);
+                                const isCatComplete = catPercent === 100;
 
-                            return (
-                                <Fragment key={team}>
-                                    {/* Category Header */}
-                                    <tr>
-                                        <td colSpan={clients.length + 1} style={{
-                                            background: '#121D2D', color: '#94A3B8',
-                                            fontWeight: 'bold', fontSize: cfg.fontSize,
-                                            padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)',
-                                            position: 'sticky', left: 0
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
-                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{team.toUpperCase()}</span>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    {/* Mini Progress Bar Background */}
-                                                    <div style={{ width: '100px', height: '6px', background: '#0A111C', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                                        <div style={{
-                                                            width: `${catPercent}%`,
-                                                            height: '100%',
-                                                            background: isCatComplete ? '#0D7A57' : '#FACC15',
-                                                            transition: 'width 0.5s ease'
-                                                        }} />
-                                                    </div>
-
-                                                    <span style={{
-                                                        color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
-                                                        fontWeight: 'bold',
-                                                        minWidth: '35px', textAlign: 'right',
-                                                        fontSize: '0.9rem'
+                                return (
+                                    <Fragment key={team}>
+                                        {/* Category Header */}
+                                        <tr>
+                                            <td colSpan={sortedClients.length + 1} style={{
+                                                background: '#0F1820', color: '#94A3B8',
+                                                fontWeight: 'bold', fontSize: cfg.fontSize,
+                                                padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                position: 'sticky', left: 0
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
+                                                    <span style={{ 
+                                                        minWidth: '250px', 
+                                                        display: 'inline-block',
+                                                        color: isCatComplete ? '#34D399' : '#94A3B8'
                                                     }}>
-                                                        {catPercent}%
+                                                        {isCatComplete ? '✓ ' : ''}{team.toUpperCase()}
                                                     </span>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        {/* Mini Progress Bar Background */}
+                                                        <div style={{ width: '100px', height: '6px', background: '#080D12', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                                            <div style={{
+                                                                width: `${catPercent}%`,
+                                                                height: '100%',
+                                                                background: isCatComplete ? '#0D7A57' : '#FACC15',
+                                                                transition: 'width 0.5s ease'
+                                                            }} />
+                                                        </div>
+
+                                                        <span style={{
+                                                            color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
+                                                            fontWeight: 'bold',
+                                                            minWidth: '35px', textAlign: 'right',
+                                                            fontSize: '0.9rem'
+                                                        }}>
+                                                            {catPercent}%
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                        </tr>
 
-                                    {categoryProducts.map(product => {
-                                        const rowHasData = clients.some(c => matrix[product.id]?.[c.id]);
-                                        if (!rowHasData) return null;
+                                        {categoryProducts.map(product => {
+                                            const rowHasData = sortedClients.some(c => matrix[product.id]?.[c.id]);
+                                            if (!rowHasData) return null;
 
-                                        return (
-                                            <tr key={product.id}>
-                                                {/* Product Name (Sticky Left) */}
-                                                <td style={{
-                                                    position: 'sticky', left: 0, zIndex: 10,
-                                                    background: productsWithAlerts.has(product.id) ? '#7F1D1D' : '#0A111C',
-                                                    borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                                    padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
-                                                    color: productsWithAlerts.has(product.id) ? '#fff' : '#ddd', 
-                                                    fontSize: cfg.productFontSize,
-                                                    minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
-                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                    animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
-                                                }} title={product.name}>
-                                                    {product.name}
-                                                    <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: '#555' }}>
-                                                        {product.unit_of_measure}
-                                                    </span>
-                                                </td>
+                                            return (
+                                                <tr key={product.id}>
+                                                    {(() => {
+                                                        const prodComplete = isProductComplete(product.id);
+                                                        return (
+                                                            <td style={{
+                                                                position: 'sticky', left: 0, zIndex: 10,
+                                                                background: productsWithAlerts.has(product.id) ? 'rgba(239, 68, 68, 0.2)' : '#080D12',
+                                                                borderRight: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                                                padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
+                                                                color: productsWithAlerts.has(product.id) ? '#fff' : (prodComplete ? '#34D399' : '#ddd'), 
+                                                                fontSize: cfg.productFontSize,
+                                                                minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
+                                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                                fontWeight: prodComplete ? 'bold' : 'normal',
+                                                                animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
+                                                            }} title={product.name}>
+                                                                {prodComplete ? '✓ ' : ''}{product.name}
+                                                                <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
+                                                                    {product.unit_of_measure}
+                                                                </span>
+                                                            </td>
+                                                        );
+                                                    })()}
 
-                                                {/* Matrix Cells */}
-                                                {clients.map(client => {
+                                                    {/* Matrix Cells */}
+                                                    {sortedClients.map(client => {
                                                     const cell = matrix[product.id]?.[client.id];
 
                                                     if (!cell) {
-                                                        return <td key={client.id} style={{ background: '#0A111C', borderBottom: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)' }}></td>;
+                                                        return <td key={client.id} style={{ background: '#0B1319', borderBottom: '1px solid rgba(255,255,255,0.02)', borderRight: '1px solid rgba(255,255,255,0.02)' }}></td>;
                                                     }
 
                                                     // State Logic
-                                                    let bg = '#0A111C';
+                                                    let bg = '#0B1319';
                                                     let fg = '#475569';
-                                                    if (cell.picked > 0) { bg = '#331B00'; fg = '#F59E0B'; } // Picking
-                                                    if (cell.picked >= cell.ordered) { bg = 'rgba(13, 122, 87, 0.2)'; fg = '#34D399'; } // Ready
+                                                    if (cell.picked > 0) { bg = '#2D1E08'; fg = '#FBBF24'; } // Picking
+                                                    if (cell.picked >= cell.ordered) { bg = 'rgba(16, 185, 129, 0.15)'; fg = '#34D399'; } // Ready
 
                                                     // REJECTION & WARNING OVERRIDES
                                                     if (cell.hasRejection) {
                                                         bg = '#EF4444'; 
                                                         fg = '#fff';
                                                     } else if (cell.hasWarning) {
-                                                        bg = '#EAB308';
-                                                        fg = '#000';
+                                                        bg = 'rgba(245, 158, 11, 0.25)';
+                                                        fg = '#FCD34D';
                                                     }
 
                                                     // If just ordered but not picked
                                                     if (cell.ordered > 0 && cell.picked === 0) {
                                                         bg = '#1E293B';
-                                                        fg = '#fff';
+                                                        fg = '#E2E8F0';
                                                     }
 
                                                     const isPartial = cell.picked > 0 && cell.picked < cell.ordered;
@@ -964,7 +1122,7 @@ export default function PickingDashboard() {
                                                             onClick={() => handleCellClick(product, client.id, client.company_name, cell)}
                                                             style={{
                                                                 background: bg, color: fg,
-                                                                borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
+                                                                borderBottom: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)',
                                                                 textAlign: 'center', fontWeight: 'bold',
                                                                 fontSize: cfg.fontSize,
                                                                 height: cfg.cellHeight,
@@ -1031,8 +1189,16 @@ export default function PickingDashboard() {
                 }}
                 title="Clic para ver detalles de alertas"
             >
-                <div style={{ display: 'inline-block', animation: 'marquee 45s linear infinite', width: '100%' }}>
-                    ••• {bannerText} •••
+                <div style={{ 
+                    display: 'flex', 
+                    width: 'max-content',
+                    animation: `marqueeContinuous ${Math.max(85, Math.min(240, bannerText.length * 1.3))}s linear infinite`
+                }}>
+                    {Array(6).fill(null).map((_, i) => (
+                        <span key={i} style={{ paddingRight: '18rem', display: 'inline-block' }}>
+                            ••• {bannerText}
+                        </span>
+                    ))}
                 </div>
             </div>
 
@@ -1040,9 +1206,9 @@ export default function PickingDashboard() {
                 :global(#ops-main-header) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
                 :global(#ops-main-footer) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
 
-                @keyframes marquee {
-                    0% { transform: translateX(100%); }
-                    100% { transform: translateX(-100%); }
+                @keyframes marqueeContinuous {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
                 }
                 @keyframes popIn {
                     0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
