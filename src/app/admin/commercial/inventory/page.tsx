@@ -555,9 +555,10 @@ export default function InventoryAdminPage() {
             window.showToast?.('Movimiento registrado con éxito', 'success');
             setIsMovementModalOpen(false);
             fetchData();
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Error desconocido';
-            alert('Error: ' + message);
+        } catch (error: any) {
+            console.error('Error applying inventory movement:', error);
+            const message = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+            alert('Error al aplicar ajuste: ' + message);
         }
     }, [fetchData]);
 

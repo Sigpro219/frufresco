@@ -82,9 +82,17 @@ export default function OrderLoadingPage() {
     }, []);
 
     const [selectedDate, setSelectedDate] = useState(() => {
-        const now = new Date();
-        const bogota = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-        return bogota.toISOString().split('T')[0];
+        try {
+            const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Bogota',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            return formatter.format(new Date());
+        } catch (e) {
+            return new Date().toISOString().split('T')[0];
+        }
     });
     const [refreshTrigger, setRefreshTrigger] = useState(0); 
     const [searchTerm, setSearchTerm] = useState('');
