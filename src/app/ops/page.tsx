@@ -13,21 +13,18 @@ import {
   RotateCcw,
   Activity,
   ArrowRight,
-  Server,
-  ShieldAlert
+  Server
 } from 'lucide-react';
 
 interface OpsStats {
     totalStockValue: number;
     pendingAudits: number;
-    pendingSupervisorTasks: number;
 }
 
 export default function OpsHome() {
     const [stats, setStats] = useState<OpsStats>({
         totalStockValue: 0,
-        pendingAudits: 0,
-        pendingSupervisorTasks: 0
+        pendingAudits: 0
     });
 
     const isMounted = useRef(true);
@@ -52,24 +49,11 @@ export default function OpsHome() {
                     .select('*', { count: 'exact', head: true })
                     .eq('status', 'pending');
 
-                const { count: quarantineCount } = await supabase
-                    .from('purchases')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('status', 'received_review');
-
-                const { count: discrepancyCount } = await supabase
-                    .from('weight_discrepancies')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('status', 'pending_approval');
-
-                const supervisorTasks = (quarantineCount || 0) + (discrepancyCount || 0);
-
                 if (!isMounted.current) return;
 
                 setStats({
                     totalStockValue: Math.round(value),
-                    pendingAudits: count || 0,
-                    pendingSupervisorTasks: supervisorTasks
+                    pendingAudits: count || 0
                 });
             } catch (err: unknown) {
                 console.error('Error fetching ops stats:', err);
@@ -225,25 +209,6 @@ export default function OpsHome() {
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>DEVOLUCIONES</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Retornos e Inconsistencias de Ruta</div>
-                    </div>
-                </Link>
-
-                <Link href="/ops/recepcion/supervisor" style={{ textDecoration: 'none' }}>
-                    <div className={`card-op ${stats.pendingSupervisorTasks > 0 ? 'card-op-warning' : ''}`}>
-                        <div className="op-icon-wrapper" style={{ 
-                            background: stats.pendingSupervisorTasks > 0 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.05)', 
-                            color: stats.pendingSupervisorTasks > 0 ? '#F59E0B' : 'var(--ops-primary)' 
-                        }}>
-                            <ShieldAlert size={24} strokeWidth={1.5} />
-                        </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>SUPERVISIÓN</div>
-                        <div style={{ 
-                            fontSize: '0.8rem', 
-                            color: stats.pendingSupervisorTasks > 0 ? '#D97706' : 'var(--ops-text-muted)', 
-                            fontWeight: stats.pendingSupervisorTasks > 0 ? 700 : 'normal' 
-                        }}>
-                            {stats.pendingSupervisorTasks > 0 ? `⚠️ ${stats.pendingSupervisorTasks} PENDIENTES` : 'Cuarentenas y Excedentes'}
-                        </div>
                     </div>
                 </Link>
             </div>

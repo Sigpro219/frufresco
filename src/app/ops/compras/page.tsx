@@ -269,9 +269,11 @@ export default function ProcurementPage() {
       const cutoffEnabled = cutoffData?.value !== 'false';
 
       // 1. Load tasks
-      let query = supabase.from("procurement_tasks")
-        .select("*")
-        .eq('delivery_date', targetDate);
+      let query = supabase.from("procurement_tasks").select("*");
+      
+      if (cutoffEnabled) {
+        query = query.eq('delivery_date', targetDate);
+      }
 
       const { data: rawTasks, error: tErr } = await query
         .order("delivery_date", { ascending: true })

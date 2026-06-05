@@ -150,7 +150,7 @@ export default function AdminStrategyPage() {
                         <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Inteligencia & Estrategia</h1>
                     </div>
                     {/* Segmented Control (Tabs) per design_manual.md */}
-                    <div style={{ backgroundColor: '#EDF1EE', padding: '4px', borderRadius: THEME.radius.lg, display: 'flex', gap: '2px', border: `1px solid ${THEME.colors.border}` }}>
+                    <div style={{ backgroundColor: '#E5E7EB', padding: '0.25rem', borderRadius: THEME.radius.md, display: 'flex', gap: '4px' }}>
                         {(['geofencing', 'seo', 'it', 'hierarchy'] as Tab[]).map(t => {
                             const isActive = activeTab === t;
                             const isHovered = hoveredTab === t;
@@ -162,12 +162,12 @@ export default function AdminStrategyPage() {
                                     onMouseLeave={() => setHoveredTab(null)}
                                     style={{
                                         padding: '0.5rem 1rem',
-                                        borderRadius: THEME.radius.md,
+                                        borderRadius: THEME.radius.sm,
                                         border: 'none',
                                         backgroundColor: isActive 
                                             ? THEME.colors.primary 
                                             : (isHovered ? THEME.colors.primaryLight : 'transparent'),
-                                        boxShadow: isActive ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
+                                        boxShadow: isActive ? THEME.shadow.sm : 'none',
                                         color: isActive 
                                             ? '#FFFFFF' 
                                             : (isHovered ? THEME.colors.textMain : THEME.colors.textSecondary),
@@ -207,116 +207,23 @@ export default function AdminStrategyPage() {
     );
 }
 
-const STATUS_COLORS = {
-    critical: {
-        bg: '#FEF2F2',
-        border: '#FECACA',
-        text: '#DC2626',
-        iconBg: '#FEE2E2',
-    },
-    warning: {
-        bg: '#FEF3C7',
-        text: '#92400E',
-    },
-    normal: {
-        bg: THEME.colors.surface,
-        border: THEME.colors.border,
-        text: THEME.colors.textMain,
-        iconBg: THEME.colors.primaryLight,
-    }
-};
-
 function HierarchyView({ products, onFix }: { products: any[], onFix: () => void }) {
     const [hoveredRow, setHoveredRow] = useState<string | null>(null);
     const hijos = products.filter(p => p.parent_id);
     const criticalIssues = hijos.filter(p => p.web_conversion_factor === 1);
-    const hasCritical = criticalIssues.length > 0;
-    const cardStatus = hasCritical ? STATUS_COLORS.critical : STATUS_COLORS.normal;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                <div 
-                    style={{ 
-                        padding: '1.25rem 1.5rem', 
-                        borderRadius: THEME.radius.md, 
-                        backgroundColor: THEME.colors.surface, 
-                        border: `1px solid ${THEME.colors.border}`, 
-                        boxShadow: THEME.shadow.sm,
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        cursor: 'default',
-                    }}
-                    onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = THEME.shadow.lg;
-                    }}
-                    onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.boxShadow = THEME.shadow.sm;
-                    }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Total Hijos</p>
-                            <p style={{ margin: '8px 0 0 0', fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(hijos.length)}</p>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: THEME.colors.primaryLight }}>
-                            <Layers size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                        </div>
-                    </div>
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Total Hijos</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(hijos.length)}</p>
                 </div>
-
-                <div 
-                    style={{ 
-                        padding: '1.25rem 1.5rem', 
-                        borderRadius: THEME.radius.md, 
-                        backgroundColor: cardStatus.bg, 
-                        border: `1px solid ${cardStatus.border}`, 
-                        boxShadow: THEME.shadow.sm,
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        cursor: 'default',
-                    }}
-                    onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = THEME.shadow.lg;
-                    }}
-                    onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.boxShadow = THEME.shadow.sm;
-                    }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: cardStatus.text, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Factores Críticos (1.0)</p>
-                            <p style={{ margin: '8px 0 0 0', fontSize: '1.3rem', fontWeight: '700', color: cardStatus.text, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(criticalIssues.length)}</p>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: cardStatus.iconBg }}>
-                            <AlertCircle size={18} strokeWidth={1.5} style={{ color: cardStatus.text }} />
-                        </div>
-                    </div>
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: criticalIssues.length > 0 ? '#FEF2F2' : THEME.colors.surface, border: criticalIssues.length > 0 ? '#FECACA 1px solid' : `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textSecondary, letterSpacing: '0.05rem', textTransform: 'uppercase' }}>Factores Críticos (1.0)</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '2rem', fontWeight: '750', color: criticalIssues.length > 0 ? '#DC2626' : THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>{formatNumber(criticalIssues.length)}</p>
                 </div>
-
-                <div 
-                    style={{ 
-                        padding: '1.25rem 1.5rem', 
-                        borderRadius: THEME.radius.md, 
-                        backgroundColor: THEME.colors.surface, 
-                        border: `1px solid ${THEME.colors.border}`, 
-                        boxShadow: THEME.shadow.sm, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                    onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = THEME.shadow.lg;
-                    }}
-                    onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.boxShadow = THEME.shadow.sm;
-                    }}
-                >
+                <div style={{ padding: '1.25rem 1.5rem', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <button 
                         onClick={() => window.open('/admin/master/products', '_blank')}
                         style={{ padding: '0.65rem 1.25rem', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', transition: 'background-color 0.2s' }}
@@ -329,49 +236,47 @@ function HierarchyView({ products, onFix }: { products: any[], onFix: () => void
             </div>
 
             {criticalIssues.length > 0 && (
-                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '0', overflow: 'hidden', boxShadow: THEME.shadow.sm }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, borderLeft: `3px solid ${STATUS_COLORS.critical.text}` }}>
-                        <h3 style={{ margin: 0, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.4rem', color: STATUS_COLORS.critical.text, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+                <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                        <h3 style={{ margin: 0, fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#DC2626', fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
                             <AlertCircle size={18} strokeWidth={1.5} /> Alerta de Inventario: Factores de Conversión Genéricos
                         </h3>
                         <p style={{ margin: 0, fontSize: '0.85rem', color: THEME.colors.textSecondary }}>Estos productos restan 1:1 del padre, lo cual suele ser incorrecto para fraccionados.</p>
                     </div>
-                    <div style={{ padding: '1.5rem' }}>
-                        <div style={{ maxHeight: '400px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
-                                <thead style={{ backgroundColor: '#F9FAFB', position: 'sticky', top: 0, borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <tr>
-                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>SKU</th>
-                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Nombre</th>
-                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Unidad Web</th>
-                                        <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Factor</th>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
+                            <thead style={{ backgroundColor: THEME.colors.background, position: 'sticky', top: 0 }}>
+                                <tr>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>SKU</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Nombre</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Unidad Web</th>
+                                    <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>Factor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {criticalIssues.map(p => (
+                                    <tr 
+                                        key={p.id} 
+                                        style={{ 
+                                            borderBottom: `1px solid ${THEME.colors.border}`,
+                                            backgroundColor: hoveredRow === p.id ? '#F8FAF9' : 'transparent',
+                                            transition: 'background-color 0.2s ease'
+                                        }}
+                                        onMouseEnter={() => setHoveredRow(p.id)}
+                                        onMouseLeave={() => setHoveredRow(null)}
+                                    >
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.primary }}>{p.sku}</td>
+                                        <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textMain }}>{p.name}</td>
+                                        <td style={{ padding: '0.65rem 1.25rem' }}>
+                                            <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                {p.web_unit || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: '#DC2626' }}>{formatNumber(p.web_conversion_factor, 2)}</td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {criticalIssues.map(p => (
-                                        <tr 
-                                            key={p.id} 
-                                            style={{ 
-                                                borderBottom: `1px solid ${THEME.colors.border}`,
-                                                backgroundColor: hoveredRow === p.id ? '#F8FAF9' : 'transparent',
-                                                transition: 'background-color 0.2s ease'
-                                            }}
-                                            onMouseEnter={() => setHoveredRow(p.id)}
-                                            onMouseLeave={() => setHoveredRow(null)}
-                                        >
-                                            <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.primary }}>{p.sku}</td>
-                                            <td style={{ padding: '0.65rem 1.25rem', color: THEME.colors.textMain }}>{p.name}</td>
-                                            <td style={{ padding: '0.65rem 1.25rem' }}>
-                                                <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: '600' }}>
-                                                    {p.web_unit || 'N/A'}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: STATUS_COLORS.critical.text }}>{formatNumber(p.web_conversion_factor, 2)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
@@ -409,8 +314,8 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
                     ))
                 )}
             </div>
-            <div style={{ background: 'linear-gradient(135deg, #0B1C17 0%, #153328 100%)', color: 'white', borderRadius: THEME.radius.md, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignSelf: 'start', boxShadow: THEME.shadow.md }}>
-                <h4 style={{ margin: 0, fontWeight: '700', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            <div style={{ backgroundColor: '#1E293B', color: 'white', borderRadius: THEME.radius.md, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignSelf: 'start' }}>
+                <h4 style={{ margin: 0, fontWeight: '750', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
                     <Cpu size={18} strokeWidth={1.5} style={{ color: THEME.colors.primaryLight }} /> Sugerente AI
                 </h4>
                 <p style={{ fontSize: '0.85rem', opacity: 0.8, lineHeight: '1.5', margin: 0 }}>Genera metadatos optimizados usando Gemini analizando el contexto geográfico de tus geocercas.</p>
@@ -426,9 +331,7 @@ function SEOView({ strategies, onGenerate, loading, settings }: { strategies: SE
                 <button 
                     onClick={() => onGenerate('geofence_b2b_poly')} 
                     disabled={loading || b2bCount === 0}
-                    style={{ padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: 'transparent', color: 'white', fontWeight: '600', border: `1.5px solid ${THEME.colors.primary}`, cursor: 'pointer', opacity: (loading || b2bCount === 0) ? 0.6 : 1, fontSize: '0.9rem', transition: 'background-color 0.2s' }}
-                    onMouseOver={e => { if (!loading && b2bCount > 0) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }}
-                    onMouseOut={e => { if (!loading && b2bCount > 0) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    style={{ padding: '0.75rem', borderRadius: THEME.radius.sm, backgroundColor: 'transparent', color: 'white', fontWeight: '600', border: `1.5px solid ${THEME.colors.primary}`, cursor: 'pointer', opacity: (loading || b2bCount === 0) ? 0.6 : 1, fontSize: '0.9rem' }}
                 >
                     {loading ? 'Generando...' : 'Inyectar B2B'}
                 </button>
@@ -446,7 +349,7 @@ function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (ty
                 <h3 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.1rem', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>Auditoría de Solicitudes</h3>
                 <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: THEME.typography?.fontFamilySecondary || 'var(--font-inter), sans-serif' }}>
-                        <thead style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                        <thead style={{ backgroundColor: THEME.colors.background }}>
                             <tr>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Tipo</th>
                                 <th style={{ ...THEME.typography?.tableHeader, padding: '0.65rem 1.25rem', textAlign: 'left' }}>Estado</th>
@@ -454,36 +357,24 @@ function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (ty
                             </tr>
                         </thead>
                         <tbody>
-                            {requests.map(r => {
-                                const isPending = r.status === 'pending';
-                                return (
-                                    <tr 
-                                        key={r.id} 
-                                        style={{ 
-                                            borderBottom: `1px solid ${THEME.colors.border}`,
-                                            backgroundColor: hoveredRow === r.id ? '#F8FAF9' : 'transparent',
-                                            transition: 'background-color 0.2s ease'
-                                        }}
-                                        onMouseEnter={() => setHoveredRow(r.id)}
-                                        onMouseLeave={() => setHoveredRow(null)}
-                                    >
-                                        <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.textMain }}>{r.type}</td>
-                                        <td style={{ padding: '0.65rem 1.25rem' }}>
-                                            <span style={{ 
-                                                fontSize: '0.7rem', 
-                                                fontWeight: '600', 
-                                                backgroundColor: isPending ? STATUS_COLORS.warning.bg : THEME.colors.primaryLight, 
-                                                color: isPending ? STATUS_COLORS.warning.text : THEME.colors.primary, 
-                                                padding: '4px 8px', 
-                                                borderRadius: '4px' 
-                                            }}>
-                                                {r.status.toUpperCase()}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(r.created_at).toLocaleDateString()}</td>
-                                    </tr>
-                                );
-                            })}
+                            {requests.map(r => (
+                                <tr 
+                                    key={r.id} 
+                                    style={{ 
+                                        borderBottom: `1px solid ${THEME.colors.border}`,
+                                        backgroundColor: hoveredRow === r.id ? '#F8FAF9' : 'transparent',
+                                        transition: 'background-color 0.2s ease'
+                                    }}
+                                    onMouseEnter={() => setHoveredRow(r.id)}
+                                    onMouseLeave={() => setHoveredRow(null)}
+                                >
+                                    <td style={{ padding: '0.65rem 1.25rem', fontWeight: '600', color: THEME.colors.textMain }}>{r.type}</td>
+                                    <td style={{ padding: '0.65rem 1.25rem' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '600', backgroundColor: r.status === 'pending' ? '#FEF3C7' : THEME.colors.primaryLight, color: r.status === 'pending' ? '#92400E' : THEME.colors.primary, padding: '4px 8px', borderRadius: '4px' }}>{r.status.toUpperCase()}</span>
+                                    </td>
+                                    <td style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem', color: THEME.colors.textSecondary }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>

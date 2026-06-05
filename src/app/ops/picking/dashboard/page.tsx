@@ -4,13 +4,27 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
-import { Clock, Wifi, Package, ArrowLeft, AlertCircle, RefreshCw, Monitor, LayoutGrid, Tv } from 'lucide-react';
+import { CATEGORY_MAP } from '@/lib/constants';
+import { 
+    Monitor, 
+    LayoutGrid, 
+    Tv, 
+    Bell, 
+    AlertTriangle, 
+    AlertOctagon, 
+    AlertCircle, 
+    CheckCircle, 
+    Check, 
+    Calendar,
+    X,
+    XCircle
+} from 'lucide-react';
 
 // Types
 type Product = {
     id: string;
     name: string;
-    buying_team?: string | null;
+    category: string;
     unit_of_measure: string;
     min_inventory_level?: number;
     current_stock?: number;
@@ -27,32 +41,61 @@ type CellData = {
 // Initialize Supabase outside the component to keep it stable
 const supabase = createClient();
 
-function formatLifoSpaces(spaces: number[]): string {
-    if (spaces.length === 0) return 'ESP -';
-    const uniqueSpaces = Array.from(new Set(spaces)).sort((a, b) => a - b);
-    if (uniqueSpaces.length === 1) return `ESP ${uniqueSpaces[0]}`;
-    // Check if contiguous
-    const isContiguous = uniqueSpaces.every((val, i) => i === 0 || val === uniqueSpaces[i - 1] + 1);
-    if (isContiguous) {
-        return `ESP ${uniqueSpaces[0]}-${uniqueSpaces[uniqueSpaces.length - 1]}`;
-    } else {
-        return `ESP ${uniqueSpaces.join(', ')}`;
-    }
-}
-
-function cleanCategoryName(name: string): string {
-    return name
-        .toUpperCase()
-        .replace(/^ALISTAMIENTO DE\s+/, '')
-        .replace(/^ALISTAMIENTO EN SECO\s+/, '')
-        .replace(/^ALISTAMIENTO\s+/, '')
-        .replace(/^EQUIPO\s+[A-Z]\s+(DE\s+)?/, '')
-        .trim();
-}
-
 export default function PickingDashboard() {
     const router = useRouter();
     const isMounted = useRef(true);
+    const [density, setDensity] = useState<'standard' | 'high' | 'tv'>('standard');
+
+    // Persistence for density preference
+    useEffect(() => {
+        const saved = localStorage.getItem('picking_dashboard_density');
+        if (saved === 'high' || saved === 'tv' || saved === 'standard') {
+            setDensity(saved);
+        }
+    }, []);
+
+    const changeDensity = (val: 'standard' | 'high' | 'tv') => {
+        setDensity(val);
+        localStorage.setItem('picking_dashboard_density', val);
+    };
+
+    const DENSITY_CONFIG = {
+        standard: {
+            cellWidth: '40px',
+            cellHeight: '40px',
+            fontSize: '1rem',
+            laneFontSize: '1.3rem',
+            clientFontSize: '0.75rem',
+            productFontSize: '0.9rem',
+            headerHeight: '85px',
+            hideExternal: false,
+            clientHeaderHeight: '160px'
+        },
+        high: {
+            cellWidth: '32px',
+            cellHeight: '32px',
+            fontSize: '0.85rem',
+            laneFontSize: '1.1rem',
+            clientFontSize: '0.65rem',
+            productFontSize: '0.8rem',
+            headerHeight: '75px',
+            hideExternal: false,
+            clientHeaderHeight: '140px'
+        },
+        tv: {
+            cellWidth: '22px',
+            cellHeight: '22px',
+            fontSize: '0.7rem',
+            laneFontSize: '0.85rem',
+            clientFontSize: '0.55rem',
+            productFontSize: '0.75rem',
+            headerHeight: '60px',
+            hideExternal: true,
+            clientHeaderHeight: '120px'
+        }
+    };
+
+    const cfg = DENSITY_CONFIG[density];
 
     useEffect(() => {
         isMounted.current = true;
@@ -60,84 +103,13 @@ export default function PickingDashboard() {
     }, []);
 
     // STATE
-    const [density, setDensity] = useState<'standard' | 'high' | 'tv'>('standard');
-
-    useEffect(() => {
-        const saved = localStorage.getItem('picking_dashboard_density');
-        if (saved && (saved === 'standard' || saved === 'high' || saved === 'tv')) {
-            setDensity(saved);
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('picking-density-changed', { detail: saved }));
-            }, 100);
-        }
-    }, []);
-
-    const changeDensity = (val: 'standard' | 'high' | 'tv') => {
-        setDensity(val);
-        localStorage.setItem('picking_dashboard_density', val);
-        window.dispatchEvent(new CustomEvent('picking-density-changed', { detail: val }));
-    };
-
-    const DENSITY_CONFIG = {
-        standard: {
-            cellWidth: '50px',
-            cellHeight: '50px',
-            fontSize: '0.95rem',
-            clientFontSize: '0.7rem',
-            productFontSize: '0.85rem',
-            clientHeaderHeight: '100px',
-            productColWidth: '220px',
-            productColMaxWidth: '300px'
-        },
-        high: {
-            cellWidth: '40px',
-            cellHeight: '40px',
-            fontSize: '0.85rem',
-            clientFontSize: '0.6rem',
-            productFontSize: '0.75rem',
-            clientHeaderHeight: '85px',
-            productColWidth: '180px',
-            productColMaxWidth: '240px'
-        },
-        tv: {
-            cellWidth: '32px',
-            cellHeight: '32px',
-            fontSize: '0.75rem',
-            clientFontSize: '0.55rem',
-            productFontSize: '0.7rem',
-            clientHeaderHeight: '75px',
-            productColWidth: '150px',
-            productColMaxWidth: '200px'
-        }
-    };
-
-    const cfg = DENSITY_CONFIG[density];
-
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
-    const [clients, setClients] = useState<{ id: string, company_name: string, zone_name: string }[]>([]);
+    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
-    const [clientSpaces, setClientSpaces] = useState<Record<string, string>>({});
-    const [logisticParameters, setLogisticParameters] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
     const [isConnected, setIsConnected] = useState(false);
-    const [logoUrl, setLogoUrl] = useState<string | null>(null);
-    const [shortName, setShortName] = useState('FRUFRESCO');
-
-    useEffect(() => {
-        supabase
-            .from('app_settings')
-            .select('key, value')
-            .in('key', ['app_logosymbol_url', 'app_short_name'])
-            .then(({ data, error }) => {
-                if (!error && data) {
-                    const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
-                    if (logo) setLogoUrl(logo);
-                    const name = data.find(s => s.key === 'app_short_name')?.value;
-                    if (name) setShortName(name.toUpperCase());
-                }
-            });
-    }, []);
+    const [showBannerModal, setShowBannerModal] = useState(false);
 
     useEffect(() => {
         // Hydration fix for time
@@ -153,76 +125,84 @@ export default function PickingDashboard() {
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, customer_name, status,
+                    id, status,
+                    profiles:profile_id (
+                        id, company_name, contact_name, role, id_zr
+                    ),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status
                     )
                 `)
-                .neq('status', 'cancelled');
+                .in('status', ['para_compra', 'approved', 'picking']);
             
             if (signal) ordersQuery = ordersQuery.abortSignal(signal);
 
             const { data: orders } = await ordersQuery;
 
-            const activeClientNames = Array.from(new Set((orders || []).map(o => (o as any).customer_name).filter((n): n is string => !!n))) as string[];
+            const getOrderName = (order: any): string => {
+                const p = order.profiles;
+                if (!p) return '';
+                if (p.role === 'b2b_client') return p.company_name || 'Sin Razón Social';
+                return p.contact_name || p.company_name || 'Cliente B2C';
+            };
 
-            // 2. Fetch Profiles to get zones
-            const { data: profiles } = await supabase.from('profiles')
-                .select('id, company_name, delivery_zone_id')
-                .eq('role', 'b2b_client')
-                .abortSignal(signal as any) as { data: { id: string; company_name: string; delivery_zone_id: string }[] | null };
-            
-            const profileMap = new Map((profiles || []).map(p => [p.company_name, p]));
+            const activeOrders = (orders || []).filter(o => o.order_items && o.order_items.length > 0);
 
-            // Fetch Zones for Mapping
-            const { data: zones } = await supabase.from('delivery_zones').select('id, name').abortSignal(signal as any) as { data: { id: string; name: string }[] | null };
-            const zoneMap = new Map((zones || []).map(z => [z.id, z.name]));
+            // 2. Fetch routes and route_stops to get assigned vehicle
+            const orderIds = activeOrders.map(o => o.id);
+            const { data: routeStops } = await supabase
+                .from('route_stops')
+                .select(`
+                    order_id,
+                    routes (
+                        vehicle_plate
+                    )
+                `)
+                .in('order_id', orderIds)
+                .abortSignal(signal as any);
 
-            // Fetch logistic parameters and route stops
-            const { data: dbParams } = await supabase.from('logistic_parameters').select('*');
-            if (dbParams && isMounted.current) {
-                setLogisticParameters(dbParams);
-            }
-
-            const { data: routeStops } = await supabase.from('route_stops').select('route_id, order_id, sequence_number') as { data: { route_id: string; order_id: string; sequence_number: number }[] | null };
-
-            // Calculate LIFO space per order_id
-            const stopsByRoute: Record<string, { order_id: string, sequence_number: number }[]> = {};
-            (routeStops || []).forEach(stop => {
-                if (!stop.route_id || !stop.order_id) return;
-                if (!stopsByRoute[stop.route_id]) {
-                    stopsByRoute[stop.route_id] = [];
+            // NEW: Fetch fleet_vehicles to map plate -> driver name
+            const { data: fleet } = await supabase.from('fleet_vehicles').select('plate, collaborators:driver_id(contact_name)').abortSignal(signal as any);
+            const plateToDriver = new Map<string, string>();
+            (fleet || []).forEach(f => {
+                if (f.plate && f.collaborators && f.collaborators.contact_name) {
+                    const parts = f.collaborators.contact_name.split(' ').filter(Boolean);
+                    const shortName = parts.length >= 3 ? `${parts[0]} ${parts[2]}` : parts[0];
+                    plateToDriver.set(f.plate, shortName);
                 }
-                stopsByRoute[stop.route_id].push({
-                    order_id: stop.order_id,
-                    sequence_number: stop.sequence_number || 0
-                });
             });
 
-            const orderToSpaceMap: Record<string, number> = {};
-            Object.values(stopsByRoute).forEach(stops => {
-                // Sort route stops in reverse sequence (descending) per route
-                stops.sort((a, b) => b.sequence_number - a.sequence_number);
-                stops.forEach((stop, idx) => {
-                    orderToSpaceMap[stop.order_id] = idx + 1;
-                });
+            const orderToPlate = new Map<string, string>();
+            (routeStops || []).forEach((stop: any) => {
+                if (stop.routes && stop.routes.vehicle_plate) {
+                    const plate = stop.routes.vehicle_plate;
+                    const driverName = plateToDriver.get(plate);
+                    const displayName = driverName ? `${plate} (${driverName})` : plate;
+                    orderToPlate.set(stop.order_id, displayName);
+                }
             });
 
-            // Build clients from ORDERS (Source of Truth)
-            const formattedClients = activeClientNames
-                .map(name => {
-                    const profile = profileMap.get(name) as any;
-                    const zoneName = (profile ? zoneMap.get(profile.delivery_zone_id) : null) || 'GENERAL';
+            // Build columns from individual orders, NOT merged clients
+            const formattedClients = activeOrders
+                .map(order => {
+                    const plate = orderToPlate.get(order.id) || 'SIN ASIGNAR';
+                    const baseName = getOrderName(order);
+                    const shortId = order.sequence_id ? `#${order.sequence_id}` : `#${order.id.substring(0, 4)}`;
                     return {
-                        id: (profile?.id || name) as string,
-                        company_name: name as string,
-                        zone_name: zoneName as string
+                        id: order.id, 
+                        company_name: baseName,
+                        order_short: shortId,
+                        zone_name: plate
                     };
                 })
                 .sort((a, b) => {
                     const zoneA = a.zone_name.toUpperCase();
                     const zoneB = b.zone_name.toUpperCase();
-                    if (zoneA !== zoneB) return zoneA.localeCompare(zoneB);
+                    if (zoneA !== zoneB) {
+                        if (zoneA === 'SIN ASIGNAR') return 1;
+                        if (zoneB === 'SIN ASIGNAR') return -1;
+                        return zoneA.localeCompare(zoneB);
+                    }
                     
                     const nameA = a.company_name.toUpperCase();
                     const nameB = b.company_name.toUpperCase();
@@ -231,25 +211,14 @@ export default function PickingDashboard() {
 
             if (isMounted.current) setClients(formattedClients);
 
-            // Build LIFO spaces for each client
-            const formattedClientSpaces: Record<string, string> = {};
-            formattedClients.forEach(client => {
-                const clientOrders = (orders || []).filter(o => o.customer_name === client.company_name);
-                const spaces = clientOrders
-                    .map(o => orderToSpaceMap[o.id])
-                    .filter((s): s is number => typeof s === 'number');
-                formattedClientSpaces[client.company_name] = formatLifoSpaces(spaces);
-            });
-            if (isMounted.current) setClientSpaces(formattedClientSpaces);
-
-            // 3. Fetch Products with Stock Info - Group and Order by 'buying_team'
+            // 3. Fetch Products with Stock Info
             const { data: prods } = await supabase
                 .from('products')
                 .select(`
-                    id, name, buying_team, unit_of_measure, min_inventory_level,
+                    id, name, category, unit_of_measure, min_inventory_level,
                     inventory_stocks (quantity, status)
                 `)
-                .order('buying_team')
+                .order('category')
                 .order('name')
                 .abortSignal(signal as any);
             
@@ -268,19 +237,18 @@ export default function PickingDashboard() {
 
             // 4. Build Matrix
             const newMatrix: Record<string, Record<string, CellData>> = {};
-            if (orders) {
-                orders.forEach(order => {
-                    const clientName = order.customer_name;
+            if (activeOrders) {
+                activeOrders.forEach(order => {
                     if (order.order_items) {
                         order.order_items.forEach((item: { product_id: string, quantity: number, picked_quantity: number, quality_status?: string | null, id: string }) => {
                             if (!newMatrix[item.product_id]) newMatrix[item.product_id] = {};
-                            const currentCell = newMatrix[item.product_id][clientName] || { ordered: 0, picked: 0, hasRejection: false, hasWarning: false, items: [] };
+                            const currentCell = newMatrix[item.product_id][order.id] || { ordered: 0, picked: 0, hasRejection: false, hasWarning: false, items: [] };
                             const qty = Number(item.quantity) || 0;
                             const picked = Number(item.picked_quantity) || 0;
                             const rejected = item.quality_status === 'red';
                             const warning = item.quality_status === 'yellow';
                             
-                            newMatrix[item.product_id][clientName] = {
+                            newMatrix[item.product_id][order.id] = {
                                 ordered: currentCell.ordered + qty,
                                 picked: currentCell.picked + picked,
                                 hasRejection: currentCell.hasRejection || rejected,
@@ -333,7 +301,7 @@ export default function PickingDashboard() {
         };
     }, [loadData]);
 
-    const handleCellClick = async (product: Product, clientName: string, cellData: CellData) => {
+    const handleCellClick = async (product: Product, clientId: string, clientName: string, cellData: CellData) => {
         if (!cellData || cellData.ordered === 0) return;
 
         const newPickedStr = window.prompt(
@@ -348,7 +316,7 @@ export default function PickingDashboard() {
 
         // Optimistic UI Update
         const newMatrix = { ...matrix };
-        newMatrix[product.id][clientName] = {
+        newMatrix[product.id][clientId] = {
             ...cellData,
             picked: newPickedTotal
         };
@@ -361,11 +329,10 @@ export default function PickingDashboard() {
         }
     };
 
-    // Group Products by Buying Team
-    const productsByBuyingTeam = products.reduce((acc, p) => {
-        const team = p.buying_team || 'SIN ASIGNAR';
-        if (!acc[team]) acc[team] = [];
-        acc[team].push(p);
+    // Group Products by Category
+    const productsByCategory = products.reduce((acc, p) => {
+        if (!acc[p.category]) acc[p.category] = [];
+        acc[p.category].push(p);
         return acc;
     }, {} as Record<string, Product[]>);
 
@@ -399,7 +366,7 @@ export default function PickingDashboard() {
 
         zoneClients.forEach(c => {
             Object.values(matrix).forEach(prodRow => {
-                const cell = prodRow[c.company_name];
+                const cell = prodRow[c.id];
                 if (cell) {
                     total += cell.ordered;
                     picked += Math.min(cell.ordered, cell.picked);
@@ -439,12 +406,12 @@ export default function PickingDashboard() {
     });
 
     // Helper for Client Completion
-    const isClientComplete = useCallback((clientName: string) => {
+    const isClientComplete = useCallback((clientId: string) => {
         let hasOrders = false;
         let allItemsPicked = true;
 
         Object.values(matrix).forEach(prodRow => {
-            const cell = prodRow[clientName];
+            const cell = prodRow[clientId];
             if (cell && cell.ordered > 0) {
                 hasOrders = true;
                 if (cell.picked < cell.ordered) {
@@ -456,12 +423,12 @@ export default function PickingDashboard() {
         return hasOrders && allItemsPicked;
     }, [matrix]);
 
-    // Helper for Buying Team Progress
-    const getBuyingTeamPercent = (teamName: string, teamProducts: Product[]) => {
+    // Helper for Category Progress
+    const getCategoryPercent = (categoryName: string, products: Product[]) => {
         let total = 0;
         let picked = 0;
 
-        teamProducts.forEach(p => {
+        products.forEach(p => {
             const prodRow = matrix[p.id];
             if (prodRow) {
                 Object.values(prodRow).forEach(cell => {
@@ -487,10 +454,10 @@ export default function PickingDashboard() {
         let newlyCompletedName = null;
 
         clients.forEach(c => {
-            const isDone = isClientComplete(c.company_name);
+            const isDone = isClientComplete(c.id);
             if (isDone) {
-                currentCompleted.add(c.company_name);
-                if (!lastCompletedClientsRef.current.has(c.company_name)) {
+                currentCompleted.add(c.id);
+                if (!lastCompletedClientsRef.current.has(c.id)) {
                     newlyCompletedName = c.company_name;
                 }
             }
@@ -530,24 +497,20 @@ export default function PickingDashboard() {
     const percentComplete = totalGlobalOrdered > 0 ? Math.round((totalCompletedUnits / totalGlobalOrdered) * 100) : 0;
     const percentPartial = totalGlobalOrdered > 0 ? Math.round((totalPartialUnits / totalGlobalOrdered) * 100) : 0;
 
-    if (loading) {
-        return (
-            <div style={{
-                background: '#020617',
-                color: '#94A3B8',
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: 'Outfit, sans-serif',
-                gap: '1rem'
-            }}>
-                <RefreshCw className="animate-spin text-emerald-500" size={40} />
-                <span style={{ fontSize: '1.2rem', fontWeight: '600', letterSpacing: '0.05em' }}>CARGANDO CONTROL DE PICKING...</span>
-            </div>
-        );
-    }
+    // Crosshair Highlighting Logic
+    const clientsWithAlerts = new Set<string>();
+    const productsWithAlerts = new Set<string>();
+
+    Object.entries(matrix).forEach(([prodId, prodRow]) => {
+        Object.entries(prodRow).forEach(([clientId, cell]) => {
+            if (cell.hasRejection || cell.hasWarning) {
+                clientsWithAlerts.add(clientId);
+                productsWithAlerts.add(prodId);
+            }
+        });
+    });
+
+    if (loading) return <div style={{ background: '#0A111C', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: '2rem' }}>AGUARDE...</div>;
 
     // Inventory Alerts Calculation
     const inventoryAlerts = products
@@ -558,285 +521,188 @@ export default function PickingDashboard() {
             min: p.min_inventory_level || 0
         }));
 
+    // --- SMART BANNER LOGIC ---
+    const bannerAlerts: { type: 'critical' | 'warning' | 'info', msg: string }[] = [];
+
+    if (!isConnected) {
+        bannerAlerts.push({ type: 'critical', msg: 'CONEXIÓN PERDIDA - Intentando reconectar...' });
+    }
+
+    let hasAnyRejection = false;
+    let hasAnyWarning = false;
+    
+    Object.values(matrix).forEach(prodRow => {
+        Object.values(prodRow).forEach(cell => {
+            if (cell.hasRejection) hasAnyRejection = true;
+            if (cell.hasWarning) hasAnyWarning = true;
+        });
+    });
+
+    if (hasAnyRejection) {
+        bannerAlerts.push({ type: 'critical', msg: 'CALIDAD: Hay productos rechazados en piso que requieren atención.' });
+    }
+    if (hasAnyWarning) {
+        bannerAlerts.push({ type: 'warning', msg: 'NOVEDAD: Hay advertencias de calidad en productos.' });
+    }
+
+    if (inventoryAlerts && inventoryAlerts.length > 0) {
+        inventoryAlerts.slice(0, 3).forEach(p => {
+            bannerAlerts.push({ type: 'warning', msg: `INVENTARIO: Bajo stock de ${p.name} (Actual: ${p.current})` });
+        });
+        if (inventoryAlerts.length > 3) {
+            bannerAlerts.push({ type: 'warning', msg: `INVENTARIO: Y ${inventoryAlerts.length - 3} alertas más.` });
+        }
+    }
+
+    if (bannerAlerts.length === 0) {
+        bannerAlerts.push({ type: 'info', msg: `OPERACIÓN FLUIDA - Progreso Global: ${percentComplete}%` });
+    }
+
+    const hasCritical = bannerAlerts.some(a => a.type === 'critical');
+    const hasWarningBanner = bannerAlerts.some(a => a.type === 'warning');
+    
+    let bannerBg = 'rgba(13, 122, 87, 0.85)';
+    let bannerFg = 'white';
+    let bannerBorder = '1px solid rgba(13, 122, 87, 0.4)';
+    if (hasCritical) {
+        bannerBg = 'rgba(239, 68, 68, 0.85)';
+        bannerFg = 'white';
+        bannerBorder = '1px solid rgba(239, 68, 68, 0.4)';
+    } else if (hasWarningBanner) {
+        bannerBg = 'rgba(234, 179, 8, 0.85)';
+        bannerFg = 'black';
+        bannerBorder = '1px solid rgba(234, 179, 8, 0.4)';
+    }
+
+    const bannerText = bannerAlerts.map(a => a.msg).join(' ••• ');
+
     return (
-        <main style={{
-            backgroundColor: '#020617',
-            minHeight: '100vh',
-            color: '#F8FAFC',
-            fontFamily: "'Inter', sans-serif",
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-        }}>
-            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-            
-            <style>{`
-                @keyframes pulse-live {
-                    0% {
-                        transform: scale(0.85);
-                        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
-                    }
-                    70% {
-                        transform: scale(1);
-                        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
-                    }
-                    100% {
-                        transform: scale(0.85);
-                        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-                    }
-                }
-                .live-pulse {
-                    animation: pulse-live 1.8s infinite ease-in-out;
-                }
-                .live-badge-glow {
-                    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
-                    transition: all 0.3s ease;
-                }
-                .density-btn {
-                    max-width: 32px;
-                    height: 28px;
-                    padding: 0 !important;
-                    justify-content: center;
-                    overflow: hidden;
-                    transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, background-color 0.2s !important;
-                    white-space: nowrap;
-                    display: inline-flex;
-                    align-items: center;
-                }
-                .density-btn span {
-                    opacity: 0;
-                    width: 0;
-                    overflow: hidden;
-                    transition: opacity 0.2s ease, width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    display: inline-block;
-                    font-size: 0.75rem;
-                }
-                .density-btn.active {
-                    max-width: 140px;
-                    padding: 0 10px !important;
-                    justify-content: flex-start;
-                }
-                .density-btn.active span {
-                    opacity: 1;
-                    width: auto;
-                    margin-left: 6px;
-                }
-                .density-btn:hover {
-                    max-width: 140px;
-                    padding: 0 10px !important;
-                    justify-content: flex-start;
-                }
-                .density-btn:hover span {
-                    opacity: 1;
-                    width: auto;
-                    margin-left: 6px;
-                }
-            `}</style>
+        <main style={{ backgroundColor: '#0A111C', height: '100vh', color: '#F8FAFC', fontFamily: "Inter, system-ui, sans-serif", display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* TOP HEADER */}
-            <header style={{
-                height: density === 'tv' ? '60px' : '75px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: density === 'tv' ? '0 1rem' : '0 2rem',
-                background: 'rgba(15, 23, 42, 0.6)',
-                backdropFilter: 'blur(12px)',
-                zIndex: 50
+            <header style={{ 
+                height: cfg.headerHeight, 
+                borderBottom: '1px solid rgba(255,255,255,0.08)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                padding: density === 'tv' ? '0 1rem' : '0 2rem', 
+                background: '#121D2D',
+                flexShrink: 0
             }}>
                 <div
                     onClick={() => router.push('/ops')}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.6rem',
-                        color: '#10B981',
-                        fontWeight: '800',
-                        fontSize: density === 'tv' ? '1.1rem' : '1.3rem',
-                        cursor: 'pointer',
-                        fontFamily: 'Outfit, sans-serif'
-                    }}
-                >
-                    <div style={{
-                        backgroundColor: 'white',
-                        width: density === 'tv' ? '24px' : '32px',
-                        height: density === 'tv' ? '24px' : '32px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 0 10px rgba(255,255,255,0.1)',
-                        padding: '3px',
-                        flexShrink: 0
+                    style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: density === 'tv' ? '0.5rem' : '1rem', 
+                        color: '#0D7A57', 
+                        fontWeight: '900', 
+                        fontSize: density === 'tv' ? '1rem' : '1.5rem', 
+                        cursor: 'pointer' 
                     }}>
-                        <img 
-                            src={logoUrl || "/logosimbolo.png"} 
-                            alt={shortName} 
-                            style={{ height: '100%', width: 'auto', objectFit: 'contain' }} 
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/logosimbolo.png"; }}
-                        />
-                    </div>
-                    <span style={{ color: '#fff' }}>
-                        {shortName} <span style={{ color: 'var(--ops-primary)' }}>OPS</span>
-                    </span>
-                    {density !== 'tv' && (
-                        <>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.15)', marginLeft: '4px' }}>|</span>
-                            <span style={{ color: '#94A3B8', fontWeight: '500', fontSize: '1rem', marginLeft: '4px' }}>TABLERO DE PICKING</span>
-                        </>
-                    )}
+                    <img src="/logo_completo_compacto.png" alt="Fru Fresco" style={{ height: density === 'tv' ? '30px' : '45px', objectFit: 'contain', borderRadius: '6px' }} />
+                    <span style={{ color: '#475569', marginLeft: '8px' }}>|</span> <span style={{ color: '#fff', marginLeft: '8px' }}>PICKING</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: density === 'tv' ? '1.2rem' : '2.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3rem' }}>
                     {/* ADVANCED PROGRESS BAR */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: density === 'tv' ? '550px' : '450px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
-                            <span>PRODUCCIÓN DE ALISTAMIENTO</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '400px', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#94A3B8', textTransform: 'uppercase' }}>
+                            <span>PRODUCCIÓN</span>
                             <span>{totalGlobalPicked} / {totalGlobalOrdered} Und</span>
                         </div>
-                        <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '5px', overflow: 'hidden', display: 'flex', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        {/* THE BAR */}
+                        <div style={{ width: '100%', height: '10px', background: '#0A111C', borderRadius: '6px', overflow: 'hidden', display: 'flex', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <div style={{
                                 width: `${percentComplete}%`,
-                                background: '#10B981',
+                                background: '#0D7A57',
                                 height: '100%',
-                                transition: 'width 0.5s ease'
+                                transition: 'width 0.5s'
                             }} title={`Terminado: ${percentComplete}%`}></div>
 
                             <div style={{
                                 width: `${percentPartial}%`,
-                                background: '#F59E0B',
+                                background: '#EAB308',
                                 height: '100%',
-                                transition: 'width 0.5s ease'
+                                transition: 'width 0.5s'
                             }} title={`Parcial: ${percentPartial}%`}></div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: '600', fontFamily: 'Inter, sans-serif' }}>
-                            <span style={{ color: '#10B981' }}>⬤ {percentComplete}% COMPLETADO</span>
-                            <span style={{ color: '#F59E0B' }}>⬤ {percentPartial}% EN PROCESO</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: '600' }}>
+                            <span style={{ color: '#0D7A57' }}>⬤ {percentComplete}% OK</span>
+                            <span style={{ color: '#EAB308' }}>⬤ {percentPartial}% PARCIAL</span>
                         </div>
                     </div>
 
                     {/* GLOBAL PROGRESS */}
-                    <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '10px',
-                        minWidth: density === 'tv' ? '100px' : '130px',
-                        justifyContent: 'flex-end'
-                    }}>
-                        <span style={{ color: '#94A3B8', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'Outfit, sans-serif' }}>TOTAL</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ color: '#94A3B8', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>TOTAL</span>
                         <div style={{
                             fontSize: '2rem',
                             fontWeight: 'bold',
-                            color: globalPercent === 100 ? '#10B981' : '#F59E0B',
-                            textShadow: '0 0 15px rgba(245, 158, 11, 0.2)',
-                            fontFamily: 'Outfit, sans-serif',
-                            fontVariantNumeric: 'tabular-nums',
-                            minWidth: density === 'tv' ? '50px' : '65px',
-                            textAlign: 'right'
+                            color: globalPercent === 100 ? '#10B981' : '#FACC15',
+                            textShadow: '0 0 10px rgba(250, 204, 21, 0.1)'
                         }}>
                             {globalPercent}%
                         </div>
                     </div>
 
-                    {/* DENSITY SELECTOR */}
-                    <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        background: 'rgba(15, 23, 42, 0.8)', 
-                        padding: '4px 6px', 
-                        borderRadius: '10px', 
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        marginRight: '5px',
-                        gap: '5px'
-                    }}>
-                        <button 
-                            onClick={() => changeDensity('standard')}
-                            className={`density-btn ${density === 'standard' ? 'active' : ''}`}
-                            style={{
-                                borderRadius: '6px', 
-                                border: 'none', 
-                                cursor: 'pointer',
-                                background: density === 'standard' ? '#10B981' : 'transparent',
-                                color: density === 'standard' ? '#020617' : '#94A3B8',
-                                fontWeight: '700',
-                            }} 
-                            title="Estándar (PC)"
-                        >
-                            <Monitor size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                            <span>Standard</span>
-                        </button>
-                        <button 
-                            onClick={() => changeDensity('high')}
-                            className={`density-btn ${density === 'high' ? 'active' : ''}`}
-                            style={{
-                                borderRadius: '6px', 
-                                border: 'none', 
-                                cursor: 'pointer',
-                                background: density === 'high' ? '#10B981' : 'transparent',
-                                color: density === 'high' ? '#020617' : '#94A3B8',
-                                fontWeight: '700',
-                            }} 
-                            title="Alta Densidad (PC)"
-                        >
-                            <LayoutGrid size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                            <span>Compact</span>
-                        </button>
-                        <button 
-                            onClick={() => changeDensity('tv')}
-                            className={`density-btn ${density === 'tv' ? 'active' : ''}`}
-                            style={{
-                                borderRadius: '6px', 
-                                border: 'none', 
-                                cursor: 'pointer',
-                                background: density === 'tv' ? '#10B981' : 'transparent',
-                                color: density === 'tv' ? '#020617' : '#94A3B8',
-                                fontWeight: '700',
-                            }} 
-                            title="Televisor (TV)"
-                        >
-                            <Tv size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                            <span>TV Mode</span>
-                        </button>
-                    </div>
-
                     {/* CLOCK & STATUS */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <div 
-                            className={isConnected ? "live-badge-glow" : ""}
-                            style={{
-                                padding: '5px 10px', borderRadius: '20px',
-                                background: isConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                border: isConnected ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                                display: 'flex', alignItems: 'center', gap: '6px'
-                            }}
-                        >
-                            {isConnected ? (
-                                <span style={{
-                                    width: '6px',
-                                    height: '6px',
-                                    borderRadius: '50%',
-                                    backgroundColor: '#10B981',
-                                    display: 'inline-block'
-                                }} className="live-pulse" />
-                            ) : (
-                                <Wifi size={12} className="text-red-500" />
-                            )}
-                            <span style={{ fontSize: '0.7rem', color: isConnected ? '#10B981' : '#EF4444', fontWeight: 'bold' }}>
-                                {isConnected ? 'LIVE' : 'DISCONNECTED'}
-                            </span>
+                        <div style={{
+                            padding: '5px 10px', borderRadius: '20px',
+                            background: isConnected ? 'rgba(13, 122, 87, 0.1)' : 'rgba(239, 68, 68, 0.2)',
+                            border: isConnected ? '1px solid #0D7A57' : '1px solid #EF4444',
+                            display: 'flex', alignItems: 'center', gap: '8px'
+                        }}>
+                            <div style={{
+                                width: '10px', height: '10px', borderRadius: '50%',
+                                background: isConnected ? '#0D7A57' : '#EF4444',
+                                boxShadow: isConnected ? '0 0 10px #0D7A57' : '0 0 10px #EF4444',
+                                animation: !isConnected ? 'pulseAlert 1s infinite' : 'none'
+                            }}></div>
+                            {!isConnected && <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: 'bold' }}>DESCONECTADO</span>}
                         </div>
 
+                         <div style={{ fontSize: density === 'tv' ? '1.2rem' : '2rem', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', minWidth: density === 'tv' ? '90px' : '150px', textAlign: 'right' }}>{currentTime}</div>
+
+                        {/* DENSITY SELECTOR */}
                         <div style={{ 
-                            fontSize: density === 'tv' ? '1.8rem' : '1.4rem', 
-                            fontWeight: 'bold', 
-                            fontFamily: 'Outfit, sans-serif', 
-                            color: '#E2E8F0',
-                            fontVariantNumeric: 'tabular-nums',
-                            minWidth: density === 'tv' ? '135px' : '110px',
-                            textAlign: 'right',
-                            lineHeight: 1
-                        }}>{currentTime}</div>
+                            display: 'flex', 
+                            background: '#0A111C', 
+                            padding: '3px', 
+                            borderRadius: '8px', 
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            marginLeft: '10px'
+                        }}>
+                            <button 
+                                onClick={() => changeDensity('standard')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'standard' ? '#0D7A57' : 'transparent',
+                                    color: density === 'standard' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Estándar"><Monitor size={14} strokeWidth={2.5} /></button>
+                            <button 
+                                onClick={() => changeDensity('high')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'high' ? '#0D7A57' : 'transparent',
+                                    color: density === 'high' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Alta Densidad"><LayoutGrid size={14} strokeWidth={2.5} /></button>
+                            <button 
+                                onClick={() => changeDensity('tv')}
+                                style={{
+                                    padding: '5px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                    background: density === 'tv' ? '#0D7A57' : 'transparent',
+                                    color: density === 'tv' ? 'white' : '#888',
+                                    transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center'
+                                }} title="Modo TV"><Tv size={14} strokeWidth={2.5} /></button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -844,29 +710,29 @@ export default function PickingDashboard() {
             {/* INVENTORY ALERT BANNER */}
             {inventoryAlerts && inventoryAlerts.length > 0 && (
                 <div style={{ 
-                    backgroundColor: 'rgba(251, 191, 36, 0.1)', 
-                    color: '#FBBF24', 
+                    backgroundColor: '#FEF3C7', 
+                    color: '#92400E', 
                     padding: '0.6rem 2rem', 
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: '1rem',
-                    borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
-                    zIndex: 40,
-                    fontWeight: '600',
+                    borderBottom: '2px solid #F59E0B',
+                    zIndex: 100,
+                    fontWeight: '800',
                     fontSize: '0.9rem',
                     overflow: 'hidden'
                 }}>
-                    <AlertCircle className="text-amber-500" size={18} />
+                    <AlertTriangle size={18} className="text-amber-700" />
                     <div style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         <div style={{ 
                             display: 'inline-block', 
                             animation: inventoryAlerts.length > 2 ? 'marqueeAlert 30s linear infinite' : 'none',
                             paddingLeft: '100%'
                         }}>
-                            <span style={{ marginRight: '2rem', color: '#FBBF24', fontWeight: 'bold' }}>REVISAR STOCK DE SEGURIDAD EN ALMACÉN:</span>
+                            <span style={{ marginRight: '2rem', color: '#B45309' }}>¡ATENCIÓN SECTOR PICKING! REVISAR ABASTECIMIENTO:</span>
                             {inventoryAlerts.map((alert, idx) => (
                                 <span key={idx} style={{ marginRight: '3rem' }}>
-                                    {alert.name} (Actual: {alert.current} | Min: {alert.min})
+                                    La carga de <strong style={{ textDecoration: 'underline' }}>{alert.name}</strong> está por debajo del mínimo (Actual: {alert.current} | Mín: {alert.min})
                                 </span>
                             ))}
                         </div>
@@ -875,32 +741,29 @@ export default function PickingDashboard() {
             )}
 
             {/* SCROLLABLE GRID */}
-            <div style={{ flex: 1, overflow: 'auto', position: 'relative', background: '#090d16' }}>
+            <div style={{ flex: 1, overflow: 'auto', position: 'relative', paddingBottom: '32px' }}>
                 <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
                     <thead>
                         {/* ROW 1: ZONES (Sticky Top) */}
                         <tr>
                             <th style={{
                                 position: 'sticky', top: 0, left: 0, zIndex: 40,
-                                background: '#090d16', minWidth: '220px',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                                borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                                height: '45px'
+                                background: '#0A111C', minWidth: '200px',
+                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
+                                height: '44px'
                             }}></th>
 
                             {zoneHeaders.map((zone, i) => (
                                 <th key={i} colSpan={zone.count} style={{
                                     position: 'sticky', top: 0, zIndex: 30,
-                                    background: 'rgba(15, 23, 42, 0.9)',
-                                    color: zone.percent === 100 ? '#10B981' : zone.color,
-                                    borderBottom: `3px solid ${zone.percent === 100 ? '#10B981' : zone.color}`,
-                                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: '#121D2D',
+                                    color: zone.percent === 100 ? '#0D7A57' : zone.color,
+                                    borderBottom: `4px solid ${zone.percent === 100 ? '#0D7A57' : zone.color}`,
+                                    borderRight: '1px solid rgba(255,255,255,0.08)',
                                     textAlign: 'center',
                                     fontWeight: 'bold',
-                                    fontSize: '0.9rem',
-                                    padding: '0.5rem 0',
-                                    fontFamily: 'Outfit, sans-serif',
-                                    backdropFilter: 'blur(8px)'
+                                    fontSize: '1rem',
+                                    padding: '0.5rem 0'
                                 }}>
                                     {zone.name.toUpperCase()} <span style={{ color: '#fff', opacity: 0.7, marginLeft: '5px' }}>{zone.percent}%</span>
                                 </th>
@@ -910,30 +773,28 @@ export default function PickingDashboard() {
                         {/* ROW 2: CLIENT NAMES (Vertical) */}
                         <tr>
                             <th style={{
-                                position: 'sticky', top: '45px', left: 0, zIndex: 40,
-                                background: '#090d16',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                                borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                                color: '#64748B', textAlign: 'right', padding: '1rem',
-                                fontFamily: 'Outfit, sans-serif', fontSize: '0.85rem'
+                                position: 'sticky', top: '44px', left: 0, zIndex: 40,
+                                background: '#0A111C',
+                                borderBottom: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)',
+                                color: '#94A3B8', textAlign: 'right', padding: '1rem',
+                                fontSize: cfg.fontSize
                             }}>PRODUCTO</th>
 
-                            {clients.map((client) => {
-                                const complete = isClientComplete(client.company_name);
+                            {clients.map((client, index) => {
+                                const complete = isClientComplete(client.id);
                                 return (
                                     <th key={client.id} style={{
-                                        position: 'sticky', top: '45px', zIndex: 20,
-                                        background: complete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.95)',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                                        borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+                                        position: 'sticky', top: '44px', zIndex: 20,
+                                        background: complete ? 'rgba(13, 122, 87, 0.2)' : (clientsWithAlerts.has(client.id) ? '#7F1D1D' : '#0A111C'),
+                                        borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                        borderRight: '1px solid rgba(255,255,255,0.05)',
                                         height: cfg.clientHeaderHeight,
                                         verticalAlign: 'top',
                                         padding: '0',
                                         minWidth: cfg.cellWidth,
                                         maxWidth: cfg.cellWidth,
                                         overflow: 'hidden',
-                                        backdropFilter: 'blur(8px)',
-                                        transition: 'background-color 0.2s ease'
+                                        animation: clientsWithAlerts.has(client.id) ? 'pulseAlert 1.5s infinite' : 'none'
                                     }}>
                                         <div style={{
                                             display: 'flex',
@@ -943,98 +804,97 @@ export default function PickingDashboard() {
                                             justifyContent: 'flex-start',
                                             overflow: 'hidden'
                                         }}>
-                                            {/* LIFO Space Label instead of Index */}
+                                            {/* Big Lane Number */}
                                             <div style={{
-                                                fontSize: cfg.clientFontSize,
-                                                fontWeight: '700',
-                                                color: complete ? '#10B981' : '#38BDF8',
-                                                marginBottom: '4px',
-                                                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                                                fontSize: cfg.laneFontSize,
+                                                fontWeight: '800',
+                                                color: complete ? '#34D399' : '#fff',
+                                                marginBottom: '2px',
+                                                borderBottom: '1px solid rgba(255,255,255,0.08)',
                                                 width: '100%',
                                                 textAlign: 'center',
-                                                paddingTop: '6px',
-                                                paddingBottom: '4px',
+                                                paddingTop: '4px',
+                                                paddingBottom: '2px',
                                                 flexShrink: 0,
-                                                fontFamily: 'Outfit, sans-serif',
-                                                letterSpacing: '0.5px'
+                                                letterSpacing: '-1px'
                                             }}>
-                                                {clientSpaces[client.company_name] || 'ESP -'}
+                                                {index + 1}
                                             </div>
- 
+
                                             {/* Vertical Name */}
                                             <div style={{
                                                 writingMode: 'vertical-rl',
                                                 transform: 'rotate(180deg)',
                                                 whiteSpace: 'nowrap',
                                                 fontSize: cfg.clientFontSize, 
-                                                fontWeight: '600',
+                                                fontWeight: '800',
                                                 letterSpacing: '0.5px',
-                                                color: complete ? '#A7F3D0' : '#E2E8F0',
+                                                color: complete ? '#A7F3D0' : '#fff',
                                                 textAlign: 'left',
                                                 width: '100%',
                                                 flex: 1,
                                                 overflow: 'hidden',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'flex-end',
-                                                paddingBottom: '8px',
-                                                fontFamily: 'Inter, sans-serif'
+                                                justifyContent: 'flex-start'
                                             }}>
-                                                {getClientShortName(client.company_name)}
+                                                <div style={{ animation: 'slideClientName 15s linear infinite', whiteSpace: 'nowrap' }}>
+                                                    {getClientShortName(client.company_name)}
+                                                    <span style={{ opacity: 0 }}>------</span>
+                                                    {getClientShortName(client.company_name)}
+                                                </div>
                                             </div>
                                         </div>
                                     </th>
-                                );
+                                )
                             })}
                         </tr>
                     </thead>
 
                     <tbody>
-                        {Object.entries(productsByBuyingTeam).map(([team, teamProducts]) => {
-                            const teamPercent = getBuyingTeamPercent(team, teamProducts);
-                            const isTeamComplete = teamPercent === 100;
+                        {Object.entries(productsByCategory).map(([category, categoryProducts]) => {
+                            const catPercent = getCategoryPercent(category, categoryProducts);
+                            const isCatComplete = catPercent === 100;
 
                             return (
-                                <Fragment key={team}>
-                                    {/* Buying Team Section Header */}
+                                <Fragment key={category}>
+                                    {/* Category Header */}
                                     <tr>
                                         <td colSpan={clients.length + 1} style={{
-                                            background: 'rgba(15, 23, 42, 0.8)', color: '#94a3b8',
-                                            fontWeight: 'bold', fontSize: '1.1rem',
-                                            padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                                            position: 'sticky', left: 0,
-                                            backdropFilter: 'blur(8px)',
-                                            zIndex: 5
+                                            background: '#121D2D', color: '#94A3B8',
+                                            fontWeight: 'bold', fontSize: cfg.fontSize,
+                                            padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                            position: 'sticky', left: 0
                                         }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
-                                                <span style={{ minWidth: '250px', display: 'inline-block', fontFamily: 'Outfit, sans-serif', letterSpacing: '0.5px' }}>{cleanCategoryName(team)}</span>
+                                                <span style={{ minWidth: '250px', display: 'inline-block' }}>{(CATEGORY_MAP[category] || category).toUpperCase()}</span>
 
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <div style={{ width: '100px', height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    {/* Mini Progress Bar Background */}
+                                                    <div style={{ width: '100px', height: '6px', background: '#0A111C', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
                                                         <div style={{
-                                                            width: `${teamPercent}%`,
+                                                            width: `${catPercent}%`,
                                                             height: '100%',
-                                                            background: isTeamComplete ? '#10B981' : '#F59E0B',
+                                                            background: isCatComplete ? '#0D7A57' : '#FACC15',
                                                             transition: 'width 0.5s ease'
                                                         }} />
                                                     </div>
 
                                                     <span style={{
-                                                        color: teamPercent === 0 ? '#64748b' : (isTeamComplete ? '#10B981' : '#F59E0B'),
+                                                        color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
                                                         fontWeight: 'bold',
                                                         minWidth: '35px', textAlign: 'right',
-                                                        fontSize: '0.9rem',
-                                                        fontFamily: 'Inter, sans-serif'
+                                                        fontSize: '0.9rem'
                                                     }}>
-                                                        {teamPercent}%
+                                                        {catPercent}%
                                                     </span>
                                                 </div>
                                             </div>
                                         </td>
                                     </tr>
 
-                                    {teamProducts.map(product => {
-                                        const rowHasData = clients.some(c => matrix[product.id]?.[c.company_name]);
+                                    {categoryProducts.map(product => {
+                                        const rowHasData = clients.some(c => matrix[product.id]?.[c.id]);
                                         if (!rowHasData) return null;
 
                                         return (
@@ -1042,81 +902,81 @@ export default function PickingDashboard() {
                                                 {/* Product Name (Sticky Left) */}
                                                 <td style={{
                                                     position: 'sticky', left: 0, zIndex: 10,
-                                                    background: '#090d16',
-                                                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                                                    padding: density === 'tv' ? '0.2rem 0.5rem' : '0.6rem 1rem',
-                                                    color: '#E2E8F0', 
+                                                    background: productsWithAlerts.has(product.id) ? '#7F1D1D' : '#0A111C',
+                                                    borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                    padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
+                                                    color: productsWithAlerts.has(product.id) ? '#fff' : '#ddd', 
                                                     fontSize: cfg.productFontSize,
-                                                    minWidth: cfg.productColWidth, maxWidth: cfg.productColMaxWidth,
+                                                    minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
                                                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                    fontFamily: 'Outfit, sans-serif'
+                                                    animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
                                                 }} title={product.name}>
                                                     {product.name}
-                                                    <span style={{ marginLeft: '8px', fontSize: cfg.clientFontSize, color: '#64748B', fontFamily: 'Inter, sans-serif' }}>
+                                                    <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: '#555' }}>
                                                         {product.unit_of_measure}
                                                     </span>
                                                 </td>
 
                                                 {/* Matrix Cells */}
                                                 {clients.map(client => {
-                                                    const cell = matrix[product.id]?.[client.company_name];
+                                                    const cell = matrix[product.id]?.[client.id];
 
                                                     if (!cell) {
-                                                        return <td key={client.id} style={{ background: 'transparent', borderBottom: '1px solid rgba(255, 255, 255, 0.03)', borderRight: '1px solid rgba(255, 255, 255, 0.03)' }}></td>;
+                                                        return <td key={client.id} style={{ background: '#0A111C', borderBottom: '1px solid rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.03)' }}></td>;
                                                     }
 
-                                                    // Stock & Picking logic for background color
-                                                    const remaining = cell.ordered - cell.picked;
-                                                    const currentStock = product.current_stock || 0;
-                                                    const pickedPercentage = cell.ordered > 0 ? (cell.picked / cell.ordered) : 0;
+                                                    // State Logic
+                                                    let bg = '#0A111C';
+                                                    let fg = '#475569';
+                                                    if (cell.picked > 0) { bg = '#331B00'; fg = '#F59E0B'; } // Picking
+                                                    if (cell.picked >= cell.ordered) { bg = 'rgba(13, 122, 87, 0.2)'; fg = '#34D399'; } // Ready
 
-                                                    let bg = 'rgba(30, 41, 59, 0.8)'; // Normal Premium Dark Cell (GRIS)
-                                                    let fg = '#F8FAFC';
+                                                    // REJECTION & WARNING OVERRIDES
+                                                    if (cell.hasRejection) {
+                                                        bg = '#EF4444'; 
+                                                        fg = '#fff';
+                                                    } else if (cell.hasWarning) {
+                                                        bg = '#EAB308';
+                                                        fg = '#000';
+                                                    }
 
-                                                    if (remaining <= 0 || currentStock >= remaining) {
-                                                        // 1. GRIS
-                                                        if (cell.picked >= cell.ordered) {
-                                                            bg = 'rgba(16, 185, 129, 0.15)'; // Elegant green for completed
-                                                            fg = '#10B981';
-                                                        } else {
-                                                            bg = 'rgba(30, 41, 59, 0.8)';
-                                                            fg = '#F8FAFC';
-                                                        }
-                                                    } else {
-                                                        // Deficit: currentStock < remaining
-                                                        if (pickedPercentage >= 0.8) {
-                                                            // 3. ROJO: picked >= 80%, but deficit exists
-                                                            bg = 'rgba(239, 68, 68, 0.15)';
-                                                            fg = '#EF4444';
-                                                        } else {
-                                                            // 2. AMARILLO: insufficient to start/continue picking
-                                                            bg = 'rgba(245, 158, 11, 0.15)';
-                                                            fg = '#F59E0B';
-                                                        }
+                                                    // If just ordered but not picked
+                                                    if (cell.ordered > 0 && cell.picked === 0) {
+                                                        bg = '#1E293B';
+                                                        fg = '#fff';
                                                     }
 
                                                     const isPartial = cell.picked > 0 && cell.picked < cell.ordered;
 
                                                     return (
                                                         <td key={client.id}
-                                                            onClick={() => handleCellClick(product, client.company_name, cell)}
+                                                            onClick={() => handleCellClick(product, client.id, client.company_name, cell)}
                                                             style={{
                                                                 background: bg, color: fg,
-                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                                                                borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+                                                                borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)',
                                                                 textAlign: 'center', fontWeight: 'bold',
                                                                 fontSize: cfg.fontSize,
-                                                                cursor: 'pointer', transition: 'all 0.15s ease',
-                                                                position: 'relative',
                                                                 height: cfg.cellHeight,
-                                                                fontFamily: 'Inter, sans-serif'
+                                                                cursor: 'pointer', transition: 'all 0.1s',
+                                                                animation: cell.hasRejection ? 'pulseAlert 1s infinite' : (cell.hasWarning ? 'pulseWarning 1.5s infinite' : 'none'),
+                                                                position: 'relative',
+                                                                zIndex: (cell.hasRejection || cell.hasWarning) ? 5 : 1
                                                             }}
                                                         >
-                                                            {isPartial ? (
-                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2', alignItems: 'center', justifyContent: 'center' }}>
-                                                                    <span style={{ color: fg, fontSize: cfg.fontSize }}>{cell.picked}</span>
-                                                                    <span style={{ fontSize: cfg.clientFontSize, color: '#64748B', borderTop: '1px solid rgba(255,255,255,0.1)', width: '60%', marginTop: '2px', paddingTop: '1px' }}>{cell.ordered}</span>
+                                                            {cell.hasRejection ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <AlertOctagon size={14} />
+                                                                    <span style={{ fontSize: '0.65rem' }}> RECHAZO</span>
+                                                                </div>
+                                                            ) : cell.hasWarning ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <AlertTriangle size={14} />
+                                                                    <span style={{ fontSize: '0.65rem' }}> VERIF</span>
+                                                                </div>
+                                                            ) : isPartial ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1' }}>
+                                                                    <span style={{ color: '#fff', fontSize: cfg.fontSize }}>{cell.picked}</span>
+                                                                    <span style={{ fontSize: `calc(${cfg.fontSize} * 0.7)`, opacity: 0.8, borderTop: '1px solid #555' }}>{cell.ordered}</span>
                                                                 </div>
                                                             ) : (
                                                                 cell.ordered
@@ -1135,27 +995,40 @@ export default function PickingDashboard() {
             </div>
 
             {/* Footer Ticker */}
-            <div style={{
-                backgroundColor: '#F59E0B',
-                color: '#020617',
-                padding: '0.35rem 1rem',
-                fontWeight: '700',
-                fontSize: '0.8rem',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                zIndex: 50,
-                fontFamily: 'Outfit, sans-serif',
-                letterSpacing: '0.5px'
-            }}>
-                <div className="animate-marquee inline-block">
-                    *** SEGUIMIENTO EN VIVO *** OPERACIÓN FLUIDA *** VERIFICACIÓN AUTOMÁTICA DE CALIDAD AL COMPLETAR PICKING *** RUTAS DE DESPACHO EN PREPARACIÓN ***
+            <div 
+                onClick={() => setShowBannerModal(true)}
+                style={{ 
+                    position: 'fixed',
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    backgroundColor: bannerBg,
+                    color: bannerFg,
+                    borderTop: bannerBorder,
+                    padding: '0.5rem',
+                    fontWeight: 'bold',
+                    fontSize: '0.85rem',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    zIndex: 100,
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                }}
+                title="Clic para ver detalles de alertas"
+            >
+                <div style={{ display: 'inline-block', animation: 'marquee 45s linear infinite', width: '100%' }}>
+                    ••• {bannerText} •••
                 </div>
             </div>
 
             <style jsx>{`
-                .animate-marquee {
-                    animation: marquee 30s linear infinite;
-                }
+                :global(#ops-main-header) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
+                :global(#ops-main-footer) { display: ${cfg.hideExternal ? 'none' : 'flex'} !important; }
+
                 @keyframes marquee {
                     0% { transform: translateX(100%); }
                     100% { transform: translateX(-100%); }
@@ -1169,25 +1042,83 @@ export default function PickingDashboard() {
                     from { transform: translateX(0); }
                     to { transform: translateX(-100%); }
                 }
+                @keyframes pulseAlert {
+                    0% { background-color: #EF4444; }
+                    50% { background-color: #7F1D1D; }
+                    100% { background-color: #EF4444; }
+                }
+                @keyframes pulseWarning {
+                    0% { background-color: #EAB308; }
+                    50% { background-color: #78350F; }
+                    100% { background-color: #EAB308; }
+                }
+                @keyframes slideClientName {
+                    0% { transform: translateY(0); }
+                    100% { transform: translateY(-50%); }
+                }
             `}</style>
+
+            {/* BANNER MODAL */}
+            {showBannerModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                    background: 'rgba(0,0,0,0.8)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }} onClick={() => setShowBannerModal(false)}>
+                    <div style={{
+                        background: '#121D2D', border: '1px solid rgba(255,255,255,0.08)', padding: '2rem',
+                        borderRadius: '16px', minWidth: '400px', maxWidth: '800px',
+                        color: '#fff',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Bell size={24} className="text-slate-400" /> Alertas Activas
+                        </h2>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {bannerAlerts.map((a, i) => (
+                                <li key={i} style={{ 
+                                    padding: '0.75rem', 
+                                    background: a.type === 'critical' ? 'rgba(239, 68, 68, 0.15)' : (a.type === 'warning' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(13, 122, 87, 0.15)'),
+                                    borderRadius: '12px',
+                                    fontWeight: 'bold',
+                                    borderLeft: `4px solid ${a.type === 'critical' ? '#EF4444' : (a.type === 'warning' ? '#F59E0B' : '#0D7A57')}`,
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}>
+                                    {a.type === 'critical' ? <AlertOctagon size={16} className="text-red-500" /> : (a.type === 'warning' ? <AlertTriangle size={16} className="text-yellow-500" /> : <CheckCircle size={16} className="text-emerald-500" />)}
+                                    {a.msg}
+                                </li>
+                            ))}
+                        </ul>
+                        <div style={{ marginTop: '2rem', textAlign: 'right' }}>
+                            <button onClick={() => setShowBannerModal(false)} style={{
+                                background: '#0D7A57', color: '#fff', border: 'none', padding: '0.5rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s'
+                            }}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MILESTONE POPUP */}
             {milestone && (
                 <div style={{
                     position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                    background: 'rgba(9, 13, 22, 0.95)', border: '2px solid #10B981',
-                    padding: '2.5rem 4rem', borderRadius: '16px', zIndex: 100,
-                    textAlign: 'center', boxShadow: '0 0 40px rgba(16, 185, 129, 0.25)',
-                    animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                    backdropFilter: 'blur(10px)'
+                    background: 'rgba(12, 29, 45, 0.95)', border: '4px solid #0D7A57',
+                    padding: '2rem 4rem', borderRadius: '20px', zIndex: 1000,
+                    textAlign: 'center', boxShadow: '0 0 50px rgba(13, 122, 87, 0.5)',
+                    animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}>
-                    <div style={{ fontSize: '1.2rem', color: '#94A3B8', marginBottom: '8px', fontFamily: 'Outfit, sans-serif', fontWeight: '600' }}>
+                    <div style={{ fontSize: '1.2rem', color: '#94A3B8', marginBottom: '10px', fontWeight: 'bold' }}>
                         {milestone.type === 'CLIENT' ? 'PEDIDO COMPLETADO' : 'ZONA LISTA'}
                     </div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#10B981', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '3rem', fontWeight: '900', color: 'white', textTransform: 'uppercase', marginBottom: '1rem' }}>
                         {milestone.name}
                     </div>
-                    <div style={{ fontSize: '4rem', lineHeight: '1' }}>🎉</div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <CheckCircle size={64} strokeWidth={1.5} className="text-emerald-500" />
+                    </div>
                 </div>
             )}
         </main>

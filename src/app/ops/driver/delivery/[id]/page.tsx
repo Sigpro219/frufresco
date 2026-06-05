@@ -125,7 +125,6 @@ export default function DeliveryConfirmationPage() {
             }
 
             setStop(data);
-            localStorage.setItem(`cached_stop_data_${id}`, JSON.stringify(data));
             
             // Initialize items with 0 returned_qty
             const order = (data as any).orders;
@@ -147,30 +146,6 @@ export default function DeliveryConfirmationPage() {
             }
         } catch (err) {
             if (isAbortError(err)) return;
-            // Offline fallback
-            const cached = localStorage.getItem(`cached_stop_data_${id}`);
-            if (cached) {
-                const data = JSON.parse(cached);
-                setStop(data);
-                const order = data.orders;
-                if (order?.order_items) {
-                    const formattedItems = (order.order_items as any[]).map(item => {
-                        const variant = item.variant_label || item.nickname || '';
-                        const dispName = variant ? `${item.products?.name || 'Producto'} (${variant})` : (item.products?.name || 'Producto');
-                        return {
-                            id: item.id,
-                            product_id: item.product_id || item.products?.id,
-                            product_name: dispName,
-                            quantity: item.quantity,
-                            picked_quantity: item.picked_quantity || item.quantity,
-                            returned_qty: 0,
-                            unit: item.products?.unit_of_measure || 'un'
-                        };
-                    });
-                    setItems(formattedItems);
-                }
-                console.log('🔌 Offline Mode: Loaded delivery stop details from local cache.');
-            }
             console.error('Error fetching stop:', err);
         } finally {
             setLoading(false);
@@ -271,52 +246,15 @@ export default function DeliveryConfirmationPage() {
         }
     };
 
-    const enqueueOfflineSync = (payload: any) => {
-        const queue = JSON.parse(localStorage.getItem('pending_delivery_sync') || '[]');
-        queue.push(payload);
-        localStorage.setItem('pending_delivery_sync', JSON.stringify(queue));
-
-        // Update local stop cache state to delivered/failed locally so UI shows it completed
-        const cachedStops = localStorage.getItem(`cached_route_stops_${payload.routeId}`);
-        if (cachedStops) {
-            const parsedStops = JSON.parse(cachedStops);
-            const updatedStops = parsedStops.map((s: any) => 
-                s.id === payload.stopId ? { ...s, status: payload.status } : s
-            );
-            localStorage.setItem(`cached_route_stops_${payload.routeId}`, JSON.stringify(updatedStops));
-        }
-
-        alert('🔌 MODO OFFLINE: Sin conexión a internet. Tu entrega fue guardada localmente y se sincronizará automáticamente cuando recuperes señal.');
-        router.push(`/ops/driver/route-map/${payload.routeId}`);
-    };
-
     const handleFinalize = async () => {
         if (!evidenceUrl && !hasNovedad) {
             if (!confirm('¿Deseas finalizar sin foto de evidencia?')) return;
         }
 
-        const isTotalCancellation = hasNovedad && TOTAL_CANCELLATION_REASONS.includes(novedadReason);
-        const payload = {
-            stopId: id,
-            routeId: stop?.route_id,
-            status: isTotalCancellation ? 'failed' : 'delivered',
-            isTotalCancellation,
-            hasNovedad,
-            novedadReason,
-            evidenceUrl,
-            items,
-            canastillasDelivered,
-            canastillasReceived,
-            timestamp: new Date().toISOString()
-        };
-
-        if (!navigator.onLine) {
-            enqueueOfflineSync(payload);
-            return;
-        }
-
         try {
             setSaving(true);
+
+            const isTotalCancellation = hasNovedad && TOTAL_CANCELLATION_REASONS.includes(novedadReason);
 
             // BYPASS DB UPDATES FOR MOCK DATA
             if (typeof id === 'string' && id.startsWith('ms')) {
@@ -403,7 +341,7 @@ export default function DeliveryConfirmationPage() {
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: '#9CA3AF' }}>Preparando remisión...</div>;
 
     return (
-        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100%', backgroundColor: '#090D16' }}>
+        <div style={{ padding: '1rem', paddingBottom: '7rem', maxWidth: '600px', margin: '0 auto', color: 'white', minHeight: '100vh', backgroundColor: '#090D16' }}>
              <header style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button 
                     onClick={() => router.back()} 
