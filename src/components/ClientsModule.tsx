@@ -862,9 +862,10 @@ export default function ClientsModule() {
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
                                                     <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PROSPECTO / EMPRESA</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>CONTACTO</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>UBICACIÓN</th>
                                                     <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ESTADO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ÚLTIMO CONTACTO</th>
-                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>PRÓXIMA TAREA</th>
+                                                    <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>SEGUIMIENTO</th>
                                                     <th style={{ padding: '1.2rem', color: '#64748B', fontSize: '0.85rem', fontWeight: '800' }}>ACCIONES</th>
                                                 </tr>
                                             </thead>
@@ -1514,9 +1515,9 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 )}
                 <button 
                     onClick={handleWhatsApp}
-                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#0891B2', color: 'white', fontWeight: '700', cursor: 'pointer' }}
+                    style={{ padding: '0.8rem', borderRadius: '12px', border: 'none', background: '#25D366', color: 'white', fontWeight: '800', cursor: 'pointer' }}
                 >
-                    WA
+                    💬 WhatsApp
                 </button>
             </div>
         </div>
@@ -1541,6 +1542,23 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
         window.open(`https://wa.me/57${cleanPhone}`, '_blank');
     };
 
+    let displayMunicipality = client.municipality || '';
+    let displayAddress = client.address || '';
+    let displayCity = client.city || '';
+
+    if (isLead) {
+        if (!displayCity) displayCity = 'Prospecto';
+        if (!displayAddress || !displayMunicipality) {
+            const notesText = (client as any).notes || '';
+            if (notesText.includes('MUN:') || notesText.includes('ORIG:')) {
+                const munMatch = notesText.match(/MUN:\s*([^|]+)/);
+                const origMatch = notesText.match(/ORIG:\s*([^|]+)/);
+                if (munMatch && !displayMunicipality) displayMunicipality = munMatch[1].trim();
+                if (origMatch && !displayAddress) displayAddress = origMatch[1].trim();
+            }
+        }
+    }
+
     return (
         <tr 
             style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s', cursor: 'pointer' }}
@@ -1550,21 +1568,24 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
         >
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.95rem' }}>{client.company_name || client.contact_name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
-                <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
-                    {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
-                    
-                    {/* ICONOS OPERATIVOS ADICIONALES */}
-                    {!isLead && (
-                        <>
+                {isLead ? (
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        {(client as any).business_type && <span style={{ fontSize: '0.65rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_type}</span>}
+                        {(client as any).business_size && <span style={{ fontSize: '0.65rem', backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>{(client as any).business_size}</span>}
+                    </div>
+                ) : (
+                    <>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>NIT: {client.nit || '---'}</div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                            {client.is_corporate_parent && <span style={{ fontSize: '0.6rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Matriz</span>}
+                            {client.parent_id && <span style={{ fontSize: '0.6rem', backgroundColor: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', textTransform: 'uppercase' }}>Sucursal</span>}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0' }}>🧺 SI</span>}
                             <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0' }}>
                                 📄 {client.document_type === 'invoice' ? (client.print_invoice ? 'FAC-IMP' : 'FAC-DIG') : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')}
                             </span>
-                        </>
-                    )}
-                </div>
+                        </div>
+                    </>
+                )}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569' }}>{client.contact_name}</div>
@@ -1572,8 +1593,10 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                 {client.email && <div style={{ fontSize: '0.75rem', color: '#0891B2', fontWeight: '600', marginTop: '2px' }}>📧 {client.email}</div>}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{client.city} / {client.municipality}</div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{client.address}</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
+                    {displayCity ? `${displayCity} / ` : ''}{displayMunicipality || '---'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{displayAddress || '---'}</div>
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
                 {isB2B ? (
@@ -1598,28 +1621,47 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, agreement
                 )}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
-                {agreementStatus && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                        <div style={{ 
-                            width: '8px', height: '8px', borderRadius: '50%', 
-                            backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
-                        }} />
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
+                {isLead ? (
+                    <div>
+                        {(client as any).last_contact_date ? (
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#475569' }}>Último: {new Date((client as any).last_contact_date).toLocaleDateString()}</div>
+                        ) : (
+                            <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Sin contacto</div>
+                        )}
+                        {(client as any).next_contact_date ? (
+                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D97706', marginTop: '2px' }}>Tarea: {new Date((client as any).next_contact_date).toLocaleDateString()}</div>
+                        ) : (
+                            <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '2px' }}>Sin tareas</div>
+                        )}
                     </div>
-                )}
-                {(client.latitude && client.longitude) ? (
-                    <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🛰️ GPS OK</div>
                 ) : (
-                    <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                    <>
+                        {agreementStatus && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                <div style={{ 
+                                    width: '8px', height: '8px', borderRadius: '50%', 
+                                    backgroundColor: agreementStatus === 'active' ? '#10B981' : agreementStatus === 'warning' ? '#F59E0B' : '#CBD5E1' 
+                                }} />
+                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B' }}>{agreementStatus === 'active' ? 'AL DÍA' : 'SIN ACUERDO'}</span>
+                            </div>
+                        )}
+                        {(client.latitude && client.longitude) ? (
+                            <div style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '900' }}>🗺️ GPS OK</div>
+                        ) : (
+                            <div style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '900' }}>📍 NO GPS</div>
+                        )}
+                    </>
                 )}
             </td>
             <td style={{ padding: '1rem 1.2rem' }}>
                 <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
-                    <button 
-                        onClick={onEdit} 
-                        style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
-                        title="Editar"
-                    >✏️</button>
+                    {!isLead && onEdit && (
+                        <button 
+                            onClick={onEdit} 
+                            style={{ background: '#F1F5F9', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
+                            title="Editar"
+                        >✏️</button>
+                    )}
                     <button 
                         onClick={handleWhatsApp} 
                         style={{ background: '#DCFCE7', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' }}
@@ -1663,6 +1705,7 @@ function EmptyState({ text }: { text: string }) {
 
 function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNicknameClientId, setIsNicknameModalOpen, isReadOnly = false }: { onClose: () => void, onRefresh: () => void, pricingModels: PricingModel[], editData?: Partial<Profile> | null, setNicknameClientId?: (id: string | null) => void, setIsNicknameModalOpen?: (open: boolean) => void, isReadOnly?: boolean }) {
     const isEdit = !!editData && !!editData.id;
+    const isLead = !!editData && ('status' in editData);
     const role = (editData as any)?.role || 'b2b_client';
     const isB2C = role === 'b2c_client';
     const [formData, setFormData] = useState({
@@ -1787,7 +1830,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     // Initialización / Actualización del Mapa Interactivo
     useEffect(() => {
-        if (!mapRef.current || !window.google) return;
+        if (!mapRef.current || !window.google || isLead) return;
 
         const latVal = parseFloat(String(formData.latitude));
         const lngVal = parseFloat(String(formData.longitude));
@@ -1846,7 +1889,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 markerInstance.current?.setPosition(newPos);
             }
         }
-    }, [formData.latitude, formData.longitude, formData.geocoding_status, isReadOnly]);
+    }, [formData.latitude, formData.longitude, formData.geocoding_status, isReadOnly, isLead]);
 
     const handleGeocode = async () => {
         if (!formData.address) {
@@ -2014,13 +2057,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>{isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
+                            <span style={{ fontSize: '1.5rem' }}>{isLead ? '🔥' : isReadOnly ? '📋' : (isB2C ? '👤' : (formData.is_corporate_parent ? '🏢' : '📍'))}</span>
                             <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.03rem' }}>
-                                {isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
+                                {isLead ? 'Ficha de Prospecto (Lead)' : isReadOnly ? 'Consulta de Cliente' : (isEdit ? `Editar ${isB2C ? 'Cliente Hogar' : 'Cuenta'}` : `Nueva ${isB2C ? 'Cuenta Hogar' : 'Cuenta Institucional'}`)}
                             </h2>
                         </div>
                         <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem', fontWeight: '500' }}>
-                            {isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
+                            {isLead ? `Detalles del lead capturado por el chatbot` : isReadOnly ? `Visualizando perfil de: ${formData.company_name || 'Sin nombre'}` : (isEdit ? `Modificando: ${formData.company_name || 'Sin nombre'}` : 'Configura el perfil comercial y operativo del cliente.')}
                         </p>
                     </div>
                     <button 
@@ -2043,47 +2086,144 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                     >✕</button>
                 </header>
 
-                <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
-                    
-                    {/* SELECTOR DE TIPO DE ENTIDAD (SOLO CREACIÓN) - ULTRA COMPACTO */}
-                    {!isEdit && !isReadOnly && (
-                        <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', backgroundColor: '#F1F5F9', padding: '6px', borderRadius: '16px', maxWidth: '600px', margin: '0 auto 2.5rem auto' }}>
-                            {[
-                                { id: 'matriz', label: 'CASA MATRIZ', icon: '🏛️', sub: 'Legal / Fiscal', color: '#0891B2', active: formData.is_corporate_parent },
-                                { id: 'sucursal', label: 'SUCURSAL', icon: '📍', sub: 'Entrega / Picking', color: '#10B981', active: !formData.is_corporate_parent }
-                            ].map(type => (
-                                <div 
-                                    key={type.id}
-                                    onClick={() => setFormData({ ...formData, is_corporate_parent: type.id === 'matriz', parent_id: '', branch_id: '' })}
-                                    style={{ 
-                                        flex: 1, padding: '0.8rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
-                                        backgroundColor: type.active ? 'white' : 'transparent',
-                                        boxShadow: type.active ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                                        border: type.active ? `1px solid ${type.color}40` : '1px solid transparent'
-                                    }}
-                                >
-                                    <span style={{ fontSize: '1.2rem' }}>{type.icon}</span>
-                                    <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: '900', color: type.active ? type.color : '#64748B' }}>{type.label}</div>
-                                        <div style={{ fontSize: '0.6rem', fontWeight: '600', color: '#94A3B8' }}>{type.sub}</div>
+                {isLead ? (
+                    <div style={{ padding: '2.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2.5rem' }}>
+                            {/* Left Side: General Info and chatbot conversation notes */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🏢</div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>DATOS DEL NEGOCIO</h4>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Empresa / Establecimiento</span>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B', marginTop: '0.2rem' }}>{editData?.company_name || 'Sin especificar'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Contacto Directo</span>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B', marginTop: '0.2rem' }}>{editData?.contact_name || 'Sin especificar'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tipo de Negocio</span>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{(editData as any)?.business_type || 'No especificado'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Tamaño de Negocio</span>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#334155', marginTop: '0.2rem' }}>{(editData as any)?.business_size || 'No especificado'}</div>
+                                        </div>
+                                    </div>
+                                </section>
 
-                    {isReadOnly && (
-                        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                            <span style={{ 
-                                padding: '0.6rem 1.5rem', borderRadius: '50px', backgroundColor: formData.is_corporate_parent ? '#ECFEFF' : '#F0FDF4',
-                                color: formData.is_corporate_parent ? '#0891B2' : '#10B981', fontWeight: '900', fontSize: '0.75rem', border: `1px solid ${formData.is_corporate_parent ? '#0891B2' : '#10B981'}40`
-                            }}>
-                                {formData.is_corporate_parent ? '🏢 PERFIL DE CASA MATRIZ (FISCAL)' : '📍 PERFIL DE SUCURSAL (LOGÍSTICO)'}
-                            </span>
-                        </div>
-                    )}
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📞</div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>INFORMACIÓN DE CONTACTO</h4>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Teléfono</span>
+                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem' }}>📞 {editData?.phone || 'Sin número'}</div>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Email</span>
+                                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#0891B2', marginTop: '0.2rem' }}>📧 {editData?.email || 'Sin correo'}</div>
+                                        </div>
+                                        <div style={{ gridColumn: 'span 2' }}>
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', display: 'block', textTransform: 'uppercase' }}>Dirección Declarada</span>
+                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1E293B', marginTop: '0.2rem' }}>📍 {(editData as any)?.address || 'No declarada'} - {(editData as any)?.municipality || ''}</div>
+                                        </div>
+                                    </div>
+                                </section>
 
+                                {(editData as any)?.notes && (
+                                    <section style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>💬</span>
+                                            <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#475569', margin: 0 }}>HISTORIAL / CONVERSACIÓN DEL CHATBOT</h4>
+                                        </div>
+                                        <div style={{ 
+                                            whiteSpace: 'pre-line', 
+                                            fontSize: '0.85rem', 
+                                            color: '#334155', 
+                                            lineHeight: '1.6', 
+                                            backgroundColor: 'white', 
+                                            padding: '1.2rem', 
+                                            borderRadius: '16px', 
+                                            border: '1px solid #E2E8F0',
+                                            maxHeight: '300px',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {(editData as any).notes}
+                                        </div>
+                                    </section>
+                                )}
+                            </div>
+
+                            {/* Right Side: Map location & status log */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                <section style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                                        <div style={{ width: '32px', height: '32px', backgroundColor: '#F1F5F9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🗺️</div>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>UBICACIÓN EN MAPA</h4>
+                                    </div>
+                                    {editData?.latitude && editData?.longitude ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div style={{ height: '240px', width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0', position: 'relative' }}>
+                                                <div ref={mapRef} style={{ width: '100%', height: '100%' }}></div>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#059669' }}>✓ Ubicación exacta detectada</span>
+                                                <a 
+                                                    href={`https://www.google.com/maps?q=${editData.latitude},${editData.longitude}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: '#0891B2', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800' }}
+                                                >
+                                                    Abrir Google Maps ↗
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '2rem 1rem', textAlign: 'center', backgroundColor: '#FFFBEB', borderRadius: '16px', border: '1px solid #FEF3C7', color: '#B45309' }}>
+                                            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: '800' }}>Sin Coordenadas GPS</div>
+                                            <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>El prospecto no proporcionó o no se pudo georeferenciar la ubicación automáticamente.</div>
+                                        </div>
+                                    )}
+                                </section>
+
+                                <section style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', marginBottom: '0.8rem', textTransform: 'uppercase' }}>Estado del Lead</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
+                                            <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Fecha Registro:</span>
+                                            <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{editData?.created_at ? new Date(editData.created_at).toLocaleDateString() : 'Desconocida'}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
+                                            <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Número de Contactos:</span>
+                                            <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{(editData as any)?.contact_count || 0} veces</span>
+                                        </div>
+                                        { (editData as any)?.last_contact_date && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
+                                                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Último Contacto:</span>
+                                                <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{new Date((editData as any).last_contact_date).toLocaleDateString()}</span>
+                                            </div>
+                                        )}
+                                        { (editData as any)?.next_contact_date && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Siguiente Tarea:</span>
+                                                <span style={{ fontSize: '0.78rem', color: '#D97706', fontWeight: '800' }}>{new Date((editData as any).next_contact_date).toLocaleDateString()}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                <form onSubmit={handleSubmit} style={{ padding: '1.5rem 2.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                         
                         {/* BLOQUE: IDENTIFICACIÓN (DINÁMICO) */}
@@ -2767,6 +2907,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                         )}
                     </div>
                 </form>
+                )}
             </div>
         </div>
     );

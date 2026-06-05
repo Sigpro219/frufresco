@@ -502,7 +502,11 @@ async function generateAiExplanation(orders: any[], vehicles: any[], assignments
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        
+        // Try models in order of preference
+        const modelsToTry = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+        let explanation = "";
+        let errorDetails = "";
 
         // Build a concise description of the assignments for the prompt
         let summaryText = `Analiza la siguiente asignación de despacho de la flota de FruFresco y redacta un informe de máximo 3 a 4 párrafos/viñetas explicando brevemente y con emojis la lógica/estrategia de esta planeación.
@@ -536,11 +540,44 @@ INSTRUCCIONES DE REDACCIÓN:
 5. Inicia cada viñeta con un emoji correspondiente (ej: 🚚, ⚖️, 📍, 💰).
 6. El texto debe ser de lectura rápida y ejecutiva para el despachador.`;
 
-        const result = await model.generateContent(summaryText);
-        const responseText = result.response.text();
-        return responseText;
+        for (const modelName of modelsToTry) {
+            try {
+                console.log(`Intentando generar informe con modelo: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(summaryText);
+                explanation = result.response.text();
+                if (explanation) {
+                    return explanation;
+                }
+            } catch (innerErr: any) {
+                console.warn(`Error con modelo ${modelName}:`, innerErr);
+                errorDetails += `[${modelName}]: ${innerErr.message || innerErr}\n`;
+            }
+        }
+
+        // Programmatic fallback explanation if all AI calls fail
+        const totalAssignedOrders = Object.values(assignments).reduce((sum, ids) => sum + ids.length, 0);
+        const activeVehicles = Object.entries(assignments)
+            .filter(([_, ids]) => ids.length > 0)
+            .map(([vid]) => {
+                const v = vehicles.find(veh => veh.id === vid);
+                return v ? v.plate : vid;
+            });
+
+        return `### 🚚 Resumen de Planeación de Ruta (Generado Automáticamente)
+
+* 📦 Se han distribuido **${totalAssignedOrders} pedidos** de forma automática utilizando el algoritmo de optimización de capacidad y rutas.
+* 🚛 Se activaron **${activeVehicles.length} camiones** (${activeVehicles.join(', ')}) para esta operación, minimizando costos fijos al mantener el resto de la flota libre.
+* ⚖️ Las asignaciones se realizaron asegurando el cumplimiento estricto de los límites de peso (**kg**) y capacidad de canastillas de cada vehículo.
+* 📍 El agrupamiento de entregas se calculó minimizando las distancias geográficas y optimizando los tiempos estimados de llegada.
+
+*(Nota: No se pudo generar la explicación detallada por IA debido a una indisponibilidad temporal del servicio de Google Gemini. Sin embargo, la optimización física de rutas se completó con éxito).*`;
+        
     } catch (e: any) {
-        console.error('Error generating AI explanation:', e);
-        return `Hubo un inconveniente al generar la justificación con IA: ${e.message || 'Error desconocido'}`;
+        console.error('Error in generateAiExplanation wrapper:', e);
+        return `### 🚚 Resumen de Planeación de Ruta (Generado Automáticamente)
+* 📦 Se completó la optimización de rutas de forma correcta.
+* 🚛 Los pedidos fueron asignados según capacidades y cercanía geográfica.
+*(Nota: El servidor de IA no está respondiendo temporalmente).*`;
     }
 }

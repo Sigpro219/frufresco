@@ -1027,7 +1027,15 @@ export default function RoutePlanner() {
                     paddingRight: '0.5rem',
                     alignContent: 'start'
                 }}>
-                    {vehicles.map(vehicle => {
+                    {[...vehicles]
+                        .sort((a, b) => {
+                            const aAssigned = (assignments[a.id] || []).length;
+                            const bAssigned = (assignments[b.id] || []).length;
+                            if (aAssigned > 0 && bAssigned === 0) return -1;
+                            if (bAssigned > 0 && aAssigned === 0) return 1;
+                            return a.plate.localeCompare(b.plate);
+                        })
+                        .map(vehicle => {
                         const load = getVehicleLoad(vehicle.id);
                         const cratesNeeded = Math.ceil(load / params.avg_kg_per_crate);
                         

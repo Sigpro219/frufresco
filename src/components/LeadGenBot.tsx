@@ -242,6 +242,8 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                     business_size: finalData.business_size,
                     latitude: finalData.latitude,
                     longitude: finalData.longitude,
+                    address: finalData.address,
+                    municipality: finalData.municipality || 'Desconocido',
                     notes: `📍 GPS: ${finalData.latitude},${finalData.longitude} | MUN: ${finalData.municipality || 'Desconocido'} | ORIG: ${finalData.address} | BOT_V2.1 🤖`
                 }]);
 
