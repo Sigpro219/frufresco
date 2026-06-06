@@ -244,7 +244,9 @@ export async function POST(req: Request) {
         const emailHtml = `
 <div style="font-family: 'Playfair Display', serif; color: #286a36; padding: 40px; background-color: #f8f9f5; border-radius: 20px; max-width: 600px; margin: auto;">
     <center>
-        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;">
+        <div style="background-color: white; display: inline-block; padding: 15px 25px; border-radius: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">
+            <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="display: block;">
+        </div>
         <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
         <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
