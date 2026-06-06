@@ -144,13 +144,18 @@ export async function POST(req: Request) {
     }
 
     // 3. Save draft to public.order_drafts
+    // Use an explicit UUID so we can reference its short ID immediately
+    const draftUuid = crypto.randomUUID();
+    const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
+
     const { data: newDraft, error: draftError } = await supabaseAdmin
       .from('order_drafts')
       .insert({
+        id: draftUuid,
         profile_id: profile ? profile.id : null,
         client_detected_name: extractedData.clientInDocument || profile?.company_name || 'Desconocido',
         source_email: senderEmail,
-        email_subject: subject,
+        email_subject: `[${shortCode}] ${subject}`,
         email_body: plainText,
         extracted_items: extractedData.items || [],
         status: 'pending'
@@ -245,7 +250,7 @@ export async function POST(req: Request) {
         }
         
         const clientName = extractedClientName || profile?.company_name || profile?.contact_name || '';
-        const draftIdStr = newDraft.id.substring(0, 8).toUpperCase(); // Short ID
+        const draftIdStr = shortCode;
 
         const emailHtml = `
 <div style="font-family: 'Playfair Display', serif; color: #286a36; padding: 40px; background-color: #ffffff; border-radius: 20px; max-width: 600px; margin: auto;">
