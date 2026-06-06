@@ -396,11 +396,21 @@ export default function EmailDraftsModule() {
                                     </div>
                                   </td>
                                   <td style={{ padding: '1rem 0.5rem', width: '30%' }}>
-                                    <select
-                                      value={item.matched_product_id || ''}
+                                    <input
+                                      list={`products-list-${i}`}
+                                      value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
+                                      placeholder="-- Buscar Producto --"
                                       onChange={(e) => {
+                                        const val = e.target.value;
+                                        const found = products.find(p => p.name === val);
                                         const newEdits = [...editableItems];
-                                        newEdits[i].matched_product_id = e.target.value;
+                                        if (found) {
+                                          newEdits[i].matched_product_id = found.id;
+                                          newEdits[i].searchQuery = found.name;
+                                        } else {
+                                          newEdits[i].matched_product_id = null;
+                                          newEdits[i].searchQuery = val;
+                                        }
                                         setEditableItems(newEdits);
                                       }}
                                       style={{
@@ -413,12 +423,12 @@ export default function EmailDraftsModule() {
                                         fontWeight: 600,
                                         color: '#111827'
                                       }}
-                                    >
-                                      <option value="">-- Buscar Producto --</option>
+                                    />
+                                    <datalist id={`products-list-${i}`}>
                                       {products.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                        <option key={p.id} value={p.name} />
                                       ))}
-                                    </select>
+                                    </datalist>
                                   </td>
                                   <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
                                     <input 
