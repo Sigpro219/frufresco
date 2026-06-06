@@ -199,7 +199,7 @@ export async function POST(req: Request) {
         const emailHtml = `
 <div style="font-family: 'Playfair Display', serif; color: #025357; padding: 40px; background-color: #f8f9f5; border-radius: 20px; max-width: 600px; margin: auto;">
     <center>
-        <img src="https://zeticas.com/favicon.png" width="80" style="margin-bottom: 20px;">
+        <img src="https://frufresco-liard.vercel.app/logo.png" width="120" style="margin-bottom: 20px;">
         <h1 style="color: #025357; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
         <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
@@ -234,13 +234,13 @@ export async function POST(req: Request) {
     <hr style="border: 0; border-top: 1px solid #D6BD98; margin: 40px 0;">
     
     <center>
-        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Propósito Artesanal • Zeticas</p>
+        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Negocio</p>
     </center>
 </div>
         `;
 
         await transporter.sendMail({
-          from: `"Zeticas (Pedidos)" <${process.env.SMTP_USER}>`,
+          from: `"FruFresco (Pedidos)" <${process.env.SMTP_USER}>`,
           to: senderEmail,
           subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
           html: emailHtml,
