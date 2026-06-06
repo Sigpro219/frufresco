@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EmailDraftsModule() {
@@ -217,6 +217,113 @@ export default function EmailDraftsModule() {
         >
           Actualizar Bandeja
         </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Date Filter */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          backgroundColor: 'white', 
+          border: `1px solid ${THEME.colors.border}`, 
+          borderRadius: THEME.radius.md,
+          padding: '0.6rem 1rem',
+          gap: '12px'
+        }}>
+          <Calendar size={16} color="#6B7280" />
+          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111827' }}>07 / 06 / 2026</span>
+          <Calendar size={16} color="#111827" />
+        </div>
+
+        {/* Search Input */}
+        <div style={{ 
+          flex: 1, 
+          display: 'flex', 
+          alignItems: 'center', 
+          backgroundColor: '#F9FAFB', 
+          border: 'none', 
+          borderRadius: THEME.radius.md,
+          padding: '0.6rem 1rem',
+          gap: '8px'
+        }}>
+          <Search size={16} color="#6B7280" />
+          <input 
+            type="text" 
+            placeholder="Buscar por ID, empresa, @estado..." 
+            style={{ 
+              border: 'none', 
+              background: 'transparent', 
+              outline: 'none', 
+              width: '100%', 
+              fontSize: '0.85rem',
+              color: '#4B5563',
+              fontWeight: 600
+            }} 
+          />
+        </div>
+
+        {/* Channel Dropdown */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          backgroundColor: '#F9FAFB', 
+          border: 'none', 
+          borderRadius: THEME.radius.md,
+          padding: '0.6rem 1rem',
+          gap: '12px',
+          cursor: 'pointer'
+        }}>
+          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111827' }}>Todos los canales</span>
+          <ChevronDown size={16} color="#6B7280" />
+        </div>
+
+        {/* Info Icon */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: '#EFF6FF', 
+          borderRadius: THEME.radius.md,
+          width: '38px',
+          height: '38px',
+          cursor: 'pointer'
+        }}>
+          <Info size={20} color="#3B82F6" strokeWidth={3} />
+        </div>
+
+        {/* View Toggle */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          backgroundColor: '#F3F4F6', 
+          borderRadius: THEME.radius.md,
+          padding: '4px',
+          gap: '4px'
+        }}>
+          <div style={{ 
+            backgroundColor: 'white', 
+            borderRadius: '6px', 
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            cursor: 'pointer'
+          }}>
+            <List size={16} color="#111827" />
+          </div>
+          <div style={{ 
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            opacity: 0.5
+          }}>
+            <Grid size={16} color="#6B7280" />
+          </div>
+        </div>
       </div>
 
       {loading ? (
