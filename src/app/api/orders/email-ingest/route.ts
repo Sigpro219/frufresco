@@ -123,9 +123,7 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
-        3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada en el texto (ej. "Entregar en la Calle 100").
-        4. Identifica si hay un TELÉFONO de contacto.
-        5. Identifica si hay un número de CÉDULA o NIT.
+        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes en el texto o en la firma.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -134,10 +132,10 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre o Empresa Detectada",
-          "addressInDocument": "Dirección Extraída o null",
-          "phoneInDocument": "Teléfono Extraído o null",
-          "nitInDocument": "NIT/Cédula Extraída o null",
           "documentType": "Email",
+          "address": "Dirección extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
           "items": [
             { "originalName": "Tomate Chonto", "quantity": 15 }
           ]
@@ -148,8 +146,19 @@ export async function POST(req: Request) {
       const response = await result.response;
       let text = response.text().trim();
       text = text.replace(/^```json/, '').replace(/```$/, '').trim();
+      extractedData = {};
       try {
         extractedData = JSON.parse(text);
+        
+        // Inyectar metadata en el array de items para que el panel administrativo pueda geolocalizar
+        if (!extractedData.items) extractedData.items = [];
+        extractedData.items.push({
+            isMetadata: true,
+            address: extractedData.address || '',
+            phone: extractedData.phone || '',
+            nit: extractedData.nit || ''
+        });
+        
       } catch (e) {
         console.error('Failed to parse Gemini output for email text:', text);
       }
