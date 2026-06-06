@@ -7,6 +7,8 @@ const supabaseAdmin = createClient(
 );
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
+
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
