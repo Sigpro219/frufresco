@@ -180,17 +180,62 @@ export async function POST(req: Request) {
 
         const today = new Date().toLocaleDateString('es-CO');
         
-        // Build items HTML
+        // Build items HTML and calculate total
         let itemsHtml = '';
+        let totalOrderAmount = 0;
+        let hasPendingPrices = false;
         const items = extractedData.items || [];
+        
         for (const item of items) {
+          let price = 0;
+          let unit = '';
+          const qty = item.quantity || 1;
+          const searchName = item.originalName || item.name || '';
+          
+          if (searchName) {
+            // Search in DB
+            const { data: matchedProducts } = await supabaseAdmin
+              .from('products')
+              .select('base_price, unit_of_measure')
+              .ilike('name', `%${searchName}%`)
+              .limit(1);
+            
+            if (matchedProducts && matchedProducts.length > 0) {
+              price = matchedProducts[0].base_price || 0;
+              unit = matchedProducts[0].unit_of_measure || '';
+            }
+          }
+          
+          const lineTotal = price * qty;
+          totalOrderAmount += lineTotal;
+          
+          let lineTotalDisplay = '';
+          if (price > 0) {
+            lineTotalDisplay = `$${lineTotal.toLocaleString('es-CO')}`;
+          } else {
+            lineTotalDisplay = 'Por confirmar';
+            hasPendingPrices = true;
+          }
+
+          const productNameDisplay = `${searchName || 'Producto'}${unit ? ` (${unit})` : ''}`;
+
           itemsHtml += `
             <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 12px 5px; color: #333;">${item.originalName || item.name || 'Producto'}</td>
-                <td style="padding: 12px 5px; text-align: center; color: #666;">${item.quantity || 1}</td>
-                <td style="padding: 12px 5px; text-align: right; color: #333; font-weight: bold;">Pendiente</td>
+                <td style="padding: 12px 5px; color: #333;">${productNameDisplay}</td>
+                <td style="padding: 12px 5px; text-align: center; color: #666;">${qty}</td>
+                <td style="padding: 12px 5px; text-align: right; color: #333; font-weight: bold;">${lineTotalDisplay}</td>
             </tr>
           `;
+        }
+        
+        let totalOrderDisplay = '';
+        if (totalOrderAmount > 0) {
+          totalOrderDisplay = `Total Aprox: $${totalOrderAmount.toLocaleString('es-CO')}`;
+          if (hasPendingPrices) {
+             totalOrderDisplay += ' <span style="font-size: 11px; color: #666;">(+ Ítems por confirmar)</span>';
+          }
+        } else {
+          totalOrderDisplay = 'Total: A confirmar en despacho';
         }
 
         const clientName = extractedData.clientInDocument || profile?.company_name || 'Cliente';
@@ -222,7 +267,7 @@ export async function POST(req: Request) {
         </table>
         
         <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-            <p style="font-size: 16px; color: #286a36; margin: 0;"><b>Total: A confirmar en despacho</b></p>
+            <p style="font-size: 16px; color: #286a36; margin: 0;"><b>${totalOrderDisplay}</b></p>
         </div>
     </div>
 
