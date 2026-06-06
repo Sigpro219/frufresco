@@ -13,10 +13,14 @@ export default function EmailDraftsModule() {
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [geocoding, setGeocoding] = useState(false);
+  const [aliases, setAliases] = useState<Record<string, string>>({});
+  const [editableItems, setEditableItems] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchDrafts();
     fetchProducts();
+    fetchAliases();
   }, []);
 
   const fetchProducts = async () => {
@@ -25,6 +29,17 @@ export default function EmailDraftsModule() {
       if (data) setProducts(data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const fetchAliases = async () => {
+    try {
+      const { data } = await supabase.from('app_settings').select('value').eq('key', 'ai_product_aliases').single();
+      if (data && data.value) {
+        setAliases(typeof data.value === 'string' ? JSON.parse(data.value) : data.value);
+      }
+    } catch (e) {
+      console.error('Error fetching aliases', e);
     }
   };
 
@@ -83,11 +98,38 @@ export default function EmailDraftsModule() {
         setDraftCoordinates(null);
         setGeocoding(false);
       }
+      
+      // Initialize editable items
+      const rawItems = getDraftItems(selectedDraft);
+      const initialEdits = rawItems.map((item: any) => {
+        // Try to find a match using aliases first, then by name
+        let matchedId = item.matched_product_id || null;
+        if (!matchedId) {
+            const aliasMatch = aliases[item.originalName?.toLowerCase()?.trim()];
+            if (aliasMatch) {
+                matchedId = aliasMatch;
+            } else {
+                const autoMatch = products.find((p: any) => 
+                    item.originalName?.toLowerCase()?.includes(p.name.toLowerCase()) ||
+                    p.name.toLowerCase().includes(item.originalName?.toLowerCase()?.split(' ')[0])
+                );
+                if (autoMatch) matchedId = autoMatch.id;
+            }
+        }
+        return {
+            ...item,
+            quantity: item.quantity || 1,
+            matched_product_id: matchedId
+        };
+      });
+      setEditableItems(initialEdits);
+      
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
+      setEditableItems([]);
     }
-  }, [selectedDraft]);
+  }, [selectedDraft, products, aliases]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -103,6 +145,53 @@ export default function EmailDraftsModule() {
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado'
     };
+  };
+
+  const handleApprove = async () => {
+    if (!selectedDraft) return;
+    setSaving(true);
+    
+    // 1. Prepare new aliases to save
+    const newAliases: Record<string, string> = {};
+    editableItems.forEach(item => {
+      const originalText = item.originalName?.toLowerCase()?.trim();
+      if (originalText && item.matched_product_id) {
+        // Solo guardamos si no estaba en la memoria o si cambió
+        if (aliases[originalText] !== item.matched_product_id) {
+          newAliases[originalText] = item.matched_product_id;
+        }
+      }
+    });
+
+    try {
+      // 2. Save aliases via our new API
+      if (Object.keys(newAliases).length > 0) {
+        await fetch('/api/orders/aliases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newAliases })
+        });
+      }
+
+      // 3. Update the draft's extracted_items to include our manual edits
+      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata);
+      const updatedExtractedItems = [
+        ...(metaItem ? [metaItem] : []),
+        ...editableItems
+      ];
+
+      await supabase
+        .from('order_drafts')
+        .update({ extracted_items: updatedExtractedItems })
+        .eq('id', selectedDraft.id);
+
+      // 4. Redirect
+      window.location.href = `/admin/orders/create?draft_id=${selectedDraft.id}`;
+    } catch (e) {
+      console.error('Error in handleApprove:', e);
+      alert('Error al guardar. Por favor intenta de nuevo.');
+      setSaving(false);
+    }
   };
 
   return (
@@ -284,42 +373,62 @@ export default function EmailDraftsModule() {
                     <tbody>
                       {(() => {
                         let totalValue = 0;
-                        const actualItems = getDraftItems(selectedDraft);
-                        
-                        if (actualItems.length === 0) {
-                          return <tr><td colSpan={4} style={{ padding: '1rem', textAlign: 'center', color: '#9CA3AF' }}>No se extrajeron productos</td></tr>;
-                        }
-
                         return (
                           <>
-                            {actualItems.map((item: any, i: number) => {
-                              // Intentar match
-                              const matchedProd = products.find((p: any) => 
-                                item.originalName?.toLowerCase().includes(p.name.toLowerCase()) ||
-                                p.name.toLowerCase().includes(item.originalName?.toLowerCase().split(' ')[0] || '')
-                              );
-                              
+                            {editableItems.map((item: any, i: number) => {
+                              const matchedProd = products.find(p => p.id === item.matched_product_id);
                               const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 1)) : 0;
                               totalValue += itemTotal;
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                  <td style={{ padding: '1.2rem 0.5rem' }}>
-                                    <div style={{ fontWeight: 800, color: '#111827', fontSize: '1rem' }}>
-                                      {matchedProd ? (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                          {matchedProd.name} <Check size={16} color="#10B981" />
-                                        </span>
-                                      ) : (
-                                        <span style={{ color: '#EF4444' }}>Sin coincidencia en inventario</span>
-                                      )}
+                                  <td style={{ padding: '1rem 0.5rem', width: '40%' }}>
+                                    <div style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>
+                                      {item.originalName}
                                     </div>
-                                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>
-                                      Texto original: "{item.originalName}"
-                                    </div>
+                                    <select
+                                      value={item.matched_product_id || ''}
+                                      onChange={(e) => {
+                                        const newEdits = [...editableItems];
+                                        newEdits[i].matched_product_id = e.target.value;
+                                        setEditableItems(newEdits);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        padding: '0.5rem',
+                                        borderRadius: '6px',
+                                        border: '1px solid #D1D5DB',
+                                        fontSize: '0.9rem',
+                                        backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
+                                        fontWeight: 600,
+                                        color: '#111827'
+                                      }}
+                                    >
+                                      <option value="">-- Buscar Producto --</option>
+                                      {products.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                      ))}
+                                    </select>
                                   </td>
-                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: 800, fontSize: '1rem' }}>
-                                    {item.quantity}
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
+                                    <input 
+                                      type="number"
+                                      value={item.quantity || ''}
+                                      onChange={(e) => {
+                                        const newEdits = [...editableItems];
+                                        newEdits[i].quantity = parseFloat(e.target.value) || 0;
+                                        setEditableItems(newEdits);
+                                      }}
+                                      style={{
+                                        width: '60px',
+                                        padding: '0.5rem',
+                                        textAlign: 'center',
+                                        borderRadius: '6px',
+                                        border: '1px solid #D1D5DB',
+                                        fontWeight: 800,
+                                        fontSize: '1rem'
+                                      }}
+                                    />
                                   </td>
                                   <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
                                     {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
@@ -364,22 +473,25 @@ export default function EmailDraftsModule() {
               >
                 Cancelar
               </button>
-              <Link 
-                href={`/admin/orders/create?draft_id=${selectedDraft.id}`}
+              <button 
+                onClick={handleApprove}
+                disabled={saving}
                 style={{
                   padding: '0.75rem 1.5rem',
                   backgroundColor: THEME.colors.primary,
                   color: 'white',
                   borderRadius: '10px',
                   fontWeight: '700',
-                  textDecoration: 'none',
+                  border: 'none',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.7 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px'
                 }}
               >
-                Aprobar y Procesar Pedido <ArrowRight size={18} />
-              </Link>
+                {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
+              </button>
             </div>
           </div>
         </div>

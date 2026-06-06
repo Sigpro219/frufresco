@@ -264,10 +264,11 @@ function CreateOrderContent() {
                             if (dbProducts) {
                                 const newCartItems: any[] = [];
                                 actualItems.forEach((item: any) => {
-                                    const matchedProd = dbProducts.find((p: any) => 
-                                        item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                                        p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
-                                    );
+                                    const matchedProd = dbProducts.find((p: any) => {
+                                        if (item.matched_product_id) return p.id === item.matched_product_id;
+                                        return item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                                               p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0]);
+                                    });
                                     if (matchedProd) {
                                         newCartItems.push({
                                             product: matchedProd,
