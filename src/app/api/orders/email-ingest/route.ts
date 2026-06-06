@@ -238,7 +238,13 @@ export async function POST(req: Request) {
           totalOrderDisplay = 'Total: A confirmar en despacho';
         }
 
-        const clientName = extractedData.clientInDocument || profile?.company_name || 'Cliente';
+        let extractedClientName = extractedData.clientInDocument || '';
+        const lowerName = extractedClientName.toLowerCase();
+        if (lowerName.includes('no detectado') || lowerName.includes('desconocido') || lowerName.includes('no especificado') || lowerName.includes('none')) {
+            extractedClientName = '';
+        }
+        
+        const clientName = extractedClientName || profile?.company_name || profile?.contact_name || '';
         const draftIdStr = newDraft.id.substring(0, 8).toUpperCase(); // Short ID
 
         const emailHtml = `
@@ -247,7 +253,7 @@ export async function POST(req: Request) {
         <div style="background-color: white; display: inline-block; padding: 15px 25px; border-radius: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">
             <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="display: block;">
         </div>
-        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
+        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
         <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
     
