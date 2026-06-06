@@ -230,37 +230,59 @@ function CreateOrderContent() {
                             }
                         }
                     } else {
+                        // Extraer metadata si existe (para evitar errores SQL, los guardamos en el primer item)
+                        const items = draft.extracted_items || [];
+                        const metadataItem = items.find((i: any) => i.isMetadata);
+                        const actualItems = items.filter((i: any) => !i.isMetadata);
+                        
+                        const extractedAddress = metadataItem?.address || draft.extracted_address || '';
+                        const extractedPhone = metadataItem?.phone || draft.extracted_phone || '';
+                        const extractedNit = metadataItem?.nit || draft.extracted_nit || '';
+
                         setClientType('B2C');
                         setB2CMode('new');
                         setGuestInfo(prev => ({
                             ...prev,
                             name: draft.client_detected_name || '',
-                            email: draft.source_email || ''
+                            email: draft.source_email || '',
+                            address: extractedAddress,
+                            phone: extractedPhone,
+                            nit: extractedNit
                         }));
-                    }
+                        if (extractedAddress) {
+                            handleGeocode(extractedAddress, 'Bogotá');
+                        }
 
-                    // Cargar productos al carrito
-                    if (draft.extracted_items && Array.isArray(draft.extracted_items)) {
-                        const newCartItems: any[] = [];
-                        draft.extracted_items.forEach((item: any) => {
-                            const matchedProd = prods.find((p: any) => 
-                                item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                                p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
-                            );
-                            if (matchedProd) {
-                                newCartItems.push({
-                                    product: matchedProd,
-                                    qty: item.quantity || 1,
-                                    variant_label: undefined,
-                                    selected_options: undefined
+                        // Cargar productos al carrito
+                        if (actualItems && actualItems.length > 0) {
+                            setLoading(true);
+                            const { data: dbProducts } = await supabase
+                                .from('products')
+                                .select('*')
+                                .eq('status', 'active');
+                            
+                            if (dbProducts) {
+                                const newCartItems: any[] = [];
+                                actualItems.forEach((item: any) => {
+                                    const matchedProd = dbProducts.find((p: any) => 
+                                        item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                                        p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
+                                    );
+                                    if (matchedProd) {
+                                        newCartItems.push({
+                                            product: matchedProd,
+                                            qty: item.quantity || 1,
+                                            variant_label: undefined,
+                                            selected_options: undefined
+                                        });
+                                    }
                                 });
+                                setCart(newCartItems);
                             }
-                        });
-                        setCart(newCartItems);
+                        }
                     }
                 }
             }
-
         } catch (e) {
             console.error("Excepción en loadData:", e);
         }
@@ -493,14 +515,16 @@ function CreateOrderContent() {
         }));
     };
 
-    const handleGeocode = async () => {
-        if (!guestInfo.address || !guestInfo.city) {
+    const handleGeocode = async (directAddress?: string, directCity?: string) => {
+        const addr = directAddress || guestInfo.address;
+        const cty = directCity || guestInfo.city;
+        if (!addr || !cty) {
             alert("Por favor ingrese dirección y ciudad para validar coordenadas.");
             return;
         }
         setIsGettingLocation(true);
         try {
-            const response = await fetch(`/api/geocode?address=${encodeURIComponent(guestInfo.address)}&city=${encodeURIComponent(guestInfo.city)}`);
+            const response = await fetch(`/api/geocode?address=${encodeURIComponent(addr)}&city=${encodeURIComponent(cty)}`);
             const data = await response.json();
 
             if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -509,7 +533,7 @@ function CreateOrderContent() {
                 const lon = location.lng;
                 setLatitude(lat);
                 setLongitude(lon);
-                setLastGeocodedAddress(guestInfo.address);
+                setLastGeocodedAddress(addr);
 
                 // Validar Geocerca
                 if (b2cGeofence.length > 0) {

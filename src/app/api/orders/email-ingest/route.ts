@@ -69,7 +69,10 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre del CLIENTE mencionado en el documento.
         2. Extrae todos los productos solicitados junto con su cantidad numérica.
-        3. Determina el tipo de documento (PDF, Excel, etc.).
+        3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada (ej. "Calle 100 # 15-20").
+        4. Identifica si hay un TELÉFONO de contacto.
+        5. Identifica si hay un número de CÉDULA o NIT.
+        6. Determina el tipo de documento (PDF, Excel, etc.).
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin markdown (ej. no uses \`\`\`json).
@@ -79,6 +82,9 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre del Cliente Detectado",
+          "addressInDocument": "Dirección Extraída o null",
+          "phoneInDocument": "Teléfono Extraído o null",
+          "nitInDocument": "NIT/Cédula Extraída o null",
           "documentType": "PDF",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
@@ -117,6 +123,9 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
+        3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada en el texto (ej. "Entregar en la Calle 100").
+        4. Identifica si hay un TELÉFONO de contacto.
+        5. Identifica si hay un número de CÉDULA o NIT.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -125,6 +134,9 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre o Empresa Detectada",
+          "addressInDocument": "Dirección Extraída o null",
+          "phoneInDocument": "Teléfono Extraído o null",
+          "nitInDocument": "NIT/Cédula Extraída o null",
           "documentType": "Email",
           "items": [
             { "originalName": "Tomate Chonto", "quantity": 15 }
@@ -157,7 +169,15 @@ export async function POST(req: Request) {
         source_email: senderEmail,
         email_subject: `[${shortCode}] ${subject}`,
         email_body: plainText,
-        extracted_items: extractedData.items || [],
+        extracted_items: [
+          { 
+            isMetadata: true, 
+            address: extractedData.addressInDocument || null,
+            phone: extractedData.phoneInDocument || null,
+            nit: extractedData.nitInDocument || null
+          },
+          ...(extractedData.items || [])
+        ],
         status: 'pending'
       })
       .select()

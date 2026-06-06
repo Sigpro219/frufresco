@@ -30,7 +30,10 @@ export async function POST(req: Request) {
       TAREA:
       1. Identifica el nombre del CLIENTE mencionado en el documento.
       2. Extrae todos los productos solicitados junto con su cantidad numérica.
-      3. Determina el tipo de documento.
+      3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada.
+      4. Identifica si hay un TELÉFONO de contacto.
+      5. Identifica si hay un número de CÉDULA o NIT.
+      6. Determina el tipo de documento.
       
       REGLAS CRÍTICAS:
       - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -40,6 +43,9 @@ export async function POST(req: Request) {
       FORMATO DE RESPUESTA ESPERADO:
       {
         "clientInDocument": "Nombre del Cliente Detectado",
+        "addressInDocument": "Dirección Extraída o null",
+        "phoneInDocument": "Teléfono Extraído o null",
+        "nitInDocument": "NIT/Cédula Extraída o null",
         "documentType": "PDF / Excel / Imagen",
         "items": [
           { "originalName": "Nombre del Producto en el documento", "quantity": 10 }
