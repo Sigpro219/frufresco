@@ -19,7 +19,7 @@ export default function EmailDraftsModule() {
 
   const fetchProducts = async () => {
     try {
-      const { data } = await supabase.from('products').select('*').eq('status', 'active');
+      const { data } = await supabase.from('products').select('*').eq('is_active', true);
       if (data) setProducts(data);
     } catch (e) {
       console.error(e);
@@ -265,7 +265,7 @@ export default function EmailDraftsModule() {
                                 p.name.toLowerCase().includes(item.originalName?.toLowerCase().split(' ')[0] || '')
                               );
                               
-                              const itemTotal = matchedProd ? (matchedProd.price * (item.quantity || 1)) : 0;
+                              const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 1)) : 0;
                               totalValue += itemTotal;
 
                               return (

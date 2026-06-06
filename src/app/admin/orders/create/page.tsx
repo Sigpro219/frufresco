@@ -259,7 +259,7 @@ function CreateOrderContent() {
                             const { data: dbProducts } = await supabase
                                 .from('products')
                                 .select('*')
-                                .eq('status', 'active');
+                                .eq('is_active', true);
                             
                             if (dbProducts) {
                                 const newCartItems: any[] = [];
