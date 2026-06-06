@@ -186,8 +186,8 @@ export async function POST(req: Request) {
         for (const item of items) {
           itemsHtml += `
             <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 12px 5px; color: #333;">\${item.originalName || item.name || 'Producto'}</td>
-                <td style="padding: 12px 5px; text-align: center; color: #666;">\${item.quantity || 1}</td>
+                <td style="padding: 12px 5px; color: #333;">${item.originalName || item.name || 'Producto'}</td>
+                <td style="padding: 12px 5px; text-align: center; color: #666;">${item.quantity || 1}</td>
                 <td style="padding: 12px 5px; text-align: right; color: #333; font-weight: bold;">Pendiente</td>
             </tr>
           `;
@@ -200,13 +200,13 @@ export async function POST(req: Request) {
 <div style="font-family: 'Playfair Display', serif; color: #025357; padding: 40px; background-color: #f8f9f5; border-radius: 20px; max-width: 600px; margin: auto;">
     <center>
         <img src="https://zeticas.com/favicon.png" width="80" style="margin-bottom: 20px;">
-        <h1 style="color: #025357; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, \${clientName}!</h1>
+        <h1 style="color: #025357; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
         <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
     
     <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #D6BD98; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-        <h3 style="color: #025357; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #\${draftIdStr}</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> \${today}</p>
+        <h3 style="color: #025357; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
         
         <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
             <thead>
@@ -217,7 +217,7 @@ export async function POST(req: Request) {
                 </tr>
             </thead>
             <tbody>
-                \${itemsHtml}
+                ${itemsHtml}
             </tbody>
         </table>
         
@@ -240,9 +240,9 @@ export async function POST(req: Request) {
         `;
 
         await transporter.sendMail({
-          from: \`"Zeticas (Pedidos)" <\${process.env.SMTP_USER}>\`,
+          from: `"Zeticas (Pedidos)" <${process.env.SMTP_USER}>`,
           to: senderEmail,
-          subject: \`¡Hemos recibido tu pedido! (#\${draftIdStr})\`,
+          subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
           html: emailHtml,
         });
         console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
