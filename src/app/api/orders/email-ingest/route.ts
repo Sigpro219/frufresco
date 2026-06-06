@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(req: Request) {
@@ -26,7 +31,7 @@ export async function POST(req: Request) {
     console.log(`[Email Inbound] Received mail from ${senderEmail} with subject: ${subject}`);
 
     // 1. Identify Client in our database
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('id, company_name, contact_name')
       .eq('email', senderEmail)
@@ -39,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     let extractedData = {
       clientInDocument: '',
@@ -137,7 +142,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Save draft to public.order_drafts
-    const { data: newDraft, error: draftError } = await supabase
+    const { data: newDraft, error: draftError } = await supabaseAdmin
       .from('order_drafts')
       .insert({
         profile_id: profile ? profile.id : null,
