@@ -63,29 +63,25 @@ export async function POST(req: Request) {
       const mimeType = attachment.content_type || 'application/pdf';
 
       const prompt = `
-        Eres un asistente de logística experto en FruFresco.
-        Analiza esta orden de compra adjunta al correo.
+        Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         
         TAREA:
-        1. Identifica el nombre del CLIENTE mencionado en el documento.
-        2. Extrae todos los productos solicitados junto con su cantidad numérica.
-        3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada (ej. "Calle 100 # 15-20").
-        4. Identifica si hay un TELÉFONO de contacto.
-        5. Identifica si hay un número de CÉDULA o NIT.
-        6. Determina el tipo de documento (PDF, Excel, etc.).
+        1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF).
+        2. Identifica el nombre o empresa del CLIENTE.
+        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes.
+        4. Extrae todos los productos solicitados y su cantidad numérica.
         
         REGLAS CRÍTICAS:
-        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin markdown (ej. no uses \`\`\`json).
-        - Si el nombre del producto es ambiguo, mantén el nombre original del documento.
-        - Las cantidades deben ser números.
+        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
+        - Las cantidades deben ser estrictamente numéricas (si dice "una libra", pon 1. Si no hay cantidad, asume 1).
         
         FORMATO DE RESPUESTA ESPERADO:
         {
-          "clientInDocument": "Nombre del Cliente Detectado",
-          "addressInDocument": "Dirección Extraída o null",
-          "phoneInDocument": "Teléfono Extraído o null",
-          "nitInDocument": "NIT/Cédula Extraída o null",
-          "documentType": "PDF",
+          "clientInDocument": "Nombre o Empresa Detectada",
+          "documentType": "Imagen/WhatsApp/PDF",
+          "address": "Dirección extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
           ]
@@ -149,16 +145,6 @@ export async function POST(req: Request) {
       extractedData = {};
       try {
         extractedData = JSON.parse(text);
-        
-        // Inyectar metadata en el array de items para que el panel administrativo pueda geolocalizar
-        if (!extractedData.items) extractedData.items = [];
-        extractedData.items.push({
-            isMetadata: true,
-            address: extractedData.address || '',
-            phone: extractedData.phone || '',
-            nit: extractedData.nit || ''
-        });
-        
       } catch (e) {
         console.error('Failed to parse Gemini output for email text:', text);
       }
@@ -181,9 +167,9 @@ export async function POST(req: Request) {
         extracted_items: [
           { 
             isMetadata: true, 
-            address: extractedData.addressInDocument || null,
-            phone: extractedData.phoneInDocument || null,
-            nit: extractedData.nitInDocument || null
+            address: extractedData.address || null,
+            phone: extractedData.phone || null,
+            nit: extractedData.nit || null
           },
           ...(extractedData.items || [])
         ],
