@@ -118,6 +118,7 @@ export default function EmailDraftsModule() {
         }
         return {
             ...item,
+            originalQuantity: item.quantity || 1,
             quantity: item.quantity || 1,
             matched_product_id: matchedId
         };
@@ -364,8 +365,10 @@ export default function EmailDraftsModule() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRODUCTO / MATCH</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
                       </tr>
@@ -377,15 +380,22 @@ export default function EmailDraftsModule() {
                           <>
                             {editableItems.map((item: any, i: number) => {
                               const matchedProd = products.find(p => p.id === item.matched_product_id);
-                              const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 1)) : 0;
+                              const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
                               totalValue += itemTotal;
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                  <td style={{ padding: '1rem 0.5rem', width: '40%' }}>
-                                    <div style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>
+                                  <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
+                                    <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                       {item.originalName}
                                     </div>
+                                  </td>
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '10%', backgroundColor: '#F9FAFB' }}>
+                                    <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
+                                      {item.originalQuantity || item.quantity}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: '1rem 0.5rem', width: '30%' }}>
                                     <select
                                       value={item.matched_product_id || ''}
                                       onChange={(e) => {
@@ -413,7 +423,7 @@ export default function EmailDraftsModule() {
                                   <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
                                     <input 
                                       type="number"
-                                      value={item.quantity || ''}
+                                      value={item.quantity === 0 ? '' : item.quantity}
                                       onChange={(e) => {
                                         const newEdits = [...editableItems];
                                         newEdits[i].quantity = parseFloat(e.target.value) || 0;
@@ -424,7 +434,7 @@ export default function EmailDraftsModule() {
                                         padding: '0.5rem',
                                         textAlign: 'center',
                                         borderRadius: '6px',
-                                        border: '1px solid #D1D5DB',
+                                        border: '1px solid #10B981',
                                         fontWeight: 800,
                                         fontSize: '1rem'
                                       }}
