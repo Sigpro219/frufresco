@@ -213,38 +213,37 @@ export default function EmailDraftsModule() {
             {/* Modal Body */}
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div style={{ backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>Cliente Detectado</div>
-                  <div style={{ fontWeight: 600, color: '#111827' }}>{selectedDraft.client_detected_name || 'Desconocido'}</div>
+              {/* Encabezado Estilo Pedido */}
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827', fontWeight: 900 }}>
+                    Revisión de Pedido por Correo
+                  </h2>
+                  <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800 }}>NUEVO BORRADOR</span>
                 </div>
-                <div style={{ backgroundColor: '#F9FAFB', padding: '1rem', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#6B7280', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>Datos Extraídos</div>
-                  <div style={{ fontSize: '0.85rem', color: '#4B5563', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> {getDraftMetadata(selectedDraft).address}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Phone size={14}/> {getDraftMetadata(selectedDraft).phone}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Hash size={14}/> {getDraftMetadata(selectedDraft).nit}</span>
-                  </div>
+                
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1E3A8A', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
+                  <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: 600 }}> (NIT: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#4B5563', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={16} /> {getDraftMetadata(selectedDraft).address || 'Dirección no detectada'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} /> {getDraftMetadata(selectedDraft).phone || 'Teléfono no detectado'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '0.9rem', color: '#111827', fontWeight: 700, marginBottom: '0.5rem' }}>Cuerpo del Correo</h3>
-                <div style={{ backgroundColor: '#F3F4F6', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem', color: '#4B5563', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto' }}>
-                  {selectedDraft.email_body || '(Sin cuerpo)'}
-                </div>
-              </div>
-
-              <div>
-                <h3 style={{ fontSize: '0.9rem', color: '#111827', fontWeight: 700, marginBottom: '0.5rem' }}>Productos Reconocidos</h3>
-                <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: '8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                    <thead style={{ backgroundColor: '#F9FAFB' }}>
-                      <tr>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#4B5563' }}>CANTIDAD</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#4B5563' }}>TEXTO ORIGINAL (IA)</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 600, color: '#4B5563' }}>MATCH EN INVENTARIO</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 600, color: '#4B5563' }}>VALOR EST.</th>
+              {/* Tabla de Productos Estilo Pedido */}
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRODUCTO / MATCH</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -269,27 +268,38 @@ export default function EmailDraftsModule() {
                               totalValue += itemTotal;
 
                               return (
-                                <tr key={i} style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
-                                  <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{item.quantity}</td>
-                                  <td style={{ padding: '0.75rem 1rem', color: '#4B5563' }}>{item.originalName}</td>
-                                  <td style={{ padding: '0.75rem 1rem' }}>
-                                    {matchedProd ? (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#047857', fontWeight: 600 }}>
-                                        <Check size={14} /> {matchedProd.name}
-                                      </div>
-                                    ) : (
-                                      <span style={{ color: '#EF4444', fontSize: '0.75rem' }}>Sin coincidencia</span>
-                                    )}
+                                <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                  <td style={{ padding: '1.2rem 0.5rem' }}>
+                                    <div style={{ fontWeight: 800, color: '#111827', fontSize: '1rem' }}>
+                                      {matchedProd ? (
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          {matchedProd.name} <Check size={16} color="#10B981" />
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: '#EF4444' }}>Sin coincidencia en inventario</span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '4px' }}>
+                                      Texto original: "{item.originalName}"
+                                    </div>
                                   </td>
-                                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 600, color: '#111827' }}>
+                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'center', fontWeight: 800, fontSize: '1rem' }}>
+                                    {item.quantity}
+                                  </td>
+                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
+                                    {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
+                                  </td>
+                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
                                   </td>
                                 </tr>
                               );
                             })}
-                            <tr style={{ backgroundColor: '#F9FAFB', borderTop: `1px solid ${THEME.colors.border}` }}>
-                              <td colSpan={3} style={{ padding: '1rem', textAlign: 'right', fontWeight: 800, color: '#111827' }}>TOTAL ESTIMADO:</td>
-                              <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 800, color: THEME.colors.primary, fontSize: '1.1rem' }}>
+                            <tr style={{ backgroundColor: '#F8FAFC' }}>
+                              <td colSpan={3} style={{ padding: '1.5rem 1rem', textAlign: 'right', fontWeight: 900, color: '#475569', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+                                TOTAL ESTIMADO
+                              </td>
+                              <td style={{ padding: '1.5rem 1rem', textAlign: 'right', fontWeight: 900, color: '#059669', fontSize: '1.6rem' }}>
                                 {formatMoney(totalValue)}
                               </td>
                             </tr>
@@ -301,10 +311,18 @@ export default function EmailDraftsModule() {
                 </div>
               </div>
 
+              {/* Cuerpo del correo oculto en un acordeón al final */}
+              <details style={{ backgroundColor: '#F3F4F6', borderRadius: '8px', padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #E5E7EB' }}>
+                <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>Ver texto original del correo enviado por el cliente</summary>
+                <div style={{ padding: '1rem 0 0.5rem 0', fontSize: '0.85rem', color: '#6B7280', whiteSpace: 'pre-wrap', cursor: 'text' }}>
+                  {selectedDraft.email_body || '(Sin cuerpo)'}
+                </div>
+              </details>
+
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+            <div style={{ padding: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', gap: '1rem', backgroundColor: '#F9FAFB', borderBottomLeftRadius: THEME.radius.xl, borderBottomRightRadius: THEME.radius.xl }}>
               <button 
                 onClick={() => setSelectedDraft(null)}
                 style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
