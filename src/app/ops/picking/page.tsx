@@ -37,6 +37,7 @@ interface PickingItem {
     quality_status?: 'green' | 'yellow' | 'red' | null;
     quality_notes?: string;
     category?: string;
+    available_stock?: number;
 }
 
 interface PickingTask {
@@ -123,6 +124,30 @@ export default function PickingExecutionPage() {
                 return;
             }
 
+            // Fetch inventory stocks for all products in active orders
+            const productIds = Array.from(new Set(
+                (activeOrders || []).flatMap(order => 
+                    ((order.order_items as unknown as any[]) || []).map(item => item.product_id)
+                )
+            )).filter(Boolean);
+
+            const stockMap: Record<string, number> = {};
+            if (productIds.length > 0) {
+                const { data: stocks, error: stocksError } = await supabase
+                    .from('inventory_stocks')
+                    .select('product_id, quantity')
+                    .in('product_id', productIds)
+                    .eq('status', 'available');
+
+                if (stocksError) {
+                    console.error('Database Error (inventory_stocks):', stocksError.message);
+                } else if (stocks) {
+                    stocks.forEach(s => {
+                        stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (s.quantity || 0);
+                    });
+                }
+            }
+
             // Helper: deriva el nombre del cliente del perfil unido
             const getOrderName = (order: any): string => {
                 const p = order.profiles;
@@ -190,25 +215,25 @@ export default function PickingExecutionPage() {
                                 quality_status: item.quality_status,
                                 quality_notes: item.quality_notes,
                                 unit: product?.unit_of_measure || 'un',
-                                category: product?.buying_team || 'SIN CATEGORÍA'
+                                category: product?.buying_team || 'SIN CATEGORÍA',
+                                available_stock: stockMap[item.product_id] || 0
                             };
                         });
 
                     if (itemsInCategory.length > 0) {
-                        if (!formattedTasks[clientName]) {
-                            const clientData = seenClients.get(clientName);
-                            formattedTasks[clientName] = {
-                                id: order.id,
-                                company_name: clientName,
-                                assigned_space: order.warehouse_spaces && order.warehouse_spaces.length > 0
-                                    ? order.warehouse_spaces.join(', ')
-                                    : '-',
-                                zone: clientData?.zone || 'GENERAL',
-                                items: [],
-                                status: 'pending'
-                            };
-                        }
-                        formattedTasks[clientName].items.push(...itemsInCategory);
+                        const idZr = (order as any).profiles?.id_zr;
+                        const zone = getZoneName(idZr);
+                        // Key by order.id to treat each order as a separate picking task
+                        formattedTasks[order.id] = {
+                            id: order.id,
+                            company_name: clientName,
+                            assigned_space: order.warehouse_spaces && order.warehouse_spaces.length > 0
+                                ? order.warehouse_spaces.join(', ')
+                                : '-',
+                            zone: zone,
+                            items: itemsInCategory,
+                            status: 'pending'
+                        };
                     }
                 });
 
@@ -295,13 +320,20 @@ export default function PickingExecutionPage() {
     }, []);
 
     const quickComplete = (item: PickingItem) => {
+        const available = item.available_stock || 0;
+        if (available < item.quantity) {
+            window.showToast?.(`Stock insuficiente en inventario (${available} ${item.unit} disponibles). Usa el modal para registrar un faltante.`, 'error');
+            openExceptionModal(item);
+            return;
+        }
         setExceptionItem({
             id: item.id,
             product_id: item.product_id,
             product_name: item.product_name || '',
             quantity: item.quantity,
             picked_quantity: item.picked_quantity || 0,
-            unit: item.unit || ''
+            unit: item.unit || '',
+            available_stock: item.available_stock
         });
         setExceptionQty(item.quantity.toString());
         setExceptionQuality('green');
@@ -313,6 +345,7 @@ export default function PickingExecutionPage() {
         name: string;
         unit: string;
         category?: string;
+        available_stock?: number;
         clients: {
             id: string;
             order_id: string;
@@ -323,6 +356,7 @@ export default function PickingExecutionPage() {
             quality_status: 'green' | 'yellow' | 'red' | null;
             quality_notes: string;
             isDone: boolean;
+            available_stock?: number;
         }[];
     }
     const productGroups: ProductGroup[] = [];
@@ -341,6 +375,7 @@ export default function PickingExecutionPage() {
                         name: item.product_name,
                         unit: item.unit,
                         category: item.category,
+                        available_stock: item.available_stock,
                         clients: []
                     };
                 }
@@ -354,7 +389,8 @@ export default function PickingExecutionPage() {
                     picked_quantity: item.picked_quantity,
                     quality_status: item.quality_status || null,
                     quality_notes: item.quality_notes || '',
-                    isDone: isItemDone
+                    isDone: isItemDone,
+                    available_stock: item.available_stock
                 });
             });
         });
@@ -385,13 +421,26 @@ export default function PickingExecutionPage() {
 
     const handleValidateQuantity = () => {
         if (!exceptionItem || !exceptionQty) return;
+        const qty = parseFloat(exceptionQty);
+        if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
+        
+        const available = exceptionItem.available_stock || 0;
+        if (qty > available) {
+            alert(`No puedes alistar más de lo disponible en inventario (${available} ${exceptionItem.unit})`);
+            return;
+        }
         setIsQuantityValidated(true);
     };
 
     const handleExceptionSave = async () => {
         if (!exceptionItem) return;
         const qty = parseFloat(exceptionQty);
-        if (isNaN(qty)) return alert('Cantidad inválida');
+        if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
+        
+        const available = exceptionItem.available_stock || 0;
+        if (qty > available) {
+            return alert(`Error: La cantidad a alistar (${qty}) supera el inventario disponible (${available} ${exceptionItem.unit})`);
+        }
         
         setIsSaving(true);
         try {
@@ -900,7 +949,7 @@ export default function PickingExecutionPage() {
                     return (
                         <div style={{ display: 'grid', gap: '1rem' }}>
                             {filteredTasks.map(task => (
-                            <div key={task.company_name} style={{
+                            <div key={task.id} style={{
                                 backgroundColor: '#121D2D', borderRadius: '16px', overflow: 'hidden',
                                 borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                                 borderRight: '1px solid rgba(255, 255, 255, 0.08)',
@@ -944,16 +993,54 @@ export default function PickingExecutionPage() {
                                                         {item.quality_status === 'red' && <span style={{ color: '#EF4444', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertCircle size={10} /> RECHAZADO</span>}
                                                         {item.quality_status === 'yellow' && <span style={{ color: '#EAB308', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '2px' }}><AlertTriangle size={10} /> VERIFICAR</span>}
                                                     </div>
-                                                    <div style={{ fontSize: '0.8rem', color: item.quality_status === 'red' ? '#EF4444' : (isDone ? '#0D7A57' : '#EAB308'), fontWeight: '800' }}>
-                                                        {item.quality_status === 'red' ? `RECHAZADO: ${item.quality_notes}` : (isDone ? 'COMPLETO' : `${item.quantity} ${item.unit}`)} 
-                                                        {item.picked_quantity > 0 && !isDone && item.quality_status !== 'red' && ` (Llevas: ${item.picked_quantity})`}
+                                                    <div style={{ fontSize: '0.8rem', color: item.quality_status === 'red' ? '#EF4444' : (isDone ? '#0D7A57' : '#EAB308'), fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                        <span>{item.quality_status === 'red' ? `RECHAZADO: ${item.quality_notes}` : (isDone ? 'COMPLETO' : `${item.quantity} ${item.unit}`)}</span>
+                                                        {item.picked_quantity > 0 && !isDone && item.quality_status !== 'red' && <span>(Llevas: {item.picked_quantity})</span>}
+                                                        {!isDone && (
+                                                            <span style={{ 
+                                                                fontSize: '0.75rem', 
+                                                                color: (item.available_stock || 0) === 0 ? '#EF4444' : '#94A3B8',
+                                                                backgroundColor: (item.available_stock || 0) === 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontWeight: 'bold',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px'
+                                                            }}>
+                                                                Stock: {item.available_stock || 0} {item.unit}
+                                                                {(item.available_stock || 0) === 0 && <AlertCircle size={10} />}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                {!isDone ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem', cursor: 'pointer' }}>
-                                                        LISTO
-                                                    </button>
-                                                ) : <div onClick={() => openExceptionModal(item)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}><CheckCircle size={20} className="text-emerald-500" /></div>}
+                                                {!isDone ? (() => {
+                                                    const isInsufficient = (item.available_stock || 0) < item.quantity;
+                                                    if (isInsufficient) {
+                                                        return (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); openExceptionModal(item); }} 
+                                                                style={{ 
+                                                                    backgroundColor: '#1E293B', 
+                                                                    color: '#94A3B8', 
+                                                                    border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                                                    padding: '0.5rem 1rem', 
+                                                                    borderRadius: '10px', 
+                                                                    fontWeight: '900', 
+                                                                    fontSize: '0.75rem', 
+                                                                    cursor: 'pointer' 
+                                                                }}
+                                                            >
+                                                                {(item.available_stock || 0) === 0 ? 'SIN STOCK' : 'AJUSTAR'}
+                                                            </button>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <button onClick={(e) => { e.stopPropagation(); quickComplete(item); }} style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1.2rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                                            LISTO
+                                                        </button>
+                                                    );
+                                                })() : <div onClick={() => openExceptionModal(item)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}><CheckCircle size={20} className="text-emerald-500" /></div>}
                                             </div>
                                         );
                                     })}
@@ -1007,11 +1094,24 @@ export default function PickingExecutionPage() {
                                         <h2 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{group.name.toUpperCase()}</h2>
                                         <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.8 }}>REPARTIR A {group.clients.filter((c:any) => !c.isDone).length} RECINTOS</p>
                                     </div>
-                                    {selectedCategory === 'TODAS' && group.category && (
-                                        <span style={{ fontSize: '0.7rem', color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '4px 10px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
-                                            {group.category}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{
+                                            fontSize: '0.8rem',
+                                            backgroundColor: (group.available_stock || 0) === 0 ? '#EF4444' : '#121D2D',
+                                            color: 'white',
+                                            padding: '4px 10px',
+                                            borderRadius: '8px',
+                                            fontWeight: 'bold',
+                                            border: '1px solid rgba(255,255,255,0.1)'
+                                        }}>
+                                            Stock: {group.available_stock || 0} {group.unit}
                                         </span>
-                                    )}
+                                        {selectedCategory === 'TODAS' && group.category && (
+                                            <span style={{ fontSize: '0.7rem', color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '4px 10px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+                                                {group.category}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div style={{ padding: '1rem' }}>
                                     {group.clients.map((target: any) => (
@@ -1044,13 +1144,45 @@ export default function PickingExecutionPage() {
                                                     {target.picked_quantity > 0 && !target.isDone && target.quality_status !== 'red' && ` (Llevas: ${target.picked_quantity})`}
                                                 </div>
                                             </div>
-                                            {!target.isDone ? (
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); quickComplete({ ...target, product_name: group.name, unit: group.unit }); }}
-                                                    style={{ backgroundColor: target.quality_status === 'red' ? '#EF4444' : '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' }}>
-                                                    {target.quality_status === 'red' ? 'RE-ALISTAR' : 'LISTO'}
-                                                </button>
-                                            ) : (
+                                            {!target.isDone ? (() => {
+                                                if (target.quality_status === 'red') {
+                                                    return (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); quickComplete({ ...target, product_name: group.name, unit: group.unit }); }}
+                                                            style={{ backgroundColor: '#EF4444', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' }}
+                                                        >
+                                                            RE-ALISTAR
+                                                        </button>
+                                                    );
+                                                }
+                                                const isInsufficient = (target.available_stock || 0) < target.quantity;
+                                                if (isInsufficient) {
+                                                    return (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); openExceptionModal({ ...target, product_name: group.name, unit: group.unit }); }} 
+                                                            style={{ 
+                                                                backgroundColor: '#1E293B', 
+                                                                color: '#94A3B8', 
+                                                                border: '1px solid rgba(255, 255, 255, 0.08)', 
+                                                                padding: '0.5rem 1rem', 
+                                                                borderRadius: '8px', 
+                                                                fontWeight: '800', 
+                                                                fontSize: '0.75rem', 
+                                                                cursor: 'pointer' 
+                                                            }}
+                                                        >
+                                                            {(target.available_stock || 0) === 0 ? 'SIN STOCK' : 'AJUSTAR'}
+                                                        </button>
+                                                    );
+                                                }
+                                                return (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); quickComplete({ ...target, product_name: group.name, unit: group.unit }); }}
+                                                        style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' }}>
+                                                        LISTO
+                                                    </button>
+                                                );
+                                            })() : (
                                                 <div style={{ display: 'flex', alignItems: 'center' }}><CheckCircle size={20} className="text-emerald-500" /></div>
                                             )}
                                         </div>
@@ -1111,72 +1243,97 @@ export default function PickingExecutionPage() {
                                 <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}>PRODUCTO</div>
                                 <div style={{ fontSize: '0.95rem', fontWeight: '800', color: 'white' }}>{exceptionItem.product_name}</div>
                             </div>
-                            <div style={{ backgroundColor: '#0A111C', border: '1px dashed rgba(13, 122, 87, 0.4)', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '100px', textAlign: 'center' }}>
+                            <div style={{ backgroundColor: '#0A111C', border: '1px dashed rgba(13, 122, 87, 0.4)', padding: '0.8rem 1rem', borderRadius: '16px', minWidth: '80px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#0D7A57', fontWeight: 'bold', marginBottom: '4px' }}>A ALISTAR</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'white' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
+                                <div style={{ fontSize: '1rem', fontWeight: '900', color: 'white' }}>{exceptionItem.quantity} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
+                            </div>
+                            <div style={{ 
+                                backgroundColor: '#0A111C', 
+                                border: `1px solid ${(exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'rgba(255,255,255,0.08)'}`, 
+                                padding: '0.8rem 1rem', 
+                                borderRadius: '16px', 
+                                minWidth: '80px', 
+                                textAlign: 'center' 
+                            }}>
+                                <div style={{ fontSize: '0.65rem', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}>STOCK DISP.</div>
+                                <div style={{ fontSize: '1rem', fontWeight: '900', color: (exceptionItem.available_stock || 0) === 0 ? '#EF4444' : 'white' }}>{exceptionItem.available_stock || 0} <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>{exceptionItem.unit}</span></div>
                             </div>
                         </div>
 
-                        {!isQuantityValidated ? (
-                            /* PHASE 1: QUANTITY VALIDATION - Mobile stacked layout */
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                                <div style={{ 
-                                    backgroundColor: 'rgba(13, 122, 87, 0.1)',
-                                    color: 'white',
-                                    padding: '1.5rem 1rem',
-                                    borderRadius: '16px', 
-                                    border: '1px solid #0D7A57',
-                                    textAlign: 'center'
-                                }}>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#0D7A57', marginBottom: '6px' }}>
-                                        CANTIDAD ALISTADA ({exceptionQty || '0'} / {exceptionItem.quantity} {exceptionItem.unit})
-                                    </div>
-                                    <input 
-                                        type="number"
-                                        value={exceptionQty}
-                                        onChange={(e) => setExceptionQty(e.target.value)}
-                                        placeholder="0"
-                                        autoFocus
-                                        step="any"
-                                        style={{ 
-                                            background: 'none', border: 'none', width: '100%', textAlign: 'center', 
-                                            fontSize: '2.4rem', fontWeight: '900', color: 'white', outline: 'none' 
-                                        }}
-                                    />
-                                </div>
-                                
-                                <button 
-                                    onClick={handleValidateQuantity}
-                                    disabled={!exceptionQty}
-                                    style={{ 
-                                        width: '100%', 
-                                        backgroundColor: (parseFloat(exceptionQty) < exceptionItem.quantity) ? '#F59E0B' : '#0D7A57', 
-                                        color: 'white',
-                                        padding: '1.1rem', 
-                                        borderRadius: '16px',
-                                        border: 'none',
-                                        fontWeight: '900',
-                                        fontSize: '1.1rem',
-                                        cursor: 'pointer',
-                                        opacity: !exceptionQty ? 0.5 : 1,
-                                        transition: 'all 0.2s',
-                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                                    }}
-                                >
-                                    {(parseFloat(exceptionQty) < exceptionItem.quantity) ? 'Confirmar Parcial' : 'Validar Cantidad'}
-                                </button>
-
-                                {parseFloat(exceptionQty) < exceptionItem.quantity && (
+                        {!isQuantityValidated ? (() => {
+                            const qtyNum = parseFloat(exceptionQty);
+                            const isQtyInvalid = isNaN(qtyNum) || qtyNum < 0 || qtyNum > (exceptionItem.available_stock || 0);
+                            return (
+                                /* PHASE 1: QUANTITY VALIDATION - Mobile stacked layout */
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                     <div style={{ 
-                                        padding: '1rem', borderRadius: '16px', backgroundColor: 'rgba(234,179,8,0.1)', 
-                                        color: '#FBBF24', fontWeight: 'bold', fontSize: '0.85rem',
-                                        border: '1px solid rgba(234,179,8,0.3)', textAlign: 'center'
+                                        backgroundColor: 'rgba(13, 122, 87, 0.1)',
+                                        color: 'white',
+                                        padding: '1.5rem 1rem',
+                                        borderRadius: '16px', 
+                                        border: '1px solid #0D7A57',
+                                        textAlign: 'center'
                                     }}>
-                                        ⚠️ Estás registrando una entrega parcial.
+                                        <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#0D7A57', marginBottom: '6px' }}>
+                                            CANTIDAD ALISTADA ({exceptionQty || '0'} / {exceptionItem.quantity} {exceptionItem.unit})
+                                        </div>
+                                        <input 
+                                            type="number"
+                                            value={exceptionQty}
+                                            onChange={(e) => setExceptionQty(e.target.value)}
+                                            placeholder="0"
+                                            autoFocus
+                                            step="any"
+                                            style={{ 
+                                                background: 'none', border: 'none', width: '100%', textAlign: 'center', 
+                                                fontSize: '2.4rem', fontWeight: '900', color: 'white', outline: 'none' 
+                                            }}
+                                        />
                                     </div>
-                                )}
-                            </div>
-                        ) : (
+                                    
+                                    <button 
+                                        onClick={handleValidateQuantity}
+                                        disabled={!exceptionQty || isQtyInvalid}
+                                        style={{ 
+                                            width: '100%', 
+                                            backgroundColor: isQtyInvalid ? '#475569' : ((qtyNum < exceptionItem.quantity) ? '#F59E0B' : '#0D7A57'), 
+                                            color: 'white',
+                                            padding: '1.1rem', 
+                                            borderRadius: '16px',
+                                            border: 'none',
+                                            fontWeight: '900',
+                                            fontSize: '1.1rem',
+                                            cursor: isQtyInvalid ? 'not-allowed' : 'pointer',
+                                            opacity: (!exceptionQty || isQtyInvalid) ? 0.5 : 1,
+                                            transition: 'all 0.2s',
+                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                                        }}
+                                    >
+                                        {isQtyInvalid ? 'Cantidad Excede Stock' : ((qtyNum < exceptionItem.quantity) ? 'Confirmar Parcial' : 'Validar Cantidad')}
+                                    </button>
+
+                                    {isQtyInvalid && (
+                                        <div style={{ 
+                                            padding: '1rem', borderRadius: '16px', backgroundColor: 'rgba(239,68,68,0.1)', 
+                                            color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem',
+                                            border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center'
+                                        }}>
+                                            ❌ La cantidad supera el stock disponible en inventario ({exceptionItem.available_stock || 0} {exceptionItem.unit}).
+                                        </div>
+                                    )}
+
+                                    {!isQtyInvalid && qtyNum < exceptionItem.quantity && (
+                                        <div style={{ 
+                                            padding: '1rem', borderRadius: '16px', backgroundColor: 'rgba(234,179,8,0.1)', 
+                                            color: '#FBBF24', fontWeight: 'bold', fontSize: '0.85rem',
+                                            border: '1px solid rgba(234,179,8,0.3)', textAlign: 'center'
+                                        }}>
+                                            ⚠️ Estás registrando una entrega parcial.
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })() : (
                             /* PHASE 2: QUALITY VALIDATION */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                                 <div style={{ 

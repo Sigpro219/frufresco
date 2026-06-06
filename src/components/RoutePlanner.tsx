@@ -74,9 +74,13 @@ export default function RoutePlanner() {
         driver_break_mins: 45,
         fleet_start_time: '04:30',
         fleet_end_time: '19:00',
-        optimization_strategy: 'balanced'
+        optimization_strategy: 'balanced',
+        warehouse_base_load_time: 15,
+        warehouse_time_per_10_crates_load: 5
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
+    const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
+    const [showPreConfirm, setShowPreConfirm] = useState(false);
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -421,7 +425,26 @@ export default function RoutePlanner() {
 
             const result = await response.json();
             
-            alert(`✅ ${result.routeConfirmations.length} Rutas confirmadas y enviadas a picking exitosamente.`);
+            if (result.routeConfirmations && Array.isArray(result.routeConfirmations)) {
+                const enrichedConfirmations = result.routeConfirmations.map((route: any) => {
+                    const stops = (route.order_ids || []).map((oid: string) => {
+                        const localOrder = orders.find(o => String(o.id) === String(oid));
+                        return {
+                            id: oid,
+                            customer_name: localOrder?.customer_name || 'Cliente',
+                            total_weight_kg: localOrder?.total_weight_kg || 0,
+                            crates: localOrder?.crates || 0,
+                            address: localOrder?.address || 'Sin Dirección',
+                            warehouse_spaces: route.order_spaces?.[oid] || []
+                        };
+                    });
+                    return {
+                        ...route,
+                        stops
+                    };
+                });
+                setConfirmedManifest(enrichedConfirmations);
+            }
             
             // Limpiar borrador del día al confirmar
             try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
@@ -442,7 +465,7 @@ export default function RoutePlanner() {
     };
 
     const updateParameter = async (id: string, value: any) => {
-        setParams({ ...params, [id]: value });
+        setParams(prev => ({ ...prev, [id]: value }));
         await supabase.from('logistic_parameters').upsert({ id, value: value.toString() });
     };
 
@@ -519,10 +542,169 @@ export default function RoutePlanner() {
         e.dataTransfer.dropEffect = 'move';
     };
 
+    const getEstimatedTimesForVehicle = (vehicleId: string, totalCrates: number) => {
+        // Departure time
+        const departureTimeStr = params.fleet_start_time || '04:30';
+        const [h, m] = departureTimeStr.split(':').map(Number);
+        const totalMinutes = h * 60 + m;
+
+        // Calculate load time in minutes: base_load + (crates * (time_per_10_crates / 10))
+        const baseLoad = parseFloat(params.warehouse_base_load_time) || 15;
+        const timePer10 = parseFloat(params.warehouse_time_per_10_crates_load) || 5;
+        const loadDuration = Math.round(baseLoad + (totalCrates * (timePer10 / 10)));
+
+        // Load start time
+        let loadMinutes = totalMinutes - loadDuration;
+        if (loadMinutes < 0) loadMinutes += 1440; // wrap around day if needed
+
+        const loadH = Math.floor(loadMinutes / 60);
+        const loadM = loadMinutes % 60;
+
+        const formatTime = (hh: number, mm: number) => {
+            const ampm = hh >= 12 ? 'PM' : 'AM';
+            const displayH = hh % 12 || 12;
+            const displayM = mm.toString().padStart(2, '0');
+            return `${displayH}:${displayM} ${ampm}`;
+        };
+
+        return {
+            loadStart: formatTime(loadH, loadM),
+            departure: formatTime(h, m),
+            duration: loadDuration
+        };
+    };
+
+    const printManifestViaNewWindow = () => {
+        if (!confirmedManifest) return;
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir.');
+
+        const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        const routesHtml = confirmedManifest.map((route: any, idx: number) => {
+            const stopsHtml = route.stops && route.stops.length > 0 
+                ? `
+                <div style="margin-top: 1rem;">
+                    <div style="font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Secuencia de Carga y Entrega</div>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        ${route.stops.map((stop: any, sIdx: number) => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid #F1F5F9;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="background-color: #E2E8F0; color: #475569; font-size: 0.65rem; font-weight: 800; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${sIdx + 1}</span>
+                                    <span style="font-weight: 700; color: #1E293B;">${stop.customer_name}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 0.75rem; color: #64748B;">${stop.total_weight_kg} kg (${stop.crates} can.)</span>
+                                    <span style="font-size: 0.7rem; font-weight: 850; background-color: rgba(14, 165, 233, 0.08); color: #0284C7; padding: 2px 6px; border-radius: 4px;">
+                                        ${stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin Espacio'}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                `
+                : '';
+
+            return `
+            <div class="page-break-inside-avoid" style="border: 1px solid #E2E8F0; border-radius: 16px; padding: 1.25rem; background-color: #F8FAFC; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 1rem; align-items: center; border-bottom: ${route.stops && route.stops.length > 0 ? '1px solid #F1F5F9' : 'none'}; padding-bottom: ${route.stops && route.stops.length > 0 ? '0.75rem' : 0};">
+                    <div>
+                        <div style="font-weight: 900; color: #0F172A; font-size: 0.95rem;">🚚 ${route.vehicle_plate}</div>
+                        <div style="font-size: 0.75rem; color: #64748B; font-weight: 700; margin-top: 2px;">Conductor: ${route.driver_name}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: #64748B; font-weight: 800;">ENTREGAS / PESO</div>
+                        <div style="font-weight: 800; color: #1E293B; font-size: 0.85rem; margin-top: 2px;">${route.stops_count} entregas • ${route.total_kilos.toLocaleString()} kg</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: #64748B; font-weight: 800;">ESPACIOS BODEGA</div>
+                        <div style="font-weight: 900; color: #0EA5E9; font-size: 0.85rem; margin-top: 2px;">
+                            ${route.warehouse_spaces && route.warehouse_spaces.length > 0 
+                                ? `[${route.warehouse_spaces.join(', ')}]` 
+                                : 'Por asignar'}
+                        </div>
+                    </div>
+                </div>
+                ${stopsHtml}
+            </div>
+            `;
+        }).join('');
+
+        const logoUrl = window.location.origin + '/assets/branding/logo_corporate.png?v=3';
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Manifiesto de Despacho - Investments Cortes</title>
+                <script src="https://cdn.tailwindcss.com"></script>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+                <style>
+                    @page { margin: 15mm 15mm; size: letter; }
+                    body { font-family: 'Inter', sans-serif; background: white !important; margin: 0; color: #1f2937; }
+                    .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                </style>
+            </head>
+            <body class="bg-white">
+                <div class="max-w-[210mm] mx-auto min-h-[297mm] p-8 flex flex-col justify-between" style="box-sizing: border-box;">
+                    <div>
+                        <!-- Header -->
+                        <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+                            <div>
+                                <img src="${logoUrl}" alt="Investments Cortes Logo" style="height: 65px; width: auto; object-fit: contain;" />
+                            </div>
+                            <div style="text-align: right; font-size: 0.8rem; color: #4b5563; line-height: 1.4;">
+                                <div style="font-weight: 800; color: #111827; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 0.25rem;">Investments Cortes S.A.S</div>
+                                <div>NIT: 901.393.217</div>
+                                <div>CL 12 B # 71 D - 31 TO 4 AP 101</div>
+                                <div>Bogotá D.C., Colombia</div>
+                                <div>contacto@investmentscortes.com</div>
+                            </div>
+                        </header>
+
+                        <!-- Meta -->
+                        <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; font-size: 0.9rem; color: #6b7280;">
+                            <div>Fecha: <span class="font-bold text-gray-700">${dateStr}</span></div>
+                            <div>Ref: <span class="font-bold text-gray-700">Manifiesto de Despacho</span></div>
+                        </div>
+
+                        <!-- Title -->
+                        <h1 style="font-size: 1.5rem; font-weight: 900; color: #111827; margin-bottom: 1.5rem; text-align: center; text-transform: uppercase; tracking-tight: -0.025em;">
+                            Manifiesto de Despacho y Plan de Rutas
+                        </h1>
+
+                        <!-- Content -->
+                        <div>
+                            ${routesHtml}
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <footer style="margin-top: 3rem; border-top: 1px solid #f3f4f6; padding-top: 1.5rem; font-size: 0.75rem; color: #9ca3af; text-align: center;">
+                        <p>Este documento es propiedad de Investments Cortes S.A.S. Prohibida su reproducción total o parcial sin autorización.</p>
+                        <div style="margin-top: 0.5rem; font-weight: 600; color: #4b5563; letter-spacing: 0.05em;">CORTESÍA • CALIDAD • COMPROMISO</div>
+                    </footer>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() { window.print(); }, 600);
+                    }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
     if (loading) return <div style={{ color: '#64748B', textAlign: 'center', padding: '2rem' }}>Iniciando motores...</div>;
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '650px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
+        <>
+            <div style={{ display: 'grid', gridTemplateColumns: '650px 1fr', gap: '2rem', height: '100%', minHeight: 0 }}>
             {/* Orders Sidebar */}
             <div 
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
@@ -768,7 +950,7 @@ export default function RoutePlanner() {
                         </button>
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button 
-                                onClick={handleConfirmRoutes}
+                                onClick={() => setShowPreConfirm(true)}
                                 disabled={loading}
                                 style={{ 
                                     padding: '0.4rem 1.1rem', 
@@ -906,8 +1088,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>B2B Eficiencia (kg/min)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.b2b_kg_min) ? '' : params.b2b_kg_min} 
-                                        onChange={(e) => updateParameter('b2b_kg_min', parseFloat(e.target.value) || 0)}
+                                        value={params.b2b_kg_min ?? ''} 
+                                        onChange={(e) => updateParameter('b2b_kg_min', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -915,8 +1097,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>B2C Eficiencia (kg/min)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.b2c_kg_min) ? '' : params.b2c_kg_min} 
-                                        onChange={(e) => updateParameter('b2c_kg_min', parseFloat(e.target.value) || 0)}
+                                        value={params.b2c_kg_min ?? ''} 
+                                        onChange={(e) => updateParameter('b2c_kg_min', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -924,8 +1106,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Tiempo base de alistamiento (min)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.base_setup_time) ? '' : params.base_setup_time} 
-                                        onChange={(e) => updateParameter('base_setup_time', parseFloat(e.target.value) || 0)}
+                                        value={params.base_setup_time ?? ''} 
+                                        onChange={(e) => updateParameter('base_setup_time', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -933,8 +1115,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Descarga física de 10 canastillas (min)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.time_per_10_crates_unload) ? '' : params.time_per_10_crates_unload} 
-                                        onChange={(e) => updateParameter('time_per_10_crates_unload', parseFloat(e.target.value) || 0)}
+                                        value={params.time_per_10_crates_unload ?? ''} 
+                                        onChange={(e) => updateParameter('time_per_10_crates_unload', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -942,8 +1124,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Revisión/Firma de 10 canastillas (min)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.time_per_10_crates_delivery) ? '' : params.time_per_10_crates_delivery} 
-                                        onChange={(e) => updateParameter('time_per_10_crates_delivery', parseFloat(e.target.value) || 0)}
+                                        value={params.time_per_10_crates_delivery ?? ''} 
+                                        onChange={(e) => updateParameter('time_per_10_crates_delivery', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -983,8 +1165,8 @@ export default function RoutePlanner() {
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Descanso de Conductor (minutos)</label>
                                     <input 
                                         type="number" 
-                                        value={isNaN(params.driver_break_mins) ? '' : params.driver_break_mins} 
-                                        onChange={(e) => updateParameter('driver_break_mins', parseFloat(e.target.value) || 0)}
+                                        value={params.driver_break_mins ?? ''} 
+                                        onChange={(e) => updateParameter('driver_break_mins', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
                                     />
                                 </div>
@@ -1008,6 +1190,29 @@ export default function RoutePlanner() {
                                         <span>10 kg</span>
                                         <span>12.5 kg (Estándar)</span>
                                         <span>25 kg</span>
+                                    </div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '1rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#10B981', display: 'block', letterSpacing: '-0.01em' }}>
+                                        📦 Cargue en Bodega (Tiempos)
+                                    </span>
+                                    <div>
+                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Alistamiento Fijo Bodega (min)</label>
+                                        <input 
+                                            type="number" 
+                                            value={params.warehouse_base_load_time ?? ''} 
+                                            onChange={(e) => updateParameter('warehouse_base_load_time', e.target.value)}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Cargue de 10 canastillas (min)</label>
+                                        <input 
+                                            type="number" 
+                                            value={params.warehouse_time_per_10_crates_load ?? ''} 
+                                            onChange={(e) => updateParameter('warehouse_time_per_10_crates_load', e.target.value)}
+                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1058,7 +1263,7 @@ export default function RoutePlanner() {
                         })
                         .map(vehicle => {
                         const load = getVehicleLoad(vehicle.id);
-                        const cratesNeeded = Math.ceil(load / params.avg_kg_per_crate);
+                        const cratesNeeded = Math.ceil(load / (parseFloat(params.avg_kg_per_crate) || 12.5));
                         
                         const kgProgress = (load / vehicle.capacity_kg) * 100;
                         const crateProgress = vehicle.max_crates_capacity > 0 ? (cratesNeeded / vehicle.max_crates_capacity) * 100 : 0;
@@ -1093,72 +1298,152 @@ export default function RoutePlanner() {
                                     transform: isDragOver ? 'scale(1.01)' : 'scale(1)'
                                 }}
                             >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', alignItems: 'flex-start' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#111827' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={14} strokeWidth={1.5} /> {vehicle.plate}</span></div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.2rem' }}>
+                                    {/* Row 1: Vehicle Plate & Timings */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '0.5rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <span style={{ fontSize: '0.55rem', color: '#6366F1', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                <Truck size={10} strokeWidth={2.5} style={{ color: '#6366F1' }} /> Camión
+                                            </span>
+                                            <div style={{ fontWeight: '900', fontSize: '1.2rem', color: '#0F172A', lineHeight: 1.1 }}>
+                                                {vehicle.plate}
+                                            </div>
+                                        </div>
+                                        {assignedOrders.length > 0 && (() => {
+                                            const { loadStart, departure } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
+                                            return (
+                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginBottom: '2px' }}>
+                                                    <span style={{
+                                                        fontSize: '0.62rem', fontWeight: '800',
+                                                        backgroundColor: '#F0FDF4', color: '#16A34A',
+                                                        padding: '2px 5px', borderRadius: '5px',
+                                                        border: '1px solid #DCFCE7',
+                                                        display: 'inline-flex', alignItems: 'center', gap: '2px'
+                                                    }} title="Hora estimada de inicio de cargue en bodega">
+                                                        ⏰ {loadStart}
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '0.62rem', fontWeight: '800',
+                                                        backgroundColor: '#EEF2FF', color: '#4F46E5',
+                                                        padding: '2px 5px', borderRadius: '5px',
+                                                        border: '1px solid #E0E7FF',
+                                                        display: 'inline-flex', alignItems: 'center', gap: '2px'
+                                                    }} title="Hora estimada de salida de bodega">
+                                                        🚚 {departure}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Row 2: Driver Info */}
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
                                         <div style={{
                                             fontSize: '0.75rem',
-                                            color: vehicle.driver_name !== 'Sin Asignar' ? '#0891B2' : '#94A3B8',
-                                            fontWeight: '800',
-                                            marginTop: '0.6rem',
+                                            color: vehicle.driver_name !== 'Sin Asignar' ? '#334155' : '#94A3B8',
+                                            fontWeight: '700',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '0.6rem'
+                                            gap: '0.4rem',
+                                            flex: 1,
+                                            minWidth: 0
                                         }}>
                                             <div style={{ 
-                                                width: '28px', 
-                                                height: '28px', 
-                                                borderRadius: '8px', 
+                                                width: '24px', 
+                                                height: '24px', 
+                                                borderRadius: '50%', 
                                                 background: vehicle.driver_name !== 'Sin Asignar' 
-                                                    ? 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)' 
-                                                    : '#F1F5F9', 
+                                                    ? 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)' 
+                                                    : '#E2E8F0', 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
                                                 justifyContent: 'center', 
-                                                color: vehicle.driver_name !== 'Sin Asignar' ? 'white' : '#94A3B8', 
+                                                color: 'white', 
                                                 fontWeight: '900', 
-                                                fontSize: '0.65rem' 
+                                                fontSize: '0.6rem',
+                                                flexShrink: 0
                                             }}>
                                                 {getInitials(vehicle.driver_name || '')}
                                             </div>
-                                            Conductor: {vehicle.driver_name}
+                                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1 }} title={vehicle.driver_name}>
+                                                {vehicle.driver_name}
+                                            </span>
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                        <div>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: '900', color: isKgOverloaded ? '#EF4444' : '#0D9488' }}>
-                                                {load} / {vehicle.capacity_kg} kg
+
+                                    {/* Row 3: Capacity Progress Pills (Full Width Stack with top separator) */}
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        flexDirection: 'column', 
+                                        gap: '0.35rem', 
+                                        width: '100%',
+                                        borderTop: '1px solid #F1F5F9',
+                                        paddingTop: '0.6rem'
+                                    }}>
+                                        {/* Weight Capacity Progress Pill */}
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '8px', 
+                                            backgroundColor: isKgOverloaded ? '#FEF2F2' : '#F0FDFA',
+                                            border: isKgOverloaded ? '1px solid #FEE2E2' : '1px solid #CCFBF1',
+                                            padding: '3px 8px',
+                                            borderRadius: '8px',
+                                            transition: 'all 0.2s',
+                                            width: '100%'
+                                        }}>
+                                            <div style={{
+                                                fontSize: '0.62rem', fontWeight: '800',
+                                                color: isKgOverloaded ? '#EF4444' : '#0D9488',
+                                                display: 'flex', alignItems: 'center', gap: '3px',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                <span>⚖️</span>
+                                                <span>{load}/{vehicle.capacity_kg} kg</span>
                                             </div>
-                                            <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: '700' }}>CARGA UTIL</div>
+                                            <div style={{ flex: 1, height: '4px', backgroundColor: isKgOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
+                                                <div style={{
+                                                    width: `${Math.min(kgProgress, 100)}%`,
+                                                    height: '100%',
+                                                    backgroundColor: isKgOverloaded ? '#EF4444' : '#10B981',
+                                                    transition: 'width 0.5s ease-out'
+                                                }} />
+                                            </div>
                                         </div>
+
+                                        {/* Crates Capacity Progress Pill */}
                                         {vehicle.max_crates_capacity > 0 && (
-                                            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.4rem' }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: '900', color: isCrateOverloaded ? '#EF4444' : '#6366F1' }}>
-                                                    {cratesNeeded} / {vehicle.max_crates_capacity} und
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '8px', 
+                                                backgroundColor: isCrateOverloaded ? '#FEF2F2' : '#F5F3FF',
+                                                border: isCrateOverloaded ? '1px solid #FEE2E2' : '1px solid #E9D5FF',
+                                                padding: '3px 8px',
+                                                borderRadius: '8px',
+                                                transition: 'all 0.2s',
+                                                width: '100%'
+                                            }}>
+                                                <div style={{
+                                                    fontSize: '0.62rem', fontWeight: '800',
+                                                    color: isCrateOverloaded ? '#EF4444' : '#6D28D9',
+                                                    display: 'flex', alignItems: 'center', gap: '3px',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    <span>📦</span>
+                                                    <span>{cratesNeeded}/{vehicle.max_crates_capacity} und</span>
                                                 </div>
-                                                <div style={{ fontSize: '0.6rem', color: '#6B7280', fontWeight: '700' }}>CANASTILLAS</div>
+                                                <div style={{ flex: 1, height: '4px', backgroundColor: isCrateOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
+                                                    <div style={{
+                                                        width: `${Math.min(crateProgress, 100)}%`,
+                                                        height: '100%',
+                                                        backgroundColor: isCrateOverloaded ? '#EF4444' : '#6366F1',
+                                                        transition: 'width 0.5s ease-out'
+                                                    }} />
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                </div>
-
-                                <div style={{ height: '8px', backgroundColor: '#F3F4F6', borderRadius: '10px', marginBottom: '1.5rem', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                    <div style={{ 
-                                        width: `${Math.min(kgProgress, 100)}%`, 
-                                        height: '4px', 
-                                        backgroundColor: isKgOverloaded ? '#EF4444' : '#10B981', 
-                                        transition: 'width 0.5s ease-out',
-                                        borderRadius: '10px'
-                                    }}></div>
-                                    {vehicle.max_crates_capacity > 0 && (
-                                        <div style={{ 
-                                            width: `${Math.min(crateProgress, 100)}%`, 
-                                            height: '2px', 
-                                            backgroundColor: isCrateOverloaded ? '#EF4444' : '#6366F1', 
-                                            transition: 'width 0.5s ease-out',
-                                            borderRadius: '10px'
-                                        }}></div>
-                                    )}
                                 </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -1177,7 +1462,7 @@ export default function RoutePlanner() {
                                     ) : (
                                     assignedOrders.map((oid, stopIndex) => {
                                         const order = orders.find(o => o.id === oid);
-                                        const orderCrates = order ? Math.ceil(order.total_weight_kg / params.avg_kg_per_crate) : 0;
+                                        const orderCrates = order ? Math.ceil(order.total_weight_kg / (parseFloat(params.avg_kg_per_crate) || 12.5)) : 0;
                                         const stopNumber = stopIndex + 1;
                                         const totalStops = assignedOrders.length;
                                         // LIFO check: a stop in the 2nd half that is heavier than average
@@ -1422,7 +1707,372 @@ export default function RoutePlanner() {
                     </div>
                 </div>
             )}
-        </div>
+
+            {showPreConfirm && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(12px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 2000, padding: '2rem'
+                }} onClick={() => setShowPreConfirm(false)}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF', borderRadius: '30px',
+                        width: '95%', maxWidth: '700px', maxHeight: '90vh',
+                        padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                        display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                        position: 'relative', overflow: 'hidden'
+                    }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366F1' }}></div>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>TOMA DE DECISIONES / LOGÍSTICA</span>
+                                </div>
+                                <h2 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1E293B', letterSpacing: '-0.02em' }}>
+                                    Confirmar Lanzamiento de Despacho
+                                </h2>
+                            </div>
+                            <button
+                                onClick={() => setShowPreConfirm(false)}
+                                style={{
+                                    background: '#F1F5F9', border: 'none', width: '32px', height: '32px',
+                                    borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
+                                }}
+                            >✕</button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingRight: '0.5rem' }}>
+                            <div style={{
+                                backgroundColor: '#EEF2F6', borderRadius: '16px', padding: '1.25rem',
+                                borderLeft: '4px solid #6366F1', display: 'flex', flexDirection: 'column', gap: '0.5rem'
+                            }}>
+                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B' }}>⚠️ ¿Qué sucederá al confirmar?</span>
+                                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: '#475569', lineHeight: '1.6' }}>
+                                    <li>Los pedidos asignados cambiarán su estado a <strong>Aprobado (approved)</strong>.</li>
+                                    <li>Se consolidarán las cantidades netas y se iniciará la planeación en el portal de <strong>Compras / Abastecimiento</strong>.</li>
+                                    <li>Se asignarán los espacios físicos y la secuencia de cargue de bodega para los camiones.</li>
+                                    <li>Las rutas se publicarán y enviarán inmediatamente al equipo de operarios en <strong>Picking / Alistamiento</strong>.</li>
+                                </ul>
+                            </div>
+
+                            {/* Indicadores en Grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>RUTAS A CREAR</div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
+                                        {Object.keys(assignments).filter(k => assignments[k].length > 0).length}
+                                    </div>
+                                </div>
+                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>PEDIDOS ASIGNADOS</div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
+                                        {Object.values(assignments).reduce((sum, list) => sum + list.length, 0)}
+                                    </div>
+                                </div>
+                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>PESO TOTAL</div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
+                                        {Object.keys(assignments).reduce((sum, vid) => {
+                                            const oIds = assignments[vid] || [];
+                                            const weight = orders.filter(o => oIds.includes(o.id)).reduce((wSum, o) => wSum + o.total_weight_kg, 0);
+                                            return sum + weight;
+                                        }, 0).toLocaleString()} kg
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Resumen detallado por vehículo */}
+                            <div>
+                                <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '800', color: '#0F172A' }}>Resumen de Carga por Vehículo</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    {Object.keys(assignments).filter(vid => assignments[vid].length > 0).map((vid) => {
+                                        const vehicle = vehicles.find(v => v.id === vid);
+                                        const orderIds = assignments[vid] || [];
+                                        const routeOrders = orders.filter(o => orderIds.includes(o.id));
+                                        const totalWeight = routeOrders.reduce((wSum, o) => wSum + o.total_weight_kg, 0);
+                                        const totalCrates = routeOrders.reduce((cSum, o) => cSum + (o.crates || 0), 0);
+                                        
+                                        // Porcentaje de capacidad
+                                        const capPct = vehicle?.capacity_kg ? Math.round((totalWeight / vehicle.capacity_kg) * 100) : 0;
+                                        
+                                        return (
+                                            <div key={vid} style={{
+                                                border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem',
+                                                backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: '0.5rem'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div>
+                                                        <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.85rem' }}>🚚 {vehicle?.plate || 'Desconocido'}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>({vehicle?.driver_name || 'Sin Asignar'})</span>
+                                                    </div>
+                                                    <span style={{
+                                                        fontSize: '0.75rem', fontWeight: '800',
+                                                        color: capPct > 95 ? '#EF4444' : capPct > 75 ? '#F59E0B' : '#10B981'
+                                                    }}>
+                                                        {capPct}% Capacidad ({totalWeight} kg / {vehicle?.capacity_kg} kg)
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#475569', display: 'flex', gap: '1rem' }}>
+                                                    <span><strong>Pedidos:</strong> {orderIds.length}</span>
+                                                    <span><strong>Canastillas:</strong> {totalCrates}</span>
+                                                </div>
+                                                {(() => {
+                                                    const { loadStart, departure, duration } = getEstimatedTimesForVehicle(vid, totalCrates);
+                                                    return (
+                                                        <div style={{
+                                                            fontSize: '0.72rem', color: '#0F172A', backgroundColor: '#F0FDF4',
+                                                            padding: '6px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between',
+                                                            border: '1px solid #DCFCE7', marginTop: '0.25rem', fontWeight: '500'
+                                                        }}>
+                                                            <span>⏰ <strong>Inicio Cargue:</strong> {loadStart} <span style={{color: '#64748B', fontWeight: 'normal'}}>({duration} min)</span></span>
+                                                            <span>🚚 <strong>Salida Ruta:</strong> {departure}</span>
+                                                        </div>
+                                                    );
+                                                })()}
+                                                <div style={{
+                                                    fontSize: '0.7rem', color: '#64748B',
+                                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                    backgroundColor: '#F8FAFC', padding: '4px 8px', borderRadius: '8px',
+                                                    border: '1px dashed #E2E8F0'
+                                                }}>
+                                                    <strong>Clientes:</strong> {routeOrders.map(o => o.customer_name).join(', ')}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botones de acción */}
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', borderTop: '1px solid #F1F5F9', paddingTop: '1.25rem' }}>
+                            <button
+                                onClick={() => setShowPreConfirm(false)}
+                                style={{
+                                    padding: '0.6rem 1.25rem', borderRadius: '10px',
+                                    backgroundColor: 'transparent', border: '1px solid #CBD5E1',
+                                    color: '#475569', fontWeight: '800', fontSize: '0.8rem',
+                                    cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                Regresar al Planeador
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setShowPreConfirm(false);
+                                    await handleConfirmRoutes();
+                                }}
+                                style={{
+                                    padding: '0.6rem 1.5rem', borderRadius: '10px',
+                                    backgroundColor: '#10B981', border: 'none',
+                                    color: 'white', fontWeight: '800', fontSize: '0.8rem',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.25)',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#059669';
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#10B981';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                            >
+                                <Check size={14} strokeWidth={2} /> Confirmar y Lanzar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {confirmedManifest && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(12px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 2000, padding: '2rem'
+                }} onClick={() => setConfirmedManifest(null)}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF', borderRadius: '30px',
+                        width: '95%', maxWidth: '750px', maxHeight: '90vh',
+                        padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                        display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                        position: 'relative', overflow: 'hidden'
+                    }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981' }}></div>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>DESPACHO / PLAN DE RUTAS</span>
+                                </div>
+                                <h2 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1E293B', letterSpacing: '-0.02em' }}>
+                                    Manifiesto de Despacho Confirmado
+                                </h2>
+                            </div>
+                            <button
+                                onClick={() => setConfirmedManifest(null)}
+                                style={{
+                                    background: '#F1F5F9', border: 'none', width: '32px', height: '32px',
+                                    borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
+                                }}
+                            >✕</button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: '0.5rem' }} className="print-area">
+                            <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: '1.5' }}>
+                                Las rutas han sido generadas y enviadas al equipo de alistamiento de bodega (Picking) con éxito. A continuación el resumen para el operador de transporte:
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {confirmedManifest.map((route: any, idx: number) => (
+                                    <div key={idx} style={{
+                                        border: '1px solid #E2E8F0', borderRadius: '16px',
+                                        padding: '1.25rem', backgroundColor: '#F8FAFC',
+                                        display: 'flex', flexDirection: 'column', gap: '1rem'
+                                    }}>
+                                        <div style={{
+                                            display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '1rem',
+                                            alignItems: 'center', borderBottom: route.stops && route.stops.length > 0 ? '1px solid #F1F5F9' : 'none',
+                                            paddingBottom: route.stops && route.stops.length > 0 ? '0.75rem' : 0
+                                        }}>
+                                            <div>
+                                                <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>🚚 {route.vehicle_plate}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', marginTop: '2px' }}>Conductor: {route.driver_name}</div>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ENTREGAS / PESO</div>
+                                                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem', marginTop: '2px' }}>{route.stops_count} entregas • {route.total_kilos.toLocaleString()} kg</div>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ESPACIOS BODEGA</div>
+                                                <div style={{ fontWeight: '900', color: '#0EA5E9', fontSize: '0.85rem', marginTop: '2px' }}>
+                                                    {route.warehouse_spaces && route.warehouse_spaces.length > 0 
+                                                        ? `[${route.warehouse_spaces.join(', ')}]` 
+                                                        : 'Por asignar'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {route.stops && route.stops.length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingLeft: '0.25rem' }}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                    Secuencia de Carga y Entrega
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                    {route.stops.map((stop: any, sIdx: number) => (
+                                                        <div key={sIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#334155' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span style={{ 
+                                                                    backgroundColor: '#E2E8F0', color: '#475569', 
+                                                                    fontSize: '0.65rem', fontWeight: '800', 
+                                                                    borderRadius: '50%', width: '18px', height: '18px', 
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                                                                }}>{sIdx + 1}</span>
+                                                                <span style={{ fontWeight: '700', color: '#1E293B' }}>{stop.customer_name}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{stop.total_weight_kg} kg ({stop.crates} can.)</span>
+                                                                <span style={{ 
+                                                                    fontSize: '0.7rem', fontWeight: '850', 
+                                                                    backgroundColor: 'rgba(14, 165, 233, 0.08)', color: '#0284C7', 
+                                                                    padding: '2px 6px', borderRadius: '4px' 
+                                                                }}>
+                                                                    {stop.warehouse_spaces && stop.warehouse_spaces.length > 0 
+                                                                        ? `ESP ${stop.warehouse_spaces.join(', ')}` 
+                                                                        : 'Sin Espacio'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                            <button
+                                onClick={() => {
+                                    const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+                                    let text = `🚚 *MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
+                                    confirmedManifest.forEach((r, i) => {
+                                        text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${r.total_kilos.toLocaleString()} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
+                                        if (r.stops && r.stops.length > 0) {
+                                            r.stops.forEach((stop: any, sIdx: number) => {
+                                                text += `  ${sIdx+1}️⃣ *${stop.customer_name}* (${stop.total_weight_kg} kg) -> Espacios: ${stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A'}\n`;
+                                            });
+                                        } else {
+                                            text += `  (No hay detalles de paradas)\n`;
+                                        }
+                                        text += `\n`;
+                                    });
+                                    text += `----------------------------------------\n\n_¡Listos para cargar! 🚀_`;
+                                    
+                                    navigator.clipboard.writeText(text);
+                                    alert('📋 Resumen copiado al portapapeles para WhatsApp.');
+                                }}
+                                style={{
+                                    flex: 1, padding: '1rem', borderRadius: '14px', border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white', color: '#334155', fontWeight: '800', cursor: 'pointer',
+                                    fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                💬 Copiar WhatsApp
+                            </button>
+                            <button
+                                onClick={printManifestViaNewWindow}
+                                style={{
+                                    flex: 1, padding: '1rem', borderRadius: '14px', border: '1px solid #0EA5E9',
+                                    backgroundColor: '#EFF6FF', color: '#0284C7', fontWeight: '800', cursor: 'pointer',
+                                    fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                🖨️ Imprimir Plan
+                            </button>
+                            <button
+                                onClick={() => setConfirmedManifest(null)}
+                                style={{
+                                    flex: 1.2, padding: '1rem', borderRadius: '14px', border: 'none',
+                                    backgroundColor: '#10B981', color: 'white', fontWeight: '900', cursor: 'pointer',
+                                    fontSize: '0.9rem', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Finalizar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </div>
+            <style>{`
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    .print-area, .print-area * {
+                        visibility: visible;
+                    }
+                    .print-area {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                    }
+                }
+            `}</style>
+        </>
     );
 }
 

@@ -148,9 +148,29 @@ export default function ProcurementPage() {
     if (profile?.specialty) {
       setFilterCategory(profile.specialty);
     }
-    fetchTasks(signal, profile?.specialty || "");
-    fetchProviders(signal);
-    fetchConversions(signal);
+
+    const initLoad = async () => {
+      setLoading(true);
+      setIsConsolidating(true);
+      try {
+        await runConsolidation(signal);
+      } catch (err) {
+        if (!isAbortError(err)) {
+          console.error("Auto consolidation failed:", err);
+        }
+      } finally {
+        if (isMounted.current && !signal.aborted) {
+          setIsConsolidating(false);
+          await Promise.all([
+            fetchTasks(signal, profile?.specialty || ""),
+            fetchProviders(signal),
+            fetchConversions(signal)
+          ]);
+        }
+      }
+    };
+
+    initLoad();
 
     return () => {
       isMounted.current = false;
@@ -527,98 +547,105 @@ export default function ProcurementPage() {
       .sort((a, b) => (a.product || "").localeCompare(b.product || ""));
   };
 
+  const runConsolidation = async (signal?: AbortSignal) => {
+    const targetDate = await getTargetDeliveryDate(signal);
+    if (!targetDate) return;
+
+    // 1. Obtener items de pedidos ACTIVOS (SIN RESTRICCIÓN DE FECHA - DESACTIVADO TEMPORALMENTE)
+    const { data: items, error: fetchErr } = await supabase
+      .from("order_items")
+      .select(
+        `
+                  id, 
+                  quantity, 
+                  product_id, 
+                  variant_label,
+                  products(unit_of_measure),
+                  orders!inner(delivery_date, status)
+              `,
+      )
+      .in("orders.status", ["para_compra", "approved", "picking"])
+      .abortSignal(signal as any);
+
+    if (fetchErr) {
+      if (isAbortError(fetchErr)) return;
+      console.error("Error fetching items for consolidation:", fetchErr);
+      return;
+    }
+
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    // 2. Agrupar por producto, variante Y FECHA
+    const totals: Record<
+      string,
+      {
+        qty: number;
+        unit: string;
+        pid: string;
+        variant: string;
+        delivery_date: string;
+      }
+    > = {};
+    items.forEach((item) => {
+      const variant = item.variant_label || "";
+      const dDate = item.orders?.delivery_date || targetDate;
+      const key = `${item.product_id}_${variant}_${dDate}`;
+      if (!totals[key]) {
+        totals[key] = {
+          qty: 0,
+          unit: item.products?.unit_of_measure || "kg",
+          pid: item.product_id,
+          variant: variant,
+          delivery_date: dDate,
+        };
+      }
+      totals[key].qty += item.quantity;
+    });
+
+    // 3. Upsert en procurement_tasks (Evita duplicados por llave PID + VAR + FECHA)
+    for (const key in totals) {
+      const task = totals[key];
+      const { data: existing } = await supabase
+        .from("procurement_tasks")
+        .select("id, total_requested")
+        .eq("product_id", task.pid)
+        .eq("variant_label", task.variant)
+        .eq("delivery_date", task.delivery_date)
+        .abortSignal(signal as any)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("procurement_tasks")
+          .update({ total_requested: task.qty })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("procurement_tasks").insert({
+          product_id: task.pid,
+          variant_label: task.variant,
+          total_requested: task.qty,
+          unit: task.unit,
+          delivery_date: task.delivery_date,
+        });
+      }
+    }
+  };
+
   const handleConsolidate = async () => {
     setIsConsolidating(true);
-
-    // Usar la misma lógica de fecha objetivo
-    const targetDate = await getTargetDeliveryDate();
-
+    setLoading(true);
     try {
-      // 1. Obtener items de pedidos ACTIVOS (SIN RESTRICCIÓN DE FECHA - DESACTIVADO TEMPORALMENTE)
-      const { data: items } = (await supabase
-        .from("order_items")
-        .select(
-          `
-                    id, 
-                    quantity, 
-                    product_id, 
-                    variant_label,
-                    products(unit_of_measure),
-                    orders!inner(delivery_date, status)
-                `,
-        )
-        // .eq('orders.delivery_date', targetDate) // Filtro desactivado
-        .in("orders.status", ["para_compra", "approved"])) as { data: any[] | null };
-
-      if (!items || items.length === 0) {
-        alert(
-          "No hay pedidos nuevos para consolidar para la fecha: " + targetDate,
-        );
-        setIsConsolidating(false);
-        return;
-      }
-
-      // 2. Agrupar por producto, variante Y FECHA
-      const totals: Record<
-        string,
-        {
-          qty: number;
-          unit: string;
-          pid: string;
-          variant: string;
-          delivery_date: string;
-        }
-      > = {};
-      items.forEach((item) => {
-        const variant = item.variant_label || "";
-        const dDate = item.orders?.delivery_date || targetDate;
-        const key = `${item.product_id}_${variant}_${dDate}`;
-        if (!totals[key]) {
-          totals[key] = {
-            qty: 0,
-            unit: item.products?.unit_of_measure || "kg",
-            pid: item.product_id,
-            variant: variant,
-            delivery_date: dDate,
-          };
-        }
-        totals[key].qty += item.quantity;
-      });
-
-      // 3. Upsert en procurement_tasks (Evita duplicados por llave PID + VAR + FECHA)
-      for (const key in totals) {
-        const task = totals[key];
-        const { data: existing } = await supabase
-          .from("procurement_tasks")
-          .select("id, total_requested")
-          .eq("product_id", task.pid)
-          .eq("variant_label", task.variant)
-          .eq("delivery_date", task.delivery_date)
-          .maybeSingle();
-
-        if (existing) {
-          await supabase
-            .from("procurement_tasks")
-            .update({ total_requested: task.qty })
-            .eq("id", existing.id);
-        } else {
-          await supabase.from("procurement_tasks").insert({
-            product_id: task.pid,
-            variant_label: task.variant,
-            total_requested: task.qty,
-            unit: task.unit,
-            delivery_date: task.delivery_date,
-          });
-        }
-      }
-
-      alert(`✅ Sincronización Exitosa (Filtro de fecha desactivado)`);
+      await runConsolidation();
+      alert(`✅ Sincronización Exitosa`);
       fetchTasks();
     } catch (e: unknown) {
-      if (isAbortError(e)) return;
       console.error(e);
+      alert("Error al consolidar pedidos: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setIsConsolidating(false);
+      setLoading(false);
     }
   };
 
@@ -1106,6 +1133,35 @@ export default function ProcurementPage() {
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
+              onClick={handleConsolidate}
+              disabled={isConsolidating}
+              style={{
+                backgroundColor: "var(--ops-primary)",
+                color: "white",
+                border: "none",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "8px",
+                fontSize: "0.75rem",
+                fontWeight: "900",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                opacity: isConsolidating ? 0.6 : 1,
+              }}
+            >
+              <RefreshCw
+                size={13}
+                style={{
+                  marginRight: '4px',
+                  verticalAlign: 'middle',
+                  animation: isConsolidating ? 'spin 1.5s linear infinite' : 'none'
+                }}
+              />
+              {isConsolidating ? "CONSOLIDANDO..." : "CONSOLIDAR"}
+            </button>
+
+            <button
               className="header-tutor-btn"
               onClick={() => { setShowGuide(true); setGuideStep(0); }}
               style={{
@@ -1531,7 +1587,7 @@ export default function ProcurementPage() {
         <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--ops-primary)", animation: "spin 2s linear infinite", marginBottom: "1rem" }}><RefreshCw size={36} /></div>
           <p style={{ color: "var(--ops-text-muted)", fontWeight: "700", letterSpacing: "0.05em" }}>
-            BUSCANDO PEDIDOS...
+            {isConsolidating ? "SINCRONIZANDO Y CONSOLIDANDO PEDIDOS DE HOY..." : "BUSCANDO PEDIDOS..."}
           </p>
         </div>
       ) : tasks.length === 0 ? (
@@ -1548,7 +1604,7 @@ export default function ProcurementPage() {
             ¡Todo bajo control!
           </h3>
           <p style={{ color: "var(--ops-text-muted)", fontSize: "1rem", maxWidth: "250px", margin: "0 auto", lineHeight: "1.4" }}>
-            {filterCategory !== "Ver Todo"
+            {filterCategory && filterCategory !== "Ver Todo"
               ? `No hay compras pendientes en la categoría de ${filterCategory}.`
               : "No se han encontrado compras generadas para esta jornada."}
           </p>

@@ -164,7 +164,20 @@ export default function RecogidaPage() {
             const day = String(nowBogota.getDate()).padStart(2, '0');
             const todayBogota = `${year}-${month}-${day}`;
 
-            // Fetch pending pickups (active) and today's completed/rejected pickups
+            // Jornada de Compra starts at 5:00 PM (17:00) of previous day (Colombia time)
+            const startOfShift = new Date(nowBogota);
+            if (nowBogota.getHours() >= 17) {
+                startOfShift.setHours(17, 0, 0, 0);
+            } else {
+                startOfShift.setDate(nowBogota.getDate() - 1);
+                startOfShift.setHours(17, 0, 0, 0);
+            }
+            const y = startOfShift.getFullYear();
+            const m = String(startOfShift.getMonth() + 1).padStart(2, '0');
+            const d = String(startOfShift.getDate()).padStart(2, '0');
+            const shiftStartISO = `${y}-${m}-${d}T22:00:00.000Z`; // 17:00 Bogota is 22:00 UTC
+
+            // Fetch pending pickups (active) and today's completed/rejected pickups (since shift start)
             const { data, error } = await supabase
                 .from('purchases')
                 .select(`
@@ -179,7 +192,7 @@ export default function RecogidaPage() {
                         name
                     )
                 `)
-                .or(`status.eq.pending_pickup,status.eq.partial_pickup,and(status.eq.picked_up,created_at.gte.${todayBogota}),and(status.eq.rejected,created_at.gte.${todayBogota})`)
+                .or(`status.eq.pending_pickup,status.eq.partial_pickup,and(status.eq.picked_up,created_at.gte.${shiftStartISO}),and(status.eq.rejected,created_at.gte.${shiftStartISO})`)
                 .order('estimated_pickup_time', { ascending: true });
 
             if (error) throw error;

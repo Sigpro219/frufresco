@@ -76,14 +76,23 @@ export async function POST(request: Request) {
                 
                 // Tratar de buscar la hora de salida de su ruta
                 let departureMin = timeToMinutes('04:30'); // Default
+                let loadDuration = 150; // Fallback to 150 mins if no snapshot/params found
                 const routeSnapshot = activeRoutes?.find(r => r.id === stop.route_id);
                 if (routeSnapshot?.logic_parameters_snapshot && typeof routeSnapshot.logic_parameters_snapshot === 'object') {
                     const snap = routeSnapshot.logic_parameters_snapshot as Record<string, any>;
                     if (snap.fleet_start_time) {
                         departureMin = timeToMinutes(snap.fleet_start_time);
                     }
+                    if (snap.warehouse_base_load_time !== undefined) {
+                        const baseLoad = parseFloat(snap.warehouse_base_load_time) || 15;
+                        const timePer10 = parseFloat(snap.warehouse_time_per_10_crates_load) || 5;
+                        // Contar el total de canastillas en esa ruta para estimar la duración real
+                        const routeStopsList = activeStops.filter((s: any) => s.route_id === stop.route_id);
+                        const routeTotalCrates = routeStopsList.reduce((cSum: number, s: any) => cSum + (s.order?.crates_count || 1), 0);
+                        loadDuration = Math.round(baseLoad + (routeTotalCrates * (timePer10 / 10))) + 15; // 15 min buffer
+                    }
                 }
-                const startMin = departureMin - 150;
+                const startMin = departureMin - loadDuration;
                 const endMin = departureMin;
 
                 o.warehouse_spaces.forEach((s: number) => {
@@ -118,12 +127,22 @@ export async function POST(request: Request) {
             const vehicle = vehicles.find((v: any) => v.id === vehicleId);
             const departureTimeStr = routeStartTimes?.[vehicleId] || params?.fleet_start_time || '04:30';
             const departureMin = timeToMinutes(departureTimeStr);
-            const routeStartMin = departureMin - 150;
-            const routeEndMin = departureMin;
 
-            // Calculate load for vehicle
+            // Calculate load and total crates for vehicle
             const vehicleOrders = allOrders.filter(o => orderIds.includes(o.id));
             const totalKilos = vehicleOrders.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0) || 0;
+            const totalCrates = vehicleOrders.reduce((sum, o) => {
+                const cCount = Math.ceil((o.total_weight_kg || 0) / avg_kg_per_crate) || 1;
+                return sum + cCount;
+            }, 0);
+
+            // Calculate load duration dynamically from params
+            const baseLoad = parseFloat(params?.warehouse_base_load_time) || 15;
+            const timePer10 = parseFloat(params?.warehouse_time_per_10_crates_load) || 5;
+            const loadDuration = Math.round(baseLoad + (totalCrates * (timePer10 / 10)));
+
+            const routeStartMin = departureMin - loadDuration - 15; // 15 min safety buffer
+            const routeEndMin = departureMin;
             
             // Check if the driver_id from fleet_vehicles actually exists in profiles
             let validDriverId = null;
@@ -156,6 +175,8 @@ export async function POST(request: Request) {
             if (rErr) throw rErr;
 
             // 2. Create Route Stops, Allocate Spaces, and Update Orders
+            const routeSpacesList: number[] = [];
+            const orderSpacesMap: Record<string, number[]> = {};
             for (let i = 0; i < orderIds.length; i++) {
                 const orderId = orderIds[i];
                 const orderDetail = allOrders.find(o => String(o.id).trim().toLowerCase() === String(orderId).trim().toLowerCase());
@@ -192,6 +213,8 @@ export async function POST(request: Request) {
                         spaceCandidate++;
                     }
                     console.log(`[SPACE ALLOC] Assigned spaces for Order ${orderId}: [${spacesAssigned.join(', ')}]`);
+                    routeSpacesList.push(...spacesAssigned);
+                    orderSpacesMap[orderId] = spacesAssigned;
                 }
 
                 const { error: updateErr } = await supabase.from('orders').update({
@@ -206,7 +229,17 @@ export async function POST(request: Request) {
                 }
             }
             
-            routeConfirmations.push(route.id);
+            routeConfirmations.push({
+                id: route.id,
+                vehicle_plate: route.vehicle_plate,
+                driver_name: vehicle?.driver_name || 'Sin Asignar',
+                total_kilos: totalKilos,
+                stops_count: orderIds.length,
+                departure_time: departureTimeStr,
+                warehouse_spaces: Array.from(new Set(routeSpacesList)).sort((a, b) => a - b),
+                order_ids: orderIds,
+                order_spaces: orderSpacesMap
+            });
         }
 
         return NextResponse.json({ success: true, routeConfirmations });

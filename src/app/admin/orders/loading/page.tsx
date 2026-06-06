@@ -987,7 +987,6 @@ export default function OrderLoadingPage() {
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#E5E7EB' }} />
 
                         <button onClick={() => setActiveTab('emails')} style={{
-                            border: 'none',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',

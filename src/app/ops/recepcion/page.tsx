@@ -148,7 +148,20 @@ export default function ReceptionPage() {
             const todayBogota = `${year}-${month}-${day}`;
             setTargetDateLabel(todayBogota);
 
-            // Fetch ALL relevant statuses for Reception context to calculate global progress
+            // Jornada de Compra starts at 5:00 PM (17:00) of previous day (Colombia time)
+            const startOfShift = new Date(nowBogota);
+            if (nowBogota.getHours() >= 17) {
+                startOfShift.setHours(17, 0, 0, 0);
+            } else {
+                startOfShift.setDate(nowBogota.getDate() - 1);
+                startOfShift.setHours(17, 0, 0, 0);
+            }
+            const y = startOfShift.getFullYear();
+            const m = String(startOfShift.getMonth() + 1).padStart(2, '0');
+            const d = String(startOfShift.getDate()).padStart(2, '0');
+            const shiftStartISO = `${y}-${m}-${d}T22:00:00.000Z`; // 17:00 Bogota is 22:00 UTC
+
+            // Fetch ALL relevant statuses for Reception context to calculate global progress (since shift start)
             const { data, error } = await supabase
                 .from('purchases')
                 .select(`
@@ -164,7 +177,7 @@ export default function ReceptionPage() {
                         name
                     )
                 `)
-                .gte('created_at', todayBogota)
+                .gte('created_at', shiftStartISO)
                 .in('status', ['picked_up', 'partial_pickup', 'receiving', 'received_ok', 'received_review', 'received_rejected', 'received_partial'])
                 .order('created_at', { ascending: false });
 
