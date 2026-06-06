@@ -11,6 +11,8 @@ export default function EmailDraftsModule() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
+  const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
     fetchDrafts();
@@ -60,6 +62,32 @@ export default function EmailDraftsModule() {
       console.error('Error deleting draft:', err);
     }
   };
+
+  useEffect(() => {
+    if (selectedDraft) {
+      const meta = getDraftMetadata(selectedDraft);
+      if (meta.address && meta.address !== 'No detectado') {
+        setGeocoding(true);
+        setDraftCoordinates(null);
+        fetch(`/api/geocode?address=${encodeURIComponent(meta.address)}&city=Bogotá`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+              const loc = data.results[0].geometry.location;
+              setDraftCoordinates({ lat: loc.lat, lng: loc.lng });
+            }
+          })
+          .catch(err => console.error("Geocode error", err))
+          .finally(() => setGeocoding(false));
+      } else {
+        setDraftCoordinates(null);
+        setGeocoding(false);
+      }
+    } else {
+      setDraftCoordinates(null);
+      setGeocoding(false);
+    }
+  }, [selectedDraft]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -231,6 +259,13 @@ export default function EmailDraftsModule() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={16} /> {getDraftMetadata(selectedDraft).address || 'Dirección no detectada'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} /> {getDraftMetadata(selectedDraft).phone || 'Teléfono no detectado'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
+                  {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
+                  {draftCoordinates && (
+                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600, display: 'flex', gap: '12px', marginTop: '4px' }}>
+                      <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
+                      <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
