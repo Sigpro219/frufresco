@@ -318,6 +318,16 @@ export async function POST(req: Request) {
         });
         console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
 
+        // Guarda copia en la tabla mail para el historial
+        await supabaseAdmin.from('mail').insert({
+          to_email: senderEmail,
+          subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
+          message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
+        });
+
       } catch (emailError) {
         console.error('[Email Inbound] Failed to send confirmation email:', emailError);
       }

@@ -122,12 +122,13 @@ export async function POST(req: Request) {
     const resData = await res.json();
     console.log('[Mail Queue Processor] Resend response:', resData);
 
-    // 4. Update status to 'sent'
+    // 4. Update status to 'sent' and save the generated template message
     await supabase
       .from('mail')
       .update({
         status: 'sent',
-        sent_at: new Date().toISOString()
+        sent_at: new Date().toISOString(),
+        message: { html: htmlContent, text: textContent }
       })
       .eq('id', id);
 
