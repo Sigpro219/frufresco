@@ -32,13 +32,8 @@ export async function POST(req: Request) {
 
     console.log(`[Email Inbound] Received mail from ${senderEmail} with subject: ${subject}`);
 
-    // 1. Identify Client in our database
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('id, company_name, contact_name')
-      .eq('email', senderEmail)
-      .limit(1)
-      .maybeSingle();
+    // 1. Declare client profile reference
+    let profile: any = null;
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
@@ -48,7 +43,7 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
-    let extractedData = {
+    let extractedData: any = {
       clientInDocument: '',
       documentType: 'Email',
       items: []
@@ -150,7 +145,52 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Save draft to public.order_drafts
+    // 3. Identify Client in our database (only active profiles, and matching names for B2C)
+    const { data: candidateProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, company_name, contact_name, role, is_active')
+      .eq('email', senderEmail)
+      .eq('is_active', true);
+
+    if (candidateProfiles && candidateProfiles.length > 0) {
+      const detectedName = extractedData.clientInDocument || '';
+      
+      const namesMatch = (detName: string, profName: string): boolean => {
+        if (!detName || !profName) return false;
+        const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        
+        const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+        const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+        
+        return words1.some(w => words2.includes(w));
+      };
+
+      if (candidateProfiles.length === 1) {
+        const candidate = candidateProfiles[0];
+        if (candidate.role === 'b2b_client') {
+          profile = candidate;
+        } else {
+          if (!detectedName || namesMatch(detectedName, candidate.contact_name || '') || namesMatch(detectedName, candidate.company_name || '')) {
+            profile = candidate;
+          }
+        }
+      } else {
+        const exactOrSimilarMatch = candidateProfiles.find(p => 
+          namesMatch(detectedName, p.contact_name || '') || namesMatch(detectedName, p.company_name || '')
+        );
+        if (exactOrSimilarMatch) {
+          profile = exactOrSimilarMatch;
+        } else {
+          const b2bCandidate = candidateProfiles.find(p => p.role === 'b2b_client');
+          if (b2bCandidate) {
+            profile = b2bCandidate;
+          }
+        }
+      }
+    }
+
+    // 4. Save draft to public.order_drafts
     // Use an explicit UUID so we can reference its short ID immediately
     const draftUuid = crypto.randomUUID();
     const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
@@ -200,6 +240,30 @@ export async function POST(req: Request) {
 
         const today = new Date().toLocaleDateString('es-CO');
         
+        // Cargar memoria de alias de productos
+        const { data: aliasRecord } = await supabaseAdmin
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'ai_product_aliases')
+          .maybeSingle();
+
+        let aliases: Record<string, string> = {};
+        if (aliasRecord?.value) {
+          try {
+            aliases = typeof aliasRecord.value === 'string' ? JSON.parse(aliasRecord.value) : aliasRecord.value;
+          } catch (e) {
+            console.error('[Email Inbound] Failed to parse aliases:', e);
+          }
+        }
+
+        // Formateador local de moneda (separador de miles con punto)
+        const formatMoneyLocal = (num: number): string => {
+          if (num === null || num === undefined || isNaN(num)) return '$0';
+          const parts = Math.round(num).toFixed(0).split('.');
+          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          return `$${parts.join(',')}`;
+        };
+
         // Build items HTML and calculate total
         let itemsHtml = '';
         let totalOrderAmount = 0;
@@ -213,16 +277,37 @@ export async function POST(req: Request) {
           const searchName = item.originalName || item.name || '';
           
           if (searchName) {
-            // Search in DB
-            const { data: matchedProducts } = await supabaseAdmin
-              .from('products')
-              .select('base_price, unit_of_measure')
-              .ilike('name', `%${searchName}%`)
-              .limit(1);
-            
-            if (matchedProducts && matchedProducts.length > 0) {
-              price = matchedProducts[0].base_price || 0;
-              unit = matchedProducts[0].unit_of_measure || '';
+            const cleanSearch = searchName.toLowerCase().trim();
+            const aliasProductId = aliases[cleanSearch];
+            let matchedProduct = null;
+
+            if (aliasProductId) {
+              const { data } = await supabaseAdmin
+                .from('products')
+                .select('name, base_price, unit_of_measure')
+                .eq('id', aliasProductId)
+                .maybeSingle();
+              if (data) {
+                matchedProduct = data;
+              }
+            }
+
+            if (!matchedProduct) {
+              // Fallback a búsqueda ilike
+              const { data: matchedProducts } = await supabaseAdmin
+                .from('products')
+                .select('name, base_price, unit_of_measure')
+                .ilike('name', `%${searchName}%`)
+                .limit(1);
+              
+              if (matchedProducts && matchedProducts.length > 0) {
+                matchedProduct = matchedProducts[0];
+              }
+            }
+
+            if (matchedProduct) {
+              price = matchedProduct.base_price || 0;
+              unit = matchedProduct.unit_of_measure || '';
             }
           }
           
@@ -231,7 +316,7 @@ export async function POST(req: Request) {
           
           let lineTotalDisplay = '';
           if (price > 0) {
-            lineTotalDisplay = `$${lineTotal.toLocaleString('es-CO')}`;
+            lineTotalDisplay = formatMoneyLocal(lineTotal);
           } else {
             lineTotalDisplay = 'Por confirmar';
             hasPendingPrices = true;
@@ -240,19 +325,19 @@ export async function POST(req: Request) {
           const productNameDisplay = `${searchName || 'Producto'}${unit ? ` (${unit})` : ''}`;
 
           itemsHtml += `
-            <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 12px 5px; color: #333;">${productNameDisplay}</td>
-                <td style="padding: 12px 5px; text-align: center; color: #666;">${qty}</td>
-                <td style="padding: 12px 5px; text-align: right; color: #333; font-weight: bold;">${lineTotalDisplay}</td>
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
+                <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qty}</td>
+                <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
             </tr>
           `;
         }
         
         let totalOrderDisplay = '';
         if (totalOrderAmount > 0) {
-          totalOrderDisplay = `Total Aprox: $${totalOrderAmount.toLocaleString('es-CO')}`;
+          totalOrderDisplay = `Total Aprox: ${formatMoneyLocal(totalOrderAmount)}`;
           if (hasPendingPrices) {
-             totalOrderDisplay += ' <span style="font-size: 11px; color: #666;">(+ Ítems por confirmar)</span>';
+             totalOrderDisplay += ' <span style="font-size: 11px; color: #6B7280; font-weight: normal;">(+ Ítems por confirmar)</span>';
           }
         } else {
           totalOrderDisplay = 'Total: A confirmar en despacho';
@@ -268,23 +353,23 @@ export async function POST(req: Request) {
         const draftIdStr = shortCode;
 
         const emailHtml = `
-<div style="font-family: 'Playfair Display', serif; color: #286a36; padding: 40px; background-color: #ffffff; border-radius: 20px; max-width: 600px; margin: auto;">
+<div style="font-family: 'Outfit', sans-serif; color: #111827; padding: 40px; background-color: #F9FAFB; border-radius: 20px; max-width: 600px; margin: auto; border: 1px solid #E5E7EB;">
     <center>
-        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;">
-        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
-        <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
+        <img src="https://frufresco.com/logo.png" width="120" style="margin-bottom: 20px;" alt="FruFresco Logo">
+        <h1 style="color: #10B981; font-weight: 800; font-size: 24px; margin-bottom: 5px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
+        <p style="font-size: 14px; color: #6B7280; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
     
-    <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-        <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
+    <div style="background: white; padding: 30px; border-radius: 16px; border-left: 5px solid #10B981; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-top: 20px;">
+        <h3 style="color: #10B981; margin-top: 0; font-size: 18px; border-bottom: 1px solid #F3F4F6; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
+        <p style="font-size: 13px; color: #6B7280; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
         
         <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
             <thead>
-                <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
-                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
+                <tr style="border-bottom: 2px solid #E5E7EB; color: #9CA3AF; text-transform: uppercase; font-size: 11px; text-align: left;">
+                    <th style="padding-bottom: 8px; font-weight: bold;">Producto</th>
+                    <th style="padding-bottom: 8px; font-weight: bold; text-align: center;">Cant.</th>
+                    <th style="padding-bottom: 8px; font-weight: bold; text-align: right;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -292,26 +377,28 @@ export async function POST(req: Request) {
             </tbody>
         </table>
         
-        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-            <p style="font-size: 16px; color: #286a36; margin: 0;"><b>${totalOrderDisplay}</b></p>
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #E5E7EB; text-align: right;">
+            <p style="font-size: 16px; color: #111827; margin: 0; font-weight: 800;">
+                <span style="color: #10B981;">${totalOrderDisplay}</span>
+            </p>
         </div>
     </div>
 
-    <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
+    <p style="margin-top: 30px; text-align: center; color: #6B7280; font-size: 14px; line-height: 1.5;">
         Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
         Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
     </p>
     
-    <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
+    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 40px 0;">
     
     <center>
-        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
+        <p style="font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Mesa</p>
     </center>
 </div>
         `;
 
         await transporter.sendMail({
-          from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
+          from: `"FruFresco (Pedidos)" <${process.env.SMTP_USER}>`,
           to: senderEmail,
           subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
           html: emailHtml,

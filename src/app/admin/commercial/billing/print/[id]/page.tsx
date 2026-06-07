@@ -23,8 +23,8 @@ export default function BillingPrintPage() {
                 const { data: ordersData } = await supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, total,
-                        profiles(company_name, contact_name, contact_phone, address),
+                        id, sequence_id, created_at, total, document_type, remission_with_prices,
+                        profiles(company_name, contact_name, contact_phone, address, document_type, remission_with_prices),
                         order_items(quantity, unit_price, nickname, products(name, sku, unit_of_measure))
                     `)
                     .eq('billing_cut_id', id);
@@ -61,75 +61,85 @@ export default function BillingPrintPage() {
                 </button>
             </div>
 
-            {orders.map((order, index) => (
-                <div key={order.id} className="page-break" style={{ padding: '40px', border: '1px solid #000', marginBottom: '40px', position: 'relative' }}>
-                    {/* Header Documento */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
-                        <div>
-                            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>REMISION DE ENTREGA</h1>
-                            <p style={{ margin: '5px 0' }}>Frubana Express Colombia</p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '18px', fontWeight: 'bold' }}>#{getFriendlyOrderId(order)}</div>
-                            <p style={{ margin: 0 }}>{new Date(order.created_at).toLocaleDateString()}</p>
-                        </div>
-                    </div>
+            {orders.map((order, index) => {
+                const docType = order.document_type || order.profiles?.document_type || 'invoice';
+                // Si es factura (invoice), siempre se muestran precios. Si es remisión, depende de remission_with_prices.
+                const showPrices = docType === 'invoice' ? true : (order.remission_with_prices ?? order.profiles?.remission_with_prices ?? true);
+                const titleText = docType === 'invoice' ? 'FACTURA DE VENTA' : 'REMISION DE ENTREGA';
+                const footerSender = docType === 'invoice' ? 'FruFresco Facturación' : 'FruFresco Despachos';
 
-                    {/* Info Cliente */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '5px' }}>
-                        <div>
-                            <div style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Cliente</div>
-                            <div style={{ fontWeight: 'bold' }}>{order.profiles?.company_name}</div>
-                            <div>{order.profiles?.contact_name}</div>
+                return (
+                    <div key={order.id} className="page-break" style={{ padding: '40px', border: '1px solid #000', marginBottom: '40px', position: 'relative' }}>
+                        {/* Header Documento */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
+                            <div>
+                                <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{titleText}</h1>
+                                <p style={{ margin: '5px 0' }}>FruFresco Colombia</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>#{getFriendlyOrderId(order)}</div>
+                                <p style={{ margin: 0 }}>{new Date(order.created_at).toLocaleDateString()}</p>
+                            </div>
                         </div>
-                        <div>
-                            <div style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Destino / Observaciones</div>
-                            <div style={{ fontWeight: 'bold' }}>{order.profiles?.address}</div>
-                            <div>Tel: {order.profiles?.contact_phone}</div>
-                        </div>
-                    </div>
 
-                    {/* Detalle Productos */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '2px solid #000' }}>
-                                <th style={{ textAlign: 'left', padding: '10px 5px' }}>REF</th>
-                                <th style={{ textAlign: 'left', padding: '10px 5px' }}>PRODUCTO</th>
-                                <th style={{ textAlign: 'right', padding: '10px 5px' }}>CANT</th>
-                                <th style={{ textAlign: 'right', padding: '10px 5px' }}>UNI</th>
-                                <th style={{ textAlign: 'right', padding: '10px 5px' }}>TOTAL</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {order.order_items.map((item: any, i: number) => (
-                                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                                    <td style={{ padding: '10px 5px' }}>{item.products.sku}</td>
-                                    <td style={{ padding: '10px 5px' }}>{item.nickname || item.products.name}</td>
-                                    <td style={{ padding: '10px 5px', textAlign: 'right' }}>{item.quantity}</td>
-                                    <td style={{ padding: '10px 5px', textAlign: 'right' }}>${item.unit_price?.toLocaleString()}</td>
-                                    <td style={{ padding: '10px 5px', textAlign: 'right' }}>${(item.quantity * item.unit_price)?.toLocaleString()}</td>
+                        {/* Info Cliente */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '5px' }}>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Cliente</div>
+                                <div style={{ fontWeight: 'bold' }}>{order.profiles?.company_name}</div>
+                                <div>{order.profiles?.contact_name}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Destino / Observaciones</div>
+                                <div style={{ fontWeight: 'bold' }}>{order.profiles?.address}</div>
+                                <div>Tel: {order.profiles?.contact_phone}</div>
+                            </div>
+                        </div>
+
+                        {/* Detalle Productos */}
+                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #000' }}>
+                                    <th style={{ textAlign: 'left', padding: '10px 5px' }}>REF</th>
+                                    <th style={{ textAlign: 'left', padding: '10px 5px' }}>PRODUCTO</th>
+                                    <th style={{ textAlign: 'right', padding: '10px 5px' }}>CANT</th>
+                                    {showPrices && <th style={{ textAlign: 'right', padding: '10px 5px' }}>UNI</th>}
+                                    {showPrices && <th style={{ textAlign: 'right', padding: '10px 5px' }}>TOTAL</th>}
                                 </tr>
-                            ))}
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colSpan={4} style={{ textAlign: 'right', padding: '20px 5px', fontWeight: 'bold' }}>VALOR TOTAL</td>
-                                <td style={{ textAlign: 'right', padding: '20px 5px', fontWeight: 'bold', fontSize: '18px' }}>${order.total?.toLocaleString()}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {order.order_items.map((item: any, i: number) => (
+                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ padding: '10px 5px' }}>{item.products?.sku || '---'}</td>
+                                        <td style={{ padding: '10px 5px' }}>{item.nickname || item.products?.name}</td>
+                                        <td style={{ padding: '10px 5px', textAlign: 'right' }}>{item.quantity}</td>
+                                        {showPrices && <td style={{ padding: '10px 5px', textAlign: 'right' }}>${item.unit_price?.toLocaleString('es-CO')}</td>}
+                                        {showPrices && <td style={{ padding: '10px 5px', textAlign: 'right' }}>${(item.quantity * item.unit_price)?.toLocaleString('es-CO')}</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                            {showPrices && (
+                                <tfoot>
+                                    <tr>
+                                        <td colSpan={4} style={{ textAlign: 'right', padding: '20px 5px', fontWeight: 'bold' }}>VALOR TOTAL</td>
+                                        <td style={{ textAlign: 'right', padding: '20px 5px', fontWeight: 'bold', fontSize: '18px' }}>${order.total?.toLocaleString('es-CO')}</td>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
 
-                    {/* Firma */}
-                    <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between' }}>
-                        <div style={{ borderTop: '1px solid #000', width: '250px', paddingTop: '10px', textAlign: 'center' }}>
-                            Frubana Despachos
-                        </div>
-                        <div style={{ borderTop: '1px solid #000', width: '250px', paddingTop: '10px', textAlign: 'center' }}>
-                            Recibe Conforme (Firma y Sello)
+                        {/* Firma */}
+                        <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'space-between' }}>
+                            <div style={{ borderTop: '1px solid #000', width: '250px', paddingTop: '10px', textAlign: 'center' }}>
+                                {footerSender}
+                            </div>
+                            <div style={{ borderTop: '1px solid #000', width: '250px', paddingTop: '10px', textAlign: 'center' }}>
+                                Recibe Conforme (Firma y Sello)
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
