@@ -30,7 +30,15 @@ export async function GET() {
             });
         }
 
-        return NextResponse.json(stockMap);
+        return new NextResponse(JSON.stringify(stockMap), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
+        });
     } catch (err: any) {
         console.error('Exception in inventory stocks route:', err.message);
         return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });

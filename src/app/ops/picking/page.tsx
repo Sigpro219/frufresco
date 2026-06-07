@@ -134,7 +134,14 @@ export default function PickingExecutionPage() {
             const stockMap: Record<string, number> = {};
             if (productIds.length > 0) {
                 try {
-                    const stockRes = await fetch('/api/inventory/stocks', { signal });
+                    const stockRes = await fetch(`/api/inventory/stocks?t=${Date.now()}`, { 
+                        signal,
+                        cache: 'no-store',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
                     if (stockRes.ok) {
                         const allStocks = await stockRes.json();
                         productIds.forEach(pId => {
