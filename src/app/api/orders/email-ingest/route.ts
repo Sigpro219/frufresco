@@ -256,6 +256,18 @@ export async function POST(req: Request) {
           }
         }
 
+        // Fetch active products once for in-memory smart matching
+        let dbProducts: any[] = [];
+        try {
+          const { data: productsData } = await supabaseAdmin
+            .from('products')
+            .select('id, name, base_price, unit_of_measure')
+            .eq('is_active', true);
+          if (productsData) dbProducts = productsData;
+        } catch (e) {
+          console.error('[Email Inbound] Failed to fetch active products:', e);
+        }
+
         // Formateador local de moneda (separador de miles con punto)
         const formatMoneyLocal = (num: number): string => {
           if (num === null || num === undefined || isNaN(num)) return '$0';
@@ -282,27 +294,17 @@ export async function POST(req: Request) {
             let matchedProduct = null;
 
             if (aliasProductId) {
-              const { data } = await supabaseAdmin
-                .from('products')
-                .select('name, base_price, unit_of_measure')
-                .eq('id', aliasProductId)
-                .maybeSingle();
-              if (data) {
-                matchedProduct = data;
-              }
+              matchedProduct = dbProducts.find(p => p.id === aliasProductId);
             }
 
             if (!matchedProduct) {
-              // Fallback a búsqueda ilike
-              const { data: matchedProducts } = await supabaseAdmin
-                .from('products')
-                .select('name, base_price, unit_of_measure')
-                .ilike('name', `%${searchName}%`)
-                .limit(1);
-              
-              if (matchedProducts && matchedProducts.length > 0) {
-                matchedProduct = matchedProducts[0];
-              }
+              // Smart Auto Match (matching the UI algorithm)
+              const firstWord = cleanSearch.split(' ')[0]?.replace(/[()0-9]/g, '');
+              matchedProduct = dbProducts.find((p: any) => {
+                const prodNameLower = p.name.toLowerCase();
+                return cleanSearch.includes(prodNameLower) || 
+                       (firstWord && firstWord.length > 2 && prodNameLower.includes(firstWord));
+              });
             }
 
             if (matchedProduct) {
