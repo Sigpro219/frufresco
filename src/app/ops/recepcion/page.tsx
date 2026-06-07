@@ -1227,8 +1227,6 @@ export default function ReceptionPage() {
                                         <input
                                             type="file"
                                             id="rejectionPhotoInput"
-                                            accept="image/*"
-                                            capture="environment"
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
@@ -1236,18 +1234,28 @@ export default function ReceptionPage() {
                                                     setRejectionPreview(URL.createObjectURL(file));
                                                 }
                                             }}
-                                            style={{ display: 'none' }}
+                                             style={{
+                                                 position: 'absolute',
+                                                 width: '1px',
+                                                 height: '1px',
+                                                 padding: '0',
+                                                 margin: '-1px',
+                                                 overflow: 'hidden',
+                                                 clip: 'rect(0, 0, 0, 0)',
+                                                 whiteSpace: 'nowrap',
+                                                 border: '0'
+                                             }}
                                         />
                                         {rejectionPreview ? (
                                             <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--ops-border)', backgroundColor: '#000' }}>
                                                 <img src={rejectionPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                                 <div style={{ position: 'absolute', bottom: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                                                    <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</button>
+                                                    <label htmlFor="rejectionPhotoInput" style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</label>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div
-                                                onClick={() => document.getElementById("rejectionPhotoInput")?.click()}
+                                            <label
+                                                htmlFor="rejectionPhotoInput"
                                                 style={{
                                                     width: '100%',
                                                     minHeight: '110px',
@@ -1266,7 +1274,7 @@ export default function ReceptionPage() {
                                                 <Camera size={32} />
                                                 <span style={{ fontSize: '0.85rem', fontWeight: '900', marginTop: '0.3rem' }}>FOTO OBLIGATORIA — TAP PARA AGREGAR</span>
                                                 <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: 0.8 }}>Se requiere evidencia para registrar el rechazo</span>
-                                            </div>
+                                            </label>
                                         )}
                                     </div>
 

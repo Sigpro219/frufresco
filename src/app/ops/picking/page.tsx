@@ -133,18 +133,17 @@ export default function PickingExecutionPage() {
 
             const stockMap: Record<string, number> = {};
             if (productIds.length > 0) {
-                const { data: stocks, error: stocksError } = await supabase
-                    .from('inventory_stocks')
-                    .select('product_id, quantity')
-                    .in('product_id', productIds)
-                    .eq('status', 'available');
-
-                if (stocksError) {
-                    console.error('Database Error (inventory_stocks):', stocksError.message);
-                } else if (stocks) {
-                    stocks.forEach(s => {
-                        stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (s.quantity || 0);
-                    });
+                try {
+                    const stockRes = await fetch('/api/inventory/stocks', { signal });
+                    if (stockRes.ok) {
+                        const allStocks = await stockRes.json();
+                        productIds.forEach(pId => {
+                            const pIdStr = pId as string;
+                            stockMap[pIdStr] = allStocks[pIdStr] || 0;
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error fetching inventory stocks via API:', err);
                 }
             }
 
@@ -340,7 +339,7 @@ export default function PickingExecutionPage() {
         setIsQuantityValidated(true);
     };
 
-    // Group tasks by product for the 'product' view (Suministro)
+    // Group tasks by product for the 'product' view (Producto)
     interface ProductGroup {
         name: string;
         unit: string;
@@ -842,7 +841,7 @@ export default function PickingExecutionPage() {
                         )}
                     </div>
 
-                    {/* Sub-filter row (Cubículo & Suministro) */}
+                    {/* Sub-filter row (Espacio & Producto) */}
                     <div style={{ 
                         background: 'rgba(18, 29, 45, 0.6)',
                         backdropFilter: 'blur(12px)',
@@ -873,7 +872,7 @@ export default function PickingExecutionPage() {
                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
-                            <User size={14} strokeWidth={2.5} /> Cubículo
+                            <User size={14} strokeWidth={2.5} /> Espacio
                         </button>
                         <button
                             onClick={() => setViewMode('product')}
@@ -894,7 +893,7 @@ export default function PickingExecutionPage() {
                                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                             }}
                         >
-                            <Layers size={14} strokeWidth={2.5} /> Suministro
+                            <Layers size={14} strokeWidth={2.5} /> Producto
                         </button>
                     </div>
                 </div>
@@ -911,7 +910,7 @@ export default function PickingExecutionPage() {
                     </div>
                 ) : (
                     <>
-                        {/* VIEW 1: BY CLIENT (CUBÍCULO) */}
+                        {/* VIEW 1: BY CLIENT (ESPACIO) */}
                         {viewMode === 'client' && (() => {
                     const hasAnyTasks = tasks.length > 0;
                     const filteredTasks = tasks
@@ -1051,7 +1050,7 @@ export default function PickingExecutionPage() {
                     );
                 })()}
 
-                {/* VIEW 2: BY PRODUCT (SUMINISTRO) */}
+                {/* VIEW 2: BY PRODUCT (PRODUCTO) */}
                 {viewMode === 'product' && (() => {
                     const hasAnyGroups = productGroups.length > 0;
                     const filteredProductGroups = productGroups

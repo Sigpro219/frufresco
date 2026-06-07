@@ -15,6 +15,7 @@ interface RouteStop {
         customer_name: string;
         shipping_address: string;
         warehouse_spaces: number[] | null;
+        crates_count?: number | null;
         order_items: {
             id: string;
             products: { name: string; unit_of_measure: string };
@@ -34,6 +35,26 @@ export default function LoadVerificationPage() {
     const isMounted = useRef(true);
 
     const toggleStop = (id: string) => {
+        const stop = stops.find(s => s.id === id);
+        if (!stop) return;
+
+        const items = stop.orders?.order_items || [];
+        const hasStartedPicking = items.some(item => (item.picked_quantity || 0) > 0);
+        const hasPendingItems = items.some(item => (item.picked_quantity || 0) === 0);
+
+        // Block if completely unpicked
+        if (items.length > 0 && !hasStartedPicking) {
+            alert(`❌ ERROR DE CARGUE: El pedido de ${stop.orders?.customer_name} no ha sido alistado en bodega (todos los artículos están en 0). Por favor, espera a que el equipo de alistamiento termine.`);
+            return;
+        }
+
+        // Warn if partially unpicked (when checking for the first time)
+        if (hasPendingItems && !loadedStops.has(id)) {
+            if (!confirm(`⚠️ ALERTA: El pedido de ${stop.orders?.customer_name} tiene artículos sin alistar (0 Kg). ¿Confirmas que deseas cargarlo de todas formas?`)) {
+                return;
+            }
+        }
+
         setLoadedStops(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
@@ -88,7 +109,7 @@ export default function LoadVerificationPage() {
                 .select(`
                     id, sequence_number, status,
                     orders:order_id (
-                        id, shipping_address, warehouse_spaces,
+                        id, shipping_address, warehouse_spaces, crates_count,
                         profiles:profile_id (
                             id, company_name, contact_name, role
                         ),
@@ -266,22 +287,38 @@ export default function LoadVerificationPage() {
                                 <div>
                                     <div style={{ fontSize: '1.1rem', fontWeight: '800', color: 'white' }}>{stop.orders?.customer_name}</div>
                                     <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '2px' }}>Parada #{stop.sequence_number} de la ruta</div>
-                                    {stop.orders?.warehouse_spaces && stop.orders.warehouse_spaces.length > 0 && (
-                                        <div style={{ 
-                                            display: 'inline-flex', 
-                                            alignItems: 'center', 
-                                            gap: '4px',
-                                            fontSize: '0.7rem', 
-                                            color: '#10B981', 
-                                            fontWeight: '800',
-                                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
-                                            padding: '2px 8px', 
-                                            borderRadius: '6px',
-                                            marginTop: '6px'
-                                        }}>
-                                            UBICACIÓN: ESP {stop.orders.warehouse_spaces.join(', ')}
-                                        </div>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                        {stop.orders?.warehouse_spaces && stop.orders.warehouse_spaces.length > 0 && (
+                                            <div style={{ 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '4px',
+                                                fontSize: '0.7rem', 
+                                                color: '#10B981', 
+                                                fontWeight: '800',
+                                                backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '6px'
+                                            }}>
+                                                UBICACIÓN: ESP {stop.orders.warehouse_spaces.join(', ')}
+                                            </div>
+                                        )}
+                                        {stop.orders?.crates_count !== undefined && stop.orders.crates_count !== null && (
+                                            <div style={{ 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '4px',
+                                                fontSize: '0.7rem', 
+                                                color: '#F59E0B', 
+                                                fontWeight: '800',
+                                                backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                                                padding: '2px 8px', 
+                                                borderRadius: '6px'
+                                            }}>
+                                                📦 CANASTILLAS: {stop.orders.crates_count}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -291,7 +328,9 @@ export default function LoadVerificationPage() {
                             {stop.orders?.order_items.map(item => (
                                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                                     <span style={{ color: '#E2E8F0' }}>{item.products.name}</span>
-                                    <span style={{ fontWeight: '800', color: '#059669' }}>{item.picked_quantity} {item.products.unit_of_measure}</span>
+                                    <span style={{ fontWeight: '800', color: item.picked_quantity > 0 ? '#059669' : '#9CA3AF' }}>
+                                        {item.picked_quantity || 0} / {item.quantity} {item.products.unit_of_measure}
+                                    </span>
                                 </div>
                             ))}
                         </div>

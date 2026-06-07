@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Fragment, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Search, X, Info, Brain, Cpu, Leaf, Sun, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart3, ChevronRight, CheckCircle2, RefreshCw } from 'lucide-react';
 import { logError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import { CATEGORY_MAP } from '@/lib/constants';
@@ -155,6 +155,7 @@ export default function CostMatrixPage() {
             const { data: prods, error: prodErr } = await supabase
                 .from('products')
                 .select('*')
+                .setHeader('Cache-Control', 'no-store')
                 .eq('show_on_web', true)
                 .eq('is_active', true)
                 .order('category', { ascending: true })
@@ -170,6 +171,7 @@ export default function CostMatrixPage() {
             const { data: hist, error: histErr } = await supabase
                 .from('purchase_history_normalized')
                 .select('*')
+                .setHeader('Cache-Control', 'no-store')
                 .order('created_at', { ascending: false })
                 .limit(20000);
 
@@ -189,7 +191,8 @@ export default function CostMatrixPage() {
 
             const { data: manual, error: manualErr } = await supabase
                 .from('commercial_cost_matrix')
-                .select('*');
+                .select('*')
+                .setHeader('Cache-Control', 'no-store');
 
             if (manualErr) {
                 console.error('❌ Error en consulta commercial_cost_matrix:', manualErr);
@@ -592,7 +595,7 @@ export default function CostMatrixPage() {
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1E293B'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F172A'}
                             >
-                                <TrendingUp size={20} />
+                                <RefreshCw size={20} />
                             </button>
                             <button
                                 onClick={() => handleAuthorizeAll()}

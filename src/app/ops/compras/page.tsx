@@ -63,6 +63,8 @@ export default function ProcurementPage() {
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [showFilterGrid, setShowFilterGrid] = useState(false);
   const [conversions, setConversions] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
 
   // Onboarding Guide States
   const [showGuide, setShowGuide] = useState(false);
@@ -161,8 +163,35 @@ export default function ProcurementPage() {
       } finally {
         if (isMounted.current && !signal.aborted) {
           setIsConsolidating(false);
+
+          // Fetch available dates from DB to populate selector
+          let uniqueDates: string[] = [];
+          try {
+            const { data } = await supabase
+              .from("procurement_tasks")
+              .select("delivery_date");
+            if (data) {
+              uniqueDates = Array.from(new Set(data.map((d: any) => d.delivery_date as string)))
+                .filter(Boolean)
+                .sort()
+                .reverse() as string[];
+              setAvailableDates(uniqueDates);
+            }
+          } catch (err) {
+            console.error("Error loading available dates:", err);
+          }
+
+          // Decide target date: default cutoff date or fallback to first available date
+          const defaultDate = await getTargetDeliveryDate(signal);
+          let dateToUse = defaultDate;
+          if (uniqueDates.length > 0 && !uniqueDates.includes(defaultDate)) {
+            dateToUse = uniqueDates[0];
+          }
+
+          setSelectedDate(dateToUse);
+
           await Promise.all([
-            fetchTasks(signal, profile?.specialty || ""),
+            fetchTasks(signal, profile?.specialty || "", dateToUse),
             fetchProviders(signal),
             fetchConversions(signal)
           ]);
@@ -273,9 +302,15 @@ export default function ProcurementPage() {
     return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day} ${month}`;
   };
 
-  const fetchTasks = async (signal?: AbortSignal, categoryFilter?: string) => {
+  const fetchTasks = async (signal?: AbortSignal, categoryFilter?: string, forceDate?: string) => {
     setLoading(true);
-    const targetDate = await getTargetDeliveryDate(signal);
+    let targetDate = forceDate || selectedDate;
+    if (!targetDate) {
+      targetDate = await getTargetDeliveryDate(signal);
+      if (targetDate && isMounted.current) {
+        setSelectedDate(targetDate);
+      }
+    }
     if (!targetDate) {
       if (isMounted.current && !signal?.aborted) setLoading(false);
       return;
@@ -304,12 +339,37 @@ export default function ProcurementPage() {
         const rawTaskIds = rawTasks.map(t => t.id);
         const productIds = Array.from(new Set(rawTasks.map(t => t.product_id)));
 
-        // 2. Fetch products details (including parent_id, min_inventory_level)
-        const { data: products, error: pErr } = await supabase
-          .from("products")
-          .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure")
-          .in("id", productIds);
+        // 2. Fetch details in parallel to eliminate sequential round-trip latency
+        const [productsRes, stocksRes, purchasesRes, noveltiesRes] = await Promise.all([
+          supabase
+            .from("products")
+            .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure")
+            .in("id", productIds)
+            .abortSignal(signal as any),
+          supabase
+            .from("inventory_stocks")
+            .select("product_id, quantity")
+            .eq("status", "available")
+            .abortSignal(signal as any),
+          supabase
+            .from("purchases")
+            .select(`
+              *,
+              provider:providers (
+                name
+              )
+            `)
+            .in("task_id", rawTaskIds)
+            .abortSignal(signal as any),
+          supabase
+            .from("provider_novelties")
+            .select("*")
+            .eq("resolved", false)
+            .abortSignal(signal as any)
+        ]);
 
+        const products = productsRes.data;
+        const pErr = productsRes.error;
         if (pErr) console.warn("No se pudieron cargar detalles de productos", pErr);
 
         const productMap = (products || []).reduce((acc: any, p: any) => {
@@ -324,44 +384,25 @@ export default function ProcurementPage() {
           const { data: parentProducts } = await supabase
             .from("products")
             .select("id, name")
-            .in("id", parentIds);
+            .in("id", parentIds)
+            .abortSignal(signal as any);
           (parentProducts || []).forEach(p => {
             parentMap[p.id] = p.name;
           });
         }
 
-        // 3. Fetch available stocks
-        const { data: stocksData } = await supabase
-          .from("inventory_stocks")
-          .select("product_id, quantity")
-          .eq("status", "available");
-
+        const stocksData = stocksRes.data;
         const stockMap: Record<string, number> = {};
         (stocksData || []).forEach(s => {
           const q = parseFloat(s.quantity as any) || 0;
           stockMap[s.product_id] = (stockMap[s.product_id] || 0) + q;
         });
 
-        // 4. Fetch task purchases
-        const { data: purchasesData } = await supabase
-          .from("purchases")
-          .select(`
-            *,
-            provider:providers (
-              name
-            )
-          `)
-          .in("task_id", rawTaskIds);
-
+        const purchasesData = purchasesRes.data;
         const currentPurchases = purchasesData || [];
         setTaskPurchases(currentPurchases);
 
-        // 5. Fetch unresolved provider novelties
-        const { data: noveltiesData } = await supabase
-          .from("provider_novelties")
-          .select("*")
-          .eq("resolved", false);
-
+        const noveltiesData = noveltiesRes.data;
         // Filter out duplicate submissions (same task, purchase, type, and reason)
         const unresolvedNovelties = (noveltiesData || []).filter((v, i, a) => 
           a.findIndex((t: any) => (t.task_id === v.task_id && t.purchase_id === v.purchase_id && t.novelty_type === v.novelty_type && t.reason === v.reason)) === i
@@ -604,31 +645,24 @@ export default function ProcurementPage() {
       totals[key].qty += item.quantity;
     });
 
-    // 3. Upsert en procurement_tasks (Evita duplicados por llave PID + VAR + FECHA)
-    for (const key in totals) {
-      const task = totals[key];
-      const { data: existing } = await supabase
-        .from("procurement_tasks")
-        .select("id, total_requested")
-        .eq("product_id", task.pid)
-        .eq("variant_label", task.variant)
-        .eq("delivery_date", task.delivery_date)
-        .abortSignal(signal as any)
-        .maybeSingle();
+    // 3. Upsert en procurement_tasks en bloque (Alta velocidad)
+    const upsertRows = Object.values(totals).map((task) => ({
+      product_id: task.pid,
+      variant_label: task.variant,
+      total_requested: task.qty,
+      unit: task.unit,
+      delivery_date: task.delivery_date,
+    }));
 
-      if (existing) {
-        await supabase
-          .from("procurement_tasks")
-          .update({ total_requested: task.qty })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("procurement_tasks").insert({
-          product_id: task.pid,
-          variant_label: task.variant,
-          total_requested: task.qty,
-          unit: task.unit,
-          delivery_date: task.delivery_date,
-        });
+    if (upsertRows.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from("procurement_tasks")
+        .upsert(upsertRows, { onConflict: "product_id,variant_label,delivery_date" })
+        .abortSignal(signal as any);
+
+      if (upsertErr) {
+        if (isAbortError(upsertErr)) return;
+        console.error("Error upserting procurement tasks:", upsertErr);
       }
     }
   };
@@ -639,7 +673,7 @@ export default function ProcurementPage() {
     try {
       await runConsolidation();
       alert(`✅ Sincronización Exitosa`);
-      fetchTasks();
+      fetchTasks(undefined, filterCategory, selectedDate);
     } catch (e: unknown) {
       console.error(e);
       alert("Error al consolidar pedidos: " + (e instanceof Error ? e.message : String(e)));
@@ -905,7 +939,7 @@ export default function ProcurementPage() {
       setTimeout(() => {
         resetForm();
         setSelectedTask(null);
-        fetchTasks(undefined, filterCategory);
+        fetchTasks(undefined, filterCategory, selectedDate);
         fetchProviders();
       }, 4000);
     } catch (e: any) {
@@ -933,7 +967,7 @@ export default function ProcurementPage() {
       if (error) throw error;
 
       alert("🏁 Faltante cerrado con éxito!");
-      fetchTasks(undefined, filterCategory);
+      fetchTasks(undefined, filterCategory, selectedDate);
     } catch (e: any) {
       alert("Error cerrando faltante: " + e.message);
     }
@@ -1126,9 +1160,43 @@ export default function ProcurementPage() {
               style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
             >
               <span style={{ whiteSpace: "nowrap" }}>Compras <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
-              <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap" }}>
-                <Calendar size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> {formatDateFriendly(targetDateLabel)}
-              </span>
+              <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                <Calendar size={13} style={{ position: "absolute", left: "10px", color: "#F59E0B", pointerEvents: "none" }} />
+                <select
+                  value={selectedDate}
+                  onChange={(e) => {
+                    const nextDate = e.target.value;
+                    setSelectedDate(nextDate);
+                    setTargetDateLabel(nextDate);
+                    fetchTasks(undefined, filterCategory, nextDate);
+                  }}
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#F59E0B",
+                    fontWeight: "800",
+                    backgroundColor: "rgba(245, 158, 11, 0.12)",
+                    border: "1px solid rgba(245, 158, 11, 0.25)",
+                    padding: "4px 24px 4px 28px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    outline: "none",
+                    appearance: "none",
+                    WebkitAppearance: "none",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {availableDates.map((d) => (
+                    <option key={d} value={d} style={{ backgroundColor: "var(--ops-bg)", color: "var(--ops-text)" }}>
+                      {formatDateFriendly(d)}
+                    </option>
+                  ))}
+                  {!availableDates.includes(selectedDate) && selectedDate && (
+                    <option value={selectedDate} style={{ backgroundColor: "var(--ops-bg)", color: "var(--ops-text)" }}>
+                      {formatDateFriendly(selectedDate)}
+                    </option>
+                  )}
+                </select>
+              </div>
             </h1>
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1484,7 +1552,7 @@ export default function ProcurementPage() {
                   key={cat}
                   onClick={() => {
                     setFilterCategory(cat);
-                    fetchTasks(undefined, cat);
+                    fetchTasks(undefined, cat, selectedDate);
                     setShowFilterGrid(false);
                   }}
                   style={{
@@ -1979,7 +2047,7 @@ export default function ProcurementPage() {
                                       if (tErr) throw tErr;
 
                                       alert("⚡ Compra rápida registrada con éxito!");
-                                      fetchTasks();
+                                      fetchTasks(undefined, filterCategory, selectedDate);
                                     } catch (err: any) {
                                       alert("Error en compra rápida: " + err.message);
                                     }
@@ -2356,7 +2424,7 @@ export default function ProcurementPage() {
                           await supabase.from("procurement_tasks").update({ status: 'pending' }).eq("id", selectedTask.id);
                           
                           alert("Novedad resuelta como Reprogramada. El formulario se ha prellenado para re-intentar.");
-                          fetchTasks();
+                          fetchTasks(undefined, filterCategory, selectedDate);
                         }}
                         style={{
                           padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.15)",
@@ -2376,7 +2444,7 @@ export default function ProcurementPage() {
                           }
                           
                           alert("Novedad resuelta. Procediendo a registrar compra con otro proveedor.");
-                          fetchTasks();
+                          fetchTasks(undefined, filterCategory, selectedDate);
                         }}
                         style={{
                           padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(245, 158, 11, 0.3)",
@@ -2410,7 +2478,7 @@ export default function ProcurementPage() {
                           alert("💰 Reclamación administrativa registrada. Tarea completada.");
                           setSelectedTask(null);
                           resetForm();
-                          fetchTasks();
+                          fetchTasks(undefined, filterCategory, selectedDate);
                         }}
                         style={{
                           padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(239, 68, 68, 0.3)",
@@ -3050,15 +3118,21 @@ export default function ProcurementPage() {
                   <input
                     type="file"
                     id="voucherInput"
-                    accept="image/*"
-                    capture="environment"
                     onChange={handleFileChange}
-                    style={{ display: "none" }}
+                    style={{
+                      position: "absolute",
+                      width: "1px",
+                      height: "1px",
+                      padding: "0",
+                      margin: "-1px",
+                      overflow: "hidden",
+                      clip: "rect(0, 0, 0, 0)",
+                      whiteSpace: "nowrap",
+                      border: "0",
+                    }}
                   />
-                  <div
-                    onClick={() =>
-                      document.getElementById("voucherInput")?.click()
-                    }
+                  <label
+                    htmlFor="voucherInput"
                     style={{
                       width: "100%",
                       minHeight: voucherPreview ? "240px" : "120px",
@@ -3096,7 +3170,7 @@ export default function ProcurementPage() {
                         </span>
                       </>
                     )}
-                  </div>
+                  </label>
                 </div>
 
                 {formError && (

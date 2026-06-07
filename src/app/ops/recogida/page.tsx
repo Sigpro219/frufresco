@@ -79,9 +79,12 @@ export default function RecogidaPage() {
     // Utility: Parse Bodega Name from pickup_location
     const getBodegaName = (location: string | null | undefined): string => {
         if (!location) return 'Sin Bodega / Otros';
-        const match = location.match(/\[BODEGA\]\s*#?([^\s|]+)/i) || location.match(/BODEGA\s*#?([^\s|]+)/i);
+        const match = location.match(/\[BODEGA\]\s*#?\s*([^\s|]+)/i) || location.match(/BODEGA\s*\]?\s*:?\s*#?\s*([^\s|]+)/i);
         if (match && match[1]) {
-            return `Bodega ${match[1]}`;
+            const cleanVal = match[1].replace(/[:,\s]/g, '').trim();
+            if (cleanVal) {
+                return `Bodega ${cleanVal}`;
+            }
         }
         const fallbackMatch = location.match(/bodega\s*#?(\d+)/i);
         if (fallbackMatch && fallbackMatch[1]) {
@@ -503,8 +506,18 @@ export default function RecogidaPage() {
 
         return Object.keys(groups)
             .sort((a, b) => {
-                if (a.includes('Desconocido') || a.includes('Sin Bodega') || a.includes('Otros')) return 1;
-                if (b.includes('Desconocido') || b.includes('Sin Bodega') || b.includes('Otros')) return -1;
+                const isAOther = a.includes('Desconocido') || a.includes('Sin Bodega') || a.includes('Otros');
+                const isBOther = b.includes('Desconocido') || b.includes('Sin Bodega') || b.includes('Otros');
+                if (isAOther && !isBOther) return 1;
+                if (!isAOther && isBOther) return -1;
+                if (isAOther && isBOther) return a.localeCompare(b);
+
+                // Try numerical sorting if both contain digits
+                const numA = parseInt(a.replace(/\D/g, ''), 10);
+                const numB = parseInt(b.replace(/\D/g, ''), 10);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
                 return a.localeCompare(b);
             })
             .map(key => ({
@@ -1606,8 +1619,6 @@ purchases: groups[key]
                                             <input
                                                 type="file"
                                                 id="rejectionPhotoInput"
-                                                accept="image/*"
-                                                capture="environment"
                                                 onChange={(e) => {
                                                     const file = e.target.files?.[0];
                                                     if (file) {
@@ -1615,18 +1626,28 @@ purchases: groups[key]
                                                         setRejectionPreview(URL.createObjectURL(file));
                                                     }
                                                 }}
-                                                style={{ display: 'none' }}
+                                                style={{
+                                                     position: 'absolute',
+                                                     width: '1px',
+                                                     height: '1px',
+                                                     padding: '0',
+                                                     margin: '-1px',
+                                                     overflow: 'hidden',
+                                                     clip: 'rect(0, 0, 0, 0)',
+                                                     whiteSpace: 'nowrap',
+                                                     border: '0'
+                                                 }}
                                             />
                                             {rejectionPreview ? (
                                                 <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--ops-border)', backgroundColor: '#000' }}>
                                                     <img src={rejectionPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                                     <div style={{ position: 'absolute', bottom: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                                                        <button onClick={(e) => { e.preventDefault(); document.getElementById("rejectionPhotoInput")?.click(); }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</button>
+                                                        <label htmlFor="rejectionPhotoInput" style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.7)', color: 'white', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} /> Cambiar Foto</label>
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div
-                                                    onClick={() => document.getElementById("rejectionPhotoInput")?.click()}
+                                                <label
+                                                    htmlFor="rejectionPhotoInput"
                                                     style={{
                                                         width: '100%',
                                                         minHeight: '110px',
@@ -1646,7 +1667,7 @@ purchases: groups[key]
                                                     <Camera size={32} />
                                                     <span style={{ fontSize: '0.85rem', fontWeight: '900', marginTop: '0.3rem' }}>FOTO OBLIGATORIA — TAP PARA AGREGAR</span>
                                                     <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: 0.8 }}>Sin foto no se puede rechazar</span>
-                                                </div>
+                                                </label>
                                             )}
                                         </div>
 

@@ -270,6 +270,20 @@ export default function DeliveryConfirmationPage() {
                 completion_time: new Date().toISOString()
             }).eq('id', id);
 
+            // Check if this was the last pending stop on this route to complete the route
+            const { data: remainingStops } = await supabase
+                .from('route_stops')
+                .select('id, status')
+                .eq('route_id', stop.route_id);
+
+            const hasPending = remainingStops?.some(s => s.id !== id && s.status === 'pending');
+            if (!hasPending) {
+                await supabase
+                    .from('routes')
+                    .update({ status: 'completed' })
+                    .eq('id', stop.route_id);
+            }
+
             // 2. Record Events
             if (isTotalCancellation) {
                 // Single event for total cancellation
@@ -409,7 +423,7 @@ export default function DeliveryConfirmationPage() {
                         }} className="upload-label">
                             <Camera size={32} style={{ color: '#059669' }} />
                             <span style={{ fontSize: '0.8rem', color: '#9CA3AF', fontWeight: '500' }}>Subir foto de la planilla recibida</span>
-                            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+                            <input type="file" onChange={handlePhotoUpload} style={{ position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: '0', whiteSpace: 'nowrap' }} />
                         </label>
                     )}
                 </div>
@@ -581,7 +595,7 @@ export default function DeliveryConfirmationPage() {
                                                                 color: item.return_evidence_url ? '#059669' : '#9CA3AF'
                                                             }}>
                                                                 {item.return_evidence_url ? <Check size={16} /> : <Camera size={16} />}
-                                                                <input type="file" accept="image/*" capture="environment" onChange={(e) => handleItemPhotoUpload(item.id, e)} style={{ display: 'none' }} />
+                                                                <input type="file" onChange={(e) => handleItemPhotoUpload(item.id, e)} style={{ position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: '0', whiteSpace: 'nowrap' }} />
                                                             </label>
                                                         </div>
                                                         {item.return_evidence_url && (

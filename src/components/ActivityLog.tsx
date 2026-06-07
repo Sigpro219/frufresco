@@ -117,7 +117,19 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
                     currLon
                 );
 
-                const description = `GPS AUDIT | PLACA: ${plate} | ESTADO: ${activeActivity.type.toUpperCase()} | DURACIÓN: ${durationTxt} | KM ESTIMADOS: ${dist.toFixed(2)} | COORDS: [${activeActivity.startLat.toFixed(4)},${activeActivity.startLon.toFixed(4)}] -> [${currLat.toFixed(4)},${currLon.toFixed(4)}]`;
+                // Add Validation Check to avoid odometer jumps from 0, 0 or huge coordinates jumps
+                const isValidCoord = (lat: number, lon: number) => lat !== 0 && lon !== 0 && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+                let finalDist = dist;
+
+                if (!isValidCoord(activeActivity.startLat, activeActivity.startLon) || !isValidCoord(currLat, currLon)) {
+                    console.warn("Invalid GPS coordinates detected. Skipping odometer calculation.");
+                    finalDist = 0;
+                } else if (dist > 200) { // Limit to 200 KM max per activity switch
+                    console.warn(`Anomalous distance calculation: ${dist.toFixed(2)} KM. Capping to 0.`);
+                    finalDist = 0;
+                }
+
+                const description = `GPS AUDIT | PLACA: ${plate} | ESTADO: ${activeActivity.type.toUpperCase()} | DURACIÓN: ${durationTxt} | KM ESTIMADOS: ${finalDist.toFixed(2)} (bruto: ${dist.toFixed(2)}) | COORDS: [${activeActivity.startLat.toFixed(4)},${activeActivity.startLon.toFixed(4)}] -> [${currLat.toFixed(4)},${currLon.toFixed(4)}]`;
                 
                 if (!plate.startsWith('mock')) {
                     await supabase.from('delivery_events').insert({
@@ -130,7 +142,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
                 }
 
                 // Update theoretical odo locally for visual feedback
-                const newOdo = theoreticalOdo + dist;
+                const newOdo = theoreticalOdo + finalDist;
                 setTheoreticalOdo(newOdo);
 
                 // PRODUCTION UPDATE: Save new odo to fleet_vehicles

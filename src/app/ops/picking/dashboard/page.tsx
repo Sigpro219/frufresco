@@ -1146,9 +1146,9 @@ export default function PickingDashboard() {
                                                             color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
                                                             fontWeight: 'bold',
                                                             minWidth: '35px', textAlign: 'right',
-                                                            fontSize: '0.9rem'
-                                                        }}>
-                                                            {catPercent}%
+                                                             fontSize: '0.9rem'
+                                                         }}>
+                                                             {catPercent}%
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1159,30 +1159,48 @@ export default function PickingDashboard() {
                                             const rowHasData = visibleClients.some(c => matrix[product.id]?.[c.id]);
                                             if (!rowHasData) return null;
 
+                                            const prodComplete = isProductComplete(product.id);
+                                            const isOutOfStock = (product.current_stock || 0) === 0;
+                                            const isRedRow = isOutOfStock && !prodComplete;
+
                                             return (
                                                 <tr key={product.id}>
-                                                    {(() => {
-                                                        const prodComplete = isProductComplete(product.id);
-                                                        return (
-                                                            <td style={{
-                                                                position: 'sticky', left: 0, zIndex: 10,
-                                                                background: productsWithAlerts.has(product.id) ? 'rgba(239, 68, 68, 0.2)' : '#080D12',
-                                                                borderRight: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                                                padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
-                                                                color: productsWithAlerts.has(product.id) ? '#fff' : (prodComplete ? '#34D399' : '#ddd'), 
-                                                                fontSize: cfg.productFontSize,
-                                                                minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
-                                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                                fontWeight: prodComplete ? 'bold' : 'normal',
-                                                                animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
-                                                            }} title={product.name}>
-                                                                {prodComplete ? '✓ ' : ''}{product.name}
-                                                                <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
-                                                                    {product.unit_of_measure}
-                                                                </span>
-                                                            </td>
-                                                        );
-                                                    })()}
+                                                    <td style={{
+                                                        position: 'sticky', left: 0, zIndex: 10,
+                                                        background: productsWithAlerts.has(product.id) 
+                                                            ? 'rgba(239, 68, 68, 0.2)' 
+                                                            : (isRedRow ? '#1C0D0D' : '#080D12'),
+                                                        borderRight: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                                        padding: density === 'tv' ? '0.2rem 0.5rem' : '0.5rem 1rem',
+                                                        color: productsWithAlerts.has(product.id) 
+                                                            ? '#fff' 
+                                                            : (prodComplete ? '#34D399' : (isRedRow ? '#FCA5A5' : '#ddd')), 
+                                                        fontSize: cfg.productFontSize,
+                                                        minWidth: density === 'tv' ? '150px' : '250px', maxWidth: '400px',
+                                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                        fontWeight: prodComplete ? 'bold' : 'normal',
+                                                        animation: productsWithAlerts.has(product.id) ? 'pulseAlert 2s infinite' : 'none'
+                                                    }} title={product.name}>
+                                                        {prodComplete ? '✓ ' : ''}{product.name}
+                                                        <span style={{ marginLeft: '8px', fontSize: '0.7rem', color: prodComplete ? '#10B981' : '#555' }}>
+                                                            {product.unit_of_measure}
+                                                        </span>
+                                                        {isRedRow && (
+                                                            <span style={{ 
+                                                                marginLeft: '8px', 
+                                                                background: '#DC2626', 
+                                                                color: 'white', 
+                                                                padding: '2px 6px', 
+                                                                borderRadius: '4px', 
+                                                                fontSize: '0.65rem', 
+                                                                fontWeight: 'bold',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center'
+                                                            }}>
+                                                                ⚠️ SIN STOCK
+                                                            </span>
+                                                        )}
+                                                    </td>
 
                                                     {/* Matrix Cells */}
                                                     {visibleClients.map(client => {
@@ -1193,7 +1211,7 @@ export default function PickingDashboard() {
                                                             <td 
                                                                 key={client.id} 
                                                                 style={{ 
-                                                                    background: isFidsMode ? 'transparent' : '#0B1319', 
+                                                                    background: isFidsMode ? 'transparent' : (isRedRow ? 'rgba(239, 68, 68, 0.03)' : '#0B1319'), 
                                                                     borderBottom: isFidsMode ? '1px solid transparent' : '1px solid rgba(255,255,255,0.02)', 
                                                                     borderRight: isFidsMode ? '1px solid transparent' : '1px solid rgba(255,255,255,0.02)' 
                                                                 }}
@@ -1220,6 +1238,12 @@ export default function PickingDashboard() {
                                                     if (cell.ordered > 0 && cell.picked === 0) {
                                                         bg = '#1E293B';
                                                         fg = '#E2E8F0';
+                                                    }
+
+                                                    // If row is out of stock and not completed, override pending cells with soft red
+                                                    if (isRedRow && cell.ordered > cell.picked && !cell.hasRejection && !cell.hasWarning) {
+                                                        bg = 'rgba(239, 68, 68, 0.15)';
+                                                        fg = '#FCA5A5';
                                                     }
 
                                                     const isPartial = cell.picked > 0 && cell.picked < cell.ordered;
