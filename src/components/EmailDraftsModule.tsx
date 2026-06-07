@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
 export default function EmailDraftsModule() {
@@ -16,12 +16,130 @@ export default function EmailDraftsModule() {
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
+
+  const DEFAULT_B2C_POLYGON = [
+    { lat: 4.647, lng: -74.062 },
+    { lat: 4.685, lng: -74.030 },
+    { lat: 4.760, lng: -74.045 },
+    { lat: 4.720, lng: -74.095 },
+    { lat: 4.665, lng: -74.080 }
+  ];
 
   useEffect(() => {
     fetchDrafts();
     fetchProducts();
     fetchAliases();
+    fetchGeofence();
   }, []);
+
+  const fetchGeofence = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'geofence_b2c_poly')
+        .single();
+      if (data && data.value) {
+        const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        if (Array.isArray(parsed)) {
+          setB2cPolygon(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching geofence', e);
+    }
+  };
+
+  const checkIfInCoverage = (lat: number, lng: number) => {
+    const polygon = b2cPolygon.length > 0 ? b2cPolygon : DEFAULT_B2C_POLYGON;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].lng;
+      const yi = polygon[i].lat;
+      const xj = polygon[j].lng;
+      const yj = polygon[j].lat;
+
+      const intersect = ((yi > lat) !== (yj > lat))
+          && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  };
+
+  const handleRejectForCoverage = async () => {
+    if (!selectedDraft) return;
+    if (!confirm('¿Estás seguro de que deseas rechazar este pedido por falta de cobertura? Se enviará un correo electrónico de notificación al cliente.')) return;
+    
+    setSaving(true);
+    try {
+      // 1. Update status to rejected in database
+      const { error: draftError } = await supabase
+        .from('order_drafts')
+        .update({ status: 'rejected' })
+        .eq('id', selectedDraft.id);
+
+      if (draftError) throw draftError;
+
+      // 2. Insert mail to queue
+      const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
+      const { data: insertedMail, error: mailError } = await supabase
+        .from('mail')
+        .insert({
+          to_email: selectedDraft.source_email,
+          subject: 'Rechazo de Pedido - Fuera de Zona de Cobertura',
+          message: {
+            text: `Hola. Lamentamos informarte que tu solicitud de pedido ha sido rechazada debido a que la dirección proporcionada (${addressStr}) se encuentra fuera de nuestra zona de cobertura en Bogotá.`,
+            html: `
+              <div style="font-family: 'Outfit', sans-serif, sans-serif; color: #111827; padding: 40px; background-color: #F9FAFB; border-radius: 20px; max-width: 600px; margin: auto; border: 1px solid #E5E7EB;">
+                <center>
+                  <img src="https://frufresco.com/logo.png" width="120" style="margin-bottom: 20px;" alt="FruFresco Logo">
+                  <h2 style="color: #EF4444; font-weight: 800; font-size: 24px; margin-bottom: 5px;">Pedido Rechazado</h2>
+                  <p style="color: #6B7280; font-size: 14px; margin-top: 0;">Fuera de Zona de Cobertura</p>
+                </center>
+                
+                <div style="background: white; padding: 30px; border-radius: 16px; border-left: 5px solid #EF4444; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-top: 20px;">
+                  <p style="margin-top: 0; font-size: 15px; line-height: 1.5;">Hola,</p>
+                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Lamentamos informarte que hemos tenido que rechazar tu solicitud de pedido enviado por correo electrónico.</p>
+                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">La dirección proporcionada (<b>${addressStr}</b>) se encuentra <b>fuera de nuestra zona de cobertura actual</b> en Bogotá.</p>
+                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 40px 0;">
+                <center>
+                  <p style="font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Mesa</p>
+                </center>
+              </div>
+            `
+          }
+        })
+        .select();
+
+      if (mailError) {
+        console.error('Error inserting mail:', mailError);
+      } else if (insertedMail && insertedMail.length > 0) {
+        // Trigger processor immediately so it runs in development too
+        try {
+          await fetch('/api/mail/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ record: insertedMail[0] })
+          });
+        } catch (processErr) {
+          console.error('Error executing mail process locally:', processErr);
+        }
+      }
+
+      alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
+      setSelectedDraft(null);
+      fetchDrafts();
+    } catch (e: any) {
+      console.error('Error in handleRejectForCoverage:', e);
+      alert('Error al rechazar el borrador. Por favor intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -437,6 +555,29 @@ export default function EmailDraftsModule() {
 
             {/* Modal Body */}
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {selectedDraft.profile_id === null && (
+                <div style={{
+                  backgroundColor: '#FEF3C7',
+                  borderLeft: '4px solid #D97706',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left'
+                }}>
+                  <Info size={24} style={{ color: '#D97706', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#92400E', fontSize: '0.9rem' }}>
+                      ⚠️ CLIENTE NUEVO DETECTADO
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: 600, marginTop: '2px' }}>
+                      Este cliente no está registrado en el sistema. Es necesario verificar su cobertura en Bogotá antes de procesar el pedido.
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Encabezado Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
@@ -458,9 +599,25 @@ export default function EmailDraftsModule() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
                   {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
                   {draftCoordinates && (
-                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600, display: 'flex', gap: '12px', marginTop: '4px' }}>
+                    <div style={{
+                      fontSize: '0.8rem',
+                      color: selectedDraft.profile_id === null
+                        ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
+                        : '#059669',
+                      fontWeight: 600,
+                      display: 'flex',
+                      gap: '12px',
+                      marginTop: '4px'
+                    }}>
                       <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
                       <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
+                      {selectedDraft.profile_id === null && (
+                        <span>
+                          {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
+                            ? '✅ En Zona de Cobertura'
+                            : '❌ Fuera de Zona de Cobertura'}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -593,33 +750,161 @@ export default function EmailDraftsModule() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '1.5rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'flex-end', gap: '1rem', backgroundColor: '#F9FAFB', borderBottomLeftRadius: THEME.radius.xl, borderBottomRightRadius: THEME.radius.xl }}>
-              <button 
-                onClick={() => setSelectedDraft(null)}
-                style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleApprove}
-                disabled={saving}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: THEME.colors.primary,
-                  color: 'white',
-                  borderRadius: '10px',
-                  fontWeight: '700',
-                  border: 'none',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.7 : 1,
+            {(() => {
+              const isNewClient = selectedDraft.profile_id === null;
+              const hasCoords = draftCoordinates !== null;
+              const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
+
+              // If it's a new client AND we have coordinates AND it's OUT of coverage
+              if (isNewClient && hasCoords && !isCovered) {
+                return (
+                  <div style={{
+                    padding: '1.5rem',
+                    borderTop: `1px solid ${THEME.colors.border}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#F9FAFB',
+                    borderBottomLeftRadius: THEME.radius.xl,
+                    borderBottomRightRadius: THEME.radius.xl
+                  }}>
+                    {/* Left Side: Coverage Status */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <X size={16} strokeWidth={3} /> Fuera de Zona de Cobertura
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '600' }}>
+                          ({draftCoordinates.lat.toFixed(5)}, {draftCoordinates.lng.toFixed(5)})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Right Side: Decision Buttons */}
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button 
+                        onClick={handleRejectForCoverage}
+                        disabled={saving}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '0.65rem 1.25rem',
+                          backgroundColor: '#FAF5F5',
+                          border: '1px solid #FCA5A5',
+                          borderRadius: '24px',
+                          color: '#DC2626',
+                          fontWeight: '800',
+                          cursor: saving ? 'not-allowed' : 'pointer',
+                          fontSize: '0.85rem',
+                          transition: 'all 0.15s',
+                          opacity: saving ? 0.7 : 1
+                        }}
+                        onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
+                        onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FAF5F5'; } }}
+                      >
+                        <X size={16} strokeWidth={3} /> Rechazar Dirección
+                      </button>
+                      <button 
+                        onClick={handleApprove}
+                        disabled={saving}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '0.65rem 1.25rem',
+                          backgroundColor: '#F59E0B',
+                          border: 'none',
+                          borderRadius: '24px',
+                          color: 'white',
+                          fontWeight: '800',
+                          cursor: saving ? 'not-allowed' : 'pointer',
+                          fontSize: '0.85rem',
+                          transition: 'all 0.15s',
+                          opacity: saving ? 0.7 : 1,
+                          boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
+                        }}
+                        onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
+                        onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
+                      >
+                        <AlertTriangle size={16} /> Autorizar Excepción
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Otherwise, render the standard footer but include coverage status if coordinates are available or loading
+              return (
+                <div style={{
+                  padding: '1.5rem',
+                  borderTop: `1px solid ${THEME.colors.border}`,
                   display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
-              </button>
-            </div>
+                  backgroundColor: '#F9FAFB',
+                  borderBottomLeftRadius: THEME.radius.xl,
+                  borderBottomRightRadius: THEME.radius.xl
+                }}>
+                  {/* Left Side: Coverage status (only if new client) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                    {isNewClient && (
+                      <>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
+                        {geocoding ? (
+                          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            🔍 Validando cobertura...
+                          </span>
+                        ) : hasCoords && isCovered ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Check size={16} strokeWidth={3} /> En Zona de Cobertura
+                            </span>
+                            <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '500' }}>
+                              ({draftCoordinates!.lat.toFixed(5)}, {draftCoordinates!.lng.toFixed(5)})
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
+                            ⚠️ Sin dirección o coordenadas detectadas
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Right Side: Standard Buttons */}
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button 
+                      onClick={() => setSelectedDraft(null)}
+                      style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleApprove}
+                      disabled={saving}
+                      style={{
+                        padding: '0.75rem 1.5rem',
+                        backgroundColor: THEME.colors.primary,
+                        color: 'white',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        border: 'none',
+                        cursor: saving ? 'not-allowed' : 'pointer',
+                        opacity: saving ? 0.7 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
