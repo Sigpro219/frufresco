@@ -17,6 +17,11 @@ export default function EmailDraftsModule() {
   const [editableItems, setEditableItems] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedChannel, setSelectedChannel] = useState('all');
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const DEFAULT_B2C_POLYGON = [
     { lat: 4.647, lng: -74.062 },
@@ -25,6 +30,32 @@ export default function EmailDraftsModule() {
     { lat: 4.720, lng: -74.095 },
     { lat: 4.665, lng: -74.080 }
   ];
+
+  const checkIsNewClient = (draft: any) => {
+    if (!draft) return false;
+    if (draft.profile_id === null) return true;
+    
+    if (draft.profiles) {
+      if (draft.profiles.is_active === false) return true;
+      if (draft.profiles.role === 'b2c_client') {
+        const detectedName = draft.client_detected_name || '';
+        const profileName = draft.profiles.contact_name || draft.profiles.company_name || '';
+        if (!detectedName) return false;
+        
+        const norm1 = detectedName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const norm2 = profileName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        
+        const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+        const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+        
+        if (words1.length > 0 && words2.length > 0) {
+          const shareWord = words1.some(w => words2.includes(w));
+          if (!shareWord) return true;
+        }
+      }
+    }
+    return false;
+  };
 
   useEffect(() => {
     fetchDrafts();
@@ -166,7 +197,7 @@ export default function EmailDraftsModule() {
     try {
       const { data, error } = await supabase
         .from('order_drafts')
-        .select('*')
+        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active)')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -313,6 +344,32 @@ export default function EmailDraftsModule() {
     }
   };
 
+  const filteredDrafts = drafts.filter(draft => {
+    // 1. Search Query
+    const matchesSearch = searchQuery === '' || 
+      draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // 2. Date Filter
+    let matchesDate = true;
+    if (selectedDate) {
+      const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
+      matchesDate = draftDate === selectedDate;
+    }
+
+    // 3. Channel Filter
+    let matchesChannel = true;
+    if (selectedChannel === 'email') {
+      matchesChannel = true; // All are email inbound
+    }
+
+    return matchesSearch && matchesDate && matchesChannel;
+  });
+
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -346,12 +403,40 @@ export default function EmailDraftsModule() {
           backgroundColor: 'white', 
           border: `1px solid ${THEME.colors.border}`, 
           borderRadius: THEME.radius.md,
-          padding: '0.6rem 1rem',
-          gap: '12px'
+          padding: '0.4rem 0.8rem',
+          gap: '8px'
         }}>
           <Calendar size={16} color="#6B7280" />
-          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111827' }}>07 / 06 / 2026</span>
-          <Calendar size={16} color="#111827" />
+          <input 
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              border: 'none',
+              outline: 'none',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              color: '#111827',
+              fontFamily: 'inherit',
+              cursor: 'pointer'
+            }}
+          />
+          {selectedDate && (
+            <button 
+              onClick={() => setSelectedDate('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Search Input */}
@@ -369,6 +454,8 @@ export default function EmailDraftsModule() {
           <input 
             type="text" 
             placeholder="Buscar por ID, empresa, @estado..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{ 
               border: 'none', 
               background: 'transparent', 
@@ -379,34 +466,119 @@ export default function EmailDraftsModule() {
               fontWeight: 600
             }} 
           />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Channel Dropdown */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          backgroundColor: '#F9FAFB', 
-          border: 'none', 
-          borderRadius: THEME.radius.md,
-          padding: '0.6rem 1rem',
-          gap: '12px',
-          cursor: 'pointer'
-        }}>
-          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111827' }}>Todos los canales</span>
+        <div 
+          onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
+          style={{ 
+            position: 'relative',
+            display: 'flex', 
+            alignItems: 'center', 
+            backgroundColor: '#F9FAFB', 
+            border: 'none', 
+            borderRadius: THEME.radius.md,
+            padding: '0.6rem 1rem',
+            gap: '12px',
+            cursor: 'pointer'
+          }}
+        >
+          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111827' }}>
+            {selectedChannel === 'all' ? 'Todos los canales' : selectedChannel === 'email' ? 'Email Inbound' : 'Otros'}
+          </span>
           <ChevronDown size={16} color="#6B7280" />
+          
+          {isChannelDropdownOpen && (
+            <div style={{
+              position: 'absolute',
+              top: '45px',
+              right: 0,
+              backgroundColor: 'white',
+              border: `1px solid ${THEME.colors.border}`,
+              borderRadius: THEME.radius.md,
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              zIndex: 10,
+              minWidth: '160px',
+              overflow: 'hidden'
+            }}>
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedChannel('all');
+                  setIsChannelDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedChannel === 'all' ? THEME.colors.primary : '#4B5563',
+                  backgroundColor: selectedChannel === 'all' ? '#ECFDF5' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedChannel === 'all' ? '#ECFDF5' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedChannel === 'all' ? '#ECFDF5' : 'transparent'}
+              >
+                Todos los canales
+              </div>
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedChannel('email');
+                  setIsChannelDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedChannel === 'email' ? THEME.colors.primary : '#4B5563',
+                  backgroundColor: selectedChannel === 'email' ? '#ECFDF5' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedChannel === 'email' ? '#ECFDF5' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedChannel === 'email' ? '#ECFDF5' : 'transparent'}
+              >
+                Email Inbound
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Info Icon */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          backgroundColor: '#EFF6FF', 
-          borderRadius: THEME.radius.md,
-          width: '38px',
-          height: '38px',
-          cursor: 'pointer'
-        }}>
+        <div 
+          onClick={() => alert('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.')}
+          title="Ayuda del módulo"
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#EFF6FF', 
+            borderRadius: THEME.radius.md,
+            width: '38px',
+            height: '38px',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+        >
           <Info size={20} color="#3B82F6" strokeWidth={3} />
         </div>
 
@@ -419,40 +591,50 @@ export default function EmailDraftsModule() {
           padding: '4px',
           gap: '4px'
         }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '6px', 
-            padding: '4px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            cursor: 'pointer'
-          }}>
-            <List size={16} color="#111827" />
+          <div 
+            onClick={() => setViewMode('list')}
+            style={{ 
+              backgroundColor: viewMode === 'list' ? 'white' : 'transparent', 
+              borderRadius: '6px', 
+              padding: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              cursor: 'pointer',
+              opacity: viewMode === 'list' ? 1 : 0.5
+            }}
+          >
+            <List size={16} color={viewMode === 'list' ? "#111827" : "#6B7280"} />
           </div>
-          <div style={{ 
-            padding: '4px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            opacity: 0.5
-          }}>
-            <Grid size={16} color="#6B7280" />
+          <div 
+            onClick={() => setViewMode('grid')}
+            style={{ 
+              backgroundColor: viewMode === 'grid' ? 'white' : 'transparent', 
+              borderRadius: '6px', 
+              padding: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: viewMode === 'grid' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              cursor: 'pointer',
+              opacity: viewMode === 'grid' ? 1 : 0.5
+            }}
+          >
+            <Grid size={16} color={viewMode === 'grid' ? "#111827" : "#6B7280"} />
           </div>
         </div>
       </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
-      ) : drafts.length === 0 ? (
+      ) : filteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
           <Mail size={32} style={{ opacity: 0.3, marginBottom: '1rem', color: '#9CA3AF' }} />
           <h3 style={{ fontSize: '1.1rem', color: '#4B5563', margin: '0 0 4px 0' }}>Bandeja Vacía</h3>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No hay correos pendientes.</p>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No se encontraron correos con los filtros actuales.</p>
         </div>
-      ) : (
+      ) : viewMode === 'list' ? (
         <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
@@ -466,7 +648,7 @@ export default function EmailDraftsModule() {
               </tr>
             </thead>
             <tbody>
-              {drafts.map((draft) => {
+              {filteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
                 const itemsCount = getDraftItems(draft).length;
                 return (
@@ -518,6 +700,77 @@ export default function EmailDraftsModule() {
             </tbody>
           </table>
         </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+          {filteredDrafts.map((draft) => {
+            const meta = getDraftMetadata(draft);
+            const itemsCount = getDraftItems(draft).length;
+            return (
+              <div 
+                key={draft.id} 
+                onClick={() => setSelectedDraft(draft)}
+                style={{ 
+                  backgroundColor: 'white', 
+                  borderRadius: THEME.radius.lg, 
+                  border: `1px solid ${THEME.colors.border}`, 
+                  padding: '1.25rem', 
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.primary;
+                  e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = THEME.colors.border;
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <span style={{ backgroundColor: '#ECFDF5', color: THEME.colors.primary, padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
+                    EMAIL B2C
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 600 }}>
+                    {new Date(draft.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827', marginTop: '4px' }}>
+                  {draft.client_detected_name || 'Desconocido'}
+                </div>
+                
+                <div style={{ fontSize: '0.8rem', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Mail size={12} /> {draft.source_email}
+                </div>
+                
+                <div style={{ fontSize: '0.8rem', color: '#4B5563', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '8px', marginTop: '4px' }}>
+                  <strong>Dirección:</strong> {meta.address !== 'No detectado' ? meta.address : '-'}
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: '#4B5563' }}>
+                  <strong>Asunto:</strong> {draft.email_subject || '-'}
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
+                    {itemsCount} productos
+                  </span>
+                  <button 
+                    onClick={(e) => handleDelete(draft.id, e)}
+                    style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
+                    title="Rechazar"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Modal de Aprobación */}
@@ -555,7 +808,7 @@ export default function EmailDraftsModule() {
 
             {/* Modal Body */}
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
-              {selectedDraft.profile_id === null && (
+              {checkIsNewClient(selectedDraft) && (
                 <div style={{
                   backgroundColor: '#FEF3C7',
                   borderLeft: '4px solid #D97706',
@@ -601,7 +854,7 @@ export default function EmailDraftsModule() {
                   {draftCoordinates && (
                     <div style={{
                       fontSize: '0.8rem',
-                      color: selectedDraft.profile_id === null
+                      color: checkIsNewClient(selectedDraft)
                         ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
                         : '#059669',
                       fontWeight: 600,
@@ -611,7 +864,7 @@ export default function EmailDraftsModule() {
                     }}>
                       <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
                       <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
-                      {selectedDraft.profile_id === null && (
+                      {checkIsNewClient(selectedDraft) && (
                         <span>
                           {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
                             ? '✅ En Zona de Cobertura'
@@ -751,7 +1004,7 @@ export default function EmailDraftsModule() {
 
             {/* Modal Footer */}
             {(() => {
-              const isNewClient = selectedDraft.profile_id === null;
+              const isNewClient = checkIsNewClient(selectedDraft);
               const hasCoords = draftCoordinates !== null;
               const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
 
