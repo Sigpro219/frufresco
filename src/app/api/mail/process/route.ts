@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase';
 
 export async function POST(req: Request) {
+  let payload: any = null;
+  const supabaseAdmin = createAdminClient();
   try {
-    const payload = await req.json();
+    payload = await req.json();
     console.log('[Mail Queue Processor] Received webhook:', JSON.stringify(payload));
 
     // Webhook payload from Supabase has 'record' containing the row values
@@ -15,7 +17,7 @@ export async function POST(req: Request) {
     const { id, to_email, subject, message, template } = record;
 
     // 1. Mark mail status as 'processing' to avoid double sends
-    await supabase
+    await supabaseAdmin
       .from('mail')
       .update({ status: 'processing' })
       .eq('id', id);
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
             <td style="padding: 10px 0; font-family: sans-serif; font-size: 14px;">${it.name}</td>
             <td style="padding: 10px 0; text-align: center; font-family: sans-serif; font-size: 14px; font-weight: bold;">${it.quantity}</td>
             <td style="padding: 10px 0; text-align: right; font-family: sans-serif; font-size: 14px;">$${it.price}</td>
+            <td style="padding: 10px 0; text-align: right; font-family: sans-serif; font-size: 14px; font-weight: bold;">$${it.total || it.price}</td>
           </tr>
         `).join('');
 
@@ -63,7 +66,8 @@ export async function POST(req: Request) {
                   <tr style="border-bottom: 2px solid #E5E7EB; text-align: left; font-size: 11px; color: #9CA3AF; text-transform: uppercase;">
                     <th style="padding-bottom: 8px;">Producto</th>
                     <th style="padding-bottom: 8px; text-align: center;">Cant.</th>
-                    <th style="padding-bottom: 8px; text-align: right;">Precio</th>
+                    <th style="padding-bottom: 8px; text-align: right;">Unit.</th>
+                    <th style="padding-bottom: 8px; text-align: right;">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,56 +94,90 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Send via Resend API
+    // 3. Send the email
     const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      throw new Error('Missing RESEND_API_KEY in environment variables');
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    let messageId = 'simulated-id';
+
+    if (resendApiKey) {
+      console.log('[Mail Queue Processor] Sending via Resend API...');
+      const emailPayload = {
+        from: 'FruFresco <pedidos@frufresco.com>',
+        to: [to_email],
+        subject: subject || 'Confirmación de Compra - FruFresco',
+        html: htmlContent,
+        text: textContent
+      };
+
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailPayload)
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`Resend API failed: ${errBody}`);
+      }
+
+      const resData = await res.json();
+      messageId = resData.id;
+      console.log('[Mail Queue Processor] Resend response:', resData);
+
+    } else if (smtpUser && smtpPass) {
+      console.log('[Mail Queue Processor] Sending via SMTP (Nodemailer)...');
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+
+        const mailOptions = {
+          from: 'FruFresco <pedidos@frufresco.com>',
+          to: to_email,
+          subject: subject || 'Confirmación de Compra - FruFresco',
+          html: htmlContent,
+          text: textContent
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        messageId = info.messageId || 'smtp-id';
+        console.log('[Mail Queue Processor] SMTP email sent successfully:', messageId);
+      } catch (smtpErr: any) {
+        console.error('[Mail Queue Processor] SMTP Send failed, trying fallback log...', smtpErr.message);
+        throw smtpErr;
+      }
+    } else {
+      console.warn('[Mail Queue Processor] No email credentials found (RESEND_API_KEY or SMTP_USER/SMTP_PASS). Simulating send in development.');
     }
 
-    const emailPayload = {
-      from: 'FruFresco <pedidos@frufresco.com>',
-      to: [to_email],
-      subject: subject || 'Confirmación de Compra - FruFresco',
-      html: htmlContent,
-      text: textContent
-    };
-
-    console.log('[Mail Queue Processor] Calling Resend API...');
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(emailPayload)
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text();
-      throw new Error(`Resend API failed: ${errBody}`);
-    }
-
-    const resData = await res.json();
-    console.log('[Mail Queue Processor] Resend response:', resData);
-
-    // 4. Update status to 'sent'
-    await supabase
+    // 4. Update status to 'sent' and save the generated template message
+    await supabaseAdmin
       .from('mail')
       .update({
         status: 'sent',
-        sent_at: new Date().toISOString()
+        sent_at: new Date().toISOString(),
+        message: { html: htmlContent, text: textContent }
       })
       .eq('id', id);
 
-    return NextResponse.json({ success: true, messageId: resData.id });
+    return NextResponse.json({ success: true, messageId });
 
   } catch (err: any) {
     console.error('[Mail Queue Processor] Critical Error:', err.message);
     
     // Update status to 'failed' in DB
-    const recordId = (await req.clone().json()).record?.id;
+    const recordId = payload?.record?.id;
     if (recordId) {
-      await supabase
+      await supabaseAdmin
         .from('mail')
         .update({
           status: 'failed',

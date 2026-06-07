@@ -32,13 +32,8 @@ export async function POST(req: Request) {
 
     console.log(`[Email Inbound] Received mail from ${senderEmail} with subject: ${subject}`);
 
-    // 1. Identify Client in our database
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('id, company_name, contact_name')
-      .eq('email', senderEmail)
-      .limit(1)
-      .maybeSingle();
+    // 1. Declare client profile reference
+    let profile: any = null;
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
@@ -48,7 +43,7 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
-    let extractedData = {
+    let extractedData: any = {
       clientInDocument: '',
       documentType: 'Email',
       items: []
@@ -63,23 +58,25 @@ export async function POST(req: Request) {
       const mimeType = attachment.content_type || 'application/pdf';
 
       const prompt = `
-        Eres un asistente de logística experto en FruFresco.
-        Analiza esta orden de compra adjunta al correo.
+        Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         
         TAREA:
-        1. Identifica el nombre del CLIENTE mencionado en el documento.
-        2. Extrae todos los productos solicitados junto con su cantidad numérica.
-        3. Determina el tipo de documento (PDF, Excel, etc.).
+        1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF).
+        2. Identifica el nombre o empresa del CLIENTE.
+        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes.
+        4. Extrae todos los productos solicitados y su cantidad numérica.
         
         REGLAS CRÍTICAS:
-        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin markdown (ej. no uses \`\`\`json).
-        - Si el nombre del producto es ambiguo, mantén el nombre original del documento.
-        - Las cantidades deben ser números.
+        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
+        - Las cantidades deben ser estrictamente numéricas (si dice "una libra", pon 1. Si no hay cantidad, asume 1).
         
         FORMATO DE RESPUESTA ESPERADO:
         {
-          "clientInDocument": "Nombre del Cliente Detectado",
-          "documentType": "PDF",
+          "clientInDocument": "Nombre o Empresa Detectada",
+          "documentType": "Imagen/WhatsApp/PDF",
+          "address": "Dirección extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
           ]
@@ -117,6 +114,7 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
+        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes en el texto o en la firma.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -126,6 +124,9 @@ export async function POST(req: Request) {
         {
           "clientInDocument": "Nombre o Empresa Detectada",
           "documentType": "Email",
+          "address": "Dirección extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
           "items": [
             { "originalName": "Tomate Chonto", "quantity": 15 }
           ]
@@ -136,6 +137,7 @@ export async function POST(req: Request) {
       const response = await result.response;
       let text = response.text().trim();
       text = text.replace(/^```json/, '').replace(/```$/, '').trim();
+      extractedData = {};
       try {
         extractedData = JSON.parse(text);
       } catch (e) {
@@ -143,16 +145,74 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Save draft to public.order_drafts
+    // 3. Identify Client in our database (only active profiles, and matching names for B2C)
+    const { data: candidateProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, company_name, contact_name, role, is_active')
+      .eq('email', senderEmail)
+      .eq('is_active', true);
+
+    if (candidateProfiles && candidateProfiles.length > 0) {
+      const detectedName = extractedData.clientInDocument || '';
+      
+      const namesMatch = (detName: string, profName: string): boolean => {
+        if (!detName || !profName) return false;
+        const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        
+        const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+        const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+        
+        return words1.some(w => words2.includes(w));
+      };
+
+      if (candidateProfiles.length === 1) {
+        const candidate = candidateProfiles[0];
+        if (candidate.role === 'b2b_client') {
+          profile = candidate;
+        } else {
+          if (!detectedName || namesMatch(detectedName, candidate.contact_name || '') || namesMatch(detectedName, candidate.company_name || '')) {
+            profile = candidate;
+          }
+        }
+      } else {
+        const exactOrSimilarMatch = candidateProfiles.find(p => 
+          namesMatch(detectedName, p.contact_name || '') || namesMatch(detectedName, p.company_name || '')
+        );
+        if (exactOrSimilarMatch) {
+          profile = exactOrSimilarMatch;
+        } else {
+          const b2bCandidate = candidateProfiles.find(p => p.role === 'b2b_client');
+          if (b2bCandidate) {
+            profile = b2bCandidate;
+          }
+        }
+      }
+    }
+
+    // 4. Save draft to public.order_drafts
+    // Use an explicit UUID so we can reference its short ID immediately
+    const draftUuid = crypto.randomUUID();
+    const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
+
     const { data: newDraft, error: draftError } = await supabaseAdmin
       .from('order_drafts')
       .insert({
+        id: draftUuid,
         profile_id: profile ? profile.id : null,
         client_detected_name: extractedData.clientInDocument || profile?.company_name || 'Desconocido',
         source_email: senderEmail,
-        email_subject: subject,
+        email_subject: `[${shortCode}] ${subject}`,
         email_body: plainText,
-        extracted_items: extractedData.items || [],
+        extracted_items: [
+          { 
+            isMetadata: true, 
+            address: extractedData.address || null,
+            phone: extractedData.phone || null,
+            nit: extractedData.nit || null
+          },
+          ...(extractedData.items || [])
+        ],
         status: 'pending'
       })
       .select()
@@ -180,6 +240,42 @@ export async function POST(req: Request) {
 
         const today = new Date().toLocaleDateString('es-CO');
         
+        // Cargar memoria de alias de productos
+        const { data: aliasRecord } = await supabaseAdmin
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'ai_product_aliases')
+          .maybeSingle();
+
+        let aliases: Record<string, string> = {};
+        if (aliasRecord?.value) {
+          try {
+            aliases = typeof aliasRecord.value === 'string' ? JSON.parse(aliasRecord.value) : aliasRecord.value;
+          } catch (e) {
+            console.error('[Email Inbound] Failed to parse aliases:', e);
+          }
+        }
+
+        // Fetch active products once for in-memory smart matching
+        let dbProducts: any[] = [];
+        try {
+          const { data: productsData } = await supabaseAdmin
+            .from('products')
+            .select('id, name, base_price, unit_of_measure')
+            .eq('is_active', true);
+          if (productsData) dbProducts = productsData;
+        } catch (e) {
+          console.error('[Email Inbound] Failed to fetch active products:', e);
+        }
+
+        // Formateador local de moneda (separador de miles con punto)
+        const formatMoneyLocal = (num: number): string => {
+          if (num === null || num === undefined || isNaN(num)) return '$0';
+          const parts = Math.round(num).toFixed(0).split('.');
+          parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          return `$${parts.join(',')}`;
+        };
+
         // Build items HTML and calculate total
         let itemsHtml = '';
         let totalOrderAmount = 0;
@@ -193,16 +289,27 @@ export async function POST(req: Request) {
           const searchName = item.originalName || item.name || '';
           
           if (searchName) {
-            // Search in DB
-            const { data: matchedProducts } = await supabaseAdmin
-              .from('products')
-              .select('base_price, unit_of_measure')
-              .ilike('name', `%${searchName}%`)
-              .limit(1);
-            
-            if (matchedProducts && matchedProducts.length > 0) {
-              price = matchedProducts[0].base_price || 0;
-              unit = matchedProducts[0].unit_of_measure || '';
+            const cleanSearch = searchName.toLowerCase().trim();
+            const aliasProductId = aliases[cleanSearch];
+            let matchedProduct = null;
+
+            if (aliasProductId) {
+              matchedProduct = dbProducts.find(p => p.id === aliasProductId);
+            }
+
+            if (!matchedProduct) {
+              // Smart Auto Match (matching the UI algorithm)
+              const firstWord = cleanSearch.split(' ')[0]?.replace(/[()0-9]/g, '');
+              matchedProduct = dbProducts.find((p: any) => {
+                const prodNameLower = p.name.toLowerCase();
+                return cleanSearch.includes(prodNameLower) || 
+                       (firstWord && firstWord.length > 2 && prodNameLower.includes(firstWord));
+              });
+            }
+
+            if (matchedProduct) {
+              price = matchedProduct.base_price || 0;
+              unit = matchedProduct.unit_of_measure || '';
             }
           }
           
@@ -211,7 +318,7 @@ export async function POST(req: Request) {
           
           let lineTotalDisplay = '';
           if (price > 0) {
-            lineTotalDisplay = `$${lineTotal.toLocaleString('es-CO')}`;
+            lineTotalDisplay = formatMoneyLocal(lineTotal);
           } else {
             lineTotalDisplay = 'Por confirmar';
             hasPendingPrices = true;
@@ -220,19 +327,19 @@ export async function POST(req: Request) {
           const productNameDisplay = `${searchName || 'Producto'}${unit ? ` (${unit})` : ''}`;
 
           itemsHtml += `
-            <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 12px 5px; color: #333;">${productNameDisplay}</td>
-                <td style="padding: 12px 5px; text-align: center; color: #666;">${qty}</td>
-                <td style="padding: 12px 5px; text-align: right; color: #333; font-weight: bold;">${lineTotalDisplay}</td>
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
+                <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qty}</td>
+                <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
             </tr>
           `;
         }
         
         let totalOrderDisplay = '';
         if (totalOrderAmount > 0) {
-          totalOrderDisplay = `Total Aprox: $${totalOrderAmount.toLocaleString('es-CO')}`;
+          totalOrderDisplay = `Total Aprox: ${formatMoneyLocal(totalOrderAmount)}`;
           if (hasPendingPrices) {
-             totalOrderDisplay += ' <span style="font-size: 11px; color: #666;">(+ Ítems por confirmar)</span>';
+             totalOrderDisplay += ' <span style="font-size: 11px; color: #6B7280; font-weight: normal;">(+ Ítems por confirmar)</span>';
           }
         } else {
           totalOrderDisplay = 'Total: A confirmar en despacho';
@@ -245,26 +352,26 @@ export async function POST(req: Request) {
         }
         
         const clientName = extractedClientName || profile?.company_name || profile?.contact_name || '';
-        const draftIdStr = newDraft.id.substring(0, 8).toUpperCase(); // Short ID
+        const draftIdStr = shortCode;
 
         const emailHtml = `
-<div style="font-family: 'Playfair Display', serif; color: #286a36; padding: 40px; background-color: #ffffff; border-radius: 20px; max-width: 600px; margin: auto;">
+<div style="font-family: 'Outfit', sans-serif; color: #111827; padding: 40px; background-color: #F9FAFB; border-radius: 20px; max-width: 600px; margin: auto; border: 1px solid #E5E7EB;">
     <center>
-        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;">
-        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
-        <p style="font-size: 16px; color: #555;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
+        <img src="https://frufresco.com/logo.png" width="120" style="margin-bottom: 20px;" alt="FruFresco Logo">
+        <h1 style="color: #10B981; font-weight: 800; font-size: 24px; margin-bottom: 5px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
+        <p style="font-size: 14px; color: #6B7280; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
     
-    <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-        <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
+    <div style="background: white; padding: 30px; border-radius: 16px; border-left: 5px solid #10B981; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-top: 20px;">
+        <h3 style="color: #10B981; margin-top: 0; font-size: 18px; border-bottom: 1px solid #F3F4F6; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
+        <p style="font-size: 13px; color: #6B7280; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
         
         <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
             <thead>
-                <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
-                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
+                <tr style="border-bottom: 2px solid #E5E7EB; color: #9CA3AF; text-transform: uppercase; font-size: 11px; text-align: left;">
+                    <th style="padding-bottom: 8px; font-weight: bold;">Producto</th>
+                    <th style="padding-bottom: 8px; font-weight: bold; text-align: center;">Cant.</th>
+                    <th style="padding-bottom: 8px; font-weight: bold; text-align: right;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -272,31 +379,43 @@ export async function POST(req: Request) {
             </tbody>
         </table>
         
-        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-            <p style="font-size: 16px; color: #286a36; margin: 0;"><b>${totalOrderDisplay}</b></p>
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #E5E7EB; text-align: right;">
+            <p style="font-size: 16px; color: #111827; margin: 0; font-weight: 800;">
+                <span style="color: #10B981;">${totalOrderDisplay}</span>
+            </p>
         </div>
     </div>
 
-    <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
+    <p style="margin-top: 30px; text-align: center; color: #6B7280; font-size: 14px; line-height: 1.5;">
         Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
         Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
     </p>
     
-    <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
+    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 40px 0;">
     
     <center>
-        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
+        <p style="font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Mesa</p>
     </center>
 </div>
         `;
 
         await transporter.sendMail({
-          from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
+          from: `"FruFresco (Pedidos)" <${process.env.SMTP_USER}>`,
           to: senderEmail,
           subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
           html: emailHtml,
         });
         console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
+
+        // Guarda copia en la tabla mail para el historial
+        await supabaseAdmin.from('mail').insert({
+          to_email: senderEmail,
+          subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
+          message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
+        });
 
       } catch (emailError) {
         console.error('[Email Inbound] Failed to send confirmation email:', emailError);

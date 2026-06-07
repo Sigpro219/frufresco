@@ -60,7 +60,7 @@ function CreateOrderContent() {
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
     const [selectedClientB2C, setSelectedClientB2C] = useState('');
-    const [guestInfo, setGuestInfo] = useState({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '' }); // For B2C New
+    const [guestInfo, setGuestInfo] = useState({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); // For B2C New
 
     const [latitude, setLatitude] = useState<number | null>(null);
     const [longitude, setLongitude] = useState<number | null>(null);
@@ -153,14 +153,15 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices')
                 .eq('role', 'b2b_client')
                 .order('company_name', { ascending: true });
 
             const fetchB2C = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, phone, latitude, longitude, email, city, municipality, delivery_restrictions, geocoding_status')
+                .select('id, company_name, contact_name, nit, address, contact_phone, phone, latitude, longitude, email, city, municipality, delivery_restrictions, geocoding_status, document_type, remission_with_prices')
                 .eq('role', 'b2c_client') // Matched with Admin Drivers Core
+                .eq('is_active', true)
                 .order('contact_name', { ascending: true });
 
             const [resB2B, resB2C] = await Promise.all([fetchB2B, fetchB2C]);
@@ -211,7 +212,19 @@ function CreateOrderContent() {
                             }
                         } else {
                             const b2cMatch = (resB2C.data || []).find(c => c.id === draft.profile_id);
-                            if (b2cMatch) {
+                            const detectedName = draft.client_detected_name || '';
+                            const namesMatch = (detName: string, profName: string): boolean => {
+                                if (!detName || !profName) return false;
+                                const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                                const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                                const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+                                const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+                                return words1.some(w => words2.includes(w));
+                            };
+                            
+                            const shouldMatch = b2cMatch && (!detectedName || namesMatch(detectedName, b2cMatch.contact_name || '') || namesMatch(detectedName, b2cMatch.company_name || ''));
+
+                            if (shouldMatch && b2cMatch) {
                                 setClientType('B2C');
                                 setB2CMode('search');
                                 setSelectedClientB2C(b2cMatch.id);
@@ -221,46 +234,88 @@ function CreateOrderContent() {
                                     address: b2cMatch.address || '',
                                     city: b2cMatch.city || 'Bogotá',
                                     email: b2cMatch.email || '',
-                                    nit: b2cMatch.nit || ''
+                                    nit: b2cMatch.nit || '',
+                                    saveToDirectory: true
                                 });
                                 if (b2cMatch.latitude && b2cMatch.longitude) {
                                     setLatitude(b2cMatch.latitude);
                                     setLongitude(b2cMatch.longitude);
                                 }
+                            } else {
+                                const items = draft.extracted_items || [];
+                                const metadataItem = items.find((i: any) => i.isMetadata);
+                                const extractedAddress = metadataItem?.address || draft.extracted_address || '';
+                                const extractedPhone = metadataItem?.phone || draft.extracted_phone || '';
+                                const extractedNit = metadataItem?.nit || draft.extracted_nit || '';
+
+                                setClientType('B2C');
+                                setB2CMode('new');
+                                setGuestInfo(prev => ({
+                                    ...prev,
+                                    name: draft.client_detected_name || '',
+                                    email: draft.source_email || '',
+                                    address: extractedAddress,
+                                    phone: extractedPhone,
+                                    nit: extractedNit,
+                                    saveToDirectory: true
+                                }));
                             }
                         }
                     } else {
+                        // Extraer metadata si existe (para evitar errores SQL, los guardamos en el primer item)
+                        const items = draft.extracted_items || [];
+                        const metadataItem = items.find((i: any) => i.isMetadata);
+                        const actualItems = items.filter((i: any) => !i.isMetadata);
+                        
+                        const extractedAddress = metadataItem?.address || draft.extracted_address || '';
+                        const extractedPhone = metadataItem?.phone || draft.extracted_phone || '';
+                        const extractedNit = metadataItem?.nit || draft.extracted_nit || '';
+
                         setClientType('B2C');
                         setB2CMode('new');
                         setGuestInfo(prev => ({
                             ...prev,
                             name: draft.client_detected_name || '',
-                            email: draft.source_email || ''
+                            email: draft.source_email || '',
+                            address: extractedAddress,
+                            phone: extractedPhone,
+                            nit: extractedNit
                         }));
-                    }
+                        if (extractedAddress) {
+                            handleGeocode(extractedAddress, 'Bogotá');
+                        }
 
-                    // Cargar productos al carrito
-                    if (draft.extracted_items && Array.isArray(draft.extracted_items)) {
-                        const newCartItems: any[] = [];
-                        draft.extracted_items.forEach((item: any) => {
-                            const matchedProd = prods.find((p: any) => 
-                                item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
-                                p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0])
-                            );
-                            if (matchedProd) {
-                                newCartItems.push({
-                                    product: matchedProd,
-                                    qty: item.quantity || 1,
-                                    variant_label: undefined,
-                                    selected_options: undefined
+                        // Cargar productos al carrito
+                        if (actualItems && actualItems.length > 0) {
+                            setLoading(true);
+                            const { data: dbProducts } = await supabase
+                                .from('products')
+                                .select('*')
+                                .eq('is_active', true);
+                            
+                            if (dbProducts) {
+                                const newCartItems: any[] = [];
+                                actualItems.forEach((item: any) => {
+                                    const matchedProd = dbProducts.find((p: any) => {
+                                        if (item.matched_product_id) return p.id === item.matched_product_id;
+                                        return item.originalName.toLowerCase().includes(p.name.toLowerCase()) ||
+                                               p.name.toLowerCase().includes(item.originalName.toLowerCase().split(' ')[0]);
+                                    });
+                                    if (matchedProd) {
+                                        newCartItems.push({
+                                            product: matchedProd,
+                                            qty: item.quantity || 1,
+                                            variant_label: undefined,
+                                            selected_options: undefined
+                                        });
+                                    }
                                 });
+                                setCart(newCartItems);
                             }
-                        });
-                        setCart(newCartItems);
+                        }
                     }
                 }
             }
-
         } catch (e) {
             console.error("Excepción en loadData:", e);
         }
@@ -279,7 +334,8 @@ function CreateOrderContent() {
             address: client.address || '',
             city: client.city || 'Bogotá',
             email: client.email || '',
-            nit: client.nit || ''
+            nit: client.nit || '',
+            saveToDirectory: true
         });
         if (client.latitude && client.longitude) {
             setLatitude(client.latitude);
@@ -493,14 +549,16 @@ function CreateOrderContent() {
         }));
     };
 
-    const handleGeocode = async () => {
-        if (!guestInfo.address || !guestInfo.city) {
+    const handleGeocode = async (directAddress?: string, directCity?: string) => {
+        const addr = directAddress || guestInfo.address;
+        const cty = directCity || guestInfo.city;
+        if (!addr || !cty) {
             alert("Por favor ingrese dirección y ciudad para validar coordenadas.");
             return;
         }
         setIsGettingLocation(true);
         try {
-            const response = await fetch(`/api/geocode?address=${encodeURIComponent(guestInfo.address)}&city=${encodeURIComponent(guestInfo.city)}`);
+            const response = await fetch(`/api/geocode?address=${encodeURIComponent(addr)}&city=${encodeURIComponent(cty)}`);
             const data = await response.json();
 
             if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -509,7 +567,7 @@ function CreateOrderContent() {
                 const lon = location.lng;
                 setLatitude(lat);
                 setLongitude(lon);
-                setLastGeocodedAddress(guestInfo.address);
+                setLastGeocodedAddress(addr);
 
                 // Validar Geocerca
                 if (b2cGeofence.length > 0) {
@@ -619,7 +677,8 @@ function CreateOrderContent() {
                             geocoding_status: (outOfZone && hasCoverageOverride) ? 'OVERRIDE' : 'VALID',
                             created_at: new Date().toISOString(),
                             email: guestInfo.email || null,
-                            nit: guestInfo.nit || null
+                            nit: guestInfo.nit || null,
+                            is_active: guestInfo.saveToDirectory
                         });
 
                     if (profileError) {
@@ -685,6 +744,25 @@ function CreateOrderContent() {
                 };
             }
 
+            let finalDocumentType = 'invoice';
+            let finalRemissionWithPrices = true;
+
+            if (clientType === 'B2B') {
+                const b2bDetails = getSelectedClientDetails();
+                if (b2bDetails) {
+                    finalDocumentType = (b2bDetails as any).document_type || 'invoice';
+                    finalRemissionWithPrices = (b2bDetails as any).remission_with_prices !== undefined ? (b2bDetails as any).remission_with_prices : true;
+                }
+            } else {
+                if (b2cMode !== 'new') {
+                    const b2cDetails = getSelectedB2CDetails();
+                    if (b2cDetails) {
+                        finalDocumentType = (b2cDetails as any).document_type || 'invoice';
+                        finalRemissionWithPrices = (b2cDetails as any).remission_with_prices !== undefined ? (b2cDetails as any).remission_with_prices : true;
+                    }
+                }
+            }
+
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
@@ -702,6 +780,8 @@ function CreateOrderContent() {
                     shipping_address: shippingAddress,
                     latitude: latitude,
                     longitude: longitude,
+                    document_type: finalDocumentType,
+                    remission_with_prices: finalRemissionWithPrices,
                     // New Manual Delivery Fields
                     is_manual_delivery: isManualDelivery,
                     manual_delivery_time: manualDeliveryTime || null,
@@ -769,10 +849,12 @@ function CreateOrderContent() {
                 console.log(`[Outbound Mail] Enqueueing confirmation email to ${customerEmail}`);
                 const formattedItems = cart.map(item => {
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                    const unitPrice = item.product.base_price || 0;
                     return {
                         name: item.product.name + (item.variant_label ? ` (${item.variant_label})` : ''),
                         quantity: qtyNum,
-                        price: formatNumber(item.product.base_price)
+                        price: formatNumber(unitPrice),
+                        total: formatNumber(unitPrice * qtyNum)
                     };
                 });
 
@@ -1106,7 +1188,7 @@ function CreateOrderContent() {
                                                         </div>
                                                     </div>
                                                     <button
-                                                        onClick={() => { setSelectedClientB2C(''); setGuestInfo({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '' }); }}
+                                                        onClick={() => { setSelectedClientB2C(''); setGuestInfo({ name: '', phone: '', address: '', city: 'Bogotá', email: '', nit: '', saveToDirectory: true }); }}
                                                         style={{ background: 'transparent', border: 'none', color: '#2563EB', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.2rem' }}
                                                     >
                                                         ✕
@@ -1239,7 +1321,7 @@ function CreateOrderContent() {
                                                         style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                     />
                                                     <button
-                                                        onClick={handleGeocode}
+                                                        onClick={() => handleGeocode()}
                                                         disabled={isGettingLocation}
                                                         type="button"
                                                         style={{
@@ -2193,7 +2275,8 @@ function CreateOrderContent() {
                                                             geocoding_status: 'OVERRIDE',
                                                             created_at: new Date().toISOString(),
                                                             email: guestInfo.email || null,
-                                                            nit: guestInfo.nit || null
+                                                            nit: guestInfo.nit || null,
+                                                            is_active: guestInfo.saveToDirectory
                                                         });
 
                                                     if (profileError) {
