@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
           <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Novedad sobre tu pedido</h3>
           <p style="font-size: 15px; line-height: 1.5; color: #111827;">Hola,</p>
-          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Lamentamos informarte que hemos tenido que rechazar tu solicitud de pedido enviado por correo electrónico.</p>
+          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte sobre el estado de cobertura de tu solicitud de pedido enviado por correo electrónico.</p>
           <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">La dirección proporcionada (<b>${addressStr}</b>) se encuentra <b>fuera de nuestra zona de cobertura actual</b> en Bogotá.</p>
           <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos mucho tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>
         </div>
@@ -56,9 +56,9 @@ export async function POST(req: Request) {
         const info = await transporter.sendMail({
           from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
           to: sourceEmail,
-          subject: 'Rechazo de Pedido - Fuera de Zona de Cobertura',
+          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
           html: emailHtml,
-          text: `Hola. Lamentamos informarte que tu solicitud de pedido ha sido rechazada debido a que la dirección proporcionada (${addressStr}) se encuentra fuera de nuestra zona de cobertura en Bogotá.`
+          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
         });
 
         messageId = info.messageId || 'smtp-id';
@@ -92,9 +92,9 @@ export async function POST(req: Request) {
       .from('mail')
       .insert({
         to_email: sourceEmail,
-        subject: 'Rechazo de Pedido - Fuera de Zona de Cobertura',
+        subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
         message: {
-          text: `Hola. Lamentamos informarte que tu solicitud de pedido ha sido rechazada debido a que la dirección proporcionada (${addressStr}) se encuentra fuera de nuestra zona de cobertura en Bogotá.`,
+          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
           html: emailHtml
         },
         status: emailSent ? 'sent' : 'failed',
