@@ -1027,7 +1027,7 @@ export default function HRManagement() {
                                                     max-width: 45mm;
                                                 }
                                                 .title-name {
-                                                    font-size: 13pt;
+                                                    font-size: 10.5pt;
                                                     font-weight: 800;
                                                     color: #0f172a;
                                                     margin: 0 0 4px 0;
@@ -1035,7 +1035,7 @@ export default function HRManagement() {
                                                     text-transform: uppercase;
                                                 }
                                                 .role-badge {
-                                                    font-size: 9pt;
+                                                    font-size: 7.5pt;
                                                     font-weight: 900;
                                                     color: #0d7a57;
                                                     background-color: #f0fdf4;
@@ -1046,7 +1046,7 @@ export default function HRManagement() {
                                                     display: inline-block;
                                                 }
                                                 .doc-id {
-                                                    font-size: 9.5pt;
+                                                    font-size: 8pt;
                                                     font-weight: 700;
                                                     color: #64748b;
                                                 }
