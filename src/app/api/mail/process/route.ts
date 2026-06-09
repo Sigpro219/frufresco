@@ -145,7 +145,7 @@ export async function POST(req: Request) {
         });
 
         const mailOptions = {
-          from: 'Investments Cortés (Pedidos) <pedidos@frufresco.com>',
+          from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
           to: to_email,
           subject: subject || 'Confirmación de Compra - Investments Cortés',
           html: htmlContent,

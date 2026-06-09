@@ -242,6 +242,38 @@ export async function POST(req: Request) {
         }
       }
       if (addressStr && !extractedData.address) extractedData.address = addressStr;
+
+      // Fallback for client name extraction from signature lines above C.C./NIT/Celular
+      const lowerClientName = String(extractedData.clientInDocument || '').toLowerCase().trim();
+      if (!lowerClientName || lowerClientName === 'desconocido' || lowerClientName === 'no detectado' || lowerClientName === 'none' || lowerClientName === 'no especificado' || lowerClientName === 'no especificada') {
+        let nameCandidate = '';
+        const signatureLines = plainText.split('\n');
+        for (let k = 0; k < signatureLines.length; k++) {
+          const line = signatureLines[k].trim();
+          if (line.match(/c\.c\.|nit|celular|tel[ée]fono/i)) {
+            // Look up to 3 lines above to find the name
+            for (let prevIdx = k - 1; prevIdx >= Math.max(0, k - 3); prevIdx--) {
+              const prevLine = signatureLines[prevIdx].trim().replace(/\*/g, '');
+              if (
+                prevLine !== '' && 
+                prevLine.length > 3 && 
+                prevLine.length < 50 &&
+                !prevLine.match(/direcci[óo]n|correo|email|pedido|tomate|papa|cebolla|zanahoria|gracias|atentamente|saludos|cordialmente/i) &&
+                !prevLine.includes(':') &&
+                !prevLine.includes('/') &&
+                prevLine.match(/[a-zA-ZñÑáéíóúÁÉÍÓÚ]/)
+              ) {
+                nameCandidate = prevLine;
+                break;
+              }
+            }
+          }
+          if (nameCandidate) break;
+        }
+        if (nameCandidate) {
+          extractedData.clientInDocument = nameCandidate;
+        }
+      }
     }
 
     // 3. Identify Client in our database (we prioritize matching by NIT/CC if extracted from the email)
@@ -360,7 +392,7 @@ export async function POST(req: Request) {
       .insert({
         id: draftUuid,
         profile_id: profile ? profile.id : null,
-        client_detected_name: extractedData.clientInDocument || profile?.company_name || 'Desconocido',
+        client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
         source_email: senderEmail,
         email_subject: `[${shortCode}] ${subject}`,
         email_body: plainText,
