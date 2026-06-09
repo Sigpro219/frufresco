@@ -18,6 +18,20 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
+    const supabaseAdmin = createAdminClient();
+
+    // 1. Update draft status to 'rejected' first to unblock UI instantly
+    const { error: draftError } = await supabaseAdmin
+      .from('order_drafts')
+      .update({ status: 'rejected' })
+      .eq('id', draftId);
+
+    if (draftError) {
+      console.error('[Reject Draft API] Error updating draft:', draftError);
+      return NextResponse.json({ error: `Error al actualizar borrador: ${draftError.message}` }, { status: 500 });
+    }
+
+    // 2. Trigger email sending in the background without awaiting it
     const addressStr = address || 'No especificada';
     const emailHtml = `
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
@@ -43,11 +57,7 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    let emailSent = false;
-    let emailErrorMessage = '';
-    let messageId = 'simulated';
-
-    console.log('[Reject Draft API] Sending rejection email directly via Nodemailer...');
+    console.log('[Reject Draft API] Triggering rejection email in background...');
     try {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
@@ -58,55 +68,44 @@ export async function POST(req: Request) {
         },
       });
 
-      const info = await transporter.sendMail({
+      transporter.sendMail({
         from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
         to: sourceEmail,
         subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
         html: emailHtml,
         text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
+      }).then(async (info: any) => {
+        const messageId = info.messageId || 'smtp-id';
+        console.log('[Reject Draft API] Rejection email sent successfully in background:', messageId);
+        // Insert mail copy for history
+        await supabaseAdmin.from('mail').insert({
+          to_email: sourceEmail,
+          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
+          message: {
+            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+            html: emailHtml
+          },
+          status: 'sent',
+          sent_at: new Date().toISOString()
+        });
+      }).catch(async (smtpErr: any) => {
+        console.error('[Reject Draft API] Background SMTP send failed:', smtpErr);
+        await supabaseAdmin.from('mail').insert({
+          to_email: sourceEmail,
+          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
+          message: {
+            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+            html: emailHtml
+          },
+          status: 'failed',
+          error_message: smtpErr.message || 'SMTP Error'
+        });
       });
-
-      messageId = info.messageId || 'smtp-id';
-      emailSent = true;
-      console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
-    } catch (smtpErr: any) {
-      console.error('[Reject Draft API] SMTP direct send failed:', smtpErr);
-      emailErrorMessage = smtpErr.message || 'SMTP Error';
-      return NextResponse.json({ error: `Error de envío de correo (SMTP): ${emailErrorMessage}` }, { status: 500 });
+    } catch (err) {
+      console.error('[Reject Draft API] Failed to initialize nodemailer in background:', err);
     }
 
-    const supabaseAdmin = createAdminClient();
-
-    // 1. Update draft status to 'rejected'
-    const { error: draftError } = await supabaseAdmin
-      .from('order_drafts')
-      .update({ status: 'rejected' })
-      .eq('id', draftId);
-
-    if (draftError) {
-      console.error('[Reject Draft API] Error updating draft:', draftError);
-      return NextResponse.json({ error: `Borrador actualizado pero: ${draftError.message}` }, { status: 500 });
-    }
-
-    // 2. Insert mail copy for history
-    const { error: mailError } = await supabaseAdmin
-      .from('mail')
-      .insert({
-        to_email: sourceEmail,
-        subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
-        message: {
-          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
-          html: emailHtml
-        },
-        status: emailSent ? 'sent' : 'failed',
-        sent_at: emailSent ? new Date().toISOString() : null,
-        error_message: emailErrorMessage || null
-      });
-
-    if (mailError) {
-      console.error('[Reject Draft API] Error inserting mail copy:', mailError);
-    }
-
+    // Return success instantly
     return NextResponse.json({ success: true });
 
   } catch (err: any) {
