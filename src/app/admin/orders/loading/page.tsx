@@ -1879,7 +1879,7 @@ export default function OrderLoadingPage() {
                     </>
                 ) : (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem' }}>
-                        <EmailDraftsModule />
+                        <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} />
                     </div>
                 )}
             </div>

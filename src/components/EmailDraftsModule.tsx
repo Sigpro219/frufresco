@@ -6,7 +6,11 @@ import { THEME, formatMoney } from '@/lib/adminTheme';
 import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
-export default function EmailDraftsModule() {
+interface EmailDraftsModuleProps {
+  onDraftsChange?: (count: number) => void;
+}
+
+export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleProps = {}) {
   const [drafts, setDrafts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +68,12 @@ export default function EmailDraftsModule() {
     fetchAliases();
     fetchGeofence();
   }, []);
+
+  useEffect(() => {
+    if (onDraftsChange) {
+      onDraftsChange(drafts.length);
+    }
+  }, [drafts.length, onDraftsChange]);
 
   const fetchGeofence = async () => {
     try {
