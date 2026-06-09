@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
 
@@ -145,15 +145,17 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Identify Client in our database (only active profiles, and matching names for B2C)
+    // 3. Identify Client in our database (we also include inactive B2C profiles so their data is remembered)
     const { data: candidateProfiles } = await supabaseAdmin
       .from('profiles')
-      .select('id, company_name, contact_name, role, is_active')
-      .eq('email', senderEmail)
-      .eq('is_active', true);
+      .select('id, company_name, contact_name, role, is_active, address, phone')
+      .eq('email', senderEmail);
 
     if (candidateProfiles && candidateProfiles.length > 0) {
-      const detectedName = extractedData.clientInDocument || '';
+      let detectedName = extractedData.clientInDocument || '';
+      if (typeof detectedName !== 'string') {
+        detectedName = String(detectedName);
+      }
       
       const namesMatch = (detName: string, profName: string): boolean => {
         if (!detName || !profName) return false;
@@ -190,6 +192,15 @@ export async function POST(req: Request) {
       }
     }
 
+    if (profile) {
+      if (!extractedData.address && profile.address) {
+        extractedData.address = profile.address;
+      }
+      if (!extractedData.phone && profile.phone) {
+        extractedData.phone = profile.phone;
+      }
+    }
+
     // 4. Save draft to public.order_drafts
     // Use an explicit UUID so we can reference its short ID immediately
     const draftUuid = crypto.randomUUID();
@@ -211,7 +222,7 @@ export async function POST(req: Request) {
             phone: extractedData.phone || null,
             nit: extractedData.nit || null
           },
-          ...(extractedData.items || [])
+          ...(Array.isArray(extractedData.items) ? extractedData.items : [])
         ],
         status: 'pending'
       })
