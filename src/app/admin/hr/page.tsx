@@ -1003,7 +1003,7 @@ export default function HRManagement() {
                                                 .carnet-label {
                                                     width: 85mm;
                                                     height: 53mm;
-                                                    border: 1px dashed #cbd5e1;
+                                                    border: 1px dashed #94a3b8;
                                                     box-sizing: border-box;
                                                     padding: 6mm 4mm;
                                                     display: flex;
@@ -1061,11 +1061,21 @@ export default function HRManagement() {
                                                     height: 32mm;
                                                 }
                                                 @media print {
+                                                    @page {
+                                                        margin: 0;
+                                                        size: portrait;
+                                                    }
                                                     body {
+                                                        margin: 0;
+                                                        padding: 2mm; /* Pequeño margen físico en la esquina superior izquierda de la hoja */
+                                                        display: block;
+                                                        height: auto;
                                                         background-color: white;
                                                     }
                                                     .carnet-label {
-                                                        border: none;
+                                                        border: 1px dashed #94a3b8 !important;
+                                                        -webkit-print-color-adjust: exact;
+                                                        print-color-adjust: exact;
                                                     }
                                                 }
                                             </style>
