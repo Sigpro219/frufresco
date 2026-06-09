@@ -228,6 +228,7 @@ const styles = {
 export default function InventoryAdminPage() {
     const [stocks, setStocks] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState<'stock' | 'movements' | 'random_tasks' | 'settings' | 'novedades'>('stock');
     const [movements, setMovements] = useState<Movement[]>([]);
     const [randomTasks, setRandomTasks] = useState<RandomTask[]>([]);
@@ -257,8 +258,12 @@ export default function InventoryAdminPage() {
     const ITEMS_PER_PAGE = 50;
     const isMounted = useRef(true);
 
-    const fetchData = useCallback(async (signal?: AbortSignal) => {
-        setLoading(true);
+    const fetchData = useCallback(async (signal?: AbortSignal, silent = false) => {
+        if (silent) {
+            setRefreshing(true);
+        } else {
+            setLoading(true);
+        }
         try {
             if (activeTab === 'stock') {
                 // Fetch from products to ensure ALL master items are visible
@@ -407,7 +412,10 @@ export default function InventoryAdminPage() {
 
             console.error('Error fetching inventory details:', pgError.message || err);
         } finally {
-            if (isMounted.current) setLoading(false);
+            if (isMounted.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     }, [activeTab]);
 
@@ -533,6 +541,15 @@ export default function InventoryAdminPage() {
         };
     }, [fetchData]);
 
+    // Background polling: silently update stock details every 10 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const controller = new AbortController();
+            fetchData(controller.signal, true);
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [fetchData]);
+
     const handleApplyMovement = useCallback(async (productId: string, qty: number, type: 'entry' | 'exit' | 'adjustment', status: string, notes: string) => {
         try {
             const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
@@ -576,46 +593,53 @@ export default function InventoryAdminPage() {
 
         if (!query) return filtered;
 
-        // 2. Apply "Power Search" logic
-        const parts = query.split(/\s+/);
-        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
-        const searchTerms = parts.filter(p => !p.startsWith('@'));
+        // 2. Split query by commas for multiple searches (OR logic between comma-separated terms)
+        const segments = query.split(',').map(s => s.trim()).filter(Boolean);
+
+        if (segments.length === 0) return filtered;
 
         return filtered.filter(s => {
             const p = s.products;
             if (!p) return false;
 
-            // Text search (AND)
-            const matchesText = searchTerms.every(term => 
-                p.name?.toLowerCase().includes(term) ||
-                p.sku?.toLowerCase().includes(term) ||
-                p.accounting_id?.toString()?.includes(term)
-            );
+            return segments.some(segment => {
+                // Apply "Power Search" logic to each segment
+                const parts = segment.split(/\s+/);
+                const tags = parts.filter(pt => pt.startsWith('@')).map(t => t.slice(1));
+                const searchTerms = parts.filter(pt => !pt.startsWith('@'));
 
-            if (!matchesText && searchTerms.length > 0) return false;
-
-            // Tag search (AND)
-            const matchesTags = tags.every(tag => {
-                // Low stock/alert
-                if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
-                    return s.quantity <= (p.min_inventory_level || 0);
-                }
-                
-                // Status tags
-                if (tag === 'disponible' || tag === 'ok') return s.status === 'available';
-                if (tag === 'regreso') return s.status === 'returned';
-                if (tag === 'reproceso') return s.status === 'in_process';
-
-                // Category tags
-                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                    label.toLowerCase().startsWith(tag)
+                // Text search (AND logic within a single segment)
+                const matchesText = searchTerms.every(term => 
+                    p.name?.toLowerCase().includes(term) ||
+                    p.sku?.toLowerCase().includes(term) ||
+                    p.accounting_id?.toString()?.includes(term)
                 );
-                if (categoryEntry && p.category === categoryEntry[0]) return true;
 
-                return false;
+                if (!matchesText && searchTerms.length > 0) return false;
+
+                // Tag search (AND logic within a single segment)
+                const matchesTags = tags.every(tag => {
+                    // Low stock/alert
+                    if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
+                        return s.quantity <= (p.min_inventory_level || 0);
+                    }
+                    
+                    // Status tags
+                    if (tag === 'disponible' || tag === 'ok') return s.status === 'available';
+                    if (tag === 'regreso') return s.status === 'returned';
+                    if (tag === 'reproceso') return s.status === 'in_process';
+
+                    // Category tags
+                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                        label.toLowerCase().startsWith(tag)
+                    );
+                    if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                    return false;
+                });
+
+                return matchesTags;
             });
-
-            return matchesTags;
         });
     }, [stocks, searchQuery, stockStatusFilter]);
 
@@ -669,6 +693,44 @@ export default function InventoryAdminPage() {
                         <p style={styles.subtitle}>Consolidación multi-estado, trazabilidad total y auditoría inteligente.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <button 
+                            onClick={() => {
+                                const controller = new AbortController();
+                                fetchData(controller.signal);
+                            }}
+                            disabled={loading || refreshing}
+                            style={{ 
+                                padding: '0.55rem 1rem', 
+                                borderRadius: '8px', 
+                                border: `1.5px solid ${THEME.colors.border}`, 
+                                background: 'white', 
+                                color: THEME.colors.textMain, 
+                                fontWeight: '700', 
+                                fontSize: '0.8rem', 
+                                cursor: 'pointer', 
+                                boxShadow: THEME.shadow.sm,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                transition: 'all 0.2s ease-in-out'
+                            }}
+                            onMouseEnter={(e) => { 
+                                e.currentTarget.style.backgroundColor = '#F4F7F6'; 
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                            }}
+                            onMouseLeave={(e) => { 
+                                e.currentTarget.style.backgroundColor = 'white'; 
+                                e.currentTarget.style.borderColor = THEME.colors.border; 
+                            }}
+                        >
+                            <RefreshCw 
+                                size={14} 
+                                style={{ 
+                                    animation: (loading || refreshing) ? 'spin 1s linear infinite' : 'none' 
+                                }} 
+                            />
+                            {loading || refreshing ? 'Sincronizando...' : 'Sincronizar'}
+                        </button>
                         <Link href="/admin/master/products" style={{ textDecoration: 'none' }}>
                             <button 
                                 style={{ 
@@ -900,6 +962,14 @@ export default function InventoryAdminPage() {
                                     <div style={{ padding: '0.5rem', backgroundColor: '#F4F7F6', borderRadius: '8px', fontSize: '0.75rem', color: THEME.colors.textSecondary, marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <Sparkles size={12} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
                                         <span>Ej: <strong>Tomate @bajo</strong></span>
+                                    </div>
+                                    <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.55rem', marginTop: '0.25rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '2px' }}>Búsqueda Múltiple:</div>
+                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, lineHeight: '1.3' }}>
+                                            Separa con comas (<code>,</code>) para buscar varios productos o SKUs simultáneamente.
+                                            <br />
+                                            <span>Ej: <strong>aji casero, cebollin</strong></span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

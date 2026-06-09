@@ -420,6 +420,7 @@ export default function ReceptionPage() {
             setSelectedItem(null);
             setRejectionFile(null);
             setRejectionPreview(null);
+            setInputQty('');
             fetchIncoming();
         } catch (err: unknown) {
             console.error('Error in handleSubmitResult:', err);
@@ -449,6 +450,7 @@ export default function ReceptionPage() {
         setRejectionFile(null);
         setRejectionPreview(null);
         setSelectedItem(null);
+        setInputQty('');
     };
 
     // Helper to identify inventory group (prioritizing product field, falling back dynamically on category)
@@ -1368,8 +1370,8 @@ export default function ReceptionPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                             <input
                                                 type="number"
-                                                value={inputQty ?? ''}
-                                                onChange={e => setInputQty(e.target.value)}
+                                                value={inputQty || ''}
+                                                onChange={e => setInputQty(e.target.value || '')}
                                                 placeholder="0.00"
                                                 autoFocus
                                                 style={{

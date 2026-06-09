@@ -58,7 +58,8 @@ BEGIN
             reference_type,
             reference_id,
             notes,
-            created_at
+            created_at,
+            status_from
         ) VALUES (
             v_final_product_id,
             default_warehouse_id,
@@ -70,7 +71,8 @@ BEGIN
                 WHEN v_parent_id IS NOT NULL THEN 'Fraccionamiento (Hijo: ' || NEW.product_id || ')'
                 ELSE 'Salida automática picking'
             END,
-            NOW()
+            NOW(),
+            'available'
         );
     END IF;
 
