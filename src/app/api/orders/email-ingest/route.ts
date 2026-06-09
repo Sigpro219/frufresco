@@ -244,11 +244,61 @@ export async function POST(req: Request) {
       if (addressStr && !extractedData.address) extractedData.address = addressStr;
     }
 
-    // 3. Identify Client in our database (we also include inactive B2C profiles so their data is remembered)
-    const { data: candidateProfiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id, company_name, contact_name, role, is_active, address, phone')
-      .eq('email', senderEmail);
+    // 3. Identify Client in our database (we prioritize matching by NIT/CC if extracted from the email)
+    let candidateProfiles: any[] = [];
+    let cleanExtractedNit = '';
+    
+    if (extractedData.nit) {
+      cleanExtractedNit = String(extractedData.nit).replace(/\D/g, '');
+    }
+
+    if (cleanExtractedNit) {
+      console.log(`[Email Ingest] Extracted NIT: "${extractedData.nit}". Searching by NIT digits: "${cleanExtractedNit}"`);
+      // Build possible NIT variants to query (e.g. 900.123.456-1, 9001234561, 900123456, 12.345.678)
+      const nitQueries = [extractedData.nit, cleanExtractedNit];
+      
+      if (cleanExtractedNit.length === 10) {
+        nitQueries.push(`${cleanExtractedNit.substring(0, 3)}.${cleanExtractedNit.substring(3, 6)}.${cleanExtractedNit.substring(6, 9)}-${cleanExtractedNit.substring(9)}`);
+      }
+      if (cleanExtractedNit.length === 9) {
+        nitQueries.push(`${cleanExtractedNit.substring(0, 3)}.${cleanExtractedNit.substring(3, 6)}.${cleanExtractedNit.substring(6, 9)}`);
+      }
+      if (cleanExtractedNit.length === 8) {
+        nitQueries.push(`${cleanExtractedNit.substring(0, 2)}.${cleanExtractedNit.substring(2, 5)}.${cleanExtractedNit.substring(5, 8)}`);
+      }
+      
+      const uniqueNits = Array.from(new Set(nitQueries.filter(Boolean)));
+      
+      const { data: profilesByNit, error: nitError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit')
+        .in('nit', uniqueNits);
+
+      if (nitError) {
+        console.error('[Email Ingest] Error querying profiles by NIT:', nitError);
+      } else if (profilesByNit && profilesByNit.length > 0) {
+        console.log(`[Email Ingest] Found ${profilesByNit.length} profiles matching NIT.`);
+        candidateProfiles = profilesByNit;
+      } else {
+        console.log('[Email Ingest] No profile found matching NIT in DB. Treating as a NEW client.');
+      }
+    }
+
+    // Only if we haven't found any profiles by NIT AND there was NO NIT in the email,
+    // we fall back to searching by sender email address.
+    if (candidateProfiles.length === 0 && !cleanExtractedNit) {
+      console.log(`[Email Ingest] No NIT provided. Searching client by sender email: ${senderEmail}`);
+      const { data: profilesByEmail, error: emailError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit')
+        .eq('email', senderEmail);
+
+      if (emailError) {
+        console.error('[Email Ingest] Error querying profiles by email:', emailError);
+      } else if (profilesByEmail && profilesByEmail.length > 0) {
+        candidateProfiles = profilesByEmail;
+      }
+    }
 
     if (candidateProfiles && candidateProfiles.length > 0) {
       let detectedName = extractedData.clientInDocument || '';
@@ -408,13 +458,50 @@ export async function POST(req: Request) {
             }
 
             if (!matchedProduct) {
-              // Smart Auto Match (matching the UI algorithm)
-              const firstWord = cleanSearch.split(' ')[0]?.replace(/[()0-9]/g, '');
-              matchedProduct = dbProducts.find((p: any) => {
-                const prodNameLower = p.name.toLowerCase();
-                return cleanSearch.includes(prodNameLower) || 
-                       (firstWord && firstWord.length > 2 && prodNameLower.includes(firstWord));
-              });
+              const cleanText = (txt: string) => {
+                return txt
+                  .toLowerCase()
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/[^a-z0-9\s]/g, "")
+                  .trim();
+              };
+
+              const originalClean = cleanText(searchName);
+              const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
+
+              let bestMatch: any = null;
+              let highestScore = -999;
+
+              for (const p of dbProducts) {
+                const productClean = cleanText(p.name);
+                
+                if (productClean === originalClean) {
+                  bestMatch = p;
+                  break;
+                }
+
+                const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
+                const sharedWords = originalWords.filter(w => productWords.includes(w));
+                
+                if (sharedWords.length > 0) {
+                  const extraWords = Math.abs(productWords.length - sharedWords.length);
+                  const score = sharedWords.length * 10 - extraWords;
+                  if (score > highestScore) {
+                    highestScore = score;
+                    bestMatch = p;
+                  }
+                }
+              }
+
+              if (!bestMatch) {
+                bestMatch = dbProducts.find((p: any) => {
+                  const productClean = cleanText(p.name);
+                  return productClean.includes(originalClean) || originalClean.includes(productClean);
+                });
+              }
+
+              matchedProduct = bestMatch;
             }
 
             if (matchedProduct) {
