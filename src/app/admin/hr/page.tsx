@@ -1005,14 +1005,16 @@ export default function HRManagement() {
                                                     height: 53mm;
                                                     border: 1px dashed #94a3b8;
                                                     box-sizing: border-box;
-                                                    padding: 6mm 4mm;
+                                                    padding: 5mm 6mm;
                                                     display: flex;
                                                     flex-direction: row;
                                                     align-items: center;
                                                     justify-content: space-between;
-                                                    gap: 4mm;
+                                                    gap: 5mm;
                                                     background-color: #ffffff;
                                                     border-radius: 4px;
+                                                    transform: scale(1.6); /* Zoom en pantalla */
+                                                    transform-origin: center;
                                                 }
                                                 .info-side {
                                                     display: flex;
@@ -1021,29 +1023,29 @@ export default function HRManagement() {
                                                     align-items: flex-start;
                                                     flex: 1;
                                                     text-align: left;
-                                                    max-width: 50mm;
+                                                    max-width: 45mm;
                                                 }
                                                 .title-name {
-                                                    font-size: 11pt;
+                                                    font-size: 13pt;
                                                     font-weight: 800;
                                                     color: #0f172a;
-                                                    margin: 0 0 3px 0;
-                                                    line-height: 1.2;
+                                                    margin: 0 0 4px 0;
+                                                    line-height: 1.25;
                                                     text-transform: uppercase;
                                                 }
                                                 .role-badge {
-                                                    font-size: 7.5pt;
+                                                    font-size: 9pt;
                                                     font-weight: 900;
                                                     color: #0d7a57;
                                                     background-color: #f0fdf4;
-                                                    padding: 2px 6px;
+                                                    padding: 3px 8px;
                                                     border-radius: 4px;
                                                     text-transform: uppercase;
-                                                    margin-bottom: 5px;
+                                                    margin-bottom: 6px;
                                                     display: inline-block;
                                                 }
                                                 .doc-id {
-                                                    font-size: 8pt;
+                                                    font-size: 9.5pt;
                                                     font-weight: 700;
                                                     color: #64748b;
                                                 }
@@ -1051,14 +1053,14 @@ export default function HRManagement() {
                                                     display: flex;
                                                     justify-content: center;
                                                     align-items: center;
-                                                    padding: 4px;
+                                                    padding: 6px;
                                                     background-color: white;
                                                     border: 1px solid #e2e8f0;
                                                     border-radius: 8px;
                                                 }
                                                 .qr-side svg {
-                                                    width: 32mm;
-                                                    height: 32mm;
+                                                    width: 38mm;
+                                                    height: 38mm;
                                                 }
                                                 @media print {
                                                     @page {
@@ -1073,6 +1075,7 @@ export default function HRManagement() {
                                                         background-color: white;
                                                     }
                                                     .carnet-label {
+                                                        transform: none !important; /* Desactivar zoom al imprimir */
                                                         border: 1px dashed #94a3b8 !important;
                                                         -webkit-print-color-adjust: exact;
                                                         print-color-adjust: exact;
