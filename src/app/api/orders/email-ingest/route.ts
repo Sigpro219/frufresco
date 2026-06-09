@@ -8,6 +8,8 @@ const supabaseAdmin = createClient(
 );
 
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 export async function POST(req: Request) {
   try {
@@ -366,23 +368,24 @@ export async function POST(req: Request) {
         const draftIdStr = shortCode;
 
         const emailHtml = `
-<div style="font-family: 'Outfit', sans-serif; color: #111827; padding: 40px; background-color: #F9FAFB; border-radius: 20px; max-width: 600px; margin: auto; border: 1px solid #E5E7EB;">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+<div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
     <center>
-        <img src="https://frufresco.com/logo.png" width="120" style="margin-bottom: 20px;" alt="FruFresco Logo">
-        <h1 style="color: #10B981; font-weight: 800; font-size: 24px; margin-bottom: 5px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
-        <p style="font-size: 14px; color: #6B7280; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
+        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
+        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra${clientName ? `, ${clientName}` : ''}!</h1>
+        <p style="font-size: 16px; color: #555; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
     </center>
     
-    <div style="background: white; padding: 30px; border-radius: 16px; border-left: 5px solid #10B981; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-top: 20px;">
-        <h3 style="color: #10B981; margin-top: 0; font-size: 18px; border-bottom: 1px solid #F3F4F6; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
-        <p style="font-size: 13px; color: #6B7280; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
+    <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+        <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${draftIdStr}</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${today}</p>
         
         <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
             <thead>
-                <tr style="border-bottom: 2px solid #E5E7EB; color: #9CA3AF; text-transform: uppercase; font-size: 11px; text-align: left;">
-                    <th style="padding-bottom: 8px; font-weight: bold;">Producto</th>
-                    <th style="padding-bottom: 8px; font-weight: bold; text-align: center;">Cant.</th>
-                    <th style="padding-bottom: 8px; font-weight: bold; text-align: right;">Total</th>
+                <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
+                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
+                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
+                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -390,28 +393,28 @@ export async function POST(req: Request) {
             </tbody>
         </table>
         
-        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #E5E7EB; text-align: right;">
-            <p style="font-size: 16px; color: #111827; margin: 0; font-weight: 800;">
-                <span style="color: #10B981;">${totalOrderDisplay}</span>
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
+            <p style="font-size: 16px; color: #286a36; margin: 0; font-weight: 800;">
+                <span>${totalOrderDisplay}</span>
             </p>
         </div>
     </div>
 
-    <p style="margin-top: 30px; text-align: center; color: #6B7280; font-size: 14px; line-height: 1.5;">
+    <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
         Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
         Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
     </p>
     
-    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 40px 0;">
+    <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
     
     <center>
-        <p style="font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Mesa</p>
+        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
     </center>
 </div>
         `;
 
         await transporter.sendMail({
-          from: `"FruFresco (Pedidos)" <${process.env.SMTP_USER}>`,
+          from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
           to: senderEmail,
           subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
           html: emailHtml,
