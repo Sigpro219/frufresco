@@ -71,6 +71,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   } | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedRowIndices, setSelectedRowIndices] = useState<number[]>([]);
+  useEffect(() => {
+    setSelectedRowIndices([]);
+  }, [isEditing, selectedDraft?.id]);
   const [rejectReason, setRejectReason] = useState<string>('');
   const [rejectModal, setRejectModal] = useState<{
     isOpen: boolean;
@@ -1259,10 +1263,26 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     )}
                   </button>
                 </div>
-                <div style={{ overflow: 'hidden' }}>
+                 <div style={{ overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                        {isEditing && (
+                          <th style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F3F4F6' }}>
+                            <input
+                              type="checkbox"
+                              checked={editableItems.length > 0 && selectedRowIndices.length === editableItems.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRowIndices(editableItems.map((_, idx) => idx));
+                                } else {
+                                  setSelectedRowIndices([]);
+                                }
+                              }}
+                              style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                            />
+                          </th>
+                        )}
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
@@ -1282,6 +1302,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    {isEditing && (
+                                      <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F9FAFB' }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedRowIndices.includes(i)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedRowIndices(prev => [...prev, i]);
+                                            } else {
+                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
+                                            }
+                                          }}
+                                          style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                        />
+                                      </td>
+                                    )}
                                     <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
                                       <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
@@ -1554,7 +1590,166 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       + Añadir Producto Manualmente
                     </button>
 
-                    {recentlyDeletedItems.length > 0 && (
+                    {selectedRowIndices.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const itemsToDelete = selectedRowIndices.map(idx => {
+                            const itm = editableItems[idx];
+                            const mProd = products.find(p => p.id === itm.matched_product_id);
+                            return itm.originalName || (mProd ? mProd.name : 'este producto');
+                          });
+
+                          setDeleteConfirm({
+                            isOpen: true,
+                            step: 1,
+                            productName: itemsToDelete.join(', '),
+                            onConfirmNotify: async () => {
+                              setSaving(true);
+                              try {
+                                const newEdits = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+                                
+                                // 1. Preparar ítems para base de datos
+                                const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                                const updatedMetaItem = {
+                                  ...metaItem,
+                                  deliveryDate: deliveryDate
+                                };
+                                const dbItems = [
+                                  updatedMetaItem,
+                                  ...newEdits.map(itm => ({
+                                    originalName: itm.originalName || '',
+                                    quantity: itm.quantity,
+                                    matched_product_id: itm.matched_product_id
+                                  }))
+                                ];
+
+                                // 2. Preparar ítems para tabla de correo
+                                const emailItems = newEdits.map(itm => {
+                                  const mProd = products.find(p => p.id === itm.matched_product_id);
+                                  return {
+                                    productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+                                    quantity: itm.quantity,
+                                    unitPrice: mProd ? mProd.base_price : 0,
+                                    unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+                                  };
+                                });
+
+                                const itemsToNotify = [...recentlyDeletedItems, ...itemsToDelete];
+                                const res = await fetch('/api/orders/notify-deleted-item', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    draftId: selectedDraft.id,
+                                    deletedItem: itemsToNotify,
+                                    sourceEmail: selectedDraft.source_email,
+                                    clientName: selectedDraft.client_detected_name || 'Cliente',
+                                    dbItems,
+                                    emailItems
+                                  })
+                                });
+
+                                if (!res.ok) {
+                                  const errData = await res.json();
+                                  throw new Error(errData.error || 'Error en el servidor');
+                                }
+
+                                // Limpiar acumulados y selección
+                                setRecentlyDeletedItems([]);
+                                setSelectedRowIndices([]);
+
+                                // Actualizar estado local
+                                setEditableItems(newEdits);
+                                setSelectedDraft((prev: any) => {
+                                  if (!prev) return null;
+                                  return {
+                                    ...prev,
+                                    extracted_items: dbItems
+                                  };
+                                });
+                                setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+
+                                showToast('Novedades notificadas al cliente por correo y borrador actualizado. ✉️', 'success');
+                              } catch (err: any) {
+                                console.warn('Error notifying deleted items:', err);
+                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+                              } finally {
+                                setSaving(false);
+                              }
+                            },
+                            onConfirmOnlyDelete: async () => {
+                              setSaving(true);
+                              try {
+                                const newEdits = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+                                
+                                // 1. Preparar ítems para base de datos
+                                const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                                const updatedMetaItem = {
+                                  ...metaItem,
+                                  deliveryDate: deliveryDate
+                                };
+                                const dbItems = [
+                                  updatedMetaItem,
+                                  ...newEdits.map(itm => ({
+                                    originalName: itm.originalName || '',
+                                    quantity: itm.quantity,
+                                    matched_product_id: itm.matched_product_id
+                                  }))
+                                ];
+
+                                const { error: dbError } = await supabase
+                                  .from('order_drafts')
+                                  .update({ extracted_items: dbItems })
+                                  .eq('id', selectedDraft.id);
+
+                                if (dbError) throw dbError;
+
+                                // Añadir al estado acumulado
+                                setRecentlyDeletedItems(prev => [...prev, ...itemsToDelete]);
+                                setSelectedRowIndices([]);
+
+                                // Actualizar estado local
+                                setEditableItems(newEdits);
+                                setSelectedDraft((prev: any) => {
+                                  if (!prev) return null;
+                                  return {
+                                    ...prev,
+                                    extracted_items: dbItems
+                                  };
+                                });
+                                setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+
+                                showToast('Productos eliminados de la lista (novedad pendiente de notificar). ✍️', 'info');
+                              } catch (err: any) {
+                                console.warn('Error deleting items locally:', err);
+                                showToast(`Error al eliminar los productos: ${err.message || 'Error de conexión'}`, 'error');
+                              } finally {
+                                setSaving(false);
+                              }
+                            }
+                          });
+                        }}
+                        style={{
+                          padding: '0.6rem 1rem',
+                          backgroundColor: '#FEE2E2',
+                          color: '#EF4444',
+                          border: '1px solid #FCA5A5',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        Eliminar Seleccionados ({selectedRowIndices.length})
+                      </button>
+                    )}
+
+                    {recentlyDeletedItems.length > 0 && selectedRowIndices.length === 0 && (
                       <button
                         type="button"
                         onClick={() => {
