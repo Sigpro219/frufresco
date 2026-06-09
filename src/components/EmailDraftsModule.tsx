@@ -905,16 +905,16 @@ export default function EmailDraftsModule() {
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                  <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
-                                    <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
-                                      {item.originalName}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '10%', backgroundColor: '#F9FAFB' }}>
-                                    <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
-                                      {item.originalQuantity || item.quantity}
-                                    </div>
-                                  </td>
+                                    <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
+                                      <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
+                                        {item.originalName || item.name || item.producto || item.item || ''}
+                                      </div>
+                                    </td>
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '10%', backgroundColor: '#F9FAFB' }}>
+                                      <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
+                                        {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
+                                      </div>
+                                    </td>
                                   <td style={{ padding: '1rem 0.5rem', width: '30%' }}>
                                     <input
                                       ref={el => { productInputRefs.current[i] = el; }}
@@ -951,11 +951,11 @@ export default function EmailDraftsModule() {
                                       ))}
                                     </datalist>
                                   </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
-                                    <input 
-                                      type="number"
-                                      value={item.quantity === 0 ? '' : item.quantity}
-                                      onChange={(e) => {
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
+                                      <input 
+                                        type="number"
+                                        value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                        onChange={(e) => {
                                         const newEdits = [...editableItems];
                                         newEdits[i].quantity = parseFloat(e.target.value) || 0;
                                         setEditableItems(newEdits);

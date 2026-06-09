@@ -195,6 +195,25 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error('Failed to parse Gemini output for email text:', e);
       }
+      
+      // FALLBACK: If Gemini failed to extract items, try regex extraction
+      if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
+        extractedData.items = [];
+        const lines = plainText.split('\n');
+        const regex = /(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
+        for (let line of lines) {
+          line = line.trim();
+          if (line === '-' || line === '') continue;
+          if (line.toLowerCase().includes('dirección') || line.toLowerCase().includes('celular') || line.toLowerCase().includes('atentamente')) continue;
+          const match = line.match(regex);
+          if (match) {
+            extractedData.items.push({
+              originalName: match[4].trim().replace(/^-+/, '').trim(),
+              quantity: parseFloat(match[1].replace(',', '.'))
+            });
+          }
+        }
+      }
     }
 
     // 3. Identify Client in our database (we also include inactive B2C profiles so their data is remembered)
