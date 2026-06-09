@@ -114,7 +114,8 @@ export async function POST(req: Request) {
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF).
         2. Identifica el nombre o empresa del CLIENTE.
         3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes.
-        4. Extrae todos los productos solicitados y su cantidad numérica.
+        4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
+        5. Extrae todos los productos solicitados y su cantidad numérica.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -128,6 +129,7 @@ export async function POST(req: Request) {
           "address": "Dirección extraída o vacio",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
+          "clientType": "b2b_client o b2c_client",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
           ]
@@ -162,6 +164,7 @@ export async function POST(req: Request) {
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
         3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes en el texto o en la firma.
+        4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa, usualmente sin NIT de empresa o con cédula de ciudadanía).
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -175,6 +178,7 @@ export async function POST(req: Request) {
           "address": "Dirección extraída o vacio",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
+          "clientType": "b2b_client o b2c_client",
           "items": [
             { "originalName": "Tomate Chonto", "quantity": 15 }
           ]
@@ -382,7 +386,31 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. Save draft to public.order_drafts
+    // 4. Determine client type (B2B vs B2C) based on rules & AI extraction
+    let clientType = 'b2c_client';
+    if (profile && (profile.role === 'b2b_client' || profile.role === 'b2c_client')) {
+      clientType = profile.role;
+    } else {
+      const nitClean = extractedData.nit ? String(extractedData.nit).replace(/\D/g, '') : '';
+      const clientNameLower = String(extractedData.clientInDocument || '').toLowerCase();
+      const hasBusinessKeywords = [
+        'sas', 's.a.', 's.a.s', 'ltda', 'comercializadora', 'distribuidora', 'inversiones', 
+        'restaurante', 'cafe', 'cafeteria', 'hotel', 'hostel', 'grupo', 'cooperativa', 
+        'fruver', 'supermercado', 'tienda', 'minimarket', 'negocio'
+      ].some(keyword => {
+        const regex = new RegExp(`\\b${keyword}\\b|${keyword}`, 'i');
+        return regex.test(clientNameLower);
+      });
+      const startsWith8Or9 = nitClean.startsWith('8') || nitClean.startsWith('9');
+
+      if (startsWith8Or9 || hasBusinessKeywords) {
+        clientType = 'b2b_client';
+      } else if (extractedData.clientType === 'b2b_client' || extractedData.clientType === 'b2c_client') {
+        clientType = extractedData.clientType;
+      }
+    }
+
+    // 5. Save draft to public.order_drafts
     // Use an explicit UUID so we can reference its short ID immediately
     const draftUuid = crypto.randomUUID();
     const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
@@ -401,7 +429,8 @@ export async function POST(req: Request) {
             isMetadata: true, 
             address: extractedData.address || null,
             phone: extractedData.phone || null,
-            nit: extractedData.nit || null
+            nit: extractedData.nit || null,
+            clientType: clientType
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items : [])
         ],

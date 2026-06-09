@@ -304,7 +304,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return {
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
-      nit: meta?.nit || draft.extracted_nit || 'No detectado'
+      nit: meta?.nit || draft.extracted_nit || 'No detectado',
+      clientType: meta?.clientType || draft.profiles?.role || 'b2c_client'
     };
   };
 
@@ -679,7 +680,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <div style={{ fontWeight: 800, color: '#111827', fontSize: '0.9rem' }}>
                       {new Date(draft.created_at).toLocaleDateString()}
                     </div>
-                    <span style={{ color: THEME.colors.primary, fontWeight: 700, fontSize: '0.75rem' }}>EMAIL B2C</span>
+                    <span style={{ 
+                      color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
+                      fontWeight: 700, 
+                      fontSize: '0.75rem' 
+                    }}>
+                      {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
+                    </span>
                   </td>
                   <td style={{ padding: '1rem' }}>
                     <div style={{ fontWeight: 700, color: '#111827' }}>{draft.client_detected_name || 'Desconocido'}</div>
@@ -747,8 +754,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <span style={{ backgroundColor: '#ECFDF5', color: THEME.colors.primary, padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
-                    EMAIL B2C
+                  <span style={{ 
+                    backgroundColor: meta.clientType === 'b2b_client' ? '#EFF6FF' : '#ECFDF5', 
+                    color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
+                    padding: '2px 8px', 
+                    borderRadius: '12px', 
+                    fontSize: '0.7rem', 
+                    fontWeight: 800 
+                  }}>
+                    {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
                   </span>
                   <span style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 600 }}>
                     {new Date(draft.created_at).toLocaleDateString()}
@@ -842,7 +856,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       ⚠️ CLIENTE NUEVO DETECTADO
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#B45309', fontWeight: 600, marginTop: '2px' }}>
-                      Este cliente no está registrado en el sistema. Es necesario verificar su cobertura en Bogotá antes de procesar el pedido.
+                      {getDraftMetadata(selectedDraft).clientType === 'b2b_client' 
+                        ? 'Este cliente comercial no está registrado en el sistema.'
+                        : 'Este cliente no está registrado en el sistema. Es necesario verificar su cobertura en Bogotá antes de procesar el pedido.'
+                      }
                     </div>
                   </div>
                 </div>
@@ -855,6 +872,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     Revisión de Pedido por Correo
                   </h2>
                   <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800 }}>NUEVO BORRADOR</span>
+                  <span style={{ 
+                    backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#EFF6FF' : '#ECFDF5', 
+                    color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#2563EB' : '#059669', 
+                    padding: '4px 10px', 
+                    borderRadius: '12px', 
+                    fontSize: '0.75rem', 
+                    fontWeight: 800 
+                  }}>
+                    {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'B2C / HOGAR'}
+                  </span>
                 </div>
                 
                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1E3A8A', textTransform: 'uppercase', marginBottom: '8px' }}>
@@ -870,7 +897,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   {draftCoordinates && (
                     <div style={{
                       fontSize: '0.8rem',
-                      color: checkIsNewClient(selectedDraft)
+                      color: checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client'
                         ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
                         : '#059669',
                       fontWeight: 600,
@@ -880,7 +907,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}>
                       <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
                       <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
-                      {checkIsNewClient(selectedDraft) && (
+                      {checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client' && (
                         <span>
                           {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
                             ? '✅ En Zona de Cobertura'
@@ -1061,12 +1088,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Modal Footer */}
             {(() => {
+              const meta = getDraftMetadata(selectedDraft);
+              const isB2c = meta.clientType === 'b2c_client';
               const isNewClient = checkIsNewClient(selectedDraft);
               const hasCoords = draftCoordinates !== null;
               const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
 
-              // If it's a new client AND we have coordinates AND it's OUT of coverage
-              if (isNewClient && hasCoords && !isCovered) {
+              // If it's a new B2C client AND we have coordinates AND it's OUT of coverage
+              if (isB2c && isNewClient && hasCoords && !isCovered) {
                 return (
                   <div style={{
                     padding: '1.5rem',
@@ -1163,9 +1192,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   borderBottomLeftRadius: THEME.radius.xl,
                   borderBottomRightRadius: THEME.radius.xl
                 }}>
-                  {/* Left Side: Coverage status (only if new client) */}
+                  {/* Left Side: Coverage status (only if new B2C client) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                    {isNewClient && (
+                    {isNewClient && isB2c && (
                       <>
                         <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
                         {geocoding ? (
