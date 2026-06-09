@@ -2455,39 +2455,6 @@ export default function ProcurementPage() {
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><RefreshCw size={14} /> Descartar y generar nueva compra con otro proveedor</span>
                       </button>
 
-                      <button
-                        onClick={async () => {
-                          if (!confirm("¿Deseas registrar una reclamación administrativa? La meta se ajustará a lo comprado.")) return;
-                          const taskNovs = novelties.filter(n => n.task_id === selectedTask.id);
-                          for (const nov of taskNovs) {
-                            await resolvePurchaseNovelty({ id: nov.purchase_id, task_id: selectedTask.id, ...nov }, 'closed_with_shortfall');
-                          }
-                          
-                          const { error } = await supabase
-                            .from("procurement_tasks")
-                            .update({
-                              total_requested: selectedTask.total_purchased,
-                              status: "completed"
-                            })
-                            .eq("id", selectedTask.id);
-                          if (error) {
-                            alert("Error actualizando la tarea: " + error.message);
-                            return;
-                          }
-
-                          alert("💰 Reclamación administrativa registrada. Tarea completada.");
-                          setSelectedTask(null);
-                          resetForm();
-                          fetchTasks(undefined, filterCategory, selectedDate);
-                        }}
-                        style={{
-                          padding: "0.85rem", borderRadius: "10px", border: "1px solid rgba(239, 68, 68, 0.3)",
-                          backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#EF4444",
-                          fontWeight: "bold", fontSize: "0.8rem", cursor: "pointer", textAlign: "left"
-                        }}
-                      >
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><AlertCircle size={14} /> Reclamación Administrativa (Nota Crédito / Saldo)</span>
-                      </button>
                     </div>
                   </div>
                 )}
