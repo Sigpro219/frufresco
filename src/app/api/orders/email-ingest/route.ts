@@ -119,6 +119,7 @@ export async function POST(req: Request) {
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
         - Las cantidades deben ser estrictamente numéricas (si dice "una libra", pon 1. Si no hay cantidad, asume 1).
+        - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos. Incluso si está vacío, o si el usuario lista con guiones (-), extráelos como elementos del arreglo.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
@@ -135,8 +136,15 @@ export async function POST(req: Request) {
 
       try {
         let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
-        text = text.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
         extractedData = JSON.parse(text);
+        if (extractedData.items && !Array.isArray(extractedData.items)) {
+          if (typeof extractedData.items === 'object') {
+            extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+          } else {
+            extractedData.items = [];
+          }
+        }
       } catch (e) {
         console.error('Failed to parse Gemini output for attachment:', e);
       }
@@ -158,6 +166,7 @@ export async function POST(req: Request) {
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
         - Las cantidades deben ser numéricas.
+        - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos. Muchos clientes listan productos separados por guiones (-). Debes ignorar los guiones y extraer el nombre del producto y su cantidad.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
@@ -174,8 +183,15 @@ export async function POST(req: Request) {
 
       try {
         let text = await fetchGemini(apiKey, prompt);
-        text = text.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
         extractedData = JSON.parse(text);
+        if (extractedData.items && !Array.isArray(extractedData.items)) {
+          if (typeof extractedData.items === 'object') {
+            extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+          } else {
+            extractedData.items = [];
+          }
+        }
       } catch (e) {
         console.error('Failed to parse Gemini output for email text:', e);
       }

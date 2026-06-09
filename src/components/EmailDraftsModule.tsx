@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle } from 'lucide-react';
@@ -22,6 +22,7 @@ export default function EmailDraftsModule() {
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const DEFAULT_B2C_POLYGON = [
     { lat: 4.647, lng: -74.062 },
@@ -916,6 +917,7 @@ export default function EmailDraftsModule() {
                                   </td>
                                   <td style={{ padding: '1rem 0.5rem', width: '30%' }}>
                                     <input
+                                      ref={el => { productInputRefs.current[i] = el; }}
                                       list={`products-list-${i}`}
                                       value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
                                       placeholder="-- Buscar Producto --"
@@ -958,6 +960,19 @@ export default function EmailDraftsModule() {
                                         newEdits[i].quantity = parseFloat(e.target.value) || 0;
                                         setEditableItems(newEdits);
                                       }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          // Añadir nueva fila
+                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                                          setEditableItems(newEdits);
+                                          // Focus el nuevo input en el siguiente render
+                                          setTimeout(() => {
+                                            const nextInput = productInputRefs.current[i + 1];
+                                            if (nextInput) nextInput.focus();
+                                          }, 50);
+                                        }
+                                      }}
                                       style={{
                                         width: '60px',
                                         padding: '0.5rem',
@@ -991,6 +1006,34 @@ export default function EmailDraftsModule() {
                       })()}
                     </tbody>
                   </table>
+                </div>
+                
+                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
+                  <button
+                    onClick={() => {
+                      const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                      setEditableItems(newEdits);
+                      setTimeout(() => {
+                        const nextInput = productInputRefs.current[newEdits.length - 1];
+                        if (nextInput) nextInput.focus();
+                      }, 50);
+                    }}
+                    style={{
+                      padding: '0.6rem 1rem',
+                      backgroundColor: '#F3F4F6',
+                      color: '#4B5563',
+                      border: '1px dashed #D1D5DB',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    + Añadir Producto Manualmente
+                  </button>
                 </div>
               </div>
 
