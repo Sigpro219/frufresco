@@ -91,6 +91,29 @@ interface CollaboratorProfile {
   } | null;
 }
 
+function formatNumber(num: number | string | null | undefined, maxDecimals = 2): string {
+  if (num === null || num === undefined || isNaN(Number(num))) return '0';
+  const parsed = Number(num);
+  
+  if (parsed % 1 === 0) {
+    return parsed.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  const formatted = parsed.toFixed(maxDecimals);
+  const parts = formatted.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  let decimalPart = parts[1] || '';
+  while (decimalPart.endsWith('0')) {
+    decimalPart = decimalPart.slice(0, -1);
+  }
+  
+  if (decimalPart.length > 0) {
+    return `${parts[0]},${decimalPart}`;
+  }
+  return parts[0];
+}
+
 export default function SupervisorDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'quarantine' | 'discrepancy' | 'staff'>('quarantine');
@@ -971,13 +994,13 @@ export default function SupervisorDashboard() {
                   <div style={{ fontSize: '0.8rem' }}>
                     <div style={{ color: 'var(--ops-text-muted)', fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase' }}>CANTIDAD COMPRADA:</div>
                     <div style={{ fontWeight: 'bold', marginTop: '2px' }}>
-                      {item.quantity} {item.product.unit_of_measure}
+                      {formatNumber(item.quantity)} {item.product.unit_of_measure}
                     </div>
                   </div>
                   <div style={{ fontSize: '0.8rem' }}>
                     <div style={{ color: 'var(--ops-text-muted)', fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase' }}>CANTIDAD RECIBIDA:</div>
                     <div style={{ fontWeight: 'bold', marginTop: '2px', color: 'var(--ops-primary)' }}>
-                      {item.received_quantity} {item.product.unit_of_measure}
+                      {formatNumber(item.received_quantity)} {item.product.unit_of_measure}
                     </div>
                   </div>
                   <div style={{ fontSize: '0.8rem' }}>
@@ -1101,7 +1124,7 @@ export default function SupervisorDashboard() {
                         alignItems: 'center',
                         gap: '4px'
                       }}>
-                        ⚖️ Excedente de Peso: +{item.excess_quantity} {item.product.unit_of_measure}
+                        ⚖️ Excedente de Peso: +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', color: 'var(--ops-text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
@@ -1132,19 +1155,19 @@ export default function SupervisorDashboard() {
                   <div>
                     <div style={{ color: 'var(--ops-text-muted)', fontSize: '0.65rem', fontWeight: 'bold' }}>ESPERADO / COMPRA</div>
                     <div style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '2px' }}>
-                      {item.expected_quantity} {item.product.unit_of_measure}
+                      {formatNumber(item.expected_quantity)} {item.product.unit_of_measure}
                     </div>
                   </div>
                   <div style={{ borderLeft: '1px solid var(--ops-border)', borderRight: '1px solid var(--ops-border)' }}>
                     <div style={{ color: 'var(--ops-text-muted)', fontSize: '0.65rem', fontWeight: 'bold' }}>RECIBIDO BÁSCULA</div>
                     <div style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '2px', color: '#F59E0B' }}>
-                      {item.received_quantity} {item.product.unit_of_measure}
+                      {formatNumber(item.received_quantity)} {item.product.unit_of_measure}
                     </div>
                   </div>
                   <div>
                     <div style={{ color: '#10B981', fontSize: '0.65rem', fontWeight: 'bold' }}>SURPLUS / SOBRANTE</div>
                     <div style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '2px', color: '#10B981' }}>
-                      +{item.excess_quantity} {item.product.unit_of_measure}
+                      +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
                     </div>
                   </div>
                 </div>
