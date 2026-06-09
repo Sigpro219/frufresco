@@ -21,6 +21,7 @@ interface Product {
     variants?: any[];
     web_conversion_factor?: number;
     display_name?: string;
+    pricing_model_prices?: { price: number }[];
 }
 
 interface QuickViewModalProps {
@@ -59,7 +60,7 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     const isAvailable = product.variants && product.variants.length > 0 ? !!currentVariant : true;
     
     // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? currentVariant.price : (product.base_price || 0);
+    const rawPrice = currentVariant ? currentVariant.price : (product.pricing_model_prices?.[0]?.price || product.base_price || 0);
     const currentPrice = Math.ceil((rawPrice * (product.web_conversion_factor || 1)) / 50) * 50;
 
     const getFormattedName = () => {

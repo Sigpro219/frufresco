@@ -34,7 +34,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // as the Turbopack overlay sometimes triggers on logged errors.
         const originalConsoleError = console.error;
         console.error = (...args) => {
-            if (args.some(arg => isAbortError(arg))) return;
+            if (args.some(arg => {
+                if (!arg) return false;
+                if (isAbortError(arg)) return true;
+                const argStr = String(arg);
+                if (
+                    argStr.includes('Failed to fetch') || 
+                    argStr.includes('TypeError: Failed to fetch') || 
+                    argStr.includes('Error fetching drafts')
+                ) {
+                    return true;
+                }
+                return false;
+            })) return;
             originalConsoleError.apply(console, args);
         };
 

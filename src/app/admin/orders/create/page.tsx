@@ -19,6 +19,7 @@ import {
     Home,
     RefreshCw,
     AlertTriangle,
+    Info,
     FolderOpen,
     Sparkles,
     Settings,
@@ -109,6 +110,20 @@ function CreateOrderContent() {
 
     // Cart Logic
     const [cart, setCart] = useState<{ product: any, qty: any, variant_label?: string, selected_options?: any }[]>([]);
+    const [deleteConfirm, setDeleteConfirm] = useState<{
+        isOpen: boolean;
+        productName: string;
+        onConfirm: () => void;
+    } | null>(null);
+
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
 
     // --- STAGING AREA STATE (Mesa de Trabajo) ---
     const [isStaging, setIsStaging] = useState(false);
@@ -258,8 +273,12 @@ function CreateOrderContent() {
                                 const draftClientTypeVal = metadataItem?.clientType || 'b2c_client';
                                 setDraftClientType(draftClientTypeVal);
 
-                                setClientType('B2C');
-                                setB2CMode('new');
+                                if (draftClientTypeVal === 'b2b_client') {
+                                    setClientType('B2B');
+                                } else {
+                                    setClientType('B2C');
+                                    setB2CMode('new');
+                                }
                                 setGuestInfo(prev => ({
                                     ...prev,
                                     name: draft.client_detected_name || '',
@@ -283,8 +302,12 @@ function CreateOrderContent() {
                         const draftClientTypeVal = metadataItem?.clientType || 'b2c_client';
                         setDraftClientType(draftClientTypeVal);
 
-                        setClientType('B2C');
-                        setB2CMode('new');
+                        if (draftClientTypeVal === 'b2b_client') {
+                            setClientType('B2B');
+                        } else {
+                            setClientType('B2C');
+                            setB2CMode('new');
+                        }
                         setGuestInfo(prev => ({
                             ...prev,
                             name: draft.client_detected_name || '',
@@ -425,7 +448,15 @@ function CreateOrderContent() {
     };
 
     const removeFromCart = (index: number) => {
-        setCart(prev => prev.filter((_, i) => i !== index));
+        const item = cart[index];
+        const productName = item?.product?.name || 'este producto';
+        setDeleteConfirm({
+            isOpen: true,
+            productName: productName,
+            onConfirm: () => {
+                setCart(prev => prev.filter((_, i) => i !== index));
+            }
+        });
     };
 
     const calculateTotal = () => {
@@ -453,7 +484,7 @@ function CreateOrderContent() {
     };
 
     const handleGetLocation = () => {
-        if (!navigator.geolocation) return alert('No soportado');
+        if (!navigator.geolocation) return showToast('No soportado');
         setIsGettingLocation(true);
         navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -463,7 +494,7 @@ function CreateOrderContent() {
             },
             () => {
                 setIsGettingLocation(false);
-                alert('No se pudo obtener la ubicación');
+                showToast('No se pudo obtener la ubicación');
             }
         );
     };
@@ -526,7 +557,7 @@ function CreateOrderContent() {
             setIsStaging(true);
         } catch (error: any) {
             console.error('AI Parsing Error:', error);
-            alert(`Error: ${error.message}`);
+            showToast(`Error: ${error.message}`, 'error');
         } finally {
             setParsingFile(false);
         }
@@ -546,7 +577,7 @@ function CreateOrderContent() {
         setCart(prev => [...itemsToInject, ...prev]);
         setIsStaging(false);
         setStagedItems([]);
-        alert(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`);
+        showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
     };
 
     const updateStagedItem = (id: string, field: string, value: any) => {
@@ -565,7 +596,7 @@ function CreateOrderContent() {
         const addr = directAddress || guestInfo.address;
         const cty = directCity || guestInfo.city;
         if (!addr || !cty) {
-            alert("Por favor ingrese dirección y ciudad para validar coordenadas.");
+            showToast("Por favor ingrese dirección y ciudad para validar coordenadas.");
             return;
         }
         setIsGettingLocation(true);
@@ -589,13 +620,13 @@ function CreateOrderContent() {
                     setOutOfZone(false);
                 }
             } else {
-                alert("❌ No se encontraron coordenadas para esta dirección en " + guestInfo.city + ". Intente verificar la nomenclatura (ej: Cra 100 Sur # 100-21).");
+                showToast('❌ No se encontraron coordenadas para esta dirección en ' + guestInfo.city + '. Intente verificar la nomenclatura (ej: Cra 100 Sur # 100-21).', 'error');
                 setLatitude(null);
                 setLongitude(null);
             }
         } catch (error) {
             console.error("Geocoding error:", error);
-            alert("Error al validar dirección con Google Maps.");
+            showToast('Error al validar dirección con Google Maps.', 'error');
         } finally {
             setIsGettingLocation(false);
         }
@@ -631,25 +662,25 @@ function CreateOrderContent() {
 
 
     const handleSubmit = async () => {
-        if (clientType === 'B2B' && !selectedClient) return alert('Debes seleccionar un cliente Institucional.');
+        if (clientType === 'B2B' && !selectedClient) return showToast('Debes seleccionar un cliente Institucional.');
         
         // B2C Validation
         if (clientType === 'B2C') {
             if (b2cMode === 'new') {
-                if (!guestInfo.name || !guestInfo.phone) return alert('Debes ingresar al menos Nombre y Teléfono para cliente nuevo.');
-                if (outOfZone && !hasCoverageOverride) return alert('No se puede crear el pedido: La dirección está fuera de la zona de cobertura y no cuenta con Excepción Administrativa.');
-                if (!latitude) return alert('Debes validar la dirección con el botón "Validar" antes de continuar.');
+                if (!guestInfo.name || !guestInfo.phone) return showToast('Debes ingresar al menos Nombre y Teléfono para cliente nuevo.');
+                if (outOfZone && !hasCoverageOverride) return showToast('No se puede crear el pedido: La dirección está fuera de la zona de cobertura y no cuenta con Excepción Administrativa.');
+                if (!latitude) return showToast('Debes validar la dirección con el botón "Validar" antes de continuar.');
 
             } else {
-                if (!selectedClientB2C) return alert('Debes buscar y seleccionar un cliente B2C existente.');
+                if (!selectedClientB2C) return showToast('Debes buscar y seleccionar un cliente B2C existente.');
             }
         }
 
-        if (cart.length === 0) return alert('El pedido debe tener al menos un producto');
+        if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
         // Manual Delivery Validation
         if (isManualDelivery && !manualDeliveryTime) {
-            return alert('Si activas entrega manual, debes especificar la Hora.');
+            return showToast('Si activas entrega manual, debes especificar la Hora.');
         }
 
         setLoading(true);
@@ -886,13 +917,13 @@ function CreateOrderContent() {
                 });
             }
 
-            alert('Pedido creado exitosamente ✅');
+            showToast('Pedido creado exitosamente ✅', 'success');
             router.push('/admin/orders/loading');
 
         } catch (e: any) {
             console.error('Submit Full Error:', e);
             const msg = e.message || JSON.stringify(e);
-            alert('Error creando pedido: ' + msg);
+            showToast('Error creando pedido: ' + msg, 'error');
         } finally {
             setLoading(false);
         }
@@ -1558,7 +1589,7 @@ function CreateOrderContent() {
                                         fontWeight: '700', 
                                         cursor: 'pointer' 
                                     }}
-                                    onClick={() => alert('¡Funcionalidad lista para implementar con el PDF de ejemplo!')}
+                                    onClick={() => showToast('¡Funcionalidad lista para implementar con el PDF de ejemplo!')}
                                 >
                                     Subir PDF
                                 </button>
@@ -2201,7 +2232,7 @@ function CreateOrderContent() {
                                         onClick={async () => {
                                             if (clientType === 'B2C' && b2cMode === 'new') {
                                                 if (!guestInfo.name || !guestInfo.phone) {
-                                                    alert('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de confirmar la ubicación.');
+                                                    showToast('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de confirmar la ubicación.');
                                                     return;
                                                 }
                                                 const newProfileId = crypto.randomUUID();
@@ -2227,11 +2258,11 @@ function CreateOrderContent() {
 
                                                 if (profileError) {
                                                     console.error('Error guardando cliente en BD:', profileError);
-                                                    alert('Hubo un error al guardar el cliente en la base de datos.');
+                                                    showToast('Hubo un error al guardar el cliente en la base de datos.', 'error');
                                                     return;
                                                 }
                                                 setCreatedB2CProfileId(newProfileId);
-                                                alert(`🌟 ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente Hogar'} Creado Exitosamente.\n\nEl perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                                showToast(`🌟 ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente Hogar'} Creado Exitosamente. El perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
                                             }
                                             setShowMapPicker(false);
                                         }}
@@ -2264,10 +2295,10 @@ function CreateOrderContent() {
                                         />
                                         <button 
                                             onClick={async () => {
-                                                if (!coverageOverrideReason.trim()) return alert('Por favor ingresa el motivo de la excepción.');
+                                                if (!coverageOverrideReason.trim()) return showToast('Por favor ingresa el motivo de la excepción.');
                                                 if (clientType === 'B2C' && b2cMode === 'new') {
                                                     if (!guestInfo.name || !guestInfo.phone) {
-                                                        alert('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de autorizar la excepción.');
+                                                        showToast('Por favor asegúrate de haber ingresado el Nombre y Teléfono del cliente en el formulario antes de autorizar la excepción.');
                                                         return;
                                                     }
                                                     const newProfileId = crypto.randomUUID();
@@ -2294,14 +2325,14 @@ function CreateOrderContent() {
 
                                                     if (profileError) {
                                                         console.error('Error guardando cliente en BD:', profileError);
-                                                        alert('Hubo un error al guardar el cliente en la base de datos.');
+                                                        showToast('Hubo un error al guardar el cliente en la base de datos.', 'error');
                                                         return;
                                                     }
                                                     setCreatedB2CProfileId(newProfileId);
                                                 }
                                                 setHasCoverageOverride(true);
                                                 setShowMapPicker(false);
-                                                alert(`🌟 Excepción Autorizada y ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente'} Guardado.\n\nEl perfil de ${guestInfo.name} se ha guardado exitosamente en la base de datos con estado de Excepción Permanente.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                                showToast(`🌟 Excepción Autorizada y ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente'} Guardado. El perfil de ${guestInfo.name} se ha guardado exitosamente con Excepción Permanente. Ya puedes agregar productos y completar su pedido cuando desees.`, 'success');
                                             }}
                                             style={{ padding: '0.6rem 1.5rem', borderRadius: '99px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
                                         >
@@ -2324,7 +2355,7 @@ function CreateOrderContent() {
                                                 setHasCoverageOverride(false);
                                                 setCoverageOverrideReason('');
                                                 setShowMapPicker(false);
-                                                alert("❌ Dirección Rechazada por Fuera de Cobertura.\n\nSe ha limpiado la ubicación del pedido. Por favor informe al cliente que su dirección se encuentra fuera de nuestra zona logística actual.");
+                                                showToast('❌ Dirección Rechazada por Fuera de Cobertura. Se ha limpiado la ubicación del pedido.', 'error');
                                             }}
                                             style={{ 
                                                 padding: '0.8rem 1.5rem', 
@@ -2366,6 +2397,149 @@ function CreateOrderContent() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+            {deleteConfirm && deleteConfirm.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 11000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '20px',
+                        padding: '2rem',
+                        width: '90%',
+                        maxWidth: '400px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#FEF2F2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem',
+                            color: '#EF4444'
+                        }}>
+                            <AlertTriangle size={28} />
+                        </div>
+                        <h3 style={{
+                            fontSize: '1.25rem',
+                            fontWeight: 800,
+                            color: '#111827',
+                            margin: '0 0 0.5rem 0'
+                        }}>
+                            ¿Eliminar producto?
+                        </h3>
+                        <p style={{
+                            fontSize: '0.9rem',
+                            color: '#6B7280',
+                            margin: '0 0 1.5rem 0',
+                            lineHeight: '1.5'
+                        }}>
+                            ¿Estás seguro de que deseas eliminar <strong>{deleteConfirm.productName}</strong> del pedido?
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirm(null)}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#F3F4F6',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: '#4B5563',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    deleteConfirm.onConfirm();
+                                    setDeleteConfirm(null);
+                                }}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#EF4444',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {toast && (
+                <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    right: '20px',
+                    backgroundColor: toast.type === 'success' ? 'rgba(6, 78, 59, 0.95)' : toast.type === 'error' ? 'rgba(153, 27, 27, 0.95)' : 'rgba(30, 41, 59, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    color: 'white',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '16px',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    maxWidth: '400px',
+                    animation: 'slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    border: `1px solid ${toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#EF4444' : '#475569'}`
+                }}>
+                    <style>{`
+                        @keyframes slideIn {
+                            from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+                            to { transform: translateY(0) scale(1); opacity: 1; }
+                        }
+                    `}</style>
+                    <div style={{ flexShrink: 0 }}>
+                        {toast.type === 'success' && <Check size={20} />}
+                        {toast.type === 'error' && <AlertTriangle size={20} />}
+                        {toast.type === 'info' && <Info size={20} />}
+                    </div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}>
+                        {toast.message}
+                    </div>
+                    <button 
+                        onClick={() => setToast(null)}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            cursor: 'pointer',
+                            marginLeft: 'auto',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
             )}
         </main>

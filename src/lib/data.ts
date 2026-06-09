@@ -6,18 +6,31 @@ import { supabase, type Product } from './supabase';
  * Cached for 1 hour by default.
  */
 export const getVisibleProducts = unstable_cache(
-  async () => {
+  async (pricingModelId?: string) => {
+    const modelId = pricingModelId || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select('*, pricing_model_prices(price)')
       .eq('is_active', true)
       .eq('show_on_web', true)
+      .eq('pricing_model_prices.model_id', modelId)
       .order('image_url', { ascending: false, nullsFirst: false })
       .limit(500);
 
     if (error) {
-      console.error('Error fetching products:', error);
-      return [];
+      console.error('Error fetching products with prices, trying fallback:', error.message);
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .eq('show_on_web', true)
+        .order('image_url', { ascending: false, nullsFirst: false })
+        .limit(500);
+      if (fallbackError) {
+        console.error('Fallback products fetch failed:', fallbackError);
+        return [];
+      }
+      return fallbackData as Product[];
     }
     return data as Product[];
   },
