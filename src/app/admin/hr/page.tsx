@@ -930,6 +930,8 @@ export default function HRManagement() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
             {/* MODAL IMPRIMIR QR */}
             {printingUser && (
                 <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }} className="no-print">
