@@ -976,7 +976,124 @@ export default function HRManagement() {
 
                         <div style={{ display: 'flex', gap: '0.8rem' }}>
                             <button 
-                                onClick={() => window.print()}
+                                onClick={() => {
+                                    const printWin = window.open('', '_blank', 'width=600,height=600');
+                                    if (!printWin) return alert('Por favor, permite las ventanas emergentes (popups) para poder imprimir la etiqueta.');
+                                    
+                                    const roleLabel = ROLES.find(r => r.value === printingUser.role)?.label || printingUser.role;
+                                    const qrSvgHtml = document.querySelector('#print-label-area svg')?.outerHTML || '';
+
+                                    printWin.document.write(`
+                                        <html>
+                                        <head>
+                                            <title>Imprimir QR - ${printingUser.contact_name}</title>
+                                            <style>
+                                                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800;900&display=swap');
+                                                body {
+                                                    margin: 0;
+                                                    padding: 0;
+                                                    display: flex;
+                                                    justify-content: center;
+                                                    align-items: center;
+                                                    height: 100vh;
+                                                    background-color: #ffffff;
+                                                    font-family: 'Outfit', sans-serif;
+                                                }
+                                                /* Medida del carnet estándar (ID-1): 85.6mm x 54mm */
+                                                .carnet-label {
+                                                    width: 85mm;
+                                                    height: 53mm;
+                                                    border: 1px dashed #cbd5e1;
+                                                    box-sizing: border-box;
+                                                    padding: 6mm 4mm;
+                                                    display: flex;
+                                                    flex-direction: row;
+                                                    align-items: center;
+                                                    justify-content: space-between;
+                                                    gap: 4mm;
+                                                    background-color: #ffffff;
+                                                    border-radius: 4px;
+                                                }
+                                                .info-side {
+                                                    display: flex;
+                                                    flex-direction: column;
+                                                    justify-content: center;
+                                                    align-items: flex-start;
+                                                    flex: 1;
+                                                    text-align: left;
+                                                    max-width: 50mm;
+                                                }
+                                                .title-name {
+                                                    font-size: 11pt;
+                                                    font-weight: 800;
+                                                    color: #0f172a;
+                                                    margin: 0 0 3px 0;
+                                                    line-height: 1.2;
+                                                    text-transform: uppercase;
+                                                }
+                                                .role-badge {
+                                                    font-size: 7.5pt;
+                                                    font-weight: 900;
+                                                    color: #0d7a57;
+                                                    background-color: #f0fdf4;
+                                                    padding: 2px 6px;
+                                                    border-radius: 4px;
+                                                    text-transform: uppercase;
+                                                    margin-bottom: 5px;
+                                                    display: inline-block;
+                                                }
+                                                .doc-id {
+                                                    font-size: 8pt;
+                                                    font-weight: 700;
+                                                    color: #64748b;
+                                                }
+                                                .qr-side {
+                                                    display: flex;
+                                                    justify-content: center;
+                                                    align-items: center;
+                                                    padding: 4px;
+                                                    background-color: white;
+                                                    border: 1px solid #e2e8f0;
+                                                    border-radius: 8px;
+                                                }
+                                                .qr-side svg {
+                                                    width: 32mm;
+                                                    height: 32mm;
+                                                }
+                                                @media print {
+                                                    body {
+                                                        background-color: white;
+                                                    }
+                                                    .carnet-label {
+                                                        border: none;
+                                                    }
+                                                }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div class="carnet-label">
+                                                <div class="info-side">
+                                                    <span class="role-badge">${roleLabel}</span>
+                                                    <h3 class="title-name">${printingUser.contact_name}</h3>
+                                                    <span class="doc-id">Doc: ${printingUser.document_id || '---'}</span>
+                                                </div>
+                                                <div class="qr-side">
+                                                    ${qrSvgHtml}
+                                                </div>
+                                            </div>
+                                            <script>
+                                                window.onload = function() {
+                                                    setTimeout(function() {
+                                                        window.print();
+                                                        window.close();
+                                                    }, 300);
+                                                }
+                                            </script>
+                                        </body>
+                                        </html>
+                                    `);
+                                    printWin.document.close();
+                                }}
                                 style={{ 
                                     flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', 
                                     backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '800', 
