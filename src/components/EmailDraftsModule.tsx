@@ -908,7 +908,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   {draftCoordinates && (
                     <div style={{
                       fontSize: '0.8rem',
-                      color: checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client'
+                      color: checkIsNewClient(selectedDraft)
                         ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
                         : '#059669',
                       fontWeight: 600,
@@ -918,7 +918,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}>
                       <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
                       <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
-                      {checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client' && (
+                      {checkIsNewClient(selectedDraft) && (
                         <span>
                           {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
                             ? '✅ En Zona de Cobertura'
@@ -1105,8 +1105,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const hasCoords = draftCoordinates !== null;
               const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
 
-              // If it's a new B2C client AND we have coordinates AND it's OUT of coverage
-              if (isB2c && isNewClient && hasCoords && !isCovered) {
+              // If it's a new client AND we have coordinates AND it's OUT of coverage
+              if (isNewClient && hasCoords && !isCovered) {
                 return (
                   <div style={{
                     padding: '1.5rem',
@@ -1203,9 +1203,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   borderBottomLeftRadius: THEME.radius.xl,
                   borderBottomRightRadius: THEME.radius.xl
                 }}>
-                  {/* Left Side: Coverage status (only if new B2C client) */}
+                  {/* Left Side: Coverage status (only if new client) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                    {isNewClient && isB2c && (
+                    {isNewClient && (
                       <>
                         <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
                         {geocoding ? (
