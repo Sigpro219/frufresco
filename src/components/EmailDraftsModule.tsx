@@ -678,69 +678,96 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No se encontraron correos con los filtros actuales.</p>
         </div>
       ) : viewMode === 'list' ? (
-        <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>FECHA / TIPO</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>CLIENTE DETECTADO</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>DIRECCIÓN EXTRACT.</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>ASUNTO</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>ITEMS</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>ACCIONES</th>
+              <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE DETECTADO</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN EXTRACT. / GPS</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO</th>
+                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS</th>
+                <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR EST.</th>
+                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
               {filteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
-                const itemsCount = getDraftItems(draft).length;
+                const items = getDraftItems(draft);
+                const itemsCount = items.length;
+                const estimatedTotal = items.reduce((acc: number, item: any) => {
+                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                }, 0);
+
                 return (
                 <tr 
                   key={draft.id} 
                   onClick={() => setSelectedDraft(draft)}
-                  style={{ borderBottom: `1px solid ${THEME.colors.border}`, cursor: 'pointer', transition: 'background-color 0.15s' }}
+                  style={{ 
+                    borderBottom: '1px solid #F1F5F9', 
+                    cursor: 'pointer', 
+                    transition: 'all 0.1s',
+                    backgroundColor: 'transparent'
+                  }}
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ fontWeight: 800, color: '#111827', fontSize: '0.9rem' }}>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>
                       {new Date(draft.created_at).toLocaleDateString()}
                     </div>
-                    <span style={{ 
-                      color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
-                      fontWeight: 700, 
-                      fontSize: '0.75rem' 
-                    }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: meta.clientType === 'b2b_client' ? '#6366F1' : '#EC4899' }}>
                       {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>{draft.client_detected_name || 'Desconocido'}</div>
-                    <div style={{ color: '#6B7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                      <Mail size={12} /> {draft.source_email}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ color: '#4B5563', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {meta.address !== 'No detectado' ? meta.address : '-'}
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>
+                      {draft.client_detected_name || 'Desconocido'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      <Mail size={10} strokeWidth={1.5} /> {draft.source_email}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', maxWidth: '250px' }}>
-                    <div style={{ color: '#4B5563', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>
+                      {meta.address !== 'No detectado' ? (meta.address.slice(0, 35) + '...') : '-'}
+                    </div>
+                    {meta.address !== 'No detectado' ? (
+                      <span style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '900' }}>📍 GPS OK</span>
+                    ) : (
+                      <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#4B5563', fontWeight: '500', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {draft.email_subject || '-'}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
-                    <div style={{ fontWeight: 800, color: '#111827' }}>{itemsCount}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>prods</div>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
+                    {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
+                    {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
+                  </td>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                    <div style={{
+                      padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                      backgroundColor: '#FEF3C7',
+                      color: '#92400E'
+                    }}>
+                      PENDIENTE
+                    </div>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px' }}
+                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                       title="Rechazar"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>
