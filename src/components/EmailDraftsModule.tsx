@@ -115,63 +115,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     
     setSaving(true);
     try {
-      // 1. Update status to rejected in database
-      const { error: draftError } = await supabase
-        .from('order_drafts')
-        .update({ status: 'rejected' })
-        .eq('id', selectedDraft.id);
-
-      if (draftError) throw draftError;
-
-      // 2. Insert mail to queue
       const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
-      const { data: insertedMail, error: mailError } = await supabase
-        .from('mail')
-        .insert({
-          to_email: selectedDraft.source_email,
-          subject: 'Rechazo de Pedido - Fuera de Zona de Cobertura',
-          message: {
-            text: `Hola. Lamentamos informarte que tu solicitud de pedido ha sido rechazada debido a que la dirección proporcionada (${addressStr}) se encuentra fuera de nuestra zona de cobertura en Bogotá.`,
-            html: `
-              <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-              <div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
-                <center>
-                  <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
-                  <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">Pedido Recibido - Cobertura</h1>
-                  <p style="font-size: 16px; color: #555;">Información sobre el estado de cobertura de tu solicitud.</p>
-                </center>
-                
-                <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-                  <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Novedad sobre tu pedido</h3>
-                  <p style="font-size: 15px; line-height: 1.5; color: #111827;">Hola,</p>
-                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Lamentamos informarte que hemos tenido que rechazar tu solicitud de pedido enviado por correo electrónico.</p>
-                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">La dirección proporcionada (<b>${addressStr}</b>) se encuentra <b>fuera de nuestra zona de cobertura actual</b> en Bogotá.</p>
-                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos mucho tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>
-                </div>
-                
-                <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
-                <center>
-                  <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
-                </center>
-              </div>
-            `
-          }
+      const res = await fetch('/api/orders/reject-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId: selectedDraft.id,
+          address: addressStr,
+          sourceEmail: selectedDraft.source_email
         })
-        .select();
+      });
 
-      if (mailError) {
-        console.error('Error inserting mail:', mailError);
-      } else if (insertedMail && insertedMail.length > 0) {
-        // Trigger processor immediately so it runs in development too
-        try {
-          await fetch('/api/mail/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ record: insertedMail[0] })
-          });
-        } catch (processErr) {
-          console.error('Error executing mail process locally:', processErr);
-        }
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Error en el servidor');
       }
 
       alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
@@ -179,7 +136,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       fetchDrafts();
     } catch (e: any) {
       console.error('Error in handleRejectForCoverage:', e);
-      alert('Error al rechazar el borrador. Por favor intenta de nuevo.');
+      alert(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`);
     } finally {
       setSaving(false);
     }
