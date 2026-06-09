@@ -46,8 +46,26 @@ export async function POST(req: Request) {
 
     const formattedTotal = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalEstimated);
 
-    const emailSubject = 'Modificación de tu pedido: Producto no disponible - FruFresco';
+    const emailSubject = 'Modificación de tu pedido: Novedad de disponibilidad - FruFresco';
     
+    const deletedItemsArray = Array.isArray(deletedItem) ? deletedItem : [deletedItem];
+    const isMultiple = deletedItemsArray.length > 1;
+
+    const introText = isMultiple
+      ? 'Hemos recibido tu solicitud de pedido enviado por correo electrónico. Queremos informarte que en este momento <strong>no contamos con disponibilidad de los siguientes productos</strong> en nuestro inventario:'
+      : 'Hemos recibido tu solicitud de pedido enviado por correo electrónico. Queremos informarte que en este momento <strong>no contamos con disponibilidad del siguiente producto</strong> en nuestro inventario:';
+
+    const deletedItemsHtml = deletedItemsArray.map(item => `
+      <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 12px 16px; margin: 8px 0; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 18px; color: #ef4444;">⚠️</span>
+        <span style="font-size: 14px; font-weight: 700; color: #991b1b;">${item} (Agotado / No disponible)</span>
+      </div>
+    `).join('');
+
+    const removalText = isMultiple
+      ? 'Estos productos han sido removidos de tu solicitud para poder proceder con el despacho. A continuación encontrarás el <strong>detalle actualizado de tu pedido</strong> con los productos que sí tenemos disponibles:'
+      : 'Este ítem ha sido removido de tu solicitud para poder proceder con el despacho. A continuación encontrarás el <strong>detalle actualizado de tu pedido</strong> con los productos que sí tenemos disponibles:';
+
     // 3. Crear el HTML premium del correo
     const emailHtml = `
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -61,16 +79,15 @@ export async function POST(req: Request) {
         <div style="background: white; padding: 30px; border-radius: 16px; border-top: 4px solid #286a36; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-bottom: 25px;">
           <p style="font-size: 15px; color: #334155; font-weight: 700; margin-top: 0;">Estimado/a ${clientName || 'Cliente'},</p>
           <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            Hemos recibido tu solicitud de pedido enviado por correo electrónico. Queremos informarte que en este momento <strong>no contamos con disponibilidad del siguiente producto</strong> en nuestro inventario:
+            ${introText}
           </p>
           
-          <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 16px; margin: 20px 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 20px; color: #ef4444;">⚠️</span>
-            <span style="font-size: 14px; font-weight: 700; color: #991b1b;">${deletedItem} (Agotado / No disponible)</span>
+          <div style="margin: 20px 0;">
+            ${deletedItemsHtml}
           </div>
           
           <p style="font-size: 14px; line-height: 1.6; color: #475569;">
-            Este ítem ha sido removido de tu solicitud para poder proceder con el despacho. A continuación encontrarás el **detalle actualizado de tu pedido** con los productos que sí tenemos disponibles:
+            ${removalText}
           </p>
 
           <h3 style="color: #286a36; font-family: 'Playfair Display', Georgia, serif; font-size: 18px; margin: 25px 0 12px 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Factura / Detalle del Pedido</h3>
@@ -107,7 +124,8 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    const textAlternative = `Hola. Queremos informarte que en este momento no contamos con disponibilidad del producto "${deletedItem}" en nuestro inventario. El producto ha sido removido de tu solicitud de pedido. El valor total estimado de tu pedido es ahora ${formattedTotal}.`;
+    const deletedItemsText = deletedItemsArray.join(', ');
+    const textAlternative = `Hola. Queremos informarte que en este momento no contamos con disponibilidad de ${isMultiple ? 'los siguientes productos' : 'el siguiente producto'}: "${deletedItemsText}" en nuestro inventario. ${isMultiple ? 'Han' : 'Este ítem ha'} sido removido de tu solicitud de pedido. El valor total estimado de tu pedido es ahora ${formattedTotal}.`;
 
     console.log('[Notify Deleted API] Sending notification email...');
     if (smtpUser && smtpPass) {

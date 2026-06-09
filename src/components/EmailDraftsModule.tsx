@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2 } from 'lucide-react';
 import Link from 'next/link';
 
 const getChannelBadge = (source: string) => {
@@ -38,6 +38,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
+  const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
@@ -47,10 +48,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
+  useEffect(() => {
+    setRecentlyDeletedItems([]);
+  }, [selectedDraft?.id]);
+
   const [deleteConfirm, setDeleteConfirm] = useState<{
     isOpen: boolean;
+    step: 1 | 2;
     productName: string;
-    onConfirm: () => void;
+    onConfirmNotify: () => Promise<void>;
+    onConfirmOnlyDelete: () => Promise<void>;
   } | null>(null);
   const [actionConfirm, setActionConfirm] = useState<{
     isOpen: boolean;
@@ -61,6 +69,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     isDanger?: boolean;
     onConfirm: () => void;
   } | null>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [rejectReason, setRejectReason] = useState<string>('');
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    draftId: string;
+    address: string;
+    sourceEmail: string;
+    totalValue: number;
+  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const DEFAULT_B2C_POLYGON = [
     { lat: 4.647, lng: -74.062 },
@@ -182,12 +208,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             throw new Error(errData.error || 'Error en el servidor');
           }
 
-          alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
+          showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
           setSelectedDraft(null);
           fetchDrafts();
         } catch (e: any) {
           console.error('Error in handleRejectForCoverage:', e);
-          alert(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`);
+          showToast(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`, 'error');
         } finally {
           setSaving(false);
         }
@@ -202,6 +228,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleToggleEdit = async () => {
+    if (isEditing) {
+      setSaving(true);
+      try {
+        const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+        const updatedMetaItem = {
+          ...metaItem,
+          deliveryDate: deliveryDate
+        };
+        const updatedExtractedItems = [
+          updatedMetaItem,
+          ...editableItems
+        ];
+
+        const { error } = await supabase
+          .from('order_drafts')
+          .update({ extracted_items: updatedExtractedItems })
+          .eq('id', selectedDraft.id);
+
+        if (error) throw error;
+        
+        setSelectedDraft((prev: any) => ({
+          ...prev,
+          extracted_items: updatedExtractedItems
+        }));
+        showToast('Borrador de pedido guardado exitosamente.', 'success');
+      } catch (e: any) {
+        console.warn('Error saving edits:', e?.message || e);
+        showToast('Error al guardar las modificaciones del borrador: ' + (e?.message || e), 'error');
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setIsEditing(!isEditing);
   };
 
   const fetchAliases = async () => {
@@ -261,6 +324,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   useEffect(() => {
     if (selectedDraft) {
+      setIsEditing(false);
       const meta = getDraftMetadata(selectedDraft);
       if (meta.address && meta.address !== 'No detectado') {
         setGeocoding(true);
@@ -427,7 +491,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       window.location.href = `/admin/orders/create?draft_id=${selectedDraft.id}`;
     } catch (e) {
       console.error('Error in handleApprove:', e);
-      alert('Error al guardar. Por favor intenta de nuevo.');
+      showToast('Error al guardar. Por favor intenta de nuevo.', 'error');
       setSaving(false);
     }
   };
@@ -656,7 +720,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         {/* Info Icon */}
         <div 
-          onClick={() => alert('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.')}
+          onClick={() => showToast('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.', 'info')}
           title="Ayuda del módulo"
           style={{ 
             display: 'flex', 
@@ -739,7 +803,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
                 <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
                 <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                <th style={{ padding: '1rem', width: '7%', textAlign: 'center' }}></th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ACCIONES</th>
               </tr>
             </thead>
             <tbody>
@@ -832,10 +896,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       PENDIENTE
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '1rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={() => setSelectedDraft(draft)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: THEME.colors.primary, 
+                        cursor: 'pointer', 
+                        padding: '5px', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Revisar / Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#EF4444', 
+                        cursor: 'pointer', 
+                        padding: '5px', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                       title="Rechazar"
                     >
                       <Trash2 size={16} />
@@ -913,13 +1010,48 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
                     {itemsCount} productos
                   </span>
-                  <button 
-                    onClick={(e) => handleDelete(draft.id, e)}
-                    style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                    title="Rechazar"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSelectedDraft(draft)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: THEME.colors.primary, 
+                        cursor: 'pointer', 
+                        padding: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Revisar / Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={(e) => handleDelete(draft.id, e)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#EF4444', 
+                        cursor: 'pointer', 
+                        padding: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Rechazar"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1052,6 +1184,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <input
                       type="date"
                       value={deliveryDate}
+                      disabled={!isEditing}
                       onChange={(e) => setDeliveryDate(e.target.value)}
                       style={{
                         padding: '6px 12px',
@@ -1093,6 +1226,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
               {/* Tabla de Productos Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleToggleEdit}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: isEditing ? '#DEF7EC' : 'white',
+                      border: `1px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
+                      borderRadius: '8px',
+                      color: isEditing ? '#03543F' : '#4B5563',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Check size={16} />
+                        {saving ? 'Guardando...' : 'Finalizar Edición'}
+                      </>
+                    ) : (
+                      <>
+                        <Edit2 size={16} />
+                        Modificar Pedido
+                      </>
+                    )}
+                  </button>
+                </div>
                 <div style={{ overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
@@ -1130,6 +1296,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <input
                                       ref={el => { productInputRefs.current[i] = el; }}
                                       list={`products-list-${i}`}
+                                      disabled={!isEditing}
                                       value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
                                       placeholder="-- Buscar Producto --"
                                       onChange={(e) => {
@@ -1173,6 +1340,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
                                       <input 
                                         type="number"
+                                        disabled={!isEditing}
                                         value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
                                         onChange={(e) => {
                                         const newEdits = [...editableItems];
@@ -1210,101 +1378,142 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
                                   </td>
                                   <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '50px' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const itemLabel = item.originalName || (matchedProd ? matchedProd.name : 'este producto');
-                                        setDeleteConfirm({
-                                          isOpen: true,
-                                          productName: itemLabel,
-                                          onConfirm: async () => {
-                                            const newEdits = editableItems.filter((_, idx) => idx !== i);
-                                            
-                                            // 1. Preparar ítems para base de datos
-                                            const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
-                                            const updatedMetaItem = {
-                                              ...metaItem,
-                                              deliveryDate: deliveryDate
+                                    {isEditing && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const itemLabel = item.originalName || (matchedProd ? matchedProd.name : 'este producto');
+                                          
+                                          // Calcular los nuevos ítems si eliminamos este
+                                          const newEdits = editableItems.filter((_, idx) => idx !== i);
+                                          
+                                          // 1. Preparar ítems para base de datos
+                                          const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                                          const updatedMetaItem = {
+                                            ...metaItem,
+                                            deliveryDate: deliveryDate
+                                          };
+                                          const dbItems = [
+                                            updatedMetaItem,
+                                            ...newEdits.map(itm => ({
+                                              originalName: itm.originalName || '',
+                                              quantity: itm.quantity,
+                                              matched_product_id: itm.matched_product_id
+                                            }))
+                                          ];
+
+                                          // 2. Preparar ítems para tabla de correo
+                                          const emailItems = newEdits.map(itm => {
+                                            const mProd = products.find(p => p.id === itm.matched_product_id);
+                                            return {
+                                              productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+                                              quantity: itm.quantity,
+                                              unitPrice: mProd ? mProd.base_price : 0,
+                                              unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
                                             };
-                                            const dbItems = [
-                                              updatedMetaItem,
-                                              ...newEdits.map(itm => ({
-                                                originalName: itm.originalName || '',
-                                                quantity: itm.quantity,
-                                                matched_product_id: itm.matched_product_id
-                                              }))
-                                            ];
+                                          });
 
-                                            // 2. Preparar ítems para tabla de correo
-                                            const emailItems = newEdits.map(itm => {
-                                              const mProd = products.find(p => p.id === itm.matched_product_id);
-                                              return {
-                                                productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
-                                                quantity: itm.quantity,
-                                                unitPrice: mProd ? mProd.base_price : 0,
-                                                unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
-                                              };
-                                            });
+                                          setDeleteConfirm({
+                                            isOpen: true,
+                                            step: 1,
+                                            productName: itemLabel,
+                                            onConfirmNotify: async () => {
+                                              setSaving(true);
+                                              try {
+                                                const itemsToNotify = [...recentlyDeletedItems, itemLabel];
+                                                const res = await fetch('/api/orders/notify-deleted-item', {
+                                                  method: 'POST',
+                                                  headers: { 'Content-Type': 'application/json' },
+                                                  body: JSON.stringify({
+                                                    draftId: selectedDraft.id,
+                                                    deletedItem: itemsToNotify,
+                                                    sourceEmail: selectedDraft.source_email,
+                                                    clientName: selectedDraft.client_detected_name || 'Cliente',
+                                                    dbItems,
+                                                    emailItems
+                                                  })
+                                                });
 
-                                            setSaving(true);
-                                            try {
-                                              const res = await fetch('/api/orders/notify-deleted-item', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                  draftId: selectedDraft.id,
-                                                  deletedItem: itemLabel,
-                                                  sourceEmail: selectedDraft.source_email,
-                                                  clientName: selectedDraft.client_detected_name || 'Cliente',
-                                                  dbItems,
-                                                  emailItems
-                                                })
-                                              });
+                                                if (!res.ok) {
+                                                  const errData = await res.json();
+                                                  throw new Error(errData.error || 'Error en el servidor');
+                                                }
 
-                                              if (!res.ok) {
-                                                const errData = await res.json();
-                                                throw new Error(errData.error || 'Error en el servidor');
+                                                // Limpiar items recientemente eliminados
+                                                setRecentlyDeletedItems([]);
+
+                                                // Actualizar estado local
+                                                setEditableItems(newEdits);
+                                                setSelectedDraft((prev: any) => {
+                                                  if (!prev) return null;
+                                                  return {
+                                                    ...prev,
+                                                    extracted_items: dbItems
+                                                  };
+                                                });
+                                                setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+
+                                                showToast('Novedades notificadas al cliente por correo y borrador actualizado. ✉️', 'success');
+                                              } catch (err: any) {
+                                                console.warn('Error notifying deleted items:', err);
+                                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+                                              } finally {
+                                                setSaving(false);
                                               }
+                                            },
+                                            onConfirmOnlyDelete: async () => {
+                                              setSaving(true);
+                                              try {
+                                                const { error: dbError } = await supabase
+                                                  .from('order_drafts')
+                                                  .update({ extracted_items: dbItems })
+                                                  .eq('id', selectedDraft.id);
 
-                                              // 3. Actualizar estado local
-                                              setEditableItems(newEdits);
-                                              setSelectedDraft((prev: any) => {
-                                                if (!prev) return null;
-                                                return {
-                                                  ...prev,
-                                                  extracted_items: dbItems
-                                                };
-                                              });
-                                              setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+                                                if (dbError) throw dbError;
 
-                                              alert('Novedad notificada al cliente por correo y borrador actualizado. ✉️');
-                                            } catch (err: any) {
-                                              console.error('Error notifying deleted item:', err);
-                                              alert(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`);
-                                            } finally {
-                                              setSaving(false);
+                                                // Añadir al estado acumulado
+                                                setRecentlyDeletedItems(prev => [...prev, itemLabel]);
+
+                                                // Actualizar estado local
+                                                setEditableItems(newEdits);
+                                                setSelectedDraft((prev: any) => {
+                                                  if (!prev) return null;
+                                                  return {
+                                                    ...prev,
+                                                    extracted_items: dbItems
+                                                  };
+                                                });
+                                                setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+
+                                                showToast('Producto eliminado de la lista (novedad pendiente de notificar). ✍️', 'info');
+                                              } catch (err: any) {
+                                                console.warn('Error deleting item locally:', err);
+                                                showToast(`Error al eliminar el producto: ${err.message || 'Error de conexión'}`, 'error');
+                                              } finally {
+                                                setSaving(false);
+                                              }
                                             }
-                                          }
-                                        });
-                                      }}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#EF4444',
-                                        cursor: 'pointer',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        transition: 'background-color 0.2s'
-                                      }}
-                                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                                      title="Eliminar producto"
-                                    >
-                                      <X size={16} strokeWidth={2.5} />
-                                    </button>
+                                          });
+                                        }}
+                                        style={{
+                                          background: 'none',
+                                          border: 'none',
+                                          color: '#EF4444',
+                                          cursor: 'pointer',
+                                          padding: '4px 8px',
+                                          borderRadius: '4px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          transition: 'background-color 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                        title="Eliminar producto"
+                                      >
+                                        <X size={16} strokeWidth={2.5} />
+                                      </button>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -1317,33 +1526,120 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </table>
                 </div>
                 
-                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
-                  <button
-                    onClick={() => {
-                      const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
-                      setEditableItems(newEdits);
-                      setTimeout(() => {
-                        const nextInput = productInputRefs.current[newEdits.length - 1];
-                        if (nextInput) nextInput.focus();
-                      }, 50);
-                    }}
-                    style={{
-                      padding: '0.6rem 1rem',
-                      backgroundColor: '#F3F4F6',
-                      color: '#4B5563',
-                      border: '1px dashed #D1D5DB',
-                      borderRadius: '8px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    + Añadir Producto Manualmente
-                  </button>
-                </div>
+                {isEditing && (
+                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => {
+                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                        setEditableItems(newEdits);
+                        setTimeout(() => {
+                          const nextInput = productInputRefs.current[newEdits.length - 1];
+                          if (nextInput) nextInput.focus();
+                        }, 50);
+                      }}
+                      style={{
+                        padding: '0.6rem 1rem',
+                        backgroundColor: '#F3F4F6',
+                        color: '#4B5563',
+                        border: '1px dashed #D1D5DB',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      + Añadir Producto Manualmente
+                    </button>
+
+                    {recentlyDeletedItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionConfirm({
+                            isOpen: true,
+                            title: '¿Notificar novedades de productos agotados?',
+                            message: `Se enviará un correo electrónico de notificación consolidado al cliente por los siguientes productos que no están disponibles:\n\n${recentlyDeletedItems.map(item => `• ${item}`).join('\n')}\n\n¿Estás seguro de que deseas proceder?`,
+                            confirmText: 'Enviar Notificación',
+                            cancelText: 'Cancelar',
+                            isDanger: false,
+                            onConfirm: async () => {
+                              // Preparar ítems para tabla de correo
+                              const emailItems = editableItems.map(itm => {
+                                const mProd = products.find(p => p.id === itm.matched_product_id);
+                                return {
+                                  productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+                                  quantity: itm.quantity,
+                                  unitPrice: mProd ? mProd.base_price : 0,
+                                  unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+                                };
+                              });
+
+                              // Preparar dbItems (ya están actualizados en la base de datos)
+                              const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                              const dbItems = [
+                                { ...metaItem, deliveryDate: deliveryDate },
+                                ...editableItems.map(itm => ({
+                                  originalName: itm.originalName || '',
+                                  quantity: itm.quantity,
+                                  matched_product_id: itm.matched_product_id
+                                }))
+                              ];
+
+                              setSaving(true);
+                              try {
+                                const res = await fetch('/api/orders/notify-deleted-item', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    draftId: selectedDraft.id,
+                                    deletedItem: recentlyDeletedItems,
+                                    sourceEmail: selectedDraft.source_email,
+                                    clientName: selectedDraft.client_detected_name || 'Cliente',
+                                    dbItems,
+                                    emailItems
+                                  })
+                                });
+
+                                if (!res.ok) {
+                                  const errData = await res.json();
+                                  throw new Error(errData.error || 'Error en el servidor');
+                                }
+
+                                setRecentlyDeletedItems([]);
+                                showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
+                              } catch (err: any) {
+                                console.warn('Error sending batch notification:', err);
+                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+                              } finally {
+                                setSaving(false);
+                              }
+                            }
+                          });
+                        }}
+                        style={{
+                          padding: '0.6rem 1rem',
+                          backgroundColor: '#FEF3C7',
+                          color: '#B45309',
+                          border: '1px solid #FCD34D',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                        }}
+                      >
+                        <Mail size={16} />
+                        Notificar Novedades ({recentlyDeletedItems.length})
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Cuerpo del correo oculto en un acordeón al final */}
@@ -1552,76 +1848,175 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
             textAlign: 'center'
           }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              backgroundColor: '#FEF2F2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem',
-              color: '#EF4444'
-            }}>
-              <AlertTriangle size={28} />
-            </div>
-            <h3 style={{
-              fontSize: '1.25rem',
-              fontWeight: 800,
-              color: '#111827',
-              margin: '0 0 0.5rem 0'
-            }}>
-              ¿Eliminar producto?
-            </h3>
-            <p style={{
-              fontSize: '0.9rem',
-              color: '#6B7280',
-              margin: '0 0 1.5rem 0',
-              lineHeight: '1.5'
-            }}>
-              ¿Estás seguro de que deseas eliminar <strong>{deleteConfirm.productName}</strong> de la lista?
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => setDeleteConfirm(null)}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#F3F4F6',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  color: '#4B5563',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.6 : 1
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={async () => {
-                  await deleteConfirm.onConfirm();
-                  setDeleteConfirm(null);
-                }}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#EF4444',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  color: 'white',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.6 : 1
-                }}
-              >
-                {saving ? 'Enviando...' : 'Eliminar'}
-              </button>
-            </div>
+            {deleteConfirm.step === 1 ? (
+              <>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FEF2F2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.5rem',
+                  color: '#EF4444'
+                }}>
+                  <AlertTriangle size={28} />
+                </div>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: '#111827',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  ¿Eliminar producto?
+                </h3>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: '#6B7280',
+                  margin: '0 0 1.5rem 0',
+                  lineHeight: '1.5'
+                }}>
+                  ¿Estás seguro de que deseas eliminar <strong>{deleteConfirm.productName}</strong> de la lista?
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(null)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#F3F4F6',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: '#4B5563',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#EF4444',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FEF3C7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.5rem',
+                  color: '#D97706'
+                }}>
+                  <Mail size={28} />
+                </div>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: '#111827',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  ¿Notificar al cliente?
+                </h3>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: '#6B7280',
+                  margin: '0 0 1.5rem 0',
+                  lineHeight: '1.5'
+                }}>
+                  ¿Deseas enviar el correo de notificación por <strong>{deleteConfirm.productName}</strong> ahora, o prefieres solo eliminarlo de la lista y notificar más tarde?
+                  {recentlyDeletedItems.length > 0 && (
+                    <span style={{ display: 'block', marginTop: '8px', fontSize: '0.85rem', color: '#B45309', fontWeight: 600 }}>
+                      ⚠️ Se enviará junto con los productos ya eliminados: {recentlyDeletedItems.join(', ')}
+                    </span>
+                  )}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      await deleteConfirm.onConfirmNotify();
+                      setDeleteConfirm(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#D97706',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    {saving ? 'Enviando...' : 'Eliminar y Enviar Correo'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      await deleteConfirm.onConfirmOnlyDelete();
+                      setDeleteConfirm(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#10B981',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    {saving ? 'Eliminando...' : 'Solo Eliminar (Notificar Después)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 1 } : null)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#F3F4F6',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: '#4B5563',
+                      cursor: saving ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Atrás
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1715,6 +2110,217 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {rejectModal && rejectModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '420px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'left'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF2F2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              color: '#EF4444'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 1rem 0',
+              textAlign: 'center'
+            }}>
+              Rechazar Solicitud de Pedido
+            </h3>
+            
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem' }}>
+                Causa de Reclamación / Cancelación:
+              </label>
+              <select
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  border: `1px solid ${THEME.colors.border}`,
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="">-- Selecciona una causa --</option>
+                <option value="cobertura">Falta de cobertura geográfica</option>
+                <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
+              </select>
+            </div>
+
+            {rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000 && (
+              <div style={{
+                backgroundColor: '#FEF2F2',
+                borderLeft: '4px solid #EF4444',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: '#991B1B',
+                marginBottom: '1.25rem'
+              }}>
+                ⚠️ No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setRejectModal(null)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !rejectReason || 
+                  (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) ||
+                  saving
+                }
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    const res = await fetch('/api/orders/reject-draft', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        draftId: rejectModal.draftId,
+                        address: rejectModal.address,
+                        sourceEmail: rejectModal.sourceEmail,
+                        reason: rejectReason
+                      })
+                    });
+
+                    if (!res.ok) {
+                      const errData = await res.json();
+                      throw new Error(errData.error || 'Error en el servidor');
+                    }
+
+                    showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : 'monto mínimo'}. Se ha notificado al cliente. ✉️`, 'success');
+                    setRejectModal(null);
+                    setSelectedDraft(null);
+                    fetchDrafts();
+                  } catch (e: any) {
+                    console.error('Error rejecting draft:', e);
+                    showToast(`Error al rechazar el borrador: ${e.message}`, 'error');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#EF4444',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: 'pointer',
+                  opacity: (!rejectReason || (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) || saving) ? 0.5 : 1
+                }}
+              >
+                {saving ? 'Procesando...' : 'Rechazar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: toast.type === 'success' ? 'rgba(6, 78, 59, 0.95)' : toast.type === 'error' ? 'rgba(153, 27, 27, 0.95)' : 'rgba(30, 41, 59, 0.95)',
+          backdropFilter: 'blur(8px)',
+          color: 'white',
+          padding: '1rem 1.5rem',
+          borderRadius: '16px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          maxWidth: '400px',
+          animation: 'slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          border: `1px solid ${toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#EF4444' : '#475569'}`
+        }}>
+          <style>{`
+            @keyframes slideIn {
+              from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+              to { transform: translateY(0) scale(1); opacity: 1; }
+            }
+          `}</style>
+          <div style={{ flexShrink: 0 }}>
+            {toast.type === 'success' && <Check size={20} />}
+            {toast.type === 'error' && <AlertTriangle size={20} />}
+            {toast.type === 'info' && <Info size={20} />}
+          </div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}>
+            {toast.message}
+          </div>
+          <button 
+            onClick={() => setToast(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.6)',
+              cursor: 'pointer',
+              marginLeft: 'auto',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
     </div>
