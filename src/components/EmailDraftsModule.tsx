@@ -2,9 +2,28 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle } from 'lucide-react';
+import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe } from 'lucide-react';
 import Link from 'next/link';
+
+const getChannelBadge = (source: string) => {
+    switch (source) {
+        case 'whatsapp': 
+            return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MessageSquare size={10} strokeWidth={1.5} /> WhatsApp</span>;
+        case 'phone': 
+            return <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={10} strokeWidth={1.5} /> Teléfono</span>;
+        case 'email': 
+            return <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Mail size={10} strokeWidth={1.5} /> Correo</span>;
+        case 'file_upload': 
+            return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UploadCloud size={10} strokeWidth={1.5} /> Carga</span>;
+        case 'web_b2c': 
+            return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Home size={10} strokeWidth={1.5} /> Web Hogar</span>;
+        case 'web_b2b': 
+            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Horeca</span>;
+        default: 
+            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
+    }
+};
 
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
@@ -28,6 +47,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    productName: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [actionConfirm, setActionConfirm] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDanger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   const DEFAULT_B2C_POLYGON = [
     { lat: 4.647, lng: -74.062 },
@@ -121,37 +154,45 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return inside;
   };
 
-  const handleRejectForCoverage = async () => {
+  const handleRejectForCoverage = () => {
     if (!selectedDraft) return;
-    if (!confirm('¿Estás seguro de que deseas rechazar este pedido por falta de cobertura? Se enviará un correo electrónico de notificación al cliente.')) return;
-    
-    setSaving(true);
-    try {
-      const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
-      const res = await fetch('/api/orders/reject-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftId: selectedDraft.id,
-          address: addressStr,
-          sourceEmail: selectedDraft.source_email
-        })
-      });
+    setActionConfirm({
+      isOpen: true,
+      title: '¿Rechazar por falta de cobertura?',
+      message: '¿Estás seguro de que deseas rechazar este pedido por falta de cobertura? Se enviará un correo electrónico de notificación al cliente.',
+      confirmText: 'Rechazar',
+      cancelText: 'Cancelar',
+      isDanger: true,
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
+          const res = await fetch('/api/orders/reject-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId: selectedDraft.id,
+              address: addressStr,
+              sourceEmail: selectedDraft.source_email
+            })
+          });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Error en el servidor');
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Error en el servidor');
+          }
+
+          alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
+          setSelectedDraft(null);
+          fetchDrafts();
+        } catch (e: any) {
+          console.error('Error in handleRejectForCoverage:', e);
+          alert(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`);
+        } finally {
+          setSaving(false);
+        }
       }
-
-      alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
-      setSelectedDraft(null);
-      fetchDrafts();
-    } catch (e: any) {
-      console.error('Error in handleRejectForCoverage:', e);
-      alert(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const fetchProducts = async () => {
@@ -192,21 +233,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?')) return;
-    try {
-      const { error } = await supabase
-        .from('order_drafts')
-        .update({ status: 'rejected' })
-        .eq('id', id);
+    setActionConfirm({
+      isOpen: true,
+      title: '¿Rechazar y eliminar borrador?',
+      message: '¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?',
+      confirmText: 'Rechazar y Eliminar',
+      cancelText: 'Cancelar',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('order_drafts')
+            .update({ status: 'rejected' })
+            .eq('id', id);
 
-      if (error) throw error;
-      setDrafts(prev => prev.filter(d => d.id !== id));
-      if (selectedDraft?.id === id) setSelectedDraft(null);
-    } catch (err) {
-      console.error('Error deleting draft:', err);
-    }
+          if (error) throw error;
+          setDrafts(prev => prev.filter(d => d.id !== id));
+          if (selectedDraft?.id === id) setSelectedDraft(null);
+        } catch (err) {
+          console.error('Error deleting draft:', err);
+        }
+      }
+    });
   };
 
   useEffect(() => {
@@ -682,14 +732,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE DETECTADO</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN EXTRACT. / GPS</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO</th>
-                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS</th>
-                <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR EST.</th>
-                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}></th>
+                <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                <th style={{ padding: '1rem', width: '7%', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -700,6 +750,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const estimatedTotal = items.reduce((acc: number, item: any) => {
                   const matchedProd = products.find(p => p.id === item.matched_product_id);
                   return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                }, 0);
+
+                const estimatedWeight = items.reduce((acc: number, item: any) => {
+                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
+                  const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
+                  return acc + (weightFactor * (item.quantity || 0));
                 }, 0);
 
                 return (
@@ -729,6 +786,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
                     <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                       <Mail size={10} strokeWidth={1.5} /> {draft.source_email}
+                      {meta.phone && meta.phone !== 'No detectado' && (
+                        <>
+                          <span style={{ margin: '0 4px', color: '#94A3B8' }}>|</span>
+                          <Phone size={10} strokeWidth={1.5} /> {meta.phone}
+                        </>
+                      )}
                     </div>
                   </td>
                   <td style={{ padding: '0.8rem 1rem' }}>
@@ -741,13 +804,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
                     )}
                   </td>
-                  <td style={{ padding: '0.8rem 1rem' }}>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
                     <div style={{ fontSize: '0.8rem', color: '#4B5563', fontWeight: '500', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {draft.email_subject || '-'}
                     </div>
+                    <div style={{ marginTop: '2px' }}>
+                      {getChannelBadge('email')}
+                    </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                    {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                    <div style={{ fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
+                      {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '700', marginTop: '2px' }}>
+                      {formatNumber(estimatedWeight, 1)} kg
+                    </div>
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
                     {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
@@ -1142,8 +1213,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const newEdits = editableItems.filter((_, idx) => idx !== i);
-                                        setEditableItems(newEdits);
+                                        const itemLabel = item.originalName || (matchedProd ? matchedProd.name : 'este producto');
+                                        setDeleteConfirm({
+                                          isOpen: true,
+                                          productName: itemLabel,
+                                          onConfirm: () => {
+                                            const newEdits = editableItems.filter((_, idx) => idx !== i);
+                                            setEditableItems(newEdits);
+                                          }
+                                        });
                                       }}
                                       style={{
                                         background: 'none',
@@ -1383,6 +1461,191 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && deleteConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF2F2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              color: '#EF4444'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 0.5rem 0'
+            }}>
+              ¿Eliminar producto?
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#6B7280',
+              margin: '0 0 1.5rem 0',
+              lineHeight: '1.5'
+            }}>
+              ¿Estás seguro de que deseas eliminar <strong>{deleteConfirm.productName}</strong> de la lista?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteConfirm.onConfirm();
+                  setDeleteConfirm(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#EF4444',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {actionConfirm && actionConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: actionConfirm.isDanger ? '#FEF2F2' : '#ECFDF5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              color: actionConfirm.isDanger ? '#EF4444' : THEME.colors.primary
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 0.5rem 0'
+            }}>
+              {actionConfirm.title}
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#6B7280',
+              margin: '0 0 1.5rem 0',
+              lineHeight: '1.5'
+            }}>
+              {actionConfirm.message}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setActionConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                {actionConfirm.cancelText || 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  actionConfirm.onConfirm();
+                  setActionConfirm(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: actionConfirm.isDanger ? '#EF4444' : THEME.colors.primary,
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {actionConfirm.confirmText || 'Aceptar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

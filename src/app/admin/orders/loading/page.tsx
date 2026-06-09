@@ -1117,14 +1117,14 @@ export default function OrderLoadingPage() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ID / TIPO</th>
-                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ORIGEN</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>PESO</th>
-                                            <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                                            <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
+                                            <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ID / TIPO</th>
+                                            <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                                            <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                                            <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
+                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                                            <th style={{ padding: '1rem', width: '7%', textAlign: 'center' }}>
                                                 <input 
                                                     type="checkbox" 
                                                     checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.filter(o => o.isComplete).length}
@@ -1168,7 +1168,7 @@ export default function OrderLoadingPage() {
                                                             <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
                                                         )}
                                                     </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
                                                         {getChannelBadge(order.origin_source)}
                                                     </td>
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
