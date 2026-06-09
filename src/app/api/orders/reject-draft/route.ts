@@ -11,6 +11,13 @@ export async function POST(req: Request) {
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
 
+    if (!smtpUser || !smtpPass) {
+      console.error('[Reject Draft API] Missing SMTP credentials (SMTP_USER/SMTP_PASS)');
+      return NextResponse.json({ 
+        error: 'Las credenciales de correo (SMTP_USER o SMTP_PASS) no están configuradas en el servidor. Por favor, revísalas en Vercel.' 
+      }, { status: 500 });
+    }
+
     const addressStr = address || 'No especificada';
     const emailHtml = `
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
@@ -40,38 +47,32 @@ export async function POST(req: Request) {
     let emailErrorMessage = '';
     let messageId = 'simulated';
 
-    // Send email directly
-    if (smtpUser && smtpPass) {
-      console.log('[Reject Draft API] Sending rejection email directly via Nodemailer...');
-      try {
-        const nodemailer = require('nodemailer');
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: smtpUser,
-            pass: smtpPass,
-          },
-        });
+    console.log('[Reject Draft API] Sending rejection email directly via Nodemailer...');
+    try {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
 
-        const info = await transporter.sendMail({
-          from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
-          to: sourceEmail,
-          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
-          html: emailHtml,
-          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
-        });
+      const info = await transporter.sendMail({
+        from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
+        to: sourceEmail,
+        subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
+        html: emailHtml,
+        text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
+      });
 
-        messageId = info.messageId || 'smtp-id';
-        emailSent = true;
-        console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
-      } catch (smtpErr: any) {
-        console.error('[Reject Draft API] SMTP direct send failed:', smtpErr);
-        emailErrorMessage = smtpErr.message || 'SMTP Error';
-        return NextResponse.json({ error: `Error de envío de correo (SMTP): ${emailErrorMessage}` }, { status: 500 });
-      }
-    } else {
-      console.warn('[Reject Draft API] No SMTP credentials found. Simulating email send.');
+      messageId = info.messageId || 'smtp-id';
       emailSent = true;
+      console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
+    } catch (smtpErr: any) {
+      console.error('[Reject Draft API] SMTP direct send failed:', smtpErr);
+      emailErrorMessage = smtpErr.message || 'SMTP Error';
+      return NextResponse.json({ error: `Error de envío de correo (SMTP): ${emailErrorMessage}` }, { status: 500 });
     }
 
     const supabaseAdmin = createAdminClient();
