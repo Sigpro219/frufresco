@@ -271,11 +271,52 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             if (aliasMatch) {
                 matchedId = aliasMatch;
             } else {
-                const autoMatch = products.find((p: any) => 
-                    item.originalName?.toLowerCase()?.includes(p.name.toLowerCase()) ||
-                    p.name.toLowerCase().includes(item.originalName?.toLowerCase()?.split(' ')[0])
-                );
-                if (autoMatch) matchedId = autoMatch.id;
+                const cleanText = (txt: string) => {
+                  return txt
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-z0-9\s]/g, "")
+                    .trim();
+                };
+
+                const originalClean = cleanText(item.originalName || '');
+                const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
+
+                let bestMatch: any = null;
+                let highestScore = -999;
+
+                for (const p of products) {
+                  const productClean = cleanText(p.name);
+                  
+                  if (productClean === originalClean) {
+                    bestMatch = p;
+                    break;
+                  }
+
+                  const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
+                  const sharedWords = originalWords.filter(w => productWords.includes(w));
+                  
+                  if (sharedWords.length > 0) {
+                    const extraWords = Math.abs(productWords.length - sharedWords.length);
+                    const score = sharedWords.length * 10 - extraWords;
+                    if (score > highestScore) {
+                      highestScore = score;
+                      bestMatch = p;
+                    }
+                  }
+                }
+
+                if (!bestMatch) {
+                  bestMatch = products.find((p: any) => {
+                    const productClean = cleanText(p.name);
+                    return productClean.includes(originalClean) || originalClean.includes(productClean);
+                  });
+                }
+
+                if (bestMatch) {
+                  matchedId = bestMatch.id;
+                }
             }
         }
         return {
@@ -959,9 +1000,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       }}
                                     />
                                     <datalist id={`products-list-${i}`}>
-                                      {products.map(p => (
-                                        <option key={p.id} value={p.name} />
-                                      ))}
+                                      {products
+                                        .filter(p => {
+                                          const query = (matchedProd ? matchedProd.name : (item.searchQuery || '')).toLowerCase().trim();
+                                          if (!query) return true;
+                                          return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
+                                        })
+                                        .slice(0, 15)
+                                        .map(p => (
+                                          <option key={p.id} value={p.name} />
+                                        ))
+                                      }
                                     </datalist>
                                   </td>
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
