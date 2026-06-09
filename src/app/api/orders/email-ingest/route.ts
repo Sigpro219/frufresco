@@ -214,6 +214,34 @@ export async function POST(req: Request) {
           }
         }
       }
+      
+      // FALLBACK: If Gemini failed to extract metadata, use regex
+      const lines = plainText.split('\n');
+      let addressStr = '';
+      let addressFound = false;
+      for (let line of lines) {
+        line = line.trim();
+        // Extract Phone
+        if (line.match(/celular|tel[ée]fono/i)) {
+          const phoneMatch = line.match(/(\d[\d\s-]{6,}\d)/);
+          if (phoneMatch && !extractedData.phone) extractedData.phone = phoneMatch[1].replace(/\D/g, '');
+        }
+        // Extract NIT/CC
+        if (line.match(/c\.c\.|nit/i)) {
+          const nitMatch = line.match(/(\d[\d\.-]{5,}\d)/);
+          if (nitMatch && !extractedData.nit) extractedData.nit = nitMatch[1].replace(/\D/g, '');
+        }
+        // Extract Address
+        if (addressFound && line !== '' && !line.match(/celular|tel[ée]fono|c\.c\.|nit|atentamente|gracias|agradezco|quedo/i) && addressStr.length < 120) {
+          addressStr += (addressStr ? ', ' : '') + line;
+        }
+        if (line.match(/direcci[óo]n/i)) {
+          addressFound = true;
+          const inLine = line.replace(/.*direcci[óo]n.*?:/i, '').replace(/\*/g, '').trim();
+          if (inLine) addressStr = inLine;
+        }
+      }
+      if (addressStr && !extractedData.address) extractedData.address = addressStr;
     }
 
     // 3. Identify Client in our database (we also include inactive B2C profiles so their data is remembered)
