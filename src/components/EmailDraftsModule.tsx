@@ -75,6 +75,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   }, [drafts.length, onDraftsChange]);
 
+  useEffect(() => {
+    // Refresh every 30s only when modal is not open to avoid any interruption
+    if (selectedDraft) return;
+
+    const interval = setInterval(() => {
+      fetchDrafts(true);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [selectedDraft]);
+
   const fetchGeofence = async () => {
     try {
       const { data } = await supabase
@@ -162,8 +173,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
-  const fetchDrafts = async () => {
-    setLoading(true);
+  const fetchDrafts = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('order_drafts')
@@ -176,7 +187,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } catch (err) {
       console.error('Error fetching drafts:', err);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
 
@@ -396,7 +407,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           </h1>
         </div>
         <button 
-          onClick={fetchDrafts}
+          onClick={() => fetchDrafts()}
           style={{
             padding: '0.5rem 1rem',
             backgroundColor: 'white',
