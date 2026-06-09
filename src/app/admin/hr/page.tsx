@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { 
     User, Users, Briefcase, FileText, Calendar, Plus, Search, Filter, Mail, Phone, 
     MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, 
-    FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen 
+    FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen,
+    QrCode, Printer, RefreshCw
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 
 interface Profile {
@@ -22,6 +24,7 @@ interface Profile {
     created_at?: string;
     document_id?: string;
     avatar_url?: string;
+    qr_token?: string;
 }
 
 interface Role {
@@ -90,6 +93,7 @@ export default function HRManagement() {
     });
     const [saving, setSaving] = useState(false);
     const [scrolled, setScrolled] = useState(false);
+    const [printingUser, setPrintingUser] = useState<Profile | null>(null);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -135,6 +139,35 @@ export default function HRManagement() {
             alert('Perfil actualizado con éxito');
         } catch (err: any) {
             alert(`Error al actualizar: ${err.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRegenerateQrToken = async (user: Profile) => {
+        if (!confirm(`¿Estás seguro de que deseas regenerar el código QR de ${user.contact_name}? El código anterior quedará desactivado de inmediato.`)) return;
+        try {
+            setSaving(true);
+            const newToken = crypto.randomUUID();
+            const { error } = await supabase
+                .from('collaborators')
+                .update({ qr_token: newToken })
+                .eq('id', user.id);
+            if (error) throw error;
+            
+            await supabase.from('audit_logs').insert([{
+                action: 'REGENERATE_QR',
+                module: 'HR',
+                collaborator_id: user.id,
+                collaborator_name: user.contact_name,
+                details: { token: newToken }
+            }]);
+
+            setPrintingUser({ ...user, qr_token: newToken });
+            await fetchData();
+            alert('Código QR regenerado con éxito');
+        } catch (err: any) {
+            alert(`Error al regenerar QR: ${err.message}`);
         } finally {
             setSaving(false);
         }
@@ -566,6 +599,20 @@ export default function HRManagement() {
                                             <Edit2 strokeWidth={1.5} size={14} /> Editar
                                         </button>
                                         <button 
+                                            onClick={() => setPrintingUser(user)} 
+                                            style={{ 
+                                                padding: '0.6rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', 
+                                                cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.75rem',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }} 
+                                            title="Imprimir Código QR"
+                                            onMouseOver={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                            onMouseOut={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'white'; }}
+                                        >
+                                            <QrCode strokeWidth={1.5} size={14} />
+                                        </button>
+                                        <button 
                                             onClick={() => toggleUserStatus(user.id, user.is_active !== false)}
                                             style={{ 
                                                 flex: 1, padding: '0.6rem', borderRadius: '12px', 
@@ -665,6 +712,19 @@ export default function HRManagement() {
                                                         onMouseOut={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'transparent'; }}
                                                     >
                                                         <Edit2 strokeWidth={1.5} size={14} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setPrintingUser(user)} 
+                                                        style={{ 
+                                                            background: 'none', border: `1px solid ${THEME.colors.border}`, borderRadius: '8px', 
+                                                            cursor: 'pointer', padding: '0.4rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                            color: THEME.colors.textSecondary, transition: 'all 0.2s'
+                                                        }} 
+                                                        title="Imprimir Código QR"
+                                                        onMouseOver={e => { e.currentTarget.style.borderColor = THEME.colors.borderActive; e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                                        onMouseOut={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                    >
+                                                        <QrCode strokeWidth={1.5} size={14} />
                                                     </button>
                                                     <button 
                                                         onClick={() => toggleUserStatus(user.id, user.is_active !== false)} 
@@ -870,6 +930,72 @@ export default function HRManagement() {
                             </button>
                         </div>
                     </div>
+            {/* MODAL IMPRIMIR QR */}
+            {printingUser && (
+                <div style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 1000 }} className="no-print">
+                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '420px', boxShadow: THEME.shadow.lg }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <QrCode strokeWidth={1.5} size={20} style={{ color: THEME.colors.primary }} />
+                                <h2 style={{ margin: 0, fontWeight: '700', color: THEME.colors.textMain, fontSize: '1.2rem' }}>
+                                    Etiqueta QR
+                                </h2>
+                            </div>
+                            <button 
+                                onClick={() => setPrintingUser(null)} 
+                                style={{ 
+                                    background: THEME.colors.background, border: 'none', width: '32px', height: '32px', borderRadius: '50%', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.colors.textSecondary 
+                                }}
+                            >
+                                <X strokeWidth={1.5} size={18} />
+                            </button>
+                        </div>
+
+                        {/* Print Content Area */}
+                        <div id="print-label-area" style={{ 
+                            padding: '1.5rem', border: '2px dashed #E2E8F0', borderRadius: '16px', backgroundColor: '#F8FAF9', 
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '0.8rem',
+                            marginBottom: '1.5rem'
+                        }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: THEME.colors.textMain }}>{printingUser.contact_name}</h3>
+                            <span style={{ fontSize: '0.7rem', fontWeight: '900', color: THEME.colors.primary, textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: THEME.colors.primaryLight, padding: '2px 8px', borderRadius: '4px' }}>
+                                {ROLES.find(r => r.value === printingUser.role)?.label || printingUser.role}
+                            </span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
+                                Doc ID: {printingUser.document_id || '---'}
+                            </div>
+
+                            {/* QR Code Graphic */}
+                            <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', marginTop: '0.5rem' }}>
+                                <QRCodeSVG value={printingUser.qr_token || printingUser.id} size={130} level="H" />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.8rem' }}>
+                            <button 
+                                onClick={() => window.print()}
+                                style={{ 
+                                    flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', 
+                                    backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '800', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' 
+                                }}
+                            >
+                                <Printer size={16} /> Imprimir Etiqueta
+                            </button>
+                            <button 
+                                onClick={() => handleRegenerateQrToken(printingUser)}
+                                style={{ 
+                                    padding: '0.8rem', borderRadius: '12px', border: `1px solid #FCA5A5`, 
+                                    backgroundColor: 'transparent', color: '#EF4444', fontWeight: '800', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                                }}
+                                title="Reportar extravío y generar nuevo QR"
+                            >
+                                <RefreshCw size={16} />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -890,6 +1016,27 @@ export default function HRManagement() {
                 }
                 tr.collaborator-row:hover {
                     background-color: #F8FAF9 !important;
+                }
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    #print-label-area, #print-label-area * {
+                        visibility: visible;
+                    }
+                    #print-label-area {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                        border: none !important;
+                        background-color: white !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
                 }
             `}</style>
         </main>
