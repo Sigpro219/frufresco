@@ -977,7 +977,7 @@ export default function HRManagement() {
                         <div style={{ display: 'flex', gap: '0.8rem' }}>
                             <button 
                                 onClick={() => {
-                                    const printWin = window.open('', '_blank', 'width=600,height=600');
+                                    const printWin = window.open('', '_blank');
                                     if (!printWin) return alert('Por favor, permite las ventanas emergentes (popups) para poder imprimir la etiqueta.');
                                     
                                     const roleLabel = ROLES.find(r => r.value === printingUser.role)?.label || printingUser.role;
@@ -996,7 +996,7 @@ export default function HRManagement() {
                                                     justify-content: center;
                                                     align-items: center;
                                                     height: 100vh;
-                                                    background-color: #ffffff;
+                                                    background-color: #f1f5f9;
                                                     font-family: 'Outfit', sans-serif;
                                                 }
                                                 /* Medida del carnet estándar (ID-1): 85.6mm x 54mm */
@@ -1012,7 +1012,8 @@ export default function HRManagement() {
                                                     justify-content: space-between;
                                                     gap: 5mm;
                                                     background-color: #ffffff;
-                                                    border-radius: 4px;
+                                                    border-radius: 8px;
+                                                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                                                     transform: scale(1.6); /* Zoom en pantalla */
                                                     transform-origin: center;
                                                 }
@@ -1076,6 +1077,7 @@ export default function HRManagement() {
                                                     }
                                                     .carnet-label {
                                                         transform: none !important; /* Desactivar zoom al imprimir */
+                                                        box-shadow: none !important;
                                                         border: 1px dashed #94a3b8 !important;
                                                         -webkit-print-color-adjust: exact;
                                                         print-color-adjust: exact;
