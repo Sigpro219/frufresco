@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    console.log('[Reject Draft API] Triggering rejection email in background...');
+    console.log('[Reject Draft API] Sending rejection email...');
     try {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
@@ -68,44 +68,53 @@ export async function POST(req: Request) {
         },
       });
 
-      transporter.sendMail({
+      const info = await transporter.sendMail({
         from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
         to: sourceEmail,
-        subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
+        subject: 'Novedad sobre tu pedido - FruFresco',
         html: emailHtml,
         text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
-      }).then(async (info: any) => {
-        const messageId = info.messageId || 'smtp-id';
-        console.log('[Reject Draft API] Rejection email sent successfully in background:', messageId);
-        // Insert mail copy for history
-        await supabaseAdmin.from('mail').insert({
-          to_email: sourceEmail,
-          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
-          message: {
-            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
-            html: emailHtml
-          },
-          status: 'sent',
-          sent_at: new Date().toISOString()
-        });
-      }).catch(async (smtpErr: any) => {
-        console.error('[Reject Draft API] Background SMTP send failed:', smtpErr);
-        await supabaseAdmin.from('mail').insert({
-          to_email: sourceEmail,
-          subject: 'Novedad de Pedido - Fuera de Zona de Cobertura',
-          message: {
-            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
-            html: emailHtml
-          },
-          status: 'failed',
-          error_message: smtpErr.message || 'SMTP Error'
-        });
       });
-    } catch (err) {
-      console.error('[Reject Draft API] Failed to initialize nodemailer in background:', err);
+
+      const messageId = info.messageId || 'smtp-id';
+      console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
+      console.log('[Reject Draft API] SMTP response details:', info.response);
+      
+      // Insert mail copy for history
+      const { error: insertError } = await supabaseAdmin.from('mail').insert({
+        to_email: sourceEmail,
+        subject: 'Novedad sobre tu pedido - FruFresco',
+        message: {
+          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+          html: emailHtml
+        },
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+      if (insertError) {
+        console.error('[Reject Draft API] Failed to log sent mail in database:', insertError);
+      }
+    } catch (smtpErr: any) {
+      console.error('[Reject Draft API] SMTP send failed:', smtpErr);
+      const { error: insertError } = await supabaseAdmin.from('mail').insert({
+        to_email: sourceEmail,
+        subject: 'Novedad sobre tu pedido - FruFresco',
+        message: {
+          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+          html: emailHtml
+        },
+        status: 'failed',
+        error_message: smtpErr.message || 'SMTP Error'
+      });
+      if (insertError) {
+        console.error('[Reject Draft API] Failed to log failed mail in database:', insertError);
+      }
+      return NextResponse.json({ 
+        error: `Error al enviar el correo por SMTP: ${smtpErr.message || 'SMTP Error'}` 
+      }, { status: 500 });
     }
 
-    // Return success instantly
+    // Return success
     return NextResponse.json({ success: true });
 
   } catch (err: any) {
