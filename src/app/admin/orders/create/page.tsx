@@ -71,6 +71,7 @@ function CreateOrderContent() {
     const [coverageOverrideReason, setCoverageOverrideReason] = useState('');
     const [isOverrideMode, setIsOverrideMode] = useState(false);
     const [createdB2CProfileId, setCreatedB2CProfileId] = useState<string | null>(null);
+    const [draftClientType, setDraftClientType] = useState('b2c_client');
 
 
     
@@ -200,6 +201,13 @@ function CreateOrderContent() {
                         setAdminNotes(`[PEDIDO CORREO] Asunto: ${draft.email_subject || ''}\n---\n${draft.email_body || ''}\n---\n`);
                     }
                     
+                    // Cargar fecha de entrega si viene en la metadata del borrador
+                    const items = draft.extracted_items || [];
+                    const metadataItem = items.find((i: any) => i.isMetadata);
+                    if (metadataItem?.deliveryDate) {
+                        setDeliveryDate(metadataItem.deliveryDate);
+                    }
+                    
                     // Asociar cliente si existe
                     if (draft.profile_id) {
                         const b2bMatch = (resB2B.data || []).find(c => c.id === draft.profile_id);
@@ -247,6 +255,8 @@ function CreateOrderContent() {
                                 const extractedAddress = metadataItem?.address || draft.extracted_address || '';
                                 const extractedPhone = metadataItem?.phone || draft.extracted_phone || '';
                                 const extractedNit = metadataItem?.nit || draft.extracted_nit || '';
+                                const draftClientTypeVal = metadataItem?.clientType || 'b2c_client';
+                                setDraftClientType(draftClientTypeVal);
 
                                 setClientType('B2C');
                                 setB2CMode('new');
@@ -270,6 +280,8 @@ function CreateOrderContent() {
                         const extractedAddress = metadataItem?.address || draft.extracted_address || '';
                         const extractedPhone = metadataItem?.phone || draft.extracted_phone || '';
                         const extractedNit = metadataItem?.nit || draft.extracted_nit || '';
+                        const draftClientTypeVal = metadataItem?.clientType || 'b2c_client';
+                        setDraftClientType(draftClientTypeVal);
 
                         setClientType('B2C');
                         setB2CMode('new');
@@ -664,7 +676,7 @@ function CreateOrderContent() {
                         .from('profiles')
                         .insert({
                             id: newProfileId,
-                            role: 'b2c_client',
+                            role: draftClientType === 'b2b_client' ? 'b2b_client' : 'b2c_client',
                             contact_name: guestInfo.name,
                             contact_phone: guestInfo.phone,
                             phone: guestInfo.phone,
@@ -689,7 +701,8 @@ function CreateOrderContent() {
 
                 finalProfileId = newProfileId;
                 const overrideNote = (outOfZone && hasCoverageOverride) ? ` [EXCEPCIÓN DE COBERTURA: ${coverageOverrideReason}]` : '';
-                finalAdminNotes = `[CLIENTE HOGAR CREADO] ID: ${newProfileId} | Nombre: ${guestInfo.name} | CC: ${guestInfo.nit} | Tel: ${guestInfo.phone} | Email: ${guestInfo.email}${overrideNote}\n\n${adminNotes}`;
+                const clientCreatedLabel = draftClientType === 'b2b_client' ? 'CLIENTE INSTITUCIONAL CREADO' : 'CLIENTE HOGAR CREADO';
+                finalAdminNotes = `[${clientCreatedLabel}] ID: ${newProfileId} | Nombre: ${guestInfo.name} | CC: ${guestInfo.nit} | Tel: ${guestInfo.phone} | Email: ${guestInfo.email}${overrideNote}\n\n${adminNotes}`;
             } else if (clientType === 'B2C' && b2cMode === 'search') {
                 const b2cDetails = getSelectedB2CDetails();
                 finalAdminNotes = `[CLIENTE HOGAR EXISTENTE] ID: ${selectedClientB2C} | Nombre: ${b2cDetails?.contact_name}\n\n${adminNotes}`;
@@ -2196,7 +2209,7 @@ function CreateOrderContent() {
                                                     .from('profiles')
                                                     .insert({
                                                         id: newProfileId,
-                                                        role: 'b2c_client',
+                                                        role: draftClientType === 'b2b_client' ? 'b2b_client' : 'b2c_client',
                                                         contact_name: guestInfo.name,
                                                         contact_phone: guestInfo.phone,
                                                         phone: guestInfo.phone,
@@ -2218,7 +2231,7 @@ function CreateOrderContent() {
                                                     return;
                                                 }
                                                 setCreatedB2CProfileId(newProfileId);
-                                                alert(`🌟 Cliente Hogar Creado Exitosamente.\n\nEl perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                                alert(`🌟 ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente Hogar'} Creado Exitosamente.\n\nEl perfil de ${guestInfo.name} se ha guardado en la base de datos con ubicación verificada.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
                                             }
                                             setShowMapPicker(false);
                                         }}
@@ -2262,7 +2275,7 @@ function CreateOrderContent() {
                                                         .from('profiles')
                                                         .insert({
                                                             id: newProfileId,
-                                                            role: 'b2c_client',
+                                                            role: draftClientType === 'b2b_client' ? 'b2b_client' : 'b2c_client',
                                                             contact_name: guestInfo.name,
                                                             contact_phone: guestInfo.phone,
                                                             phone: guestInfo.phone,
@@ -2288,7 +2301,7 @@ function CreateOrderContent() {
                                                 }
                                                 setHasCoverageOverride(true);
                                                 setShowMapPicker(false);
-                                                alert(`🌟 Excepción Autorizada y Cliente Guardado.\n\nEl perfil de ${guestInfo.name} se ha guardado exitosamente en la base de datos con estado de Excepción Permanente.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
+                                                alert(`🌟 Excepción Autorizada y ${draftClientType === 'b2b_client' ? 'Cliente Institucional' : 'Cliente'} Guardado.\n\nEl perfil de ${guestInfo.name} se ha guardado exitosamente en la base de datos con estado de Excepción Permanente.\n\nYa puedes agregar productos y completar su pedido cuando desees.`);
                                             }}
                                             style={{ padding: '0.6rem 1.5rem', borderRadius: '99px', border: 'none', background: '#F59E0B', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
                                         >

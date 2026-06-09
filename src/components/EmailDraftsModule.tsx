@@ -19,6 +19,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
+  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -295,11 +296,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         };
       });
       setEditableItems(initialEdits);
+
+      // Initialize delivery date from metadata if present
+      const metadata = getDraftMetadata(selectedDraft);
+      if (metadata.deliveryDate) {
+        setDeliveryDate(metadata.deliveryDate);
+      } else {
+        setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      }
       
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
       setEditableItems([]);
+      setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
   }, [selectedDraft, products, aliases]);
 
@@ -316,7 +326,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
-      clientType: meta?.clientType || draft.profiles?.role || 'b2c_client'
+      clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
+      deliveryDate: meta?.deliveryDate || null
     };
   };
 
@@ -347,9 +358,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       // 3. Update the draft's extracted_items to include our manual edits
-      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata);
+      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      const updatedMetaItem = {
+        ...metaItem,
+        deliveryDate: deliveryDate
+      };
       const updatedExtractedItems = [
-        ...(metaItem ? [metaItem] : []),
+        updatedMetaItem,
         ...editableItems
       ];
 
@@ -901,9 +916,57 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#4B5563', fontSize: '0.9rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={16} /> {getDraftMetadata(selectedDraft).address || 'Dirección no detectada'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={16} style={{ color: THEME.colors.primary }} />
+                    {getDraftMetadata(selectedDraft).address ? (
+                      <a
+                        href={draftCoordinates 
+                          ? `https://www.google.com/maps/search/?api=1&query=${draftCoordinates.lat},${draftCoordinates.lng}` 
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getDraftMetadata(selectedDraft).address)}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: THEME.colors.primary,
+                          textDecoration: 'underline',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title="Ver ubicación en Google Maps"
+                      >
+                        {getDraftMetadata(selectedDraft).address}
+                        <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>↗</span>
+                      </a>
+                    ) : (
+                      <span>Dirección no detectada</span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} /> {getDraftMetadata(selectedDraft).phone || 'Teléfono no detectado'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
+                  
+                  {/* Delivery Date Selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
+                    <Calendar size={16} style={{ color: THEME.colors.primary }} />
+                    <span style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>Fecha de Entrega:</span>
+                    <input
+                      type="date"
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${THEME.colors.border}`,
+                        fontSize: '0.85rem',
+                        color: '#374151',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    />
+                  </div>
                   {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
                   {draftCoordinates && (
                     <div style={{
@@ -942,6 +1005,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '50px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1046,6 +1110,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   </td>
                                   <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
+                                  </td>
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '50px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newEdits = editableItems.filter((_, idx) => idx !== i);
+                                        setEditableItems(newEdits);
+                                      }}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#EF4444',
+                                        cursor: 'pointer',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                      title="Eliminar producto"
+                                    >
+                                      <X size={16} strokeWidth={2.5} />
+                                    </button>
                                   </td>
                                 </tr>
                               );
