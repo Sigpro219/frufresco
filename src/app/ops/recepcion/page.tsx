@@ -391,16 +391,58 @@ export default function ReceptionPage() {
                 if (finalStatus !== 'received_rejected') {
                     const statusTo = (finalStatus === 'received_ok') ? 'available' : 'in_process';
                     
-                    await supabase.from('inventory_movements').insert([{
-                        product_id: selectedItem.product_id,
-                        warehouse_id: warehouseData.id,
-                        quantity: receivedQty,
-                        type: 'entry',
-                        status_to: statusTo,
-                        notes: `${notePrefix}Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'OK'}`,
-                        reference_type: 'purchase_reception',
-                        reference_id: selectedItem.id
-                    }]);
+                    if (receivedQty > expected) {
+                        const excessQty = parseFloat((receivedQty - expected).toFixed(2));
+                        
+                        // 2a. Expected quantity goes to active inventory (available/in_process)
+                        await supabase.from('inventory_movements').insert([{
+                            product_id: selectedItem.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: expected,
+                            type: 'entry',
+                            status_to: statusTo,
+                            notes: `Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- OK (Cantidad Esperada)`,
+                            reference_type: 'purchase_reception',
+                            reference_id: selectedItem.id
+                        }]);
+
+                        // 2b. Excess quantity goes to quarantine (in_process)
+                        await supabase.from('inventory_movements').insert([{
+                            product_id: selectedItem.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: excessQty,
+                            type: 'entry',
+                            status_to: 'in_process',
+                            notes: `[Excedente: +${excessQty} ${selectedItem.product.unit_of_measure}] Pendiente de aprobación por supervisor`,
+                            reference_type: 'purchase_reception',
+                            reference_id: selectedItem.id
+                        }]);
+
+                        // 2c. Log weight discrepancy for supervisor approval
+                        const { error: discrepancyError } = await supabase.from('weight_discrepancies').insert([{
+                            purchase_id: selectedItem.id,
+                            product_id: selectedItem.product_id,
+                            expected_quantity: expected,
+                            received_quantity: receivedQty,
+                            status: 'pending_approval'
+                        }]);
+
+                        if (discrepancyError) {
+                            console.error('Error inserting weight discrepancy:', discrepancyError);
+                        }
+                    } else {
+                        // Normal reception without excess
+                        await supabase.from('inventory_movements').insert([{
+                            product_id: selectedItem.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: receivedQty,
+                            type: 'entry',
+                            status_to: statusTo,
+                            notes: `${notePrefix}Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'OK'}`,
+                            reference_type: 'purchase_reception',
+                            reference_id: selectedItem.id
+                        }]);
+                    }
                 } else {
                     // Record absolute rejection in inventory movements with quantity 0
                     await supabase.from('inventory_movements').insert([{
@@ -416,7 +458,11 @@ export default function ReceptionPage() {
                 }
             }
 
-            window.showToast?.('Recepción registrada e inventario actualizado', 'success');
+            if (finalStatus !== 'received_rejected' && receivedQty > expected) {
+                window.showToast?.('Recepción registrada. Excedente enviado al supervisor.', 'success');
+            } else {
+                window.showToast?.('Recepción registrada e inventario actualizado', 'success');
+            }
             setSelectedItem(null);
             setRejectionFile(null);
             setRejectionPreview(null);

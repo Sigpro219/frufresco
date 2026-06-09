@@ -13,7 +13,8 @@ import {
   RotateCcw,
   Activity,
   ArrowRight,
-  Server
+  Server,
+  ShieldAlert
 } from 'lucide-react';
 
 interface OpsStats {
@@ -160,6 +161,16 @@ export default function OpsHome() {
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>RECEPCIÓN</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Control de Calidad y Pesaje</div>
+                    </div>
+                </Link>
+
+                <Link href="/ops/recepcion/supervisor" style={{ textDecoration: 'none' }}>
+                    <div className="card-op">
+                        <div className="op-icon-wrapper">
+                            <ShieldAlert size={24} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>SUPERVISOR RECEPCIÓN</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Autorizaciones y Cuarentena</div>
                     </div>
                 </Link>
 
