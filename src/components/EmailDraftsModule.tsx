@@ -271,6 +271,88 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setIsEditing(!isEditing);
   };
 
+  const handleBatchDelete = () => {
+    if (selectedRowIndices.length === 0) return;
+    const namesToDelete = selectedRowIndices.map(idx => {
+      const item = editableItems[idx];
+      if (!item) return '';
+      const mProd = products.find(p => p.id === item.matched_product_id);
+      return mProd ? mProd.name : (item.searchQuery || item.originalName || 'Producto sin nombre');
+    }).filter(Boolean);
+
+    setDeleteConfirm({
+      isOpen: true,
+      step: 1,
+      productName: namesToDelete.join(', '),
+      onConfirmNotify: async () => {
+        setSaving(true);
+        try {
+          const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
+          setRecentlyDeletedItems(updatedDeleted);
+
+          const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+          setEditableItems(remainingItems);
+          setSelectedRowIndices([]);
+
+          const emailItems = remainingItems.map(itm => {
+            const mProd = products.find(p => p.id === itm.matched_product_id);
+            return {
+              productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+              quantity: itm.quantity,
+              unitPrice: mProd ? mProd.base_price : 0,
+              unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+            };
+          });
+
+          const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+          const dbItems = [
+            { ...metaItem, deliveryDate: deliveryDate },
+            ...remainingItems.map(itm => ({
+              originalName: itm.originalName || '',
+              quantity: itm.quantity,
+              matched_product_id: itm.matched_product_id
+            }))
+          ];
+
+          const res = await fetch('/api/orders/notify-deleted-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId: selectedDraft.id,
+              deletedItem: updatedDeleted,
+              sourceEmail: selectedDraft.source_email,
+              clientName: selectedDraft.client_detected_name || 'Cliente',
+              dbItems,
+              emailItems
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Error en el servidor');
+          }
+
+          setRecentlyDeletedItems([]);
+          showToast('Productos eliminados y novedades notificadas por correo. ✉️', 'success');
+        } catch (err: any) {
+          console.warn('Error deleting and notifying:', err);
+          showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+        } finally {
+          setSaving(false);
+        }
+      },
+      onConfirmOnlyDelete: async () => {
+        const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
+        setRecentlyDeletedItems(updatedDeleted);
+        
+        const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+        setEditableItems(remainingItems);
+        setSelectedRowIndices([]);
+        showToast('Productos eliminados de la lista (novedades pendientes de notificar). ⚠️', 'success');
+      }
+    });
+  };
+
   const fetchAliases = async () => {
     try {
       const { data } = await supabase.from('app_settings').select('value').eq('key', 'ai_product_aliases').single();
@@ -1091,9 +1173,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 800 }}>Revisión de Correo</h2>
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
-              <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
-                <X size={24} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {isEditing && selectedRowIndices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBatchDelete}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#FEE2E2',
+                      color: '#991B1B',
+                      border: '1px solid #FCA5A5',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}
+                  >
+                    <Trash2 size={16} />
+                    Eliminar Seleccionados ({selectedRowIndices.length})
+                  </button>
+                )}
+                <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
@@ -1451,108 +1558,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       + Añadir Producto Manualmente
                     </button>
 
-                    {selectedRowIndices.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const namesToDelete = selectedRowIndices.map(idx => {
-                            const item = editableItems[idx];
-                            if (!item) return '';
-                            const mProd = products.find(p => p.id === item.matched_product_id);
-                            return mProd ? mProd.name : (item.searchQuery || item.originalName || 'Producto sin nombre');
-                          }).filter(Boolean);
-
-                          setDeleteConfirm({
-                            isOpen: true,
-                            step: 1,
-                            productName: namesToDelete.join(', '),
-                            onConfirmNotify: async () => {
-                              setSaving(true);
-                              try {
-                                const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
-                                setRecentlyDeletedItems(updatedDeleted);
-
-                                const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
-                                setEditableItems(remainingItems);
-                                setSelectedRowIndices([]);
-
-                                const emailItems = remainingItems.map(itm => {
-                                  const mProd = products.find(p => p.id === itm.matched_product_id);
-                                  return {
-                                    productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
-                                    quantity: itm.quantity,
-                                    unitPrice: mProd ? mProd.base_price : 0,
-                                    unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
-                                  };
-                                });
-
-                                const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
-                                const dbItems = [
-                                  { ...metaItem, deliveryDate: deliveryDate },
-                                  ...remainingItems.map(itm => ({
-                                    originalName: itm.originalName || '',
-                                    quantity: itm.quantity,
-                                    matched_product_id: itm.matched_product_id
-                                  }))
-                                ];
-
-                                const res = await fetch('/api/orders/notify-deleted-item', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    draftId: selectedDraft.id,
-                                    deletedItem: updatedDeleted,
-                                    sourceEmail: selectedDraft.source_email,
-                                    clientName: selectedDraft.client_detected_name || 'Cliente',
-                                    dbItems,
-                                    emailItems
-                                  })
-                                });
-
-                                if (!res.ok) {
-                                  const errData = await res.json();
-                                  throw new Error(errData.error || 'Error en el servidor');
-                                }
-
-                                setRecentlyDeletedItems([]);
-                                showToast('Productos eliminados y novedades notificadas por correo. ✉️', 'success');
-                              } catch (err: any) {
-                                console.warn('Error deleting and notifying:', err);
-                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
-                              } finally {
-                                setSaving(false);
-                              }
-                            },
-                            onConfirmOnlyDelete: async () => {
-                              const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
-                              setRecentlyDeletedItems(updatedDeleted);
-                              
-                              const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
-                              setEditableItems(remainingItems);
-                              setSelectedRowIndices([]);
-                              showToast('Productos eliminados de la lista (novedades pendientes de notificar). ⚠️', 'success');
-                            }
-                          });
-                        }}
-                        style={{
-                          padding: '0.6rem 1rem',
-                          backgroundColor: '#FEE2E2',
-                          color: '#991B1B',
-                          border: '1px solid #FCA5A5',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                        }}
-                      >
-                        <Trash2 size={16} />
-                        Eliminar Seleccionados ({selectedRowIndices.length})
-                      </button>
-                    )}
 
                     {recentlyDeletedItems.length > 0 && (
                       <button
