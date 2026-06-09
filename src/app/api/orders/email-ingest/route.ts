@@ -1,11 +1,62 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import https from 'https';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: base64Image ? [
+            { inlineData: { data: base64Image, mimeType: mimeType } },
+            { text: prompt }
+          ] : [
+            { text: prompt }
+          ]
+        }
+      ]
+    });
+
+    const options = {
+      hostname: 'generativelanguage.googleapis.com',
+      port: 443,
+      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const parsed = JSON.parse(body);
+            const text = parsed.candidates[0].content.parts[0].text;
+            resolve(text);
+          } catch (e) {
+            reject(new Error("Invalid JSON response from Gemini: " + body));
+          }
+        } else {
+          reject(new Error(`Gemini API Error: ${res.statusCode} ${body}`));
+        }
+      });
+    });
+
+    req.on('error', (e) => reject(e));
+    req.write(data);
+    req.end();
+  });
+}
 
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
 export const dynamic = 'force-dynamic';
@@ -41,9 +92,6 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return NextResponse.json({ error: 'Gemini API Key is missing' }, { status: 500 });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let extractedData: any = {
       clientInDocument: '',
@@ -85,23 +133,12 @@ export async function POST(req: Request) {
         }
       `;
 
-      const result = await model.generateContent([
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: mimeType
-          }
-        },
-        { text: prompt }
-      ]);
-
-      const response = await result.response;
-      let text = response.text().trim();
-      text = text.replace(/^```json/, '').replace(/```$/, '').trim();
       try {
+        let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
+        text = text.trim().replace(/^```json/, '').replace(/```$/, '').trim();
         extractedData = JSON.parse(text);
       } catch (e) {
-        console.error('Failed to parse Gemini output for attachment:', text);
+        console.error('Failed to parse Gemini output for attachment:', e);
       }
     } else {
       console.log('[Email Inbound] Processing plain text email body');
@@ -135,15 +172,12 @@ export async function POST(req: Request) {
         }
       `;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      let text = response.text().trim();
-      text = text.replace(/^```json/, '').replace(/```$/, '').trim();
-      extractedData = {};
       try {
+        let text = await fetchGemini(apiKey, prompt);
+        text = text.trim().replace(/^```json/, '').replace(/```$/, '').trim();
         extractedData = JSON.parse(text);
       } catch (e) {
-        console.error('Failed to parse Gemini output for email text:', text);
+        console.error('Failed to parse Gemini output for email text:', e);
       }
     }
 
