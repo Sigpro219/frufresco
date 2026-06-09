@@ -11,13 +11,6 @@ export async function POST(req: Request) {
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
 
-    if (!smtpUser || !smtpPass) {
-      console.error('[Reject Draft API] Missing SMTP credentials (SMTP_USER/SMTP_PASS)');
-      return NextResponse.json({ 
-        error: 'Las credenciales de correo (SMTP_USER o SMTP_PASS) no están configuradas en el servidor. Por favor, revísalas en Vercel.' 
-      }, { status: 500 });
-    }
-
     const supabaseAdmin = createAdminClient();
 
     // 1. Update draft status to 'rejected' first to unblock UI instantly
@@ -58,60 +51,78 @@ export async function POST(req: Request) {
     `;
 
     console.log('[Reject Draft API] Sending rejection email...');
-    try {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
+    if (smtpUser && smtpPass) {
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
 
-      const info = await transporter.sendMail({
-        from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
-        to: sourceEmail,
-        subject: 'Novedad sobre tu pedido - FruFresco',
-        html: emailHtml,
-        text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
-      });
+        const info = await transporter.sendMail({
+          from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
+          to: sourceEmail,
+          subject: 'Novedad sobre tu pedido - FruFresco',
+          html: emailHtml,
+          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`
+        });
 
-      const messageId = info.messageId || 'smtp-id';
-      console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
-      console.log('[Reject Draft API] SMTP response details:', info.response);
-      
-      // Insert mail copy for history
+        const messageId = info.messageId || 'smtp-id';
+        console.log('[Reject Draft API] Rejection email sent successfully:', messageId);
+        console.log('[Reject Draft API] SMTP response details:', info.response);
+        
+        // Insert mail copy for history
+        const { error: insertError } = await supabaseAdmin.from('mail').insert({
+          to_email: sourceEmail,
+          subject: 'Novedad sobre tu pedido - FruFresco',
+          message: {
+            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+            html: emailHtml
+          },
+          status: 'sent',
+          sent_at: new Date().toISOString()
+        });
+        if (insertError) {
+          console.error('[Reject Draft API] Failed to log sent mail in database:', insertError);
+        }
+      } catch (smtpErr: any) {
+        console.error('[Reject Draft API] SMTP send failed:', smtpErr);
+        const { error: insertError } = await supabaseAdmin.from('mail').insert({
+          to_email: sourceEmail,
+          subject: 'Novedad sobre tu pedido - FruFresco',
+          message: {
+            text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+            html: emailHtml
+          },
+          status: 'failed',
+          error_message: smtpErr.message || 'SMTP Error'
+        });
+        if (insertError) {
+          console.error('[Reject Draft API] Failed to log failed mail in database:', insertError);
+        }
+        return NextResponse.json({ 
+          error: `Error al enviar el correo por SMTP: ${smtpErr.message || 'SMTP Error'}` 
+        }, { status: 500 });
+      }
+    } else {
+      console.warn('[Reject Draft API] No SMTP credentials found (SMTP_USER/SMTP_PASS). Simulating mail send in development.');
+      // Insert mail copy for history in simulation mode
       const { error: insertError } = await supabaseAdmin.from('mail').insert({
         to_email: sourceEmail,
-        subject: 'Novedad sobre tu pedido - FruFresco',
+        subject: 'Novedad sobre tu pedido - FruFresco (Simulado)',
         message: {
-          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
+          text: `Hola. [SIMULADO] Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
           html: emailHtml
         },
         status: 'sent',
         sent_at: new Date().toISOString()
       });
       if (insertError) {
-        console.error('[Reject Draft API] Failed to log sent mail in database:', insertError);
+        console.error('[Reject Draft API] Failed to log simulated mail in database:', insertError);
       }
-    } catch (smtpErr: any) {
-      console.error('[Reject Draft API] SMTP send failed:', smtpErr);
-      const { error: insertError } = await supabaseAdmin.from('mail').insert({
-        to_email: sourceEmail,
-        subject: 'Novedad sobre tu pedido - FruFresco',
-        message: {
-          text: `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`,
-          html: emailHtml
-        },
-        status: 'failed',
-        error_message: smtpErr.message || 'SMTP Error'
-      });
-      if (insertError) {
-        console.error('[Reject Draft API] Failed to log failed mail in database:', insertError);
-      }
-      return NextResponse.json({ 
-        error: `Error al enviar el correo por SMTP: ${smtpErr.message || 'SMTP Error'}` 
-      }, { status: 500 });
     }
 
     // Return success
