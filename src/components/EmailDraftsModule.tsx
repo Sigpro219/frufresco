@@ -1217,9 +1217,73 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         setDeleteConfirm({
                                           isOpen: true,
                                           productName: itemLabel,
-                                          onConfirm: () => {
+                                          onConfirm: async () => {
                                             const newEdits = editableItems.filter((_, idx) => idx !== i);
-                                            setEditableItems(newEdits);
+                                            
+                                            // 1. Preparar ítems para base de datos
+                                            const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                                            const updatedMetaItem = {
+                                              ...metaItem,
+                                              deliveryDate: deliveryDate
+                                            };
+                                            const dbItems = [
+                                              updatedMetaItem,
+                                              ...newEdits.map(itm => ({
+                                                originalName: itm.originalName || '',
+                                                quantity: itm.quantity,
+                                                matched_product_id: itm.matched_product_id
+                                              }))
+                                            ];
+
+                                            // 2. Preparar ítems para tabla de correo
+                                            const emailItems = newEdits.map(itm => {
+                                              const mProd = products.find(p => p.id === itm.matched_product_id);
+                                              return {
+                                                productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+                                                quantity: itm.quantity,
+                                                unitPrice: mProd ? mProd.base_price : 0,
+                                                unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+                                              };
+                                            });
+
+                                            setSaving(true);
+                                            try {
+                                              const res = await fetch('/api/orders/notify-deleted-item', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                  draftId: selectedDraft.id,
+                                                  deletedItem: itemLabel,
+                                                  sourceEmail: selectedDraft.source_email,
+                                                  clientName: selectedDraft.client_detected_name || 'Cliente',
+                                                  dbItems,
+                                                  emailItems
+                                                })
+                                              });
+
+                                              if (!res.ok) {
+                                                const errData = await res.json();
+                                                throw new Error(errData.error || 'Error en el servidor');
+                                              }
+
+                                              // 3. Actualizar estado local
+                                              setEditableItems(newEdits);
+                                              setSelectedDraft((prev: any) => {
+                                                if (!prev) return null;
+                                                return {
+                                                  ...prev,
+                                                  extracted_items: dbItems
+                                                };
+                                              });
+                                              setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
+
+                                              alert('Novedad notificada al cliente por correo y borrador actualizado. ✉️');
+                                            } catch (err: any) {
+                                              console.error('Error notifying deleted item:', err);
+                                              alert(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`);
+                                            } finally {
+                                              setSaving(false);
+                                            }
                                           }
                                         });
                                       }}
@@ -1520,6 +1584,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
               <button
                 type="button"
+                disabled={saving}
                 onClick={() => setDeleteConfirm(null)}
                 style={{
                   flex: 1,
@@ -1529,15 +1594,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   borderRadius: '12px',
                   fontWeight: 700,
                   color: '#4B5563',
-                  cursor: 'pointer'
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1
                 }}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteConfirm.onConfirm();
+                disabled={saving}
+                onClick={async () => {
+                  await deleteConfirm.onConfirm();
                   setDeleteConfirm(null);
                 }}
                 style={{
@@ -1548,10 +1615,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   borderRadius: '12px',
                   fontWeight: 700,
                   color: 'white',
-                  cursor: 'pointer'
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1
                 }}
               >
-                Eliminar
+                {saving ? 'Enviando...' : 'Eliminar'}
               </button>
             </div>
           </div>
