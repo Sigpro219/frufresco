@@ -383,6 +383,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return matchesSearch && matchesDate && matchesChannel;
   });
 
+  const totalValue = editableItems.reduce((acc, item) => {
+    const matchedProd = products.find(p => p.id === item.matched_product_id);
+    return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+  }, 0);
+
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -905,13 +910,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </thead>
                     <tbody>
                       {(() => {
-                        let totalValue = 0;
                         return (
                           <>
                             {editableItems.map((item: any, i: number) => {
                               const matchedProd = products.find(p => p.id === item.matched_product_id);
                               const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
-                              totalValue += itemTotal;
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -1003,14 +1006,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 </tr>
                               );
                             })}
-                            <tr style={{ backgroundColor: '#F8FAFC' }}>
-                              <td colSpan={3} style={{ padding: '1.5rem 1rem', textAlign: 'right', fontWeight: 900, color: '#475569', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
-                                TOTAL ESTIMADO
-                              </td>
-                              <td style={{ padding: '1.5rem 1rem', textAlign: 'right', fontWeight: 900, color: '#059669', fontSize: '1.6rem' }}>
-                                {formatMoney(totalValue)}
-                              </td>
-                            </tr>
+
                           </>
                         );
                       })()}
@@ -1100,13 +1096,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           gap: '8px',
                           padding: '0.65rem 1.25rem',
                           backgroundColor: '#FAF5F5',
-                          border: '1px solid #FCA5A5',
+                          border: '1px solid #FECACA',
                           borderRadius: '24px',
                           color: '#DC2626',
-                          fontWeight: '800',
+                          fontWeight: '700',
                           cursor: saving ? 'not-allowed' : 'pointer',
                           fontSize: '0.85rem',
-                          transition: 'all 0.15s',
+                          transition: 'background-color 0.15s',
                           opacity: saving ? 0.7 : 1
                         }}
                         onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
@@ -1114,6 +1110,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       >
                         <X size={16} strokeWidth={3} /> Rechazar Dirección
                       </button>
+                      
+                      <div style={{ marginLeft: '1rem', marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
+                      </div>
+
                       <button 
                         onClick={handleApprove}
                         disabled={saving}
@@ -1183,7 +1185,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </div>
 
                   {/* Right Side: Standard Buttons */}
-                  <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
+                    </div>
+
                     <button 
                       onClick={() => setSelectedDraft(null)}
                       style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}

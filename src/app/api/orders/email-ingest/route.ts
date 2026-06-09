@@ -200,7 +200,7 @@ export async function POST(req: Request) {
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
         const lines = plainText.split('\n');
-        const regex = /(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
+        const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
           if (line === '-' || line === '') continue;
