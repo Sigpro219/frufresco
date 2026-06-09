@@ -122,23 +122,25 @@ export default function EmailDraftsModule() {
           message: {
             text: `Hola. Lamentamos informarte que tu solicitud de pedido ha sido rechazada debido a que la dirección proporcionada (${addressStr}) se encuentra fuera de nuestra zona de cobertura en Bogotá.`,
             html: `
-              <div style="font-family: 'Outfit', sans-serif, sans-serif; color: #111827; padding: 40px; background-color: #F9FAFB; border-radius: 20px; max-width: 600px; margin: auto; border: 1px solid #E5E7EB;">
+              <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+              <div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
                 <center>
-                  <img src="https://frufresco.com/logo.png" width="120" style="margin-bottom: 20px;" alt="FruFresco Logo">
-                  <h2 style="color: #EF4444; font-weight: 800; font-size: 24px; margin-bottom: 5px;">Pedido Rechazado</h2>
-                  <p style="color: #6B7280; font-size: 14px; margin-top: 0;">Fuera de Zona de Cobertura</p>
+                  <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
+                  <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">Pedido Recibido - Cobertura</h1>
+                  <p style="font-size: 16px; color: #555;">Información sobre el estado de cobertura de tu solicitud.</p>
                 </center>
                 
-                <div style="background: white; padding: 30px; border-radius: 16px; border-left: 5px solid #EF4444; box-shadow: 0 4px 12px rgba(0,0,0,0.02); margin-top: 20px;">
-                  <p style="margin-top: 0; font-size: 15px; line-height: 1.5;">Hola,</p>
+                <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+                  <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Novedad sobre tu pedido</h3>
+                  <p style="font-size: 15px; line-height: 1.5; color: #111827;">Hola,</p>
                   <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Lamentamos informarte que hemos tenido que rechazar tu solicitud de pedido enviado por correo electrónico.</p>
                   <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">La dirección proporcionada (<b>${addressStr}</b>) se encuentra <b>fuera de nuestra zona de cobertura actual</b> en Bogotá.</p>
-                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>
+                  <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos mucho tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>
                 </div>
                 
-                <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 40px 0;">
+                <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
                 <center>
-                  <p style="font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 2px;">FruFresco • Del Campo a tu Mesa</p>
+                  <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
                 </center>
               </div>
             `
