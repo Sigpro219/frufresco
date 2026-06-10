@@ -44,10 +44,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
   const [editableDeliverySlot, setEditableDeliverySlot] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
@@ -443,75 +445,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // Initialize editable items
       const rawItems = getDraftItems(selectedDraft);
       const initialEdits = rawItems.map((item: any) => {
-        // Try to find a match using aliases first, then by name
         let matchedId = item.matched_product_id || null;
         if (!matchedId) {
-            const aliasMatch = aliases[item.originalName?.toLowerCase()?.trim()];
-            if (aliasMatch) {
-                matchedId = aliasMatch;
-            } else {
-                const cleanText = (txt: string) => {
-                  return txt
-                    .toLowerCase()
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[^a-z0-9\s]/g, "")
-                    .trim();
-                };
-
-                const originalClean = cleanText(item.originalName || '');
-                const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
-
-                let bestMatch: any = null;
-                let highestScore = -999;
-
-                for (const p of products) {
-                  const productClean = cleanText(p.name);
-                  
-                  if (productClean === originalClean) {
-                    bestMatch = p;
-                    highestScore = 9999;
-                    break;
-                  }
-
-                  const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
-                  const sharedWords = originalWords.filter(w => productWords.includes(w));
-                  
-                  if (sharedWords.length > 0) {
-                    const extraWords = Math.abs(productWords.length - sharedWords.length);
-                    const score = sharedWords.length * 10 - extraWords;
-                    if (score > highestScore) {
-                      highestScore = score;
-                      bestMatch = p;
-                    }
-                  }
-                }
-
-                // Exigir una puntuación mínima o coincidencia real para evitar mapeos erróneos (ej. "tipo" que asocie Ladrillos y Tomate Cherry)
-                // Si la palabra compartida es solo un término genérico como "tipo", "de", "con", etc., o si la puntuación es baja, no mapear.
-                const hasOnlyGenericSharedWords = originalWords.filter(w => {
-                  const productClean = cleanText(bestMatch?.name || '');
-                  return productClean.split(/\s+/).includes(w);
-                }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
-
-                if (highestScore < 8 || hasOnlyGenericSharedWords) {
-                  bestMatch = null;
-                }
-
-                if (!bestMatch) {
-                  // Solo buscar coincidencia parcial si tiene al menos 3 caracteres y no es una palabra genérica
-                  if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
-                    bestMatch = products.find((p: any) => {
-                      const productClean = cleanText(p.name);
-                      return productClean.includes(originalClean) || originalClean.includes(productClean);
-                    });
-                  }
-                }
-
-                if (bestMatch) {
-                  matchedId = bestMatch.id;
-                }
-            }
+          const matchedProd = findMatchedProduct(item.originalName);
+          if (matchedProd) matchedId = matchedProd.id;
         }
         return {
             ...item,
@@ -558,6 +495,74 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliveryDate: meta?.deliveryDate || null,
       deliverySlot: meta?.deliverySlot || null
     };
+  };
+
+  const findMatchedProduct = (originalName: string) => {
+    if (!originalName) return null;
+    const cleanName = originalName.toLowerCase().trim();
+    
+    const aliasMatch = aliases[cleanName];
+    if (aliasMatch) {
+      const prod = products.find(p => p.id === aliasMatch);
+      if (prod) return prod;
+    }
+
+    const cleanText = (txt: string) => {
+      return txt
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s]/g, "")
+        .trim();
+    };
+
+    const originalClean = cleanText(originalName);
+    const originalWords = originalClean.split(/\s+/).filter(w => w.length > 1);
+
+    let bestMatch: any = null;
+    let highestScore = -999;
+
+    for (const p of products) {
+      const productClean = cleanText(p.name);
+      
+      if (productClean === originalClean) {
+        return p;
+      }
+
+      const productWords = productClean.split(/\s+/).filter(w => w.length > 1);
+      const sharedWords = originalWords.filter(w => productWords.includes(w));
+      
+      if (sharedWords.length > 0) {
+        const extraWords = Math.abs(productWords.length - sharedWords.length);
+        const score = sharedWords.length * 10 - extraWords;
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = p;
+        }
+      }
+    }
+
+    if (bestMatch) {
+      const hasOnlyGenericSharedWords = originalWords.filter(w => {
+        const productClean = cleanText(bestMatch.name || '');
+        return productClean.split(/\s+/).includes(w);
+      }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+
+      if (highestScore < 8 || hasOnlyGenericSharedWords) {
+        bestMatch = null;
+      }
+    }
+
+    if (!bestMatch) {
+      if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
+        bestMatch = products.find((p: any) => {
+          const productClean = cleanText(p.name);
+          return productClean.includes(originalClean) || originalClean.includes(productClean);
+        });
+      }
+    }
+
+    return bestMatch;
   };
 
   // --- INVOICE FLOATING APPROVAL MODAL ---
@@ -808,8 +813,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       matchesChannel = true; // All are email inbound
     }
 
+    // 4. Status Filter
+    let matchesStatus = true;
+    if (selectedStatus !== 'all') {
+      matchesStatus = draft.status === selectedStatus;
+    }
+
+    return matchesSearch && matchesDate && matchesChannel && matchesStatus;
+  });
+
+  // Calculate status counts ignoring status filter itself to show counts dynamically in sidebar cards
+  const draftsBeforeStatusFilter = drafts.filter(draft => {
+    const matchesSearch = searchQuery === '' || 
+      draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      draft.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+    let matchesDate = true;
+    if (selectedDate) {
+      const draftDate = new Date(draft.created_at).toISOString().split('T')[0];
+      matchesDate = draftDate === selectedDate;
+    }
+
+    let matchesChannel = true;
+    if (selectedChannel === 'email') {
+      matchesChannel = true;
+    }
+
     return matchesSearch && matchesDate && matchesChannel;
   });
+
+  const countAll = draftsBeforeStatusFilter.length;
+  const countPending = draftsBeforeStatusFilter.filter(d => d.status === 'pending').length;
+  const countApproved = draftsBeforeStatusFilter.filter(d => d.status === 'approved').length;
+  const countRejected = draftsBeforeStatusFilter.filter(d => d.status === 'rejected').length;
 
   const STATUS_PRIORITY: Record<string, number> = {
     pending: 1,
@@ -1089,7 +1129,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       </div>
 
-      {loading ? (
+      {/* Main Container: Flex layout with left content and right sidebar */}
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap', width: '100%' }}>
+        <div style={{ flex: 1, minWidth: '320px' }}>
+          {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
       ) : sortedFilteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
@@ -1118,12 +1161,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const items = getDraftItems(draft);
                 const itemsCount = items.length;
                 const estimatedTotal = items.reduce((acc: number, item: any) => {
-                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  let matchedProd = products.find(p => p.id === item.matched_product_id);
+                  if (!matchedProd && !item.matched_product_id && item.originalName) {
+                    matchedProd = findMatchedProduct(item.originalName);
+                  }
                   return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
                 }, 0);
 
                 const estimatedWeight = items.reduce((acc: number, item: any) => {
-                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  let matchedProd = products.find(p => p.id === item.matched_product_id);
+                  if (!matchedProd && !item.matched_product_id && item.originalName) {
+                    matchedProd = findMatchedProduct(item.originalName);
+                  }
                   const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
                   const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
                   return acc + (weightFactor * (item.quantity || 0));
@@ -1355,7 +1404,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 800, marginTop: '2px' }}>
                       {(() => {
                         const estimatedTotal = getDraftItems(draft).reduce((acc: number, item: any) => {
-                          const matchedProd = products.find(p => p.id === item.matched_product_id);
+                          let matchedProd = products.find(p => p.id === item.matched_product_id);
+                          if (!matchedProd && !item.matched_product_id && item.originalName) {
+                            matchedProd = findMatchedProduct(item.originalName);
+                          }
                           return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
                         }, 0);
                         return formatMoney(estimatedTotal);
@@ -1410,6 +1462,123 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           })}
         </div>
       )}
+        </div>
+
+        {/* Sidebar Status Filter Metrics */}
+        <div style={{
+          width: '260px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.85rem',
+          backgroundColor: 'white',
+          borderRadius: THEME.radius.lg,
+          border: `1px solid ${THEME.colors.border}`,
+          padding: '1.25rem',
+          boxShadow: THEME.shadow.sm,
+          minWidth: '240px'
+        }}>
+          <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4B5563', margin: '0 0 0.4rem 0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Variables y Filtros
+          </h3>
+          
+          {/* Card: Todos */}
+          <div 
+            onClick={() => setSelectedStatus('all')}
+            style={{
+              padding: '1rem',
+              borderRadius: '12px',
+              border: `2px solid ${selectedStatus === 'all' ? THEME.colors.primary : '#F1F5F9'}`,
+              backgroundColor: selectedStatus === 'all' ? '#ECFDF5' : '#F8FAF9',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Todos los Correos</div>
+              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Total en bandeja</div>
+            </div>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#1E293B' }}>{countAll}</span>
+          </div>
+
+          {/* Card: Pendientes / No Ejecutados */}
+          <div 
+            onClick={() => setSelectedStatus('pending')}
+            style={{
+              padding: '1rem',
+              borderRadius: '12px',
+              border: `2px solid ${selectedStatus === 'pending' ? '#D97706' : '#F1F5F9'}`,
+              backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : '#F8FAF9',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>
+                Pendientes
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Por gestionar (No ejecutados)</div>
+            </div>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#B45309' }}>{countPending}</span>
+          </div>
+
+          {/* Card: Rechazados */}
+          <div 
+            onClick={() => setSelectedStatus('rejected')}
+            style={{
+              padding: '1rem',
+              borderRadius: '12px',
+              border: `2px solid ${selectedStatus === 'rejected' ? '#EF4444' : '#F1F5F9'}`,
+              backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : '#F8FAF9',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>
+                Rechazados
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Descartados</div>
+            </div>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#DC2626' }}>{countRejected}</span>
+          </div>
+
+          {/* Card: Gestionados / Ejecutados */}
+          <div 
+            onClick={() => setSelectedStatus('approved')}
+            style={{
+              padding: '1rem',
+              borderRadius: '12px',
+              border: `2px solid ${selectedStatus === 'approved' ? '#059669' : '#F1F5F9'}`,
+              backgroundColor: selectedStatus === 'approved' ? '#E6F4EA' : '#F8FAF9',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
+                Gestionados
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Aprobados / Ejecutados</div>
+            </div>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{countApproved}</span>
+          </div>
+        </div>
+      </div>
 
       {/* Modal de Aprobación */}
       {selectedDraft && (
