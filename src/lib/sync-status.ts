@@ -1,6 +1,6 @@
 export const SYNC_METADATA = {
-  lastSync: "2026-06-09T15:10:00.000Z",
-  version: "1.7.5",
+  lastSync: "2026-06-10T16:46:50.000Z",
+  version: "1.7.6",
   environment: "PRODUCTION"
 };
 
