@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2 } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 const getChannelBadge = (source: string) => {
@@ -467,6 +467,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   
                   if (productClean === originalClean) {
                     bestMatch = p;
+                    highestScore = 9999;
                     break;
                   }
 
@@ -483,11 +484,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   }
                 }
 
+                // Exigir una puntuación mínima o coincidencia real para evitar mapeos erróneos (ej. "tipo" que asocie Ladrillos y Tomate Cherry)
+                // Si la palabra compartida es solo un término genérico como "tipo", "de", "con", etc., o si la puntuación es baja, no mapear.
+                const hasOnlyGenericSharedWords = originalWords.filter(w => {
+                  const productClean = cleanText(bestMatch?.name || '');
+                  return productClean.split(/\s+/).includes(w);
+                }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+
+                if (highestScore < 8 || hasOnlyGenericSharedWords) {
+                  bestMatch = null;
+                }
+
                 if (!bestMatch) {
-                  bestMatch = products.find((p: any) => {
-                    const productClean = cleanText(p.name);
-                    return productClean.includes(originalClean) || originalClean.includes(productClean);
-                  });
+                  // Solo buscar coincidencia parcial si tiene al menos 3 caracteres y no es una palabra genérica
+                  if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
+                    bestMatch = products.find((p: any) => {
+                      const productClean = cleanText(p.name);
+                      return productClean.includes(originalClean) || originalClean.includes(productClean);
+                    });
+                  }
                 }
 
                 if (bestMatch) {

@@ -555,6 +555,7 @@ export async function POST(req: Request) {
                 
                 if (productClean === originalClean) {
                   bestMatch = p;
+                  highestScore = 9999;
                   break;
                 }
 
@@ -571,11 +572,23 @@ export async function POST(req: Request) {
                 }
               }
 
+              // Exigir una puntuación mínima o coincidencia real para evitar mapeos erróneos (ej. "tipo" que asocie Ladrillos y Tomate Cherry)
+              const hasOnlyGenericSharedWords = originalWords.filter(w => {
+                const productClean = cleanText(bestMatch?.name || '');
+                return productClean.split(/\s+/).includes(w);
+              }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+
+              if (highestScore < 8 || hasOnlyGenericSharedWords) {
+                bestMatch = null;
+              }
+
               if (!bestMatch) {
-                bestMatch = dbProducts.find((p: any) => {
-                  const productClean = cleanText(p.name);
-                  return productClean.includes(originalClean) || originalClean.includes(productClean);
-                });
+                if (originalClean.length >= 3 && !['tipo', 'para', 'con'].includes(originalClean)) {
+                  bestMatch = dbProducts.find((p: any) => {
+                    const productClean = cleanText(p.name);
+                    return productClean.includes(originalClean) || originalClean.includes(productClean);
+                  });
+                }
               }
 
               matchedProduct = bestMatch;

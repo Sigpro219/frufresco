@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
+import EmailOutboxModule from '@/components/EmailOutboxModule';
 import { 
     MessageSquare, 
     Phone, 
@@ -36,7 +37,8 @@ import {
     FileText,
     Eye,
     MapPin,
-    Scale
+    Scale,
+    Send
 } from 'lucide-react';
 
 const getStatusLabel = (s: string) => {
@@ -77,7 +79,7 @@ export default function OrderLoadingPage() {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [pendingEmailCount, setPendingEmailCount] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const [activeTab, setActiveTab] = useState<'orders' | 'emails'>('orders');
+    const [activeTab, setActiveTab] = useState<'orders' | 'emails' | 'outbox'>('orders');
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
@@ -771,6 +773,25 @@ export default function OrderLoadingPage() {
                         }}
                     >
                         <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('outbox')}
+                        style={{
+                            padding: '0.6rem 0.2rem',
+                            border: 'none',
+                            background: 'transparent',
+                            color: activeTab === 'outbox' ? '#10B981' : '#64748B',
+                            fontWeight: '700',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            borderBottom: activeTab === 'outbox' ? `3px solid #10B981` : '3px solid transparent',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <Send size={16} /> Bandeja de Salida Email
                     </button>
                 </div>
 
@@ -1877,9 +1898,13 @@ export default function OrderLoadingPage() {
                     </div>
                 )}
                     </>
-                ) : (
+                ) : activeTab === 'emails' ? (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem' }}>
                         <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} />
+                    </div>
+                ) : (
+                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
+                        <EmailOutboxModule />
                     </div>
                 )}
             </div>
