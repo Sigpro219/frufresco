@@ -88,6 +88,26 @@ export async function POST(req: Request) {
     const corporateEmails = ['higuera200@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
     const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
 
+    // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
+    const isAutoReply = 
+      headers['auto-submitted'] || 
+      headers['Auto-Submitted'] || 
+      subject.toLowerCase().startsWith('¡hemos recibido tu pedido!') ||
+      subject.toLowerCase().startsWith('hemos recibido tu pedido') ||
+      subject.toLowerCase().includes('auto-reply') || 
+      subject.toLowerCase().includes('autoreply') || 
+      subject.toLowerCase().includes('delivery status notification') || 
+      subject.toLowerCase().includes('undelivered mail') || 
+      subject.toLowerCase().includes('failure notice') ||
+      senderEmail.includes('mailer-daemon') ||
+      senderEmail.includes('noreply') ||
+      senderEmail.includes('no-reply');
+
+    if (isAutoReply) {
+      console.log(`[Email Inbound] Ignorando correo automático para evitar bucles de respuesta. Emisor: ${senderEmail}, Asunto: ${subject}`);
+      return NextResponse.json({ success: true, message: 'Ignored automatic email/loop prevention.' });
+    }
+
     if (isCorporateSender && toField) {
       let recipientEmail = toField;
       const matchTo = toField.match(/<([^>]+)>/);
@@ -95,6 +115,13 @@ export async function POST(req: Request) {
         recipientEmail = matchTo[1];
       }
       recipientEmail = recipientEmail.trim().toLowerCase();
+      
+      // Si el destinatario también es corporativo o es el mismo correo, no procesar para evitar bucles infinitos
+      if (corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co')) {
+        console.log(`[Email Inbound] Ignorando correo corporativo interno para evitar bucles. De: ${senderEmail} Para: ${recipientEmail}`);
+        return NextResponse.json({ success: true, message: 'Ignored internal corporate email.' });
+      }
+
       console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
       senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente
     } else {
