@@ -128,6 +128,10 @@ function CreateOrderContent() {
     // --- STAGING AREA STATE (Mesa de Trabajo) ---
     const [isStaging, setIsStaging] = useState(false);
     const [stagedItems, setStagedItems] = useState<any[]>([]);
+    const [selectedStagedIds, setSelectedStagedIds] = useState<string[]>([]);
+    useEffect(() => {
+        setSelectedStagedIds([]);
+    }, [isStaging, stagedItems.length]);
     const [b2cGeofence, setB2cGeofence] = useState<Point[]>([]);
     const [outOfZone, setOutOfZone] = useState(false);
     const [parsingFile, setParsingFile] = useState(false);
@@ -1695,7 +1699,32 @@ function CreateOrderContent() {
                                                 )}
                                             </div>
                                         </div>
-                                        <div style={{ textAlign: 'right' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            {selectedStagedIds.length > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm(`¿Estás seguro de que deseas eliminar ${selectedStagedIds.length} productos seleccionados?`)) {
+                                                            setStagedItems(prev => prev.filter(item => !selectedStagedIds.includes(item.id)));
+                                                            setSelectedStagedIds([]);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 14px',
+                                                        backgroundColor: '#FEE2E2',
+                                                        color: '#991B1B',
+                                                        border: '1px solid #FCA5A5',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.8rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                >
+                                                    <Trash2 size={14} /> Eliminar Seleccionados ({selectedStagedIds.length})
+                                                </button>
+                                            )}
                                             <span style={{ 
                                                 padding: '6px 12px', 
                                                 backgroundColor: 'white', 
@@ -1715,10 +1744,23 @@ function CreateOrderContent() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                             <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                                                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
+                                                    <th style={{ padding: '1rem', textAlign: 'center', width: '40px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={stagedItems.length > 0 && selectedStagedIds.length === stagedItems.length}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedStagedIds(stagedItems.map(item => item.id));
+                                                                } else {
+                                                                    setSelectedStagedIds([]);
+                                                                }
+                                                            }}
+                                                            style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                                        />
+                                                    </th>
                                                     <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left' }}>NOMBRE EN DOCUMENTO</th>
                                                     <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (SKU)</th>
                                                     <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>CANT.</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', width: '50px' }}></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1731,6 +1773,20 @@ function CreateOrderContent() {
                                                             transition: 'background-color 0.2s'
                                                         }}
                                                     >
+                                                        <td style={{ padding: '1rem', textAlign: 'center', width: '40px' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedStagedIds.includes(item.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setSelectedStagedIds(prev => [...prev, item.id]);
+                                                                    } else {
+                                                                        setSelectedStagedIds(prev => prev.filter(id => id !== item.id));
+                                                                    }
+                                                                }}
+                                                                style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                                            />
+                                                        </td>
                                                         <td style={{ padding: '1rem 2rem' }}>
                                                             <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#475569' }}>{item.originalName}</div>
                                                         </td>
@@ -1788,13 +1844,6 @@ function CreateOrderContent() {
                                                                     backgroundColor: 'white'
                                                                 }}
                                                             />
-                                                        </td>
-                                                        <td style={{ padding: '1rem 2rem' }}>
-                                                            <button 
-                                                                onClick={() => setStagedItems(prev => prev.filter(i => i.id !== item.id))}
-                                                                tabIndex={-1}
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#94A3B8' }}
-                                                            >✕</button>
                                                         </td>
                                                     </tr>
                                                 ))}
