@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import Link from 'next/link';
+import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { ShoppingBag, TrendingUp, AlertCircle, CheckCircle2, Receipt, Calendar, FileText, ChevronRight, Download, CreditCard, RefreshCw } from 'lucide-react';
 
 interface BillingCut {
     id: string;
@@ -28,59 +29,54 @@ interface BillingReturn {
     orders: { sequence_id: number, created_at: string };
 }
 
-interface Provider {
+interface Invoice {
     id: string;
-    name: string;
-    location: string;
-    contact_phone: string | null;
-    contact_name: string | null;
-    email: string | null;
-    address: string | null;
-    category: string;
-    is_active: boolean;
-    is_archived: boolean;
-    tax_id: string | null;
-    payment_terms_days: number | null;
-    bank_name: string | null;
-    bank_account_number: string | null;
-    bank_account_type: 'ahorros' | 'corriente' | null;
-    notes: string | null;
-    created_at?: string;
+    invoice_number: string;
+    order_id: string;
+    cut_id: string;
+    total_base: number;
+    total_tax: number;
+    total_final: number;
+    status: 'pending' | 'printed' | 'exported' | 'cancelled';
+    payment_status: 'pending' | 'paid' | 'overdue';
+    due_date: string;
+    created_at: string;
+    orders: {
+        sequence_id: number;
+        created_at: string;
+        profiles: {
+            company_name: string;
+            nit: string;
+            payment_days: number;
+        } | null;
+    } | null;
 }
 
 export default function BillingDashboard() {
     const [cuts, setCuts] = useState<BillingCut[]>([]);
     const [returns, setReturns] = useState<BillingReturn[]>([]);
-    const [providers, setProviders] = useState<Provider[]>([]);
-    const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'cuts' | 'returns' | 'providers' | 'archived' | 'configuration'>('cuts');
+    const [activeTab, setActiveTab] = useState<'invoicing' | 'portfolio' | 'configuration'>('invoicing');
+    const [subTab, setSubTab] = useState<'cuts' | 'returns'>('cuts');
     const [isProcessing, setIsProcessing] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isDateEditable, setIsDateEditable] = useState(false);
-    const [scrollY, setScrollY] = useState(0);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState('Transferencia');
     const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
-
-    useEffect(() => {
-        const handleScroll = () => setScrollY(window.scrollY);
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch Cuts
+            // 1. Fetch cuts
             const { data: cutsData, error: cutsError } = await supabase
                 .from('billing_cuts')
                 .select('*')
                 .order('created_at', { ascending: false });
-            
             if (cutsError) throw cutsError;
             setCuts(cutsData || []);
 
-            // 2. Fetch Pending Returns
+            // 2. Fetch returns
             const { data: returnsData, error: returnsError } = await supabase
                 .from('billing_returns')
                 .select(`
@@ -89,47 +85,41 @@ export default function BillingDashboard() {
                     orders (sequence_id, created_at)
                 `)
                 .eq('status', 'pending_review');
-            
             if (returnsError) throw returnsError;
             setReturns(returnsData || []);
 
-            // 3. Fetch Providers
-            const { data: providersData, error: providersError } = await supabase
-                .from('providers')
-                .select('*')
-                .order('name', { ascending: true });
-            
-            if (providersError) throw providersError;
-            setProviders(providersData || []);
+            // 3. Fetch invoices with profile data
+            const { data: invoicesData, error: invoicesError } = await supabase
+                .from('billing_invoices')
+                .select(`
+                    *,
+                    orders (
+                        sequence_id,
+                        created_at,
+                        profiles (
+                            company_name,
+                            nit,
+                            payment_days
+                        )
+                    )
+                `)
+                .order('created_at', { ascending: false });
+            if (invoicesError) throw invoicesError;
+            setInvoices(invoicesData || []);
 
-            // 4. Fetch Pending Orders Count (Ready for billing)
+            // 4. Fetch pending orders count
             const { count: ordersCount } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'delivered')
                 .is('billing_cut_id', null);
-            
             setPendingOrdersCount(ordersCount || 0);
-
         } catch (err: any) {
-            if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
-            console.error('Detailed Billing Error:', {
-                message: err.message,
-                code: err.code,
-                details: err.details,
-                hint: err.hint,
-                stack: err.stack
-            });
-            // Alerta visual discreta si es error de base de datos
-            if (err.code === 'PGRST205') {
-                console.warn('⚠️ La base de datos de facturación no está configurada. Ejecuta el esquema SQL.');
-            }
+            console.error('Error fetching billing data:', err);
         } finally {
-
             setLoading(false);
         }
     }, []);
-
 
     useEffect(() => {
         fetchData();
@@ -138,15 +128,24 @@ export default function BillingDashboard() {
     const handleCreateCut = async (slot: 'AM' | 'PM') => {
         setIsProcessing(true);
         try {
-            // 1. Find dispatched orders that haven't been billed yet
+            // Fetch eligible orders
             const { data: orders, error: ordersError } = await supabase
                 .from('orders')
-                .select('id, total')
-                .eq('status', 'delivered') // Or 'shipped' based on policy
+                .select(`
+                    id, 
+                    total, 
+                    profile_id,
+                    sequence_id,
+                    created_at,
+                    profiles (
+                        payment_days,
+                        iva_responsible
+                    )
+                `)
+                .eq('status', 'delivered')
                 .is('billing_cut_id', null);
 
             if (ordersError) throw ordersError;
-
             if (!orders || orders.length === 0) {
                 alert('No hay pedidos listos para facturar en este momento.');
                 return;
@@ -154,7 +153,7 @@ export default function BillingDashboard() {
 
             const totalAmount = orders.reduce((sum, o) => sum + (o.total || 0), 0);
 
-            // 2. Create the Cut
+            // 1. Create the cut
             const { data: newCut, error: cutError } = await supabase
                 .from('billing_cuts')
                 .insert([{
@@ -168,7 +167,7 @@ export default function BillingDashboard() {
 
             if (cutError) throw cutError;
 
-            // 3. Link orders to the cut (Blocking them)
+            // 2. Link orders to the cut
             const orderIds = orders.map(o => o.id);
             const { error: linkError } = await supabase
                 .from('orders')
@@ -177,12 +176,41 @@ export default function BillingDashboard() {
 
             if (linkError) throw linkError;
 
-            alert(`¡Corte ${slot} generado con éxito! ${orders.length} pedidos consolidados.`);
+            // 3. Generate sequential invoices for each order in the cut
+            for (let i = 0; i < orders.length; i++) {
+                const order = orders[i];
+                const cleanSeq = order.sequence_id.toString().padStart(4, '0');
+                const invoiceNumber = `FE-${cleanSeq}-${Date.now().toString().slice(-4)}`;
+                
+                // Calculate tax base & IVA
+                const total = order.total || 0;
+                const isIva = order.profiles?.iva_responsible || false;
+                const totalBase = isIva ? total / 1.19 : total;
+                const totalTax = isIva ? total - totalBase : 0;
+
+                // Calculate due date based on profile payment_days
+                const creditDays = order.profiles?.payment_days || 0;
+                const dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + creditDays);
+
+                await supabase.from('billing_invoices').insert([{
+                    order_id: order.id,
+                    cut_id: newCut.id,
+                    invoice_number: invoiceNumber,
+                    total_base: totalBase,
+                    total_tax: totalTax,
+                    total_final: total,
+                    status: 'pending',
+                    payment_status: 'pending',
+                    due_date: dueDate.toISOString().split('T')[0]
+                }]);
+            }
+
+            alert(`¡Corte ${slot} generado con éxito! ${orders.length} facturas emitidas.`);
             fetchData();
         } catch (err: any) {
-            if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
-            console.error('Error creating cut:', err);
-            alert('Error al generar el corte: ' + (err.message || 'Error desconocido'));
+            console.error('Error generating cut:', err);
+            alert('Error al generar el corte: ' + err.message);
         } finally {
             setIsProcessing(false);
         }
@@ -192,51 +220,98 @@ export default function BillingDashboard() {
         setIsProcessing(true);
         try {
             if (decision === 'rejected') {
-                const { error: rejectError } = await supabase
+                const { error } = await supabase
                     .from('billing_returns')
                     .update({ status: 'rejected' })
                     .eq('id', ret.id);
-                if (rejectError) throw rejectError;
+                if (error) throw error;
             } else {
-                // 1. Get unit price from order_items for accurate credit calculation
+                // Get unit price
                 const { data: itemData, error: itemError } = await supabase
                     .from('order_items')
                     .select('unit_price, quantity')
                     .eq('order_id', ret.order_id)
                     .eq('product_id', ret.product_id)
                     .single();
-                
                 if (itemError) throw itemError;
 
                 const newQty = Math.max(0, Number(itemData.quantity) - Number(ret.quantity_returned));
                 const priceCredit = Number(ret.quantity_returned) * Number(itemData.unit_price);
 
-                // 2. Update order_items (Subtract quantity)
-                const { error: updateItemError } = await supabase.from('order_items')
+                // Subtract from items
+                const { error: updateItemError } = await supabase
+                    .from('order_items')
                     .update({ quantity: newQty })
                     .eq('order_id', ret.order_id)
                     .eq('product_id', ret.product_id);
                 if (updateItemError) throw updateItemError;
 
-                // 3. Update orders total (Adjust invoice value)
+                // Subtract from order total
                 const { data: orderData } = await supabase.from('orders').select('total').eq('id', ret.order_id).single();
-                const { error: updateOrderError } = await supabase.from('orders')
-                    .update({ total: Math.max(0, (Number(orderData?.total) || 0) - priceCredit) })
+                const newTotal = Math.max(0, (Number(orderData?.total) || 0) - priceCredit);
+                const { error: updateOrderError } = await supabase
+                    .from('orders')
+                    .update({ total: newTotal })
                     .eq('id', ret.order_id);
                 if (updateOrderError) throw updateOrderError;
 
-                // 4. Mark return as approved
-                const { error: approveError } = await supabase.from('billing_returns')
-                    .update({ status: 'approved' })
-                    .eq('id', ret.id);
-                if (approveError) throw approveError;
+                // Recalculate billing_invoices details for this order
+                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', ret.order_id).single();
+                if (invoiceData) {
+                    // Fetch if client is iva responsible to adjust bases
+                    const { data: orderProf } = await supabase
+                        .from('orders')
+                        .select('profiles(iva_responsible)')
+                        .eq('id', ret.order_id)
+                        .single();
+                    const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
+                    const totalBase = isIva ? newTotal / 1.19 : newTotal;
+                    const totalTax = isIva ? newTotal - totalBase : 0;
+
+                    await supabase
+                        .from('billing_invoices')
+                        .update({
+                            total_base: totalBase,
+                            total_tax: totalTax,
+                            total_final: newTotal
+                        })
+                        .eq('id', invoiceData.id);
+                }
+
+                // Update status of return
+                await supabase.from('billing_returns').update({ status: 'approved' }).eq('id', ret.id);
             }
             alert(`✅ Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`);
             fetchData();
         } catch (err: any) {
-            if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
-            console.error('Return processing error:', err);
-            alert('Error al procesar la devolución: ' + (err.message || 'Error de base de datos'));
+            console.error('Error processing return:', err);
+            alert('Error al procesar la devolución: ' + err.message);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleRegisterPayment = async () => {
+        if (!selectedInvoice) return;
+        setIsProcessing(true);
+        try {
+            const { error } = await supabase
+                .from('billing_invoices')
+                .update({
+                    payment_status: 'paid',
+                    paid_at: new Date().toISOString(),
+                    payment_method: paymentMethod
+                })
+                .eq('id', selectedInvoice.id);
+
+            if (error) throw error;
+            alert('✅ Pago registrado exitosamente.');
+            setIsPaymentModalOpen(false);
+            setSelectedInvoice(null);
+            fetchData();
+        } catch (err: any) {
+            console.error('Error registering payment:', err);
+            alert('Error al registrar el pago: ' + err.message);
         } finally {
             setIsProcessing(false);
         }
@@ -244,8 +319,7 @@ export default function BillingDashboard() {
 
     const exportToWorldOffice = async (cutId: string) => {
         try {
-            // Fetch order items for the cut
-            const { data: items, error: itemsError } = await supabase
+            const { data: items, error } = await supabase
                 .from('order_items')
                 .select(`
                     id, quantity, unit_price, nickname,
@@ -254,13 +328,12 @@ export default function BillingDashboard() {
                 `)
                 .eq('orders.billing_cut_id', cutId);
 
-            if (itemsError) throw itemsError;
+            if (error) throw error;
             if (!items || items.length === 0) {
                 alert('No hay datos para exportar.');
                 return;
             }
 
-            // Generate CSV (Flat File Structure for WO)
             const headers = ['Nit', 'Cliente', 'Referencia', 'Nombre', 'Cantidad', 'PrecioUnitario', 'Total'];
             const rows = items.map((item: any) => [
                 item.orders.profiles?.nit || 'N/A',
@@ -283,829 +356,445 @@ export default function BillingDashboard() {
             link.click();
             document.body.removeChild(link);
 
-            // Mark as exported
             await supabase.from('billing_cuts').update({ status: 'exported', exported_at: new Date().toISOString() }).eq('id', cutId);
             fetchData();
-            
         } catch (err) {
             console.error('Export error:', err);
             alert('Error al exportar.');
         }
     };
 
-    const handleSaveProvider = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedProvider) return;
-        
-        // Validaciones básicas
-        if (!selectedProvider.name) {
-            alert('El nombre o razón social es obligatorio');
-            return;
-        }
+    // Ageing Receivable Totals
+    const calculateAging = () => {
+        let alDia = 0;
+        let vencido1_15 = 0;
+        let vencido16_30 = 0;
+        let vencido30Mas = 0;
+        const today = new Date();
+        today.setHours(0,0,0,0);
 
-        setIsProcessing(true);
-        try {
-            const isNew = !selectedProvider.id || selectedProvider.id === 'NEW';
+        invoices.forEach(inv => {
+            if (inv.payment_status === 'paid') return;
+            const due = new Date(inv.due_date);
+            due.setHours(0,0,0,0);
             
-            // Preparar payload
-            const { id: _id, ...payload } = selectedProvider;
-            
-            if (isNew) {
-                const { error } = await supabase
-                    .from('providers')
-                    .insert([payload]);
-                if (error) throw error;
-                alert('✅ Proveedor creado correctamente.');
+            const diffTime = today.getTime() - due.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 0) {
+                alDia += Number(inv.total_final || 0);
+            } else if (diffDays <= 15) {
+                vencido1_15 += Number(inv.total_final || 0);
+            } else if (diffDays <= 30) {
+                vencido16_30 += Number(inv.total_final || 0);
             } else {
-                const { error } = await supabase
-                    .from('providers')
-                    .update(payload)
-                    .eq('id', selectedProvider.id);
-                if (error) throw error;
-                alert('✅ Proveedor actualizado correctamente.');
+                vencido30Mas += Number(inv.total_final || 0);
             }
-            
-            setIsModalOpen(false);
-            fetchData();
-        } catch (err: any) {
-            console.error('Error saving provider:', err);
-            alert('Error al guardar: ' + (err.message || 'Error desconocido'));
-        } finally {
-            setIsProcessing(true);
-            setIsProcessing(false);
-        }
+        });
+
+        return { alDia, vencido1_15, vencido16_30, vencido30Mas };
     };
 
-    const handleArchiveProvider = async () => {
-        if (!selectedProvider) return;
-        if (!confirm(`¿Estás seguro de archivar a "${selectedProvider.name}"? Ya no aparecerá en la lista de facturación activa.`)) return;
-        
-        setIsProcessing(true);
-        try {
-            const { error } = await supabase
-                .from('providers')
-                .update({ is_archived: true })
-                .eq('id', selectedProvider.id);
-
-            if (error) throw error;
-            setIsProcessing(false);
-            setIsModalOpen(false);
-            fetchData();
-            alert('📦 Proveedor archivado correctamente.');
-        } catch (err: any) {
-            setIsProcessing(false);
-            console.error('Error archiving provider:', err);
-            alert('Error al archivar: ' + (err.message || 'Error desconocido'));
-        }
-    };
-
-    const handleUnarchiveProvider = async () => {
-        if (!selectedProvider) return;
-        
-        setIsProcessing(true);
-        try {
-            const { error } = await supabase
-                .from('providers')
-                .update({ is_archived: false })
-                .eq('id', selectedProvider.id);
-
-            if (error) throw error;
-            setIsProcessing(false);
-            setIsModalOpen(false);
-            fetchData();
-            alert('♻️ Proveedor restaurado correctamente.');
-        } catch (err: any) {
-            setIsProcessing(false);
-            console.error('Error unarchiving provider:', err);
-            alert('Error al restaurar: ' + (err.message || 'Error desconocido'));
-        }
-    };
-
-
-
-    const getStatusStyle = (status: string) => {
-        switch (status) {
-            case 'open': return { bg: '#FEF3C7', text: '#92400E', label: 'Abierto' };
-            case 'closed': return { bg: '#DBEAFE', text: '#1E40AF', label: 'Cerrado' };
-            case 'exported': return { bg: '#DCFCE7', text: '#166534', label: 'Exportado' };
-            default: return { bg: '#F3F4F6', text: '#4B5563', label: status };
-        }
-    };
+    const aging = calculateAging();
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-                <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, padding: '2rem 1.5rem', fontFamily: THEME.typography.fontFamilyMain }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                
+                {/* Header */}
+                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#0F172A', margin: 0, letterSpacing: '-0.025em' }}>
-                            Módulo de Facturación
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Receipt color={THEME.colors.primary} size={30} /> Facturación y Cartera
                         </h1>
-                        <p style={{ color: '#64748B', fontSize: '1.1rem', marginTop: '0.4rem' }}>
-                            Gestión de cortes operativos, archivos planos WorldOffice y devoluciones.
+                        <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                            Gestión integral de cortes diarios, emisión de facturas y control de cartera de clientes.
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button 
+                    <div style={{ display: 'flex', gap: '0.8rem' }}>
+                        <button
                             onClick={() => handleCreateCut('AM')}
                             disabled={isProcessing}
-                            style={{ backgroundColor: '#111827', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.lg, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: THEME.shadow.sm }}
                         >
-                            ☕ Generar Corte AM
+                            ☀️ Generar Corte AM
                         </button>
-                        <button 
+                        <button
                             onClick={() => handleCreateCut('PM')}
                             disabled={isProcessing}
-                            style={{ backgroundColor: '#111827', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.primaryHover, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.lg, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: THEME.shadow.sm }}
                         >
-                            🌗 Generar Corte PM
+                            🌙 Generar Corte PM
                         </button>
                     </div>
                 </header>
- 
-                {/* DASHBOARD COLAPSIBLE */}
-                <div style={{
-                    position: 'sticky',
-                    top: '1rem',
-                    zIndex: 10,
-                    marginBottom: '2rem',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}>
-                    <div style={{
-                        backgroundColor: scrollY > 50 ? 'rgba(255, 255, 255, 0.95)' : 'white',
-                        backdropFilter: scrollY > 50 ? 'blur(10px)' : 'none',
-                        borderRadius: '24px',
-                        padding: scrollY > 50 ? '0.75rem 1.5rem' : '1.5rem',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: scrollY > 50 ? '0 10px 25px -5px rgba(0,0,0,0.1)' : '0 4px 6px -1px rgba(0,0,0,0.05)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ display: 'flex', gap: scrollY > 50 ? '2rem' : '3rem', transition: 'all 0.3s' }}>
-                            <KPIItem 
-                                label="Pedidos Listos" 
-                                value={pendingOrdersCount} 
-                                icon="📦" 
-                                color="#2563EB" 
-                                condensed={scrollY > 50} 
-                            />
-                            <KPIItem 
-                                label="Cortes Abiertos" 
-                                value={cuts.filter(c => c.status === 'open').length} 
-                                icon="✂️" 
-                                color="#D97706" 
-                                condensed={scrollY > 50} 
-                            />
-                            <KPIItem 
-                                label="Novedades" 
-                                value={returns.length} 
-                                icon="🚛" 
-                                color="#DC2626" 
-                                condensed={scrollY > 50} 
-                            />
-                            <KPIItem 
-                                label="Prov. Incompletos" 
-                                value={providers.filter(p => (!p.bank_name || !p.bank_account_number) && !p.is_archived).length} 
-                                icon="⚠️" 
-                                color="#9333EA" 
-                                condensed={scrollY > 50} 
-                            />
+
+                {/* Submodule Main Tabs */}
+                <div style={{ display: 'flex', gap: '1rem', borderBottom: `1px solid ${THEME.colors.border}`, marginBottom: '1.5rem' }}>
+                    <button
+                        onClick={() => setActiveTab('invoicing')}
+                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'invoicing' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'invoicing' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                    >
+                        📝 Submódulo Facturación
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('portfolio')}
+                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'portfolio' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'portfolio' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                    >
+                        💰 Submódulo Cartera
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('configuration')}
+                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'configuration' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'configuration' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                    >
+                        ⚙️ Configuración
+                    </button>
+                </div>
+
+                {/* INVOICING SUBMODULE */}
+                {activeTab === 'invoicing' && (
+                    <div>
+                        {/* Sub-tabs cuts / returns */}
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                            <button
+                                onClick={() => setSubTab('cuts')}
+                                style={{ backgroundColor: subTab === 'cuts' ? THEME.colors.primaryLight : 'transparent', color: subTab === 'cuts' ? THEME.colors.primary : THEME.colors.textSecondary, padding: '0.4rem 1rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                            >
+                                Cortes Generales ({cuts.length})
+                            </button>
+                            <button
+                                onClick={() => setSubTab('returns')}
+                                style={{ backgroundColor: subTab === 'returns' ? THEME.colors.primaryLight : 'transparent', color: subTab === 'returns' ? THEME.colors.primary : THEME.colors.textSecondary, padding: '0.4rem 1rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer' }}
+                            >
+                                Devoluciones Pendientes ({returns.length})
+                            </button>
                         </div>
 
-                        {!isProcessing && scrollY < 50 && (
-                            <div style={{ textAlign: 'right', display: scrollY > 50 ? 'none' : 'block' }}>
-                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Facturación Hoy</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: '950', color: '#0F172A' }}>
-                                    ${cuts.filter(c => new Date(c.created_at).toDateString() === new Date().toDateString())
-                                        .reduce((acc, c) => acc + (c.total_amount || 0), 0).toLocaleString()}
+                        {subTab === 'cuts' && (
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.md }}>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                                <th style={thStyle}># Corte</th>
+                                                <th style={thStyle}>Fecha y Franja</th>
+                                                <th style={thStyle}>Pedidos</th>
+                                                <th style={thStyle}>Total Bruto</th>
+                                                <th style={thStyle}>Estado</th>
+                                                <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {loading ? (
+                                                <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>Cargando cortes...</td></tr>
+                                            ) : cuts.length === 0 ? (
+                                                <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay cortes generados aún.</td></tr>
+                                            ) : cuts.map((cut) => {
+                                                const openCut = cut.status === 'open';
+                                                return (
+                                                    <tr key={cut.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}>
+                                                        <td style={tdStyle}><span style={{ fontWeight: '800' }}>{cut.cut_number.toString().padStart(4, '0')}</span></td>
+                                                        <td style={tdStyle}>
+                                                            <div style={{ fontWeight: '700' }}>{new Date(cut.scheduled_date).toLocaleDateString()}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Franja: {cut.cut_slot}</div>
+                                                        </td>
+                                                        <td style={tdStyle}>{cut.total_orders} pedidos</td>
+                                                        <td style={{ ...tdStyle, fontWeight: '750' }}>{formatMoney(cut.total_amount)}</td>
+                                                        <td style={tdStyle}>
+                                                            <span style={{ backgroundColor: cut.status === 'exported' ? '#DCFCE7' : '#FEF3C7', color: cut.status === 'exported' ? '#166534' : '#92400E', padding: '0.2rem 0.6rem', borderRadius: THEME.radius.md, fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                {cut.status}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                            <button 
+                                                                onClick={() => exportToWorldOffice(cut.id)}
+                                                                style={{ backgroundColor: THEME.colors.background, color: THEME.colors.textMain, padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', marginRight: '0.4rem' }}
+                                                            >
+                                                                <Download size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} /> WO CSV
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {subTab === 'returns' && (
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '1.5rem', boxShadow: THEME.shadow.md }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.2rem' }}>
+                                    {returns.length === 0 ? (
+                                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>
+                                            <CheckCircle2 color={THEME.colors.primary} size={40} style={{ marginBottom: '0.5rem' }} />
+                                            <h3 style={{ fontWeight: '700', margin: 0 }}>No hay devoluciones pendientes</h3>
+                                            <p style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>Todas las novedades de transportadores al día.</p>
+                                        </div>
+                                    ) : returns.map((ret) => (
+                                        <div key={ret.id} style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, padding: '1rem', backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.textSecondary }}>Pedido #{getFriendlyOrderId({ created_at: ret.orders.created_at, sequence_id: ret.orders.sequence_id })}</div>
+                                                    <h4 style={{ margin: '0.1rem 0', fontWeight: '750', fontSize: '0.95rem' }}>{ret.products.name}</h4>
+                                                </div>
+                                                <span style={{ backgroundColor: '#FEF2F2', color: '#991B1B', padding: '0.1rem 0.4rem', borderRadius: THEME.radius.sm, fontSize: '0.7rem', fontWeight: '800' }}>
+                                                    -{ret.quantity_returned} Uds
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: THEME.colors.textSecondary, fontStyle: 'italic' }}>
+                                                &quot;{ret.reason || 'Sin observación'}&quot;
+                                            </p>
+                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto' }}>
+                                                <button
+                                                    onClick={() => handleProcessReturn(ret, 'rejected')}
+                                                    style={{ flex: 1, padding: '0.4rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                >
+                                                    Rechazar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleProcessReturn(ret, 'approved')}
+                                                    style={{ flex: 2, padding: '0.4rem', borderRadius: THEME.radius.md, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                >
+                                                    Aprobar Ajuste
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
                     </div>
-                </div>
+                )}
 
-                {/* TABS */}
-                <div style={{ display: 'flex', gap: '2rem', borderBottom: '1px solid #E2E8F0', marginBottom: '2rem' }}>
-                    {[
-                        { id: 'cuts', label: '📦 Cortes Diarios' },
-                        { id: 'returns', label: '🚛 Devoluciones' },
-                        { id: 'providers', label: '🏢 Proveedores' },
-                        { id: 'archived', label: '🗄️ Archivados' },
-                        { id: 'configuration', label: '⚙️ Configuración' }
-                    ].map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            style={{
-                                padding: '1rem 0.5rem', border: 'none', background: 'none', cursor: 'pointer',
-                                fontSize: '1rem', fontWeight: '700', color: activeTab === tab.id ? '#0F172A' : '#64748B',
-                                borderBottom: activeTab === tab.id ? '3px solid #0F172A' : '3px solid transparent',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                {/* PORTFOLIO SUBMODULE */}
+                {activeTab === 'portfolio' && (
+                    <div>
+                        {/* Ageing Portfolio Widgets */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={kpiCardStyle}>
+                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>SALDOS AL DÍA</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: '850', color: THEME.colors.primary, marginTop: '0.4rem' }}>{formatMoney(aging.alDia)}</div>
+                            </div>
+                            <div style={kpiCardStyle}>
+                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO 1 - 15 DÍAS</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#D97706', marginTop: '0.4rem' }}>{formatMoney(aging.vencido1_15)}</div>
+                            </div>
+                            <div style={kpiCardStyle}>
+                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO 16 - 30 DÍAS</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#EA580C', marginTop: '0.4rem' }}>{formatMoney(aging.vencido16_30)}</div>
+                            </div>
+                            <div style={kpiCardStyle}>
+                                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VENCIDO +30 DÍAS</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: '850', color: '#DC2626', marginTop: '0.4rem' }}>{formatMoney(aging.vencido30Mas)}</div>
+                            </div>
+                        </div>
 
-                <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
-                    {activeTab === 'cuts' && (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                    <th style={thStyle}># Corte</th>
-                                    <th style={thStyle}>Fecha y Franja</th>
-                                    <th style={thStyle}>Pedidos</th>
-                                    <th style={thStyle}>Total Bruto</th>
-                                    <th style={thStyle}>Estado</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>Cargando cortes...</td></tr>
-                                ) : cuts.length === 0 ? (
-                                    <tr><td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No hay cortes generados aún.</td></tr>
-                                ) : cuts.map((cut) => {
-                                    const status = getStatusStyle(cut.status);
-                                    return (
-                                        <tr key={cut.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }}>
-                                            <td style={tdStyle}>
-                                                <div style={{ fontWeight: '900', color: '#0F172A' }}>{cut.cut_number.toString().padStart(4, '0')}</div>
-                                            </td>
-                                            <td style={tdStyle}>
-                                                <div style={{ fontWeight: '700' }}>{new Date(cut.scheduled_date).toLocaleDateString()}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Franja: {cut.cut_slot}</div>
-                                            </td>
-                                            <td style={tdStyle}>{cut.total_orders} pedidos</td>
-                                            <td style={{ ...tdStyle, fontWeight: '800', color: '#0F172A' }}>${cut.total_amount?.toLocaleString()}</td>
-                                            <td style={tdStyle}>
-                                                <span style={{ backgroundColor: status.bg, color: status.text, padding: '0.3rem 0.8rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                    {status.label}
-                                                </span>
-                                            </td>
-                                            <td style={{ ...tdStyle, textAlign: 'right' }}>
-                                                <button 
-                                                    onClick={() => exportToWorldOffice(cut.id)}
-                                                    style={{ backgroundColor: '#F1F5F9', color: '#0F172A', padding: '0.5rem 1rem', borderRadius: '10px', border: 'none', fontWeight: '800', cursor: 'pointer', marginRight: '0.5rem' }}
-                                                >
-                                                    📄 Exportar WO
-                                                </button>
-                                                <Link href={`/admin/commercial/billing/print/${cut.id}`} target="_blank">
-                                                    <button style={{ backgroundColor: '#111827', color: 'white', padding: '0.5rem 1rem', borderRadius: '10px', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                                        🖨️ Documentos
-                                                    </button>
-                                                </Link>
-                                            </td>
+                        {/* Invoices Accounts Receivable list */}
+                        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, overflow: 'hidden', boxShadow: THEME.shadow.md }}>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                            <th style={thStyle}>Prefijo FE</th>
+                                            <th style={thStyle}>Cliente</th>
+                                            <th style={thStyle}>Vencimiento</th>
+                                            <th style={thStyle}>Base Imponible</th>
+                                            <th style={thStyle}>IVA</th>
+                                            <th style={thStyle}>Total Neto</th>
+                                            <th style={thStyle}>Estado Cartera</th>
+                                            <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
+                                    </thead>
+                                    <tbody>
+                                        {invoices.length === 0 ? (
+                                            <tr><td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: THEME.colors.textSecondary }}>No hay facturas registradas en el sistema.</td></tr>
+                                        ) : invoices.map((inv) => {
+                                            const isOverdue = inv.payment_status === 'pending' && new Date(inv.due_date) < new Date();
+                                            const statusLabel = inv.payment_status === 'paid' ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente';
+                                            const overdueDays = Math.ceil((new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24));
 
-                    {activeTab === 'returns' && (
-                        <div style={{ padding: '2rem' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                                {returns.length === 0 ? (
-                                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: '#64748B' }}>
-                                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📦</div>
-                                        <h3 style={{ fontWeight: '900' }}>No hay devoluciones pendientes</h3>
-                                        <p>Todas las remisiones coinciden con lo entregado.</p>
-                                    </div>
-                                ) : returns.map((ret) => (
-                                    <div key={ret.id} style={{ border: '1px solid #E2E8F0', borderRadius: '20px', padding: '1.5rem', backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748B', textTransform: 'uppercase' }}>Pedido #{getFriendlyOrderId({ created_at: ret.orders.created_at, sequence_id: ret.orders.sequence_id })}</div>
-                                                <h3 style={{ margin: '0.2rem 0', fontWeight: '900', fontSize: '1.2rem' }}>{ret.products.name}</h3>
-                                            </div>
-                                            <div style={{ backgroundColor: '#FEF2F2', color: '#991B1B', padding: '0.3rem 0.6rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '900' }}>
-                                                -{ret.quantity_returned} Uds
-                                            </div>
-                                        </div>
-                                        
-                                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '12px', padding: '1rem', flex: 1 }}>
-                                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem' }}>Motivo del Conductor:</div>
-                                            <p style={{ margin: 0, fontSize: '0.9rem', color: '#1E293B' }}>&quot;{ret.reason || 'Sin observación'}&quot;</p>
-                                        </div>
-
-                                        {ret.photo_url && (
-                                            <img src={ret.photo_url} alt="Remisión" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '12px', border: '1px solid #E2E8F0' }} />
-                                        )}
-
-                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
-                                            <button 
-                                                onClick={() => handleProcessReturn(ret, 'rejected')}
-                                                disabled={isProcessing}
-                                                style={{ flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '800', cursor: 'pointer' }}
-                                            >
-                                                Rechazar
-                                            </button>
-                                            <button 
-                                                onClick={() => handleProcessReturn(ret, 'approved')}
-                                                disabled={isProcessing}
-                                                style={{ flex: 2, padding: '0.6rem', borderRadius: '10px', border: 'none', background: '#111827', color: 'white', fontWeight: '800', cursor: 'pointer' }}
-                                            >
-                                                Aprobar Descuento
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                            return (
+                                                <tr key={inv.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background 0.2s' }}>
+                                                    <td style={tdStyle}><span style={{ fontWeight: '800' }}>{inv.invoice_number}</span></td>
+                                                    <td style={tdStyle}>
+                                                        <div style={{ fontWeight: '700' }}>{inv.orders?.profiles?.company_name || 'Consumidor Final'}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>NIT: {inv.orders?.profiles?.nit || 'N/A'}</div>
+                                                    </td>
+                                                    <td style={tdStyle}>
+                                                        <div style={{ fontWeight: '700' }}>{new Date(inv.due_date).toLocaleDateString()}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Plazo: {inv.orders?.profiles?.payment_days || 0} días</div>
+                                                    </td>
+                                                    <td style={tdStyle}>{formatMoney(inv.total_base)}</td>
+                                                    <td style={tdStyle}>{formatMoney(inv.total_tax)}</td>
+                                                    <td style={{ ...tdStyle, fontWeight: '750' }}>{formatMoney(inv.total_final)}</td>
+                                                    <td style={tdStyle}>
+                                                        <span style={{ 
+                                                            backgroundColor: inv.payment_status === 'paid' ? '#DCFCE7' : isOverdue ? '#FEE2E2' : '#FEF3C7', 
+                                                            color: inv.payment_status === 'paid' ? '#166534' : isOverdue ? '#991B1B' : '#92400E', 
+                                                            padding: '0.2rem 0.6rem', 
+                                                            borderRadius: THEME.radius.md, 
+                                                            fontSize: '0.75rem', 
+                                                            fontWeight: '800' 
+                                                        }}>
+                                                            {statusLabel} {isOverdue && `(Hace ${overdueDays}d)`}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                        {inv.payment_status !== 'paid' && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedInvoice(inv);
+                                                                    setIsPaymentModalOpen(true);
+                                                                }}
+                                                                style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '0.4rem 0.8rem', borderRadius: THEME.radius.md, border: 'none', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                            >
+                                                                <CreditCard size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} /> Registrar Pago
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                    {(activeTab === 'providers' || activeTab === 'archived') && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', backgroundColor: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0' }}>
-                                <div style={{ position: 'relative', width: '400px' }}>
-                                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1.1rem' }}>🔍</span>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Buscar por nombre, NIT, contacto..." 
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        style={{ 
-                                            width: '100%', 
-                                            padding: '0.85rem 1rem 0.85rem 2.8rem', 
-                                            borderRadius: '12px', 
-                                            border: '1px solid #E2E8F0',
-                                            fontSize: '0.95rem',
-                                            outline: 'none',
-                                            backgroundColor: '#F8FAFC'
-                                        }}
-                                    />
-                                </div>
-                                
-                                {activeTab === 'providers' && (
-                                    <Link href="/admin/procurement/providers" style={{ textDecoration: 'none' }}>
-                                        <button 
-                                            style={{ 
-                                                backgroundColor: '#0F172A', 
-                                                color: 'white', 
-                                                padding: '0.85rem 1.5rem', 
-                                                borderRadius: '12px', 
-                                                border: 'none', 
-                                                fontWeight: '800', 
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px',
-                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
-                                            }}
-                                        >
-                                            <span>🏢</span> Gestionar Proveedores en Compras
-                                        </button>
-                                    </Link>
-                                )}
-                            </div>
-
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                    <th style={thStyle}>Proveedor / NIT</th>
-                                    <th style={thStyle}>Contacto</th>
-                                    <th style={thStyle}>Comunicación</th>
-                                    <th style={thStyle}>Registro</th>
-                                    <th style={thStyle}>Ubicación / Categoría</th>
-                                    <th style={thStyle}>Estado</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>Cargando proveedores...</td></tr>
-                                ) : providers
-                                    .filter(p => activeTab === 'providers' ? !p.is_archived : p.is_archived)
-                                    .filter(p => {
-                                        const search = searchTerm.toLowerCase();
-                                        return p.name.toLowerCase().includes(search) || 
-                                               (p.tax_id || '').toLowerCase().includes(search) ||
-                                               (p.contact_name || '').toLowerCase().includes(search) ||
-                                               (p.category || '').toLowerCase().includes(search);
-                                    }).length === 0 ? (
-                                    <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No se encontraron proveedores.</td></tr>
-                                ) : providers
-                                    .filter(p => activeTab === 'providers' ? !p.is_archived : p.is_archived)
-                                    .filter(p => {
-                                        const search = searchTerm.toLowerCase();
-                                        return p.name.toLowerCase().includes(search) || 
-                                               (p.tax_id || '').toLowerCase().includes(search) ||
-                                               (p.contact_name || '').toLowerCase().includes(search) ||
-                                               (p.category || '').toLowerCase().includes(search);
-                                    })
-                                    .sort((a, b) => {
-                                        const aIncomplete = (!a.bank_name || !a.bank_account_number) && !a.is_archived;
-                                        const bIncomplete = (!b.bank_name || !b.bank_account_number) && !b.is_archived;
-                                        if (aIncomplete && !bIncomplete) return -1;
-                                        if (!aIncomplete && bIncomplete) return 1;
-                                        return 0;
-                                    })
-                                    .map((p) => {
-                                        const isIncomplete = !p.bank_name || !p.bank_account_number;
-                                        return (
-                                    <tr key={p.id} style={{ 
-                                        borderBottom: '1px solid #F1F5F9', 
-                                        transition: 'background 0.2s', 
-                                        opacity: p.is_archived ? 0.7 : 1,
-                                        backgroundColor: isIncomplete && !p.is_archived ? '#FFF7ED' : 'transparent'
-                                    }}>
-                                        <td style={tdStyle}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{ fontWeight: '900', color: '#0F172A' }}>{p.name}</div>
-                                                {isIncomplete && !p.is_archived && (
-                                                    <span style={{ 
-                                                        backgroundColor: '#F97316', 
-                                                        color: 'white', 
-                                                        fontSize: '0.6rem', 
-                                                        padding: '0.1rem 0.4rem', 
-                                                        borderRadius: '4px', 
-                                                        fontWeight: '900' 
-                                                    }}>
-                                                        ⚠️ COMPLETAR
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {p.tax_id && <div style={{ fontSize: '0.75rem', color: '#64748B' }}>NIT: {p.tax_id}</div>}
-                                        </td>
-                                        <td style={tdStyle}>
-                                            <div style={{ fontWeight: '700', color: '#334155' }}>{p.contact_name || 'Sin contacto'}</div>
-                                        </td>
-                                        <td style={tdStyle}>
-                                            <div style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: '600' }}>{p.contact_phone || '---'}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{p.email || ''}</div>
-                                        </td>
-                                        <td style={tdStyle}>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748B' }}>{p.created_at ? new Date(p.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '---'}</div>
-                                        </td>
-                                        <td style={tdStyle}>
-                                            <div style={{ fontWeight: '600' }}>{p.location || '---'}</div>
-                                            <span style={{ fontSize: '0.7rem', color: '#64748B', backgroundColor: '#F1F5F9', padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase', fontWeight: '800' }}>
-                                                {p.category}
-                                            </span>
-                                        </td>
-                                        <td style={tdStyle}>
-                                            <span style={{ 
-                                                backgroundColor: p.is_active ? '#DCFCE7' : '#FEE2E2', 
-                                                color: p.is_active ? '#166534' : '#991B1B', 
-                                                padding: '0.3rem 0.8rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800' 
-                                            }}>
-                                                {p.is_active ? 'ACTIVO' : 'INACTIVO'}
-                                            </span>
-                                        </td>
-                                        <td style={{ ...tdStyle, textAlign: 'right' }}>
-                                            <button 
-                                                onClick={() => {
-                                                    setSelectedProvider(p);
-                                                    setIsDateEditable(false);
-                                                    setIsModalOpen(true);
-                                                }}
-                                                style={{ backgroundColor: '#F1F5F9', color: '#0F172A', padding: '0.5rem 1rem', borderRadius: '10px', border: 'none', fontWeight: '800', cursor: 'pointer' }}
-                                            >
-                                                👁️ Detalles
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )})}
-                            </tbody>
-                        </table>
-                        </div>
-                    )}
-                    
-                    {activeTab === 'configuration' && (
-                        <div style={{ padding: '2.5rem', maxWidth: '800px' }}>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', marginBottom: '2rem' }}>Configuración del Sistema de Facturación</h2>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                                {/* DOCUMENTACIÓN */}
-                                <div style={configCard}>
-                                    <h3 style={configTitle}>📄 Prefijos y Numeración</h3>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={labelStyle}>Prefijo Factura Electrónica</label>
-                                        <input type="text" defaultValue="FE-BOG" style={inputStyle} />
-                                    </div>
-                                    <div>
-                                        <label style={labelStyle}>Número Inicial</label>
-                                        <input type="number" defaultValue="1001" style={inputStyle} />
-                                    </div>
-                                </div>
-
-                                {/* IMPUESTOS */}
-                                <div style={configCard}>
-                                    <h3 style={configTitle}>⚖️ Impuestos y Tasas</h3>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={labelStyle}>IVA General (%)</label>
-                                        <input type="number" defaultValue="19" style={inputStyle} />
-                                    </div>
-                                    <div>
-                                        <label style={labelStyle}>Retención en la Fuente</label>
-                                        <input type="number" defaultValue="2.5" style={inputStyle} />
-                                    </div>
-                                </div>
-
-                                {/* CORTES OPERATIVOS */}
-                                <div style={{ ...configCard, gridColumn: '1 / -1' }}>
-                                    <h3 style={configTitle}>⏰ Horarios de Corte Automático</h3>
-                                    <div style={{ display: 'flex', gap: '2rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Hora Cierre Corte AM</label>
-                                            <input type="time" defaultValue="12:00" style={inputStyle} />
-                                            <p style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.5rem' }}>Pedidos recibidos antes de esta hora entran en el primer bulto de facturación.</p>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Hora Cierre Corte PM</label>
-                                            <input type="time" defaultValue="18:00" style={inputStyle} />
-                                            <p style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.5rem' }}>Pedidos finales del día para despacho nocturno o primera hora mañana.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* WORLD OFFICE */}
-                                <div style={{ ...configCard, gridColumn: '1 / -1' }}>
-                                    <h3 style={configTitle}>🖥️ Exportación WorldOffice</h3>
-                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Separador de Campos</label>
-                                            <select style={inputStyle}>
-                                                <option value=",">Coma (,)</option>
-                                                <option value=";">Punto y Coma (;)</option>
-                                            </select>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Versión de Estructura</label>
-                                            <select style={inputStyle}>
-                                                <option value="2024">WO V15 (2024)</option>
-                                                <option value="2023">WO V14 (Legacy)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button style={{ backgroundColor: '#111827', color: 'white', padding: '1rem 2rem', borderRadius: '14px', border: 'none', fontWeight: '800', cursor: 'pointer' }}>
-                                    💾 Guardar Configuración
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* MODAL EDICIÓN PROVEEDOR (VISTA DE SOLO LECTURA EN FACTURACIÓN) */}
-            {isModalOpen && selectedProvider && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                        <div style={{ 
-                            padding: '2.5rem', 
-                            background: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)', 
-                            color: 'white',
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center' 
-                        }}>
-                            <div>
-                                <h2 style={{ fontSize: '2rem', fontWeight: '900', margin: 0, letterSpacing: '-0.025em' }}>
-                                    Ficha del Proveedor
-                                </h2>
-                                <p style={{ color: '#94A3B8', marginTop: '0.5rem', fontSize: '1.1rem' }}>
-                                    {selectedProvider.name || 'Detalles'}
-                                </p>
-                            </div>
-                            <button 
-                                onClick={() => setIsModalOpen(false)} 
-                                style={{ 
-                                    background: 'rgba(255,255,255,0.1)', 
-                                    border: 'none', 
-                                    width: '44px', 
-                                    height: '44px', 
-                                    borderRadius: '12px', 
-                                    cursor: 'pointer', 
-                                    color: 'white',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.2rem',
-                                    fontWeight: 'bold'
-                                }}
-                            >✕</button>
-                        </div>
-
-                        {/* WARNING READ-ONLY BANNER */}
-                        <div style={{
-                            backgroundColor: '#FFFBEB',
-                            borderLeft: '4px solid #F59E0B',
-                            padding: '1.25rem 2.5rem',
-                            color: '#B45309',
-                            fontSize: '0.95rem',
-                            fontWeight: '600',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: '1.5rem',
-                            borderBottom: '1px solid #FEF3C7'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <span style={{ fontSize: '1.4rem' }}>⚠️</span>
-                                <div>
-                                    <div style={{ fontWeight: '800' }}>Vista de Solo Lectura</div>
-                                    <div style={{ fontSize: '0.85rem', color: '#D97706', marginTop: '0.1rem' }}>
-                                        Este panel es informativo. Para crear, modificar o archivar proveedores, dirígete al módulo de compras.
-                                    </div>
-                                </div>
-                            </div>
-                            <Link href="/admin/procurement/providers">
-                                <button type="button" style={{
-                                    backgroundColor: '#D97706',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '8px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '800',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap',
-                                    transition: 'all 0.2s'
-                                }}>
-                                    Ir a Compras ↗
-                                </button>
-                            </Link>
-                        </div>
+                {/* CONFIGURATION */}
+                {activeTab === 'configuration' && (
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '2rem', boxShadow: THEME.shadow.md, maxWidth: '800px', margin: '0 auto' }}>
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Configuración del Sistema
+                        </h2>
                         
-                        <div style={{ padding: '2rem' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                                {/* Info Básica */}
-                                <div style={configCard}>
-                                    <h3 style={configTitle}>📋 Información Básica</h3>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={labelStyle}>Razon Social / Nombre</label>
-                                        <input type="text" value={selectedProvider.name} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                    </div>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={labelStyle}>NIT / Tax ID</label>
-                                        <input type="text" value={selectedProvider.tax_id || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '1rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Categoría</label>
-                                            <select 
-                                                value={selectedProvider.category || ''} 
-                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }}
-                                                disabled
-                                            >
-                                                <option value="" disabled>Seleccionar categoría...</option>
-                                                <option value="Frutas">Frutas</option>
-                                                <option value="Verduras">Verduras</option>
-                                                <option value="Lácteos">Lácteos</option>
-                                                <option value="Cárnicos">Cárnicos</option>
-                                                <option value="Abarrotes">Abarrotes</option>
-                                                <option value="Varios">Varios</option>
-                                            </select>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Estado</label>
-                                            <select value={selectedProvider.is_active ? 'true' : 'false'} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} disabled>
-                                                <option value="true">Activo</option>
-                                                <option value="false">Inactivo</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <label style={labelStyle}>Prefijo FE</label>
+                                <input type="text" defaultValue="FE-BOG" style={inputStyle} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Número Inicial</label>
+                                <input type="number" defaultValue="1001" style={inputStyle} />
+                            </div>
+                        </div>
 
-                                {/* Contacto */}
-                                <div style={configCard}>
-                                    <h3 style={configTitle}>📞 Contacto y Ubicación</h3>
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <label style={labelStyle}>Nombre de Contacto</label>
-                                        <input type="text" value={selectedProvider.contact_name || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Teléfono</label>
-                                            <input type="text" value={selectedProvider.contact_phone || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Email</label>
-                                            <input type="email" value={selectedProvider.email || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '1rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Ubicación (Bodega/Puesto)</label>
-                                            <input type="text" value={selectedProvider.location || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Dirección Física</label>
-                                            <input type="text" value={selectedProvider.address || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                    </div>
-                                    <div style={{ marginTop: '1rem' }}>
-                                        <label style={labelStyle}>Fecha de Registro</label>
-                                        <input 
-                                            type="datetime-local" 
-                                            value={selectedProvider.created_at ? new Date(selectedProvider.created_at).toISOString().slice(0, 16) : ''} 
-                                            style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} 
-                                            readOnly
-                                        />
-                                    </div>
-                                </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '1.2rem' }}>
+                            <button
+                                onClick={() => alert('Configuración guardada exitosamente.')}
+                                style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.5rem', borderRadius: THEME.radius.lg, fontWeight: '700', cursor: 'pointer' }}
+                            >
+                                Guardar Parámetros
+                            </button>
+                        </div>
+                    </div>
+                )}
 
-                                {/* Financiero */}
-                                <div style={{ ...configCard, gridColumn: '1 / -1' }}>
-                                    <h3 style={configTitle}>💰 Información Financiera</h3>
-                                    <div style={{ display: 'flex', gap: '1.5rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Banco</label>
-                                            <input type="text" value={selectedProvider.bank_name || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Número de Cuenta</label>
-                                            <input type="text" value={selectedProvider.bank_account_number || ''} style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Tipo Cuenta</label>
-                                            <select 
-                                                value={selectedProvider.bank_account_type || ''} 
-                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }}
-                                                disabled
-                                            >
-                                                <option value="">Seleccionar...</option>
-                                                <option value="ahorros">Ahorros</option>
-                                                <option value="corriente">Corriente</option>
-                                            </select>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={labelStyle}>Días de Crédito</label>
-                                            <input 
-                                                type="number" 
-                                                value={selectedProvider.payment_terms_days || 0} 
-                                                style={{ ...inputStyle, backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} 
-                                                readOnly 
-                                            />
-                                        </div>
-                                    </div>
+                {/* MODAL REGISTRAR PAGO */}
+                {isPaymentModalOpen && selectedInvoice && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                        <div style={{ backgroundColor: 'white', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '2rem', maxWidth: '450px', width: '100%', margin: 'auto', boxShadow: THEME.shadow.lg, position: 'relative' }}>
+                            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: '0 0 1rem 0' }}>Registrar Recaudo de Factura</h3>
+                            
+                            <div style={{ backgroundColor: THEME.colors.background, padding: '1rem', borderRadius: THEME.radius.lg, marginBottom: '1.2rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Factura</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '750' }}>{selectedInvoice.invoice_number}</span>
                                 </div>
-
-                                {/* Notas */}
-                                <div style={{ ...configCard, gridColumn: '1 / -1' }}>
-                                    <label style={labelStyle}>Notas Internas</label>
-                                    <textarea value={selectedProvider.notes || ''} style={{ ...inputStyle, minHeight: '80px', fontFamily: 'inherit', backgroundColor: '#F1F5F9', color: '#64748B', cursor: 'default' }} readOnly />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Cliente</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>{selectedInvoice.orders?.profiles?.company_name || 'Final Client'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>Total a Pagar</span>
+                                    <span style={{ fontSize: '1.1rem', fontWeight: '850', color: THEME.colors.primary }}>{formatMoney(selectedInvoice.total_final)}</span>
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '1rem 2.5rem', borderRadius: '14px', border: '1px solid #CBD5E1', backgroundColor: '#111827', color: 'white', fontWeight: '800', cursor: 'pointer' }}>
-                                    Cerrar
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={labelStyle}>Método de Pago</label>
+                                <select 
+                                    value={paymentMethod}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    style={inputStyle}
+                                >
+                                    <option value="Transferencia">Transferencia Bancaria (Bancolombia)</option>
+                                    <option value="Efectivo">Efectivo (Entregado a Conductor)</option>
+                                    <option value="Cheque">Cheque</option>
+                                    <option value="Daviplata">Daviplata / Nequi</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                    onClick={() => {
+                                        setIsPaymentModalOpen(false);
+                                        setSelectedInvoice(null);
+                                    }}
+                                    style={{ flex: 1, padding: '0.6rem', border: `1px solid ${THEME.colors.border}`, background: 'white', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleRegisterPayment}
+                                    disabled={isProcessing}
+                                    style={{ flex: 2, padding: '0.6rem', border: 'none', background: THEME.colors.primary, color: 'white', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer' }}
+                                >
+                                    Confirmar Recaudo
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+            </div>
         </main>
     );
 }
 
-const configCard: React.CSSProperties = { padding: '1.5rem', border: '1px solid #E2E8F0', borderRadius: '20px', backgroundColor: '#F8FAFC' };
-const configTitle: React.CSSProperties = { fontSize: '1rem', fontWeight: '800', marginBottom: '1.5rem', color: '#0F172A' };
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#64748B', marginBottom: '0.5rem', textTransform: 'uppercase' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '1rem', backgroundColor: 'white' };
+const kpiCardStyle: React.CSSProperties = {
+    backgroundColor: THEME.colors.surface,
+    border: `1px solid ${THEME.colors.border}`,
+    borderRadius: '20px',
+    padding: '1.2rem',
+    boxShadow: THEME.shadow.sm,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center'
+};
 
-const thStyle: React.CSSProperties = { padding: '1.2rem 1.5rem', textAlign: 'left', fontSize: '0.8rem', color: '#64748B', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em' };
-const tdStyle: React.CSSProperties = { padding: '1.2rem 1.5rem', fontSize: '0.95rem', color: '#334155' };
+const thStyle: React.CSSProperties = {
+    padding: '0.8rem 1rem',
+    textAlign: 'left',
+    fontSize: THEME.typography.tableHeader.fontSize,
+    color: THEME.typography.tableHeader.color,
+    fontWeight: THEME.typography.tableHeader.fontWeight,
+    textTransform: THEME.typography.tableHeader.textTransform,
+    letterSpacing: THEME.typography.tableHeader.letterSpacing
+};
 
-function KPIItem({ label, value, icon, color, condensed }: { label: string, value: number, icon: string, color: string, condensed: boolean }) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: condensed ? '0.5rem' : '1rem' }}>
-            <div style={{ 
-                fontSize: condensed ? '1.2rem' : '2rem', 
-                backgroundColor: `${color}15`, 
-                width: condensed ? '32px' : '56px', 
-                height: condensed ? '32px' : '56px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                borderRadius: '16px',
-                transition: 'all 0.3s'
-            }}>
-                {icon}
-            </div>
-            <div>
-                {!condensed && <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '2px' }}>{label}</div>}
-                <div style={{ 
-                    fontSize: condensed ? '1rem' : '1.5rem', 
-                    fontWeight: '950', 
-                    color: '#0F172A',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem'
-                }}>
-                    {value}
-                    {condensed && <span style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B' }}>{label}</span>}
-                </div>
-            </div>
-        </div>
-    );
-}
+const tdStyle: React.CSSProperties = {
+    padding: '1rem',
+    fontSize: '0.85rem',
+    color: THEME.colors.textMain
+};
+
+const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '0.75rem',
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    marginBottom: '0.4rem',
+    textTransform: 'uppercase'
+};
+
+const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '0.6rem',
+    borderRadius: THEME.radius.md,
+    border: `1px solid ${THEME.colors.border}`,
+    fontSize: '0.85rem',
+    backgroundColor: 'white'
+};

@@ -5,6 +5,7 @@ import GlobalBanner from '@/components/GlobalBanner';
 import Footer from '@/components/Footer';
 import Navbar from '@/components/Navbar';
 import HelpDeskWidget from '@/components/HelpDeskWidget';
+import PQRFloatingWidget from '@/components/PQRFloatingWidget';
 import { Providers } from '@/app/providers';
 import { Suspense } from 'react';
 
@@ -20,7 +21,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {children}
                 {!isOpsOrAdmin && <Footer />}
             </Suspense>
-            {isOpsOrAdmin && <HelpDeskWidget />}
+            {isOpsOrAdmin && (
+                <>
+                    {/* <HelpDeskWidget /> */}
+                    <PQRFloatingWidget />
+                </>
+            )}
         </Providers>
     );
 }

@@ -23,7 +23,15 @@ import {
     Sparkles,
     Trash2,
     X,
+    FileDown,
+    FileUp,
+    BarChart3,
+    Building2,
+    Users,
+    ChevronRight,
+    Home
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 declare global {
     interface Window {
@@ -75,6 +83,10 @@ interface Profile {
     collection_responsible_name?: string;
     collection_responsible_email?: string;
     collection_responsible_phone?: string;
+    remission_copies?: number;
+    id_zr?: string;
+    id_lp?: string;
+    payment_days?: number;
     created_at: string;
 }
 
@@ -125,6 +137,9 @@ export default function ClientsModule() {
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
     const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
     const [nicknameClientId, setNicknameClientId] = useState<string | null>(null);
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [dragging, setDragging] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isFormReadOnly, setIsFormReadOnly] = useState(false);
 
     useEffect(() => {
@@ -322,11 +337,300 @@ export default function ClientsModule() {
         setIsFormModalOpen(true);
     };
 
+    const downloadClientsMaster = () => {
+        // Combinar b2b y b2c para exportación completa
+        const allClients = [...clientsB2B, ...clientsB2C];
+        
+        // Tab 1: Clientes Base
+        const exportData = allClients.map(c => {
+            const parent = allClients.find(p => p.id === c.parent_id);
+            return {
+                ID_INTERNO: c.id,
+                NIT_CEDULA: c.nit || '',
+                Nombre_Comercial: c.company_name || '',
+                Razon_Social: c.razon_social || '',
+                Nombre_Contacto: c.contact_name || '',
+                Telefono: c.phone || '',
+                Email: c.email || '',
+                Direccion: c.address || '',
+                Ciudad: c.city || 'Bogotá',
+                Municipio: c.municipality || 'Bogotá',
+                Departamento: c.department || 'Cundinamarca',
+                Tipo_Cliente: c.role === 'b2b_client' ? 'INSTITUCIONAL' : 'HOGAR',
+                
+                // Jerarquía Comercial
+                Es_Matriz: c.is_corporate_parent ? 'SI' : 'NO',
+                NIT_Matriz_Padre: parent?.nit || '',
+                Nombre_Matriz_Padre: parent?.company_name || '',
+                Codigo_Sucursal: c.branch_id || '',
+                Rol_Corporativo: c.corporate_role || '',
+
+                // Configuración Financiera y Facturación (Institucional / Matriz)
+                Cupo_Credito: c.credit_limit || 0,
+                Condicion_Pago: c.payment_terms || 'Contado',
+                Responsable_IVA: c.iva_responsible ? 'SI' : 'NO',
+                Gran_Contribuyente: c.is_gran_contribuyente ? 'SI' : 'NO',
+                Autorretenedor: c.is_autorretenedor ? 'SI' : 'NO',
+                Regimen_Simple: c.is_regimen_simple ? 'SI' : 'NO',
+                Actividad_Economica: c.economic_activity_code || '',
+                Correos_Facturacion_Adicionales: c.additional_billing_emails || '',
+
+                // Contacto Cartera (Institucional / Matriz)
+                Responsable_Cartera: c.collection_responsible_name || '',
+                Email_Cartera: c.collection_responsible_email || '',
+                Telefono_Cartera: c.collection_responsible_phone || '',
+
+                // Operaciones y Logística (Sucursal / Hogar)
+                Requiere_Canastillas: c.needs_crates ? 'SI' : 'NO',
+                Tipo_Documento: c.document_type || 'invoice', // invoice | remission
+                Imprimir_Factura_Fisica: c.print_invoice ? 'SI' : 'NO',
+                Remision_Con_Precios: c.remission_with_prices ? 'SI' : 'NO',
+                Restricciones_Entrega: c.delivery_restrictions || '',
+                Copias_Remision: c.remission_copies || 2,
+                
+                // Códigos ERP de Integración
+                Codigo_ZR: c.id_zr || '',
+                Codigo_LP: c.id_lp || '',
+                Dias_Pago: c.payment_days || 0
+            };
+        });
+
+        // Tab 2: Guía de Datos
+        const guideHeaders = ["Campo Excel", "Requerido", "Aplica A", "Descripción y Valores Permitidos"];
+        const guideRows = [
+            ["ID_INTERNO", "NO", "Todos", "Dejar intacto para actualizar el cliente existente. Borrar si desea crear uno nuevo."],
+            ["NIT_CEDULA", "SÍ", "Todos", "NIT de la empresa (con DV separado o sin DV) o Cédula de Ciudadanía."],
+            ["Nombre_Comercial", "SÍ", "Todos", "Nombre de fantasía o del establecimiento."],
+            ["Razon_Social", "SÍ (Institucionales)", "Institucional", "Razón social legal para facturación electrónica."],
+            ["Nombre_Contacto", "SÍ", "Todos", "Persona encargada de recibir el pedido o coordinar compras."],
+            ["Telefono", "SÍ", "Todos", "Teléfono celular de contacto principal."],
+            ["Email", "SÍ", "Todos", "Correo electrónico donde se enviarán avisos de pedido y facturación."],
+            ["Direccion", "SÍ", "Todos", "Dirección exacta del punto de entrega (sucursal o domicilio)."],
+            ["Ciudad", "SÍ", "Todos", "Ciudad principal (ej: Bogotá, Villavicencio)."],
+            ["Municipio", "SÍ", "Todos", "Municipio específico (ej: Bogotá, Restrepo, Acacías)."],
+            ["Departamento", "SÍ", "Todos", "Departamento político (ej: Cundinamarca, Meta)."],
+            ["Tipo_Cliente", "SÍ", "Todos", "Tipo de cuenta: INSTITUCIONAL o HOGAR."],
+            ["Es_Matriz", "NO", "Institucional", "SI = Si centraliza la facturación y cartera. NO = Si es punto de entrega o independiente."],
+            ["NIT_Matriz_Padre", "NO", "Sucursal", "Escriba el NIT de la casa matriz si este cliente es una sucursal vinculada."],
+            ["Nombre_Matriz_Padre", "NO", "Sucursal", "Nombre de la matriz (como referencia)."],
+            ["Codigo_Sucursal", "NO", "Sucursal", "Identificador interno de la sucursal (ej: SUC-01, REST-CHIA)."],
+            ["Rol_Corporativo", "NO", "Sucursal", "Descripción del rol corporativo (ej: Bodega Central, Franquicia 2)."],
+            ["Cupo_Credito", "NO", "Matriz / Indep.", "Monto máximo en pesos aprobado para compras a crédito (ej: 5000000)."],
+            ["Condicion_Pago", "NO", "Matriz / Indep.", "Condición comercial de cartera: Contado, 8 Días, 15 Días, 30 Días."],
+            ["Responsable_IVA", "NO", "Matriz / Indep.", "SI / NO. Determina si aplica cobro de IVA en facturación."],
+            ["Gran_Contribuyente", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
+            ["Autorretenedor", "NO", "Matriz / Indep.", "SI / NO. Lógica fiscal colombiana."],
+            ["Regimen_Simple", "NO", "Matriz / Indep.", "SI / NO. Régimen Simple de Tributación."],
+            ["Actividad_Economica", "NO", "Matriz / Indep.", "Código CIIU de actividad económica."],
+            ["Correos_Facturacion_Adicionales", "NO", "Matriz / Indep.", "Lista de correos separados por comas para copia de facturas."],
+            ["Responsable_Cartera", "NO", "Matriz / Indep.", "Nombre del contacto de contabilidad / pagos del cliente."],
+            ["Email_Cartera", "NO", "Matriz / Indep.", "Correo de contacto de pagos."],
+            ["Telefono_Cartera", "NO", "Matriz / Indep.", "Teléfono directo de tesorería/pagos."],
+            ["Requiere_Canastillas", "NO", "Todos", "SI / NO. Indica si el despacho requiere dejar canastillas plásticas."],
+            ["Tipo_Documento", "SÍ", "Todos", "invoice = Factura Electrónica. remission = Remisión (Orden de entrega)."],
+            ["Imprimir_Factura_Fisica", "NO", "Todos", "SI / NO. Indica si el transportador debe llevar copia impresa física."],
+            ["Remision_Con_Precios", "NO", "Todos", "SI / NO. Aplica si Tipo_Documento es remission (oculta o muestra precios al recibir)."],
+            ["Restricciones_Entrega", "NO", "Todos", "Horarios, parqueaderos, especificaciones logísticas de entrega."],
+            ["Copias_Remision", "NO", "Todos", "Número de copias físicas a imprimir (ej: 2)."],
+            ["Codigo_ZR", "NO", "Todos", "Código de zona de despacho para ruteo ERP."],
+            ["Codigo_LP", "NO", "Todos", "Código de lista de precios asignada en contabilidad."],
+            ["Dias_Pago", "NO", "Todos", "Plazo en días numéricos aprobado."]
+        ];
+        const guideSheetData = [guideHeaders, ...guideRows];
+
+        const workbook = XLSX.utils.book_new();
+        const wsClients = XLSX.utils.json_to_sheet(exportData);
+        const wsGuide = XLSX.utils.aoa_to_sheet(guideSheetData);
+
+        // Ajustar anchos
+        wsClients['!cols'] = Object.keys(exportData[0] || {}).map(() => ({ wch: 20 }));
+        wsGuide['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 65 }];
+
+        XLSX.utils.book_append_sheet(workbook, wsClients, "Clientes_Master");
+        XLSX.utils.book_append_sheet(workbook, wsGuide, "Guia_Campos");
+
+        XLSX.writeFile(workbook, `CRM_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+        window.showToast?.('Base de clientes exportada con éxito', 'success');
+    };
+
+    const downloadClientsTemplate = () => {
+        const headers = [
+            "NIT_CEDULA", "Nombre_Comercial", "Razon_Social", "Nombre_Contacto", "Telefono", 
+            "Email", "Direccion", "Ciudad", "Municipio", "Departamento", "Tipo_Cliente", 
+            "Es_Matriz", "NIT_Matriz_Padre", "Nombre_Matriz_Padre", "Codigo_Sucursal", "Rol_Corporativo",
+            "Cupo_Credito", "Condicion_Pago", "Responsable_IVA", "Gran_Contribuyente", "Autorretenedor", 
+            "Regimen_Simple", "Actividad_Economica", "Correos_Facturacion_Adicionales", "Responsable_Cartera", 
+            "Email_Cartera", "Telefono_Cartera", "Requiere_Canastillas", "Tipo_Documento", "Imprimir_Factura_Fisica", 
+            "Remision_Con_Precios", "Restricciones_Entrega", "Copias_Remision", "Codigo_ZR", "Codigo_LP", "Dias_Pago"
+        ];
+        const sample1 = [
+            "901234567-1", "Restaurante El Gourmet", "Gourmet SAS", "Carlos Mendoza", "3159998877", 
+            "carlos@elgourmet.com", "Calle 100 # 15-30", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "SI", "", "", "", "", 
+            2000000, "15 Días", "SI", "NO", "NO", 
+            "NO", "5611", "contabilidad@elgourmet.com", "Luz Marina Pérez", 
+            "pagos@elgourmet.com", "3001112233", "SI", "invoice", "NO", 
+            "SI", "Entregar por bahía de carga antes de las 11 AM", 2, "ZR-Norte", "LP-01", 15
+        ];
+        const sample2 = [
+            "901234567-1", "Sucursal Gourmet Unicentro", "Gourmet SAS", "Diana Restrepo", "3204445566", 
+            "unicentro@elgourmet.com", "Avenida Carrera 15 # 124-30 Local 12", "Bogotá", "Bogotá", "Cundinamarca", "INSTITUCIONAL", 
+            "NO", "901234567-1", "Restaurante El Gourmet", "SUC-02", "Punto de Venta Mall", 
+            0, "Contado", "SI", "NO", "NO", 
+            "NO", "5611", "", "", 
+            "", "", "NO", "remission", "NO", 
+            "SI", "Acceso por sótano de servicios, requiere carnet ARL", 2, "ZR-Norte", "LP-01", 0
+        ];
+        const sample3 = [
+            "1020304050", "Familia Rincón", "", "Marcela Rincón", "3115556677", 
+            "marcela.rincon@gmail.com", "Carrera 7 # 150-10 Apto 402", "Bogotá", "Bogotá", "Cundinamarca", "HOGAR", 
+            "NO", "", "", "", "", 
+            0, "Contado", "NO", "NO", "NO", 
+            "NO", "", "", "", 
+            "", "", "NO", "remission", "NO", 
+            "NO", "Dejar en portería si no se encuentra", 1, "ZR-Hogar-Norte", "LP-B2C", 0
+        ];
+
+        const dataSheet = [headers, sample1, sample2, sample3];
+
+        const workbook = XLSX.utils.book_new();
+        const wsTemplate = XLSX.utils.aoa_to_sheet(dataSheet);
+        wsTemplate['!cols'] = headers.map(() => ({ wch: 18 }));
+
+        XLSX.utils.book_append_sheet(workbook, wsTemplate, "Plantilla_Clientes");
+        XLSX.writeFile(workbook, "plantilla_carga_masiva_clientes.xlsx");
+        window.showToast?.('Plantilla de clientes descargada', 'success');
+    };
+
+    const processClientsFile = async () => {
+        if (!selectedFile) return;
+
+        const reader = new FileReader();
+        reader.onload = async (readerEvent) => {
+            const data = readerEvent.target?.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[];
+
+            if (rows.length === 0) {
+                window.showToast?.('El archivo está vacío o tiene formato incorrecto', 'error');
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const cleanBool = (val: any) => val === 'SI' || val === 'si' || val === true;
+
+                // Primero buscaremos todos los NIT de matriz/padre para poder vincular parent_id si es sucursal
+                // Mapearemos los clientes y crearemos o actualizaremos sus perfiles
+                const clientsToInsert = rows.map(row => {
+                    const type_client = (row.Tipo_Cliente || '').toString().toUpperCase();
+
+                    return {
+                        id: row.ID_INTERNO || undefined,
+                        nit: (row.NIT_CEDULA || '').toString().trim(),
+                        company_name: (row.Nombre_Comercial || '').toString().trim(),
+                        razon_social: (row.Razon_Social || row.Nombre_Comercial || '').toString().trim(),
+                        contact_name: (row.Nombre_Contacto || row.Nombre_Comercial || '').toString().trim(),
+                        phone: (row.Telefono || '').toString().trim(),
+                        contact_phone: (row.Telefono || '').toString().trim(),
+                        email: (row.Email || '').toString().trim(),
+                        address: (row.Direccion || '').toString().trim(),
+                        city: (row.Ciudad || 'Bogotá').toString().trim(),
+                        municipality: (row.Municipio || row.Ciudad || 'Bogotá').toString().trim(),
+                        department: (row.Departamento || 'Cundinamarca').toString().trim(),
+                        role: type_client === 'HOGAR' ? 'b2c_client' : 'b2b_client',
+                        
+                        // Jerarquía
+                        is_corporate_parent: cleanBool(row.Es_Matriz),
+                        branch_id: (row.Codigo_Sucursal || '').toString().trim() || null,
+                        corporate_role: (row.Rol_Corporativo || '').toString().trim() || null,
+                        
+                        // Financiera
+                        credit_limit: parseFloat(row.Cupo_Credito || '0'),
+                        payment_terms: (row.Condicion_Pago || 'Contado').toString().trim(),
+                        iva_responsible: cleanBool(row.Responsable_IVA),
+                        is_gran_contribuyente: cleanBool(row.Gran_Contribuyente),
+                        is_autorretenedor: cleanBool(row.Autorretenedor),
+                        is_regimen_simple: cleanBool(row.Regimen_Simple),
+                        economic_activity_code: (row.Actividad_Economica || '').toString().trim() || null,
+                        additional_billing_emails: (row.Correos_Facturacion_Adicionales || '').toString().trim() || null,
+
+                        // Cartera
+                        collection_responsible_name: (row.Responsable_Cartera || '').toString().trim() || null,
+                        collection_responsible_email: (row.Email_Cartera || '').toString().trim() || null,
+                        collection_responsible_phone: (row.Telefono_Cartera || '').toString().trim() || null,
+
+                        // Logística
+                        needs_crates: cleanBool(row.Requiere_Canastillas),
+                        document_type: (row.Tipo_Documento || 'invoice').toString().trim().toLowerCase(),
+                        print_invoice: cleanBool(row.Imprimir_Factura_Fisica),
+                        remission_with_prices: cleanBool(row.Remision_Con_Precios),
+                        delivery_restrictions: (row.Restricciones_Entrega || '').toString().trim() || null,
+                        remission_copies: parseInt(row.Copias_Remision || '2'),
+
+                        // ERP
+                        id_zr: (row.Codigo_ZR || '').toString().trim() || null,
+                        id_lp: (row.Codigo_LP || '').toString().trim() || null,
+                        payment_days: parseInt(row.Dias_Pago || '0'),
+                        geocoding_status: 'manual'
+                    };
+                });
+
+                // Cargar en bloques de 50
+                const chunkSize = 50;
+                const insertedClients: any[] = [];
+
+                for (let i = 0; i < clientsToInsert.length; i += chunkSize) {
+                    const chunk = clientsToInsert.slice(i, i + chunkSize);
+                    // Usamos upsert para actualizar por ID o insertar si es nuevo
+                    const { data, error } = await supabase.from('profiles').upsert(chunk).select('id', 'nit');
+                    if (error) throw error;
+                    if (data) insertedClients.push(...data);
+                }
+
+                // Intentar hacer la vinculación parent_id si es Sucursal y especificaron NIT_Matriz_Padre
+                // Esto lo hacemos en una pasada secundaria
+                const branches = rows.filter(r => (r.NIT_Matriz_Padre || '').toString().trim() !== '' && !cleanBool(r.Es_Matriz));
+                if (branches.length > 0) {
+                    const { data: allParents } = await supabase.from('profiles').select('id, nit').eq('is_corporate_parent', true);
+                    
+                    if (allParents) {
+                        for (const row of branches) {
+                            const cleanNit = (row.NIT_CEDULA || '').toString().trim();
+                            const cleanParentNit = (row.NIT_Matriz_Padre || '').toString().trim();
+                            const branchProfile = insertedClients.find(c => c.nit === cleanNit);
+                            const parentProfile = allParents.find(p => p.nit === cleanParentNit) || insertedClients.find(c => c.nit === cleanParentNit);
+                            
+                            if (branchProfile && parentProfile) {
+                                await supabase.from('profiles')
+                                    .update({ parent_id: parentProfile.id })
+                                    .eq('id', branchProfile.id);
+                            }
+                        }
+                    }
+                }
+
+                window.showToast?.(`Base de datos de clientes actualizada: ${clientsToInsert.length} registros procesados`, 'success');
+                setIsBulkModalOpen(false);
+                setSelectedFile(null);
+                fetchData();
+            } catch (err: any) {
+                console.error('Error en carga de clientes:', err);
+                window.showToast?.('Error al procesar el archivo: ' + err.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+        reader.readAsBinaryString(selectedFile);
+    };
+
     const tabs = [
-        { id: 'dashboard', label: '📊 Resumen', icon: '📈' },
-        { id: 'b2b', label: '🏢 Institucionales', icon: '🏛️' },
-        { id: 'b2c', label: '🏠 Hogar', icon: '👤' },
-        { id: 'leads', label: '🔔 Prospectos', icon: '🔥' },
+        { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={16} /> },
+        { id: 'b2b', label: 'Institucionales', icon: <Building2 size={16} /> },
+        { id: 'b2c', label: 'Hogar', icon: <Users size={16} /> },
+        { id: 'leads', label: 'Prospectos', icon: <Mail size={16} /> },
     ];
 
     const filterData = <T extends object>(data: T[], fields: string[]): T[] => {
@@ -375,53 +679,59 @@ export default function ClientsModule() {
                 />
             )}
 
-            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 1rem' }}>
+            <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0.75rem 1rem' }}>
                 <header style={{ 
-                    marginBottom: '1.5rem', 
+                    marginBottom: '0.85rem', 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
                     flexWrap: 'wrap', 
-                    gap: '1rem',
+                    gap: '0.85rem',
                     borderBottom: '1px solid #E2E8F0',
-                    paddingBottom: '1rem'
+                    paddingBottom: '0.65rem'
                 }}>
                     <div>
-                        <h1 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1A202C', margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: '#0891B2' }}>Clientes</span></h1>
-                        <p style={{ color: '#4A5568', fontSize: '0.9rem', marginTop: '0.2rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.05rem' }}>Core de <span style={{ color: THEME.colors.primary }}>Clientes</span></h1>
+                        <p style={{ color: '#4A5568', fontSize: '0.85rem', marginTop: '0.1rem', fontWeight: '500' }}>Gestión integral de la base comercial y prospectos.</p>
                     </div>
 
                     {/* TABS MOVIDAS ARRIBA */}
                     <div style={{ 
                         display: 'flex', 
-                        gap: '0.3rem', 
-                        backgroundColor: '#F1F5F9', 
+                        gap: '0.25rem', 
+                        backgroundColor: '#EAEFEA', 
                         padding: '4px', 
-                        borderRadius: '16px', 
-                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
+                        borderRadius: '12px', 
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)',
+                        border: '1px solid rgba(13, 122, 87, 0.08)'
                     }}>
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
                                 style={{
-                                    padding: '0.6rem 1.2rem',
+                                    padding: '0.45rem 1.1rem',
                                     border: 'none',
-                                    borderRadius: '12px',
-                                    background: activeTab === tab.id ? 'white' : 'transparent',
-                                    color: activeTab === tab.id ? '#0891B2' : '#64748B',
-                                    fontWeight: activeTab === tab.id ? '800' : '600',
+                                    borderRadius: '8px',
+                                    background: activeTab === tab.id ? THEME.colors.primary : 'transparent',
+                                    color: activeTab === tab.id ? 'white' : '#4E6157',
+                                    fontWeight: activeTab === tab.id ? '700' : '500',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    fontSize: '0.85rem',
-                                    boxShadow: activeTab === tab.id ? '0 4px 6px rgba(0,0,0,0.05)' : 'none'
+                                    fontSize: '0.8rem',
+                                    boxShadow: activeTab === tab.id ? '0 4px 12px rgba(13, 122, 87, 0.25)' : 'none'
                                 }}
                             >
-                                <span style={{ fontSize: '1rem' }}>{tab.icon}</span>
-                                {tab.label.split(' ')[1] || tab.label}
+                                <span style={{ 
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    color: activeTab === tab.id ? 'white' : '#4E6157',
+                                    opacity: activeTab === tab.id ? 1 : 0.8
+                                }}>{tab.icon}</span>
+                                {tab.label}
                             </button>
                         ))}
                     </div>
@@ -488,6 +798,54 @@ export default function ClientsModule() {
                             </button>
                         )}
 
+                        {/* BOTONES DE IMPORTACIÓN/EXPORTACIÓN DE CLIENTES */}
+                        {(activeTab === 'b2b' || activeTab === 'b2c') && (
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <button
+                                    onClick={downloadClientsMaster}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        color: '#475569',
+                                        border: '1px solid #E2E8F0',
+                                        borderRadius: '10px',
+                                        width: '40px',
+                                        height: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.borderColor = '#94A3B8'}
+                                    onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
+                                    title="Exportar Clientes a Excel"
+                                >
+                                    <FileDown size={18} />
+                                </button>
+                                <button
+                                    onClick={() => setIsBulkModalOpen(true)}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        color: '#475569',
+                                        border: '1px solid #E2E8F0',
+                                        borderRadius: '10px',
+                                        width: '40px',
+                                        height: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.borderColor = '#94A3B8'}
+                                    onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
+                                    title="Carga Masiva de Clientes"
+                                >
+                                    <FileUp size={18} />
+                                </button>
+                            </div>
+                        )}
+
                         {/* TOGGLE VISTA */}
                         <div style={{ 
                             display: 'flex', 
@@ -532,53 +890,47 @@ export default function ClientsModule() {
                         <div style={{ position: 'relative', flex: 1 }}>
                             <span style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', color: '#A0AEC0' }}>🔍</span>
                             <input 
-                                placeholder={`Buscar ${tabs.find(t => t.id === activeTab)?.label?.toLowerCase()}...`}
+                                type="text"
+                                placeholder={activeTab === 'b2b' ? "Buscar por NIT, nombre comercial, contacto, sucursal, ciudad, email o teléfono..." : activeTab === 'b2c' ? "Buscar cliente hogar por nombre, nit, contacto o teléfono..." : "Buscar prospecto por empresa, nombre, notas, tipo o contacto..."}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    padding: '0 2.5rem 0 2.5rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #F1F5F9', 
-                                    fontSize: '0.85rem',
-                                    fontWeight: '600',
+                                style={{
+                                    width: '100%',
+                                    padding: '0.65rem 1rem 0.65rem 2.2rem',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
                                     outline: 'none',
-                                    height: '40px',
-                                    backgroundColor: '#F8FAFC',
-                                    transition: 'all 0.2s'
+                                    fontSize: '0.85rem',
+                                    transition: 'all 0.15s',
+                                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
                                 }}
-                                onFocus={(e) => {
-                                    e.target.style.backgroundColor = 'white';
+                                onFocus={e => {
                                     e.target.style.borderColor = '#0891B2';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1)';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(8, 145, 178, 0.1), inset 0 1px 2px rgba(0,0,0,0.02)';
                                 }}
-                                onBlur={(e) => {
-                                    e.target.style.backgroundColor = '#F8FAFC';
+                                onBlur={e => {
                                     e.target.style.borderColor = '#E2E8F0';
+                                    e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.02)';
                                 }}
                             />
                             {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
+                                <button 
+                                    onClick={() => setSearchTerm('')} 
                                     style={{
                                         position: 'absolute',
                                         right: '0.8rem',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
-                                        background: '#E2E8F0',
+                                        background: 'none',
                                         border: 'none',
-                                        color: '#64748B',
-                                        width: '20px',
-                                        height: '20px',
-                                        borderRadius: '50%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
+                                        color: '#A0AEC0',
                                         cursor: 'pointer',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 'bold'
+                                        fontSize: '0.85rem',
+                                        fontWeight: '700'
                                     }}
-                                >✕</button>
+                                >
+                                    ✕
+                                </button>
                             )}
                         </div>
 
@@ -658,53 +1010,49 @@ export default function ClientsModule() {
                     <>
                         {/* DASHBOARD VIEW */}
                         {activeTab === 'dashboard' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 {/* Top Row: Main KPIs */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '2rem' }}>
-                                    <KPICard title="Clientes B2B" value={clientsB2B.length} icon="🏛️" color="#E0F2FE" textColor="#0369A1" subtitle="Empresas operativas" />
-                                    <KPICard title="Clientes Hogar" value={clientsB2C.length} icon="👥" color="#DCFCE7" textColor="#15803D" subtitle="Clientes Hogar activos" />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
+                                    <KPICard title="CLIENTES B2B" value={clientsB2B.length} icon={<Building2 size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Institucionales" />
+                                    <KPICard title="CLIENTES B2C" value={clientsB2C.length} icon={<Home size={20} />} color="#EAEFEA" textColor="#0D7A57" subtitle="Consumidores" />
                                     <KPICard 
-                                        title="Tareas Críticas" 
+                                        title="TAREAS CRÍTICAS" 
                                         value={leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length} 
-                                        icon="🚩" 
-                                        color="#FEE2E2" 
-                                        textColor="#991B1B" 
-                                        subtitle="Atención prioritaria" 
-                                    />
-                                    <KPICard 
-                                        title="Tasa Conversión" 
-                                        value={leads.length > 0 ? `${Math.round((leads.filter(l => l.status === 'converted').length / leads.length) * 100)}%` : '0%'} 
-                                        icon="💎" 
-                                        color="#F3E8FF" 
-                                        textColor="#7E22CE" 
-                                        subtitle="Éxito comercial" 
+                                        icon={<AlertTriangle size={20} />} 
+                                        color="#EAEFEA" 
+                                        textColor="#0D7A57" 
+                                        subtitle="Prioridad comercial" 
                                     />
                                 </div>
 
                                 {/* Middle Row: Funnel & Critical Tasks & Sales */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
                                     {/* Funnel Box */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                                             <div>
-                                                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>🌪️ Embudo Comercial</h3>
-                                                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Trayectoria desde prospecto a cliente</p>
+                                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Embudo Comercial
+                                                </h3>
+                                                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Trayectoria del prospecto</p>
                                             </div>
-                                            <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem 1rem', borderRadius: '14px', border: '1px solid #E2E8F0', textAlign: 'right' }}>
-                                                <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Oportunidades</div>
-                                                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0F172A' }}>{leads.length}</div>
+                                            <div style={{ backgroundColor: '#F1F5F9', padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center', minWidth: '54px' }}>
+                                                <div style={{ fontSize: '0.55rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: '800', color: '#1E293B', lineHeight: '1.2' }}>{leads.length}</div>
                                             </div>
                                         </div>
                                         <FunnelGraphic leads={leads} />
                                     </div>
 
                                     {/* Sales Distribution Pie Chart */}
-                                    <div style={{ backgroundColor: 'white', borderRadius: '32px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #F0F2F5' }}>
-                                        <div style={{ marginBottom: '2.5rem' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>💰 Distribución de Ventas</h3>
-                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>Balance Institucional vs Hogar (Histórico)</p>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57' }}>
+                                        <div style={{ marginBottom: '1.2rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <BarChart3 size={18} style={{ color: '#0D7A57' }} /> Distribución de Ventas
+                                            </h3>
+                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Balance B2B vs B2C</p>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '180px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '160px' }}>
                                             <SalesPieChart 
                                                 totalB2B={orders.filter(o => o.is_b2b).reduce((sum, o) => sum + (o.total || 0), 0)}
                                                 totalB2C={orders.filter(o => !o.is_b2b).reduce((sum, o) => sum + (o.total || 0), 0)}
@@ -713,10 +1061,12 @@ export default function ClientsModule() {
                                     </div>
 
                                     {/* Task Box */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#111827' }}>⚡ Alertas de Seguimiento</h3>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#EF4444', backgroundColor: '#FEF2F2', padding: '0.4rem 0.8rem', borderRadius: '20px' }}>VENCIDAS</span>
+                                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', borderTop: '4px solid #0D7A57', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <AlertTriangle size={18} style={{ color: '#0D7A57' }} /> Alertas de Seguimiento
+                                            </h3>
+                                            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: '#64748B', fontWeight: '500' }}>Tareas críticas pendientes</p>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.5rem' }}>
                                             {leads.filter(l => l.status !== 'converted' && l.status !== 'rejected' && l.next_contact_date && new Date(l.next_contact_date) <= new Date()).length > 0 ? (
@@ -887,39 +1237,157 @@ export default function ClientsModule() {
                     </>
                 )}
             </div>
+
+            {/* MODAL CARGA MASIVA DE CLIENTES */}
+            {isBulkModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+                    <div style={{ backgroundColor: '#FFFFFF', padding: 0, borderRadius: '20px', width: '90%', maxWidth: '500px', border: `1px solid #E2E8F0`, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem', borderBottom: `1px solid #E2E8F0` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ backgroundColor: '#ECFDF5', color: '#10B981', padding: '6px', borderRadius: '8px' }}>
+                                    <FileUp size={16} strokeWidth={1.5} />
+                                </div>
+                                <h2 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1E293B', margin: 0 }}>Cargue Masivo (Clientes CRM)</h2>
+                            </div>
+                            <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '1.25rem', fontWeight: '300' }}>✕</button>
+                        </div>
+
+                        <div style={{ padding: '1.5rem' }}>
+                            <p style={{ color: '#64748B', fontSize: '0.8rem', textAlign: 'center', marginBottom: '1rem', lineHeight: '1.4' }}>
+                                Sube la planilla de clientes para crear nuevos registros o actualizar la cartera, cupos y logística de los existentes masivamente.
+                            </p>
+
+                            {/* Drop Zone */}
+                            <div 
+                                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                                onDragLeave={() => setDragging(false)}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    setDragging(false);
+                                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                        setSelectedFile(e.dataTransfer.files[0]);
+                                    }
+                                }}
+                                style={{ 
+                                    border: dragging ? `2px solid #0891B2` : `2px dashed #E2E8F0`,
+                                    backgroundColor: dragging ? '#ECFDF5' : '#F8FAFC',
+                                    borderRadius: '12px',
+                                    height: '180px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    position: 'relative',
+                                    transition: 'all 0.15s'
+                                }}
+                                onClick={() => document.getElementById('clients-file-input')?.click()}
+                            >
+                                <input 
+                                    id="clients-file-input"
+                                    type="file" 
+                                    accept=".xlsx, .xls"
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            setSelectedFile(e.target.files[0]);
+                                        }
+                                    }}
+                                    style={{ display: 'none' }}
+                                />
+                                <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📁</div>
+                                {selectedFile ? (
+                                    <div style={{ textAlign: 'center', padding: '0 1rem' }}>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#0F172A', wordBreak: 'break-all' }}>{selectedFile.name}</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '4px' }}>{(selectedFile.size / 1024).toFixed(1)} KB</div>
+                                    </div>
+                                ) : (
+                                    <div style={{ textAlign: 'center', padding: '0 1rem' }}>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#334155' }}>Arrastra tu archivo aquí</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>o haz clic para explorar en tu equipo (.xlsx)</div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <button 
+                                    disabled={!selectedFile || loading}
+                                    onClick={processClientsFile}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.6rem', 
+                                        backgroundColor: selectedFile ? '#0891B2' : '#94A3B8', 
+                                        color: 'white', 
+                                        border: 'none', 
+                                        borderRadius: '8px', 
+                                        fontWeight: '700', 
+                                        cursor: selectedFile ? 'pointer' : 'not-allowed',
+                                        fontSize: '0.85rem',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    {loading ? 'Procesando...' : 'Procesar Clientes'}
+                                </button>
+                                
+                                <button 
+                                    onClick={downloadClientsTemplate}
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '0.6rem', 
+                                        backgroundColor: '#F1F5F9', 
+                                        color: '#334155', 
+                                        border: `1px solid #E2E8F0`, 
+                                        borderRadius: '8px', 
+                                        fontWeight: '600', 
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <FileDown size={14} />
+                                    Descargar Plantilla Limpia (.xlsx)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
 
 
-function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: string, color: string, textColor: string, subtitle: string }) {
+function KPICard({ title, value, icon, color, textColor, subtitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, textColor: string, subtitle: string }) {
     return (
         <div style={{
             backgroundColor: 'white',
-            padding: '2.2rem',
-            borderRadius: '28px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.03)',
+            padding: '1.5rem',
+            borderRadius: '16px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
             display: 'flex',
             alignItems: 'center',
-            gap: '1.8rem',
-            border: '1px solid #F0F2F5',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            gap: '1.5rem',
+            border: '1px solid #E2E8F0',
+            transition: 'all 0.2s ease-in-out',
             cursor: 'default'
         }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-8px)';
-            e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.08)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.05)';
         }} onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.03)';
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.02)';
         }}>
-            <div style={{ backgroundColor: color, width: '72px', height: '72px', borderRadius: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>
+            <div style={{ backgroundColor: color, width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textColor, flexShrink: 0 }}>
                 {icon}
             </div>
             <div>
-                <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08rem' }}>{title}</div>
-                <div style={{ fontSize: '2.2rem', fontWeight: '900', color: textColor, margin: '0.3rem 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: '700' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>{title}</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#1E293B', margin: '0.2rem 0', lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '500' }}>{subtitle}</div>
             </div>
         </div>
     );
@@ -931,13 +1399,12 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
     const b2cPercent = total > 0 ? (totalB2C / total) * 100 : 0;
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2.5rem', width: '100%', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', width: '100%', justifyContent: 'center', fontFamily: 'var(--font-inter), sans-serif' }}>
             <div style={{
-                width: '160px',
-                height: '160px',
+                width: '130px',
+                height: '130px',
                 borderRadius: '50%',
-                background: `conic-gradient(#0369A1 ${b2bPercent}%, #15803D 0)`,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                background: total > 0 ? `conic-gradient(#5C728D ${b2bPercent}%, #7E8F9F 0)` : '#5C728D',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
@@ -945,35 +1412,34 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
                 flexShrink: 0
             }}>
                 <div style={{
-                    width: '100px',
-                    height: '100px',
+                    width: '94px',
+                    height: '94px',
                     backgroundColor: 'white',
                     borderRadius: '50%',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: 'inset 0 4px 15px rgba(0,0,0,0.08)'
+                    justifyContent: 'center'
                 }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8' }}>TOTAL</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#1E293B' }}>${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TOTAL</span>
+                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0369A1' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#0D7A57', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Institucional</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0369A1' }}>${totalB2B.toLocaleString()}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2bPercent)}% del total</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2B</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0D7A57', marginTop: '2px' }}>${totalB2B.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2bPercent)}% del total</div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#15803D' }} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', borderTop: '1px solid #F1F5F9', paddingTop: '1rem' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: '#7E8F9F', marginTop: '4px' }} />
                     <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Canal Hogar</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#15803D' }}>${totalB2C.toLocaleString()}</div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>{Math.round(b2cPercent)}% del total</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CANAL B2C</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1E293B', marginTop: '2px' }}>${totalB2C.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94A3B8', marginTop: '1px' }}>{Math.round(b2cPercent)}% del total</div>
                     </div>
                 </div>
             </div>
@@ -983,41 +1449,37 @@ function SalesPieChart({ totalB2B, totalB2C }: { totalB2B: number, totalB2C: num
 
 function FunnelGraphic({ leads }: { leads: Lead[] }) {
     const stages = [
-        { label: 'Prospectos (Nuevos)', status: 'new', color: '#6366F1' },
-        { label: 'En Contacto / Gestión', status: 'contacted', color: '#F59E0B' },
-        { label: 'Convertidos a Clientes', status: 'converted', color: '#10B981' },
-        { label: 'Descartados', status: 'rejected', color: '#EF4444' }
+        { label: 'Prospectos', status: 'new', color: '#5C728D' },
+        { label: 'En Gestión', status: 'contacted', color: '#E28743' },
+        { label: 'Convertidos', status: 'converted', color: '#0D7A57' },
+        { label: 'Descartados', status: 'rejected', color: '#D9534F' }
     ];
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%', fontFamily: 'var(--font-inter), sans-serif' }}>
             {stages.map((stage) => {
                 const count = leads.filter(l => l.status === stage.status).length;
                 const percent = leads.length > 0 ? (count / leads.length) * 100 : 0;
                 return (
-                    <div key={stage.status} style={{ width: '100%', maxWidth: '400px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '0.8rem', fontSize: '0.9rem', fontWeight: '800', color: '#4A5568' }}>
-                            <div style={{ textTransform: 'uppercase', letterSpacing: '0.05rem', fontSize: '0.75rem', color: '#94A3B8', marginBottom: '0.2rem' }}>{stage.label}</div>
-                            <div style={{ color: stage.color, fontSize: '1.1rem' }}>{count} <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>({Math.round(percent)}%)</span></div>
+                    <div key={stage.status} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#64748B' }}>
+                            <span style={{ textTransform: 'uppercase', letterSpacing: '0.03em' }}>{stage.label}</span>
+                            <span style={{ fontWeight: '800', color: '#1E293B' }}>{count} <span style={{ fontWeight: '500', color: '#94A3B8', fontSize: '0.7rem' }}>({Math.round(percent)}%)</span></span>
                         </div>
                         <div style={{ 
-                            height: '24px', 
-                            backgroundColor: '#F8FAFC', 
-                            borderRadius: '12px', 
-                            border: '1px solid #E2E8F0',
+                            height: '10px', 
+                            backgroundColor: '#F1F5F9', 
+                            borderRadius: '9999px', 
                             display: 'flex',
                             justifyContent: 'center',
-                            overflow: 'hidden',
-                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                            overflow: 'hidden'
                         }}>
                             <div style={{ 
                                 height: '100%', 
                                 width: `${percent}%`, 
                                 backgroundColor: stage.color, 
-                                borderRadius: '12px',
-                                transition: 'all 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: `0 4px 12px ${stage.color}33`,
-                                border: `2px solid ${stage.color}`
+                                borderRadius: '9999px',
+                                transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
                             }} />
                         </div>
                     </div>

@@ -1,5 +1,5 @@
 require('dotenv').config({ path: '.env.local' });
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 function fetchGemini(apiKey, prompt) {
   return new Promise((resolve, reject) => {
@@ -20,7 +20,7 @@ function fetchGemini(apiKey, prompt) {
 
     const req = require('https').request({
       hostname: 'generativelanguage.googleapis.com',
-      path: '/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
+      path: '/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
