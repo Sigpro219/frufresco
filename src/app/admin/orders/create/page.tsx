@@ -828,8 +828,6 @@ function CreateOrderContent() {
                     shipping_address: shippingAddress,
                     latitude: latitude,
                     longitude: longitude,
-                    document_type: finalDocumentType,
-                    remission_with_prices: finalRemissionWithPrices,
                     // New Manual Delivery Fields
                     is_manual_delivery: isManualDelivery,
                     manual_delivery_time: manualDeliveryTime || null,
