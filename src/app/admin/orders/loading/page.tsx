@@ -78,6 +78,7 @@ export default function OrderLoadingPage() {
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [pendingEmailCount, setPendingEmailCount] = useState(0);
+    const [sentEmailCount, setSentEmailCount] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [activeTab, setActiveTab] = useState<'orders' | 'emails' | 'outbox'>('orders');
 
@@ -88,14 +89,19 @@ export default function OrderLoadingPage() {
     }, []);
 
     useEffect(() => {
-        const fetchPendingEmailCount = async () => {
-            const { count } = await supabase
+        const fetchEmailCounts = async () => {
+            const { count: pendingCount } = await supabase
                 .from('order_drafts')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'pending');
-            setPendingEmailCount(count || 0);
+            setPendingEmailCount(pendingCount || 0);
+
+            const { count: sentCount } = await supabase
+                .from('mail')
+                .select('*', { count: 'exact', head: true });
+            setSentEmailCount(sentCount || 0);
         };
-        fetchPendingEmailCount();
+        fetchEmailCounts();
     }, [refreshTrigger]);
 
     const [selectedDate, setSelectedDate] = useState(() => {
@@ -791,7 +797,7 @@ export default function OrderLoadingPage() {
                             gap: '6px'
                         }}
                     >
-                        <Send size={16} /> Bandeja de Salida Email
+                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: '#ECFDF5', color: '#10B981', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
                     </button>
                 </div>
 
@@ -1904,7 +1910,7 @@ export default function OrderLoadingPage() {
                     </div>
                 ) : (
                     <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
-                        <EmailOutboxModule />
+                        <EmailOutboxModule onOutboxChange={(count) => setSentEmailCount(count)} />
                     </div>
                 )}
             </div>

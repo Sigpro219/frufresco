@@ -3,12 +3,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, Search, RefreshCw, Eye, X, Send } from 'lucide-react';
+import { Mail, Search, RefreshCw, Eye, X, Send, Calendar } from 'lucide-react';
 
-export default function EmailOutboxModule() {
+interface EmailOutboxModuleProps {
+  onOutboxChange?: (count: number) => void;
+}
+
+export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleProps = {}) {
   const [emails, setEmails] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
 
   useEffect(() => {
@@ -24,7 +29,11 @@ export default function EmailOutboxModule() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setEmails(data || []);
+      const list = data || [];
+      setEmails(list);
+      if (onOutboxChange) {
+        onOutboxChange(list.length);
+      }
     } catch (err) {
       console.error('Error fetching outbox emails:', err);
     } finally {
@@ -33,43 +42,121 @@ export default function EmailOutboxModule() {
   };
 
   const filteredEmails = emails.filter(email => {
+    // 1. Search Query
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return true;
-    return (
+    const matchesSearch = !query || 
       (email.to_email || '').toLowerCase().includes(query) ||
       (email.subject || '').toLowerCase().includes(query) ||
-      (email.status || '').toLowerCase().includes(query)
-    );
+      (email.status || '').toLowerCase().includes(query);
+
+    // 2. Date Filter
+    let matchesDate = true;
+    if (selectedDate) {
+      const emailDate = new Date(email.sent_at || email.created_at || Date.now()).toISOString().split('T')[0];
+      matchesDate = emailDate === selectedDate;
+    }
+
+    return matchesSearch && matchesDate;
   });
 
   return (
     <div>
       {/* Controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
-            <Search size={16} />
-          </span>
-          <input
-            type="text"
-            placeholder="Buscar por destinatario, asunto..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.6rem 1rem 0.6rem 2.2rem',
-              borderRadius: '10px',
-              border: `1.5px solid ${THEME.colors.border}`,
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              outline: 'none',
-              transition: 'border-color 0.2s',
-              backgroundColor: 'white',
-              color: '#111827'
-            }}
-            onFocus={(e) => e.target.style.borderColor = THEME.colors.primary}
-            onBlur={(e) => e.target.style.borderColor = THEME.colors.border}
-          />
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Date Filter */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            backgroundColor: 'white', 
+            border: `1px solid ${THEME.colors.border}`, 
+            borderRadius: '10px',
+            padding: '0.5rem 0.8rem',
+            gap: '8px',
+            height: '38px',
+            boxSizing: 'border-box'
+          }}>
+            <Calendar size={16} color="#6B7280" />
+            <input 
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              style={{
+                border: 'none',
+                outline: 'none',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                color: '#111827',
+                fontFamily: 'inherit',
+                cursor: 'pointer'
+              }}
+            />
+            {selectedDate && (
+              <button 
+                onClick={() => setSelectedDate('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Search Input */}
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
+              <Search size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Buscar por destinatario, asunto..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem 1rem 0.5rem 2.2rem',
+                borderRadius: '10px',
+                border: `1.5px solid ${THEME.colors.border}`,
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                backgroundColor: 'white',
+                color: '#111827',
+                height: '38px',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.target.style.borderColor = THEME.colors.primary}
+              onBlur={(e) => e.target.style.borderColor = THEME.colors.border}
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         <button
@@ -79,7 +166,7 @@ export default function EmailOutboxModule() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '0.6rem 1.2rem',
+            padding: '0.5rem 1.2rem',
             backgroundColor: 'white',
             border: `1.5px solid ${THEME.colors.border}`,
             borderRadius: '10px',
@@ -87,7 +174,9 @@ export default function EmailOutboxModule() {
             fontSize: '0.85rem',
             color: '#4B5563',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            height: '38px',
+            boxSizing: 'border-box'
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
