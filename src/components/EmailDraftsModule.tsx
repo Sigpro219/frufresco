@@ -613,6 +613,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
   }, 0);
 
+  const hasUnmatchedItems = editableItems.some(item => !item.matched_product_id);
+
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -1722,27 +1724,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
                       </div>
 
+                      {hasUnmatchedItems && (
+                        <div style={{ display: 'flex', alignItems: 'center', color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                          ⚠️ Debe mapear todos los productos
+                        </div>
+                      )}
+
                       <button 
                         onClick={handleApprove}
-                        disabled={saving}
+                        disabled={saving || hasUnmatchedItems}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px',
                           padding: '0.65rem 1.25rem',
-                          backgroundColor: '#F59E0B',
+                          backgroundColor: hasUnmatchedItems ? '#9CA3AF' : '#F59E0B',
                           border: 'none',
                           borderRadius: '24px',
                           color: 'white',
                           fontWeight: '800',
-                          cursor: saving ? 'not-allowed' : 'pointer',
+                          cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
                           fontSize: '0.85rem',
                           transition: 'all 0.15s',
-                          opacity: saving ? 0.7 : 1,
-                          boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
+                          opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
+                          boxShadow: hasUnmatchedItems ? 'none' : '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
                         }}
-                        onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
-                        onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
+                        onMouseEnter={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
+                        onMouseLeave={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
                       >
                         <AlertTriangle size={16} /> Autorizar Excepción
                       </button>
@@ -1797,6 +1805,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
                     </div>
 
+                    {hasUnmatchedItems && (
+                      <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                        ⚠️ Debe mapear todos los productos
+                      </span>
+                    )}
+
                     <button 
                       onClick={() => setSelectedDraft(null)}
                       style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
@@ -1805,19 +1819,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </button>
                     <button 
                       onClick={handleApprove}
-                      disabled={saving}
+                      disabled={saving || hasUnmatchedItems}
                       style={{
                         padding: '0.75rem 1.5rem',
-                        backgroundColor: THEME.colors.primary,
+                        backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
                         color: 'white',
                         borderRadius: '10px',
                         fontWeight: '700',
                         border: 'none',
-                        cursor: saving ? 'not-allowed' : 'pointer',
-                        opacity: saving ? 0.7 : 1,
+                        cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
+                        opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px'
+                        gap: '8px',
+                        boxShadow: hasUnmatchedItems ? 'none' : undefined
                       }}
                     >
                       {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
