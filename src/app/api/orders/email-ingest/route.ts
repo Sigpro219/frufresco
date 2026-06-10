@@ -138,6 +138,9 @@ export async function POST(req: Request) {
 
     // 1. Declare client profile reference
     let profile: any = null;
+    const draftUuid = crypto.randomUUID();
+    let attachmentUrl: string | null = null;
+    let attachmentName: string | null = null;
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (!apiKey) {
@@ -157,6 +160,36 @@ export async function POST(req: Request) {
       const attachment = attachments[0];
       const base64Data = attachment.content;
       const mimeType = attachment.content_type || 'application/pdf';
+      attachmentName = attachment.filename;
+
+      try {
+        // Ensure order-attachments bucket exists
+        try {
+          await supabaseAdmin.storage.createBucket('order-attachments', { public: true });
+        } catch (_) {}
+
+        const buffer = Buffer.from(base64Data, 'base64');
+        const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `${draftUuid}_${sanitizedFilename}`;
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+          .from('order-attachments')
+          .upload(storagePath, buffer, {
+            contentType: mimeType,
+            upsert: true
+          });
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabaseAdmin.storage
+            .from('order-attachments')
+            .getPublicUrl(storagePath);
+          attachmentUrl = publicUrl;
+          console.log(`[Email Inbound] Attachment uploaded to Supabase Storage: ${attachmentUrl}`);
+        } else {
+          console.error('[Email Inbound] Failed to upload attachment:', uploadError);
+        }
+      } catch (uploadErr) {
+        console.error('[Email Inbound] Storage upload handler crashed:', uploadErr);
+      }
 
       const prompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
@@ -467,8 +500,7 @@ export async function POST(req: Request) {
     }
 
     // 5. Save draft to public.order_drafts
-    // Use an explicit UUID so we can reference its short ID immediately
-    const draftUuid = crypto.randomUUID();
+    // Use the predefined draftUuid so we can reference its short ID immediately
     const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
 
     const { data: newDraft, error: draftError } = await supabaseAdmin
@@ -487,7 +519,9 @@ export async function POST(req: Request) {
             deliverySlot: extractedData.deliverySlot || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
-            clientType: clientType
+            clientType: clientType,
+            attachmentUrl: attachmentUrl || null,
+            attachmentName: attachmentName || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items : [])
         ],
