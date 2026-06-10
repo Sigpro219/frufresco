@@ -517,6 +517,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             ...item,
             originalQuantity: item.quantity || 1,
             quantity: item.quantity || 1,
+            originalMatchedProductId: matchedId,
             matched_product_id: matchedId
         };
       });
@@ -564,6 +565,25 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [paymentMethod, setPaymentMethod] = useState('contra_entrega');
   const [deliverySlot, setDeliverySlot] = useState('AM');
   const [confirmingOrder, setConfirmingOrder] = useState(false);
+  const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
+  const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
+
+  const isInvoiceModified = () => {
+    if (!selectedDraft) return false;
+    const originalItems = (selectedDraft.extracted_items || []).filter((item: any) => !item.isMetadata);
+    if (editableItems.length !== originalItems.length) return true;
+    for (let i = 0; i < editableItems.length; i++) {
+      const editItem = editableItems[i];
+      const origItem = originalItems[i];
+      if (!origItem) return true;
+      if (editItem.originalName !== origItem.originalName) return true;
+      const editQty = parseFloat(editItem.quantity?.toString() || '0');
+      const origQty = parseFloat(origItem.quantity?.toString() || '0');
+      if (editQty !== origQty) return true;
+      if (editItem.matched_product_id !== editItem.originalMatchedProductId) return true;
+    }
+    return false;
+  };
 
   const handleApprove = async () => {
     if (!selectedDraft) return;
@@ -611,6 +631,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // 4. Open floating modal confirmation (invoice) instead of redirecting
       setSaving(false);
+      setSendConfirmationEmail(true);
+      setIsAuthorizedForChanges(false);
       setShowConfirmModal(true);
     } catch (e) {
       console.error('Error in handleApprove:', e);
@@ -693,9 +715,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           delivery_date: deliveryDate,
           delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
           admin_notes: finalAdminNotes,
-          shipping_address: metadata?.address || 'Dirección por definir',
-          document_type: metadata?.clientType === 'b2b_client' ? 'remission' : 'invoice',
-          remission_with_prices: true
+          shipping_address: metadata?.address || 'Dirección por definir'
         })
         .select()
         .single();
@@ -725,7 +745,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .eq('id', selectedDraft.id);
 
       // 5. Send confirmation email (queue in mail table)
-      if (selectedDraft.source_email) {
+      if (selectedDraft.source_email && sendConfirmationEmail) {
         const formattedItems = editableItems.map(item => {
           const prod = products.find(p => p.id === item.matched_product_id);
           const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
@@ -2651,6 +2671,51 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <option value="wompi">Link de Pago / Tarjeta (Wompi)</option>
                 </select>
               </div>
+
+              <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: '800', color: '#374151', cursor: 'pointer', userSelect: 'none' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={sendConfirmationEmail} 
+                    onChange={(e) => {
+                      setSendConfirmationEmail(e.target.checked);
+                      if (!e.target.checked) setIsAuthorizedForChanges(false);
+                    }} 
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  Enviar correo de confirmación de pedido al cliente
+                </label>
+              </div>
+
+              {isInvoiceModified() && sendConfirmationEmail && (
+                <div style={{
+                  gridColumn: 'span 2',
+                  padding: '0.8rem',
+                  backgroundColor: '#FEF3C7',
+                  borderRadius: '10px',
+                  border: '1.5px solid #FCD34D',
+                  fontSize: '0.8rem',
+                  color: '#92400E',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertTriangle size={14} /> Se han detectado cambios respecto al correo original.
+                  </div>
+                  <div>Para poder enviar la notificación con los cambios al cliente, debes confirmar que estás autorizado:</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', fontWeight: 800 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isAuthorizedForChanges} 
+                      onChange={(e) => setIsAuthorizedForChanges(e.target.checked)} 
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    Confirmo que tengo autorización para notificar estos cambios al cliente.
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Confirm Actions */}
@@ -2664,8 +2729,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </button>
               <button
                 onClick={handleConfirmOrderDirectly}
-                disabled={confirmingOrder}
-                style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: confirmingOrder ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+                disabled={confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)}
+                style={{
+                  flex: 2,
+                  padding: '0.8rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#D1D5DB' : '#059669',
+                  color: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? '#9CA3AF' : 'white',
+                  fontWeight: '800',
+                  cursor: (confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges) ? 'none' : '0 4px 6px -1px rgba(5, 150, 105, 0.2)'
+                }}
               >
                 {confirmingOrder ? 'Procesando Pedido...' : 'CONFIRMAR Y CREAR PEDIDO'}
               </button>
