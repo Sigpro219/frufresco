@@ -2369,6 +2369,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <option value="">-- Selecciona una causa --</option>
                 <option value="cobertura">Falta de cobertura geográfica</option>
                 <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
+                <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
               </select>
             </div>
 
@@ -2430,7 +2431,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       throw new Error(errData.error || 'Error en el servidor');
                     }
 
-                    showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : 'monto mínimo'}. Se ha notificado al cliente. ✉️`, 'success');
+                    showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
                     setRejectModal(null);
                     setSelectedDraft(null);
                     fetchDrafts();

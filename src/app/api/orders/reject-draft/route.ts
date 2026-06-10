@@ -27,23 +27,31 @@ export async function POST(req: Request) {
     // 2. Trigger email sending in the background without awaiting it
     const addressStr = address || 'No especificada';
     const isMontoMinimo = reason === 'monto_minimo';
+    const isNoComercializado = reason === 'no_comercializado';
     
-    const title = isMontoMinimo ? 'Pedido Recibido - Monto Mínimo' : 'Pedido Recibido - Cobertura';
-    const subtitle = isMontoMinimo 
-      ? 'Información sobre el monto mínimo requerido para tu solicitud.' 
-      : 'Información sobre el estado de cobertura de tu solicitud.';
-      
-    const messageContent = isMontoMinimo 
-      ? `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que tu solicitud de pedido enviado por correo electrónico no cumple con nuestro <b>monto mínimo de entrega de $100.000 COP</b>.</p>
-         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por esta razón, lamentablemente no podemos procesar tu pedido en esta ocasión.</p>
-         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Te invitamos a realizar un nuevo pedido agregando más productos para alcanzar el monto mínimo y poder brindarte nuestro servicio.</p>`
-      : `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte sobre el estado de cobertura de tu solicitud de pedido enviado por correo electrónico.</p>
+    let title = 'Pedido Recibido - Cobertura';
+    let subtitle = 'Información sobre el estado de cobertura de tu solicitud.';
+    let messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte sobre el estado de cobertura de tu solicitud de pedido enviado por correo electrónico.</p>
          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">La dirección proporcionada (<b>${addressStr}</b>) se encuentra <b>fuera de nuestra zona de cobertura actual</b> en Bogotá.</p>
          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Agradecemos mucho tu interés y esperamos poder ampliar nuestra cobertura muy pronto para poder atenderte.</p>`;
+    let textAlternative = `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`;
 
-    const textAlternative = isMontoMinimo
-      ? `Hola. Queremos informarte que tu solicitud de pedido no cumple con el monto mínimo de entrega de $100.000 COP.`
-      : `Hola. Queremos informarte que tu solicitud de pedido se encuentra fuera de nuestra zona de cobertura en Bogotá para la dirección proporcionada (${addressStr}).`;
+    if (isMontoMinimo) {
+      title = 'Pedido Recibido - Monto Mínimo';
+      subtitle = 'Información sobre el monto mínimo requerido para tu solicitud.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que tu solicitud de pedido enviado por correo electrónico no cumple con nuestro <b>monto mínimo de entrega de $100.000 COP</b>.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por esta razón, lamentablemente no podemos procesar tu pedido en esta ocasión.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Te invitamos a realizar un nuevo pedido agregando más productos para alcanzar el monto mínimo y poder brindarte nuestro servicio.</p>`;
+      textAlternative = `Hola. Queremos informarte que tu solicitud de pedido no cumple con el monto mínimo de entrega de $100.000 COP.`;
+    } else if (isNoComercializado) {
+      title = 'Pedido Recibido - Productos no Comercializados';
+      subtitle = 'Información sobre la disponibilidad de productos en tu solicitud.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte sobre los productos incluidos en tu solicitud de pedido enviado por correo electrónico.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">En FruFresco somos una comercializadora de <b>alimentos y productos del campo</b> y lamentablemente <b>no vendemos ni comercializamos materiales de construcción, ferretería o productos afines</b>.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por esta razón, no nos es posible cotizar ni procesar tu solicitud de pedido en esta ocasión.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Si en el futuro requieres abastecerte de frutas, verduras, abarrotes u otros alimentos, estaremos encantados de servirte.</p>`;
+      textAlternative = `Hola. Queremos informarte que en FruFresco somos una comercializadora de alimentos y no vendemos materiales de construcción, por lo que no es posible procesar tu pedido.`;
+    }
 
     const emailHtml = `
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
