@@ -194,10 +194,16 @@ export async function POST(req: Request) {
       const prompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         
+        CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
+        """
+        ${plainText}
+        """
+        
         TAREA:
-        1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF).
-        2. Identifica el nombre o empresa del CLIENTE.
-        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes.
+        1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
+        2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
+           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
+        3. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto del correo (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacío.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae todos los productos solicitados y su cantidad numérica.
         
@@ -210,9 +216,10 @@ export async function POST(req: Request) {
         {
           "clientInDocument": "Nombre o Empresa Detectada",
           "documentType": "Imagen/WhatsApp/PDF",
-          "address": "Dirección extraída o vacio",
+          "address": "Dirección física limpia extraída o vacio",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
+          "deliverySlot": "AM / PM / Mañana / Tarde / null",
           "clientType": "b2b_client o b2c_client",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }

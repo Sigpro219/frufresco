@@ -54,6 +54,11 @@ export async function POST(req: Request) {
     const addressStr = address || 'No especificada';
     const isMontoMinimo = reason === 'monto_minimo';
     const isNoComercializado = reason === 'no_comercializado';
+    const isDatosIncompletos = reason === 'datos_incompletos';
+    const isPedidoDuplicado = reason === 'pedido_duplicado';
+    const isBloqueoCartera = reason === 'bloqueo_cartera';
+    const isSinStock = reason === 'sin_stock';
+    const isFueraDeHorario = reason === 'fuera_de_horario';
     
     let title = 'Pedido Recibido - Cobertura';
     let subtitle = 'Información sobre el estado de cobertura de tu solicitud.';
@@ -77,6 +82,41 @@ export async function POST(req: Request) {
          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por esta razón, no nos es posible cotizar ni procesar tu solicitud de pedido en esta ocasión.</p>
          <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Si en el futuro requieres abastecerte de frutas, verduras, abarrotes u otros alimentos, estaremos encantados de servirte.</p>`;
       textAlternative = `Hola. Queremos informarte que en FruFresco somos una comercializadora de alimentos y no vendemos materiales de construcción, por lo que no es posible procesar tu pedido.`;
+    } else if (isDatosIncompletos) {
+      title = 'Pedido Recibido - Datos Incompletos';
+      subtitle = 'Información requerida para procesar tu solicitud.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que tu solicitud de pedido enviado por correo electrónico presenta <b>datos de contacto o dirección de entrega incompletos o insuficientes</b>.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Para poder procesar, facturar y despachar tus productos de forma correcta, requerimos datos de ubicación precisos y un número de contacto activo.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por favor, reenvía tu solicitud incluyendo tu dirección exacta en Bogotá y un número celular de contacto.</p>`;
+      textAlternative = `Hola. Queremos informarte que tu solicitud de pedido presenta datos de contacto o dirección de entrega insuficientes. Por favor, envíanos la información completa.`;
+    } else if (isPedidoDuplicado) {
+      title = 'Solicitud de Pedido - Ya Procesada';
+      subtitle = 'Validación de pedidos duplicados.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que hemos recibido tu correo electrónico, pero detectamos que <b>esta solicitud ya ha sido procesada anteriormente</b> o se encuentra duplicada en nuestro sistema.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Para evitar cobros dobles o despachos incorrectos, hemos descartado este duplicado.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Si consideras que esto es un error o deseas programar un nuevo despacho independiente, por favor ponte en contacto con nosotros.</p>`;
+      textAlternative = `Hola. Queremos informarte que tu solicitud de pedido ya ha sido procesada previamente o está duplicada, por lo que fue descartada para evitar cobros dobles.`;
+    } else if (isBloqueoCartera) {
+      title = 'Novedad de Cuenta - Pedido Retenido';
+      subtitle = 'Información sobre el estado de cartera de tu cuenta comercial.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que tu solicitud de pedido comercial ha sido retenida debido a que tu cuenta presenta un <b>bloqueo de cartera o saldos en mora pendientes de pago</b>.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">De acuerdo con nuestras políticas comerciales, no es posible despachar nuevos pedidos hasta que la cuenta se encuentre al día.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Por favor, comunícate con el área de cartera para conciliar tu saldo y reactivar tus despachos.</p>`;
+      textAlternative = `Hola. Queremos informarte que tu solicitud de pedido ha sido retenida debido a saldos pendientes de pago en cartera. Ponte en contacto con nosotros.`;
+    } else if (isSinStock) {
+      title = 'Pedido Recibido - Novedad de Inventario';
+      subtitle = 'Información sobre disponibilidad de stock para tu pedido.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que lamentablemente <b>no contamos con disponibilidad de inventario suficiente</b> de los productos principales solicitados en tu correo.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Debido a esta falta de stock imprevista, nos vemos obligados a cancelar el despacho de tu pedido en esta ocasión.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Nos esforzamos por reabastecernos rápidamente. Te invitamos a consultar la disponibilidad de nuestros productos del campo en los próximos días.</p>`;
+      textAlternative = `Hola. Queremos informarte que debido a la falta de stock en los productos principales solicitados, no nos es posible procesar tu pedido en esta ocasión.`;
+    } else if (isFueraDeHorario) {
+      title = 'Pedido Recibido - Fuera de Horario';
+      subtitle = 'Información sobre la programación de tu solicitud.';
+      messageContent = `<p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Queremos informarte que tu solicitud de pedido fue recibida <b>fuera del horario límite establecido para la programación de entregas del día de mañana</b>.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Para garantizar la calidad de la cadena de alistamiento y despacho, contamos con horarios de corte estrictos.</p>
+         <p style="font-size: 14px; line-height: 1.5; color: #4B5563;">Te invitamos a realizar tu pedido con mayor anticipación o a programar la entrega para una fecha posterior.</p>`;
+      textAlternative = `Hola. Queremos informarte que tu solicitud de pedido fue recibida fuera del horario límite para entregas del día siguiente.`;
     }
 
     const emailHtml = `

@@ -457,12 +457,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           const matchedProd = findMatchedProduct(item.originalName);
           if (matchedProd) matchedId = matchedProd.id;
         }
+        const prod = products.find(p => p.id === matchedId);
         return {
             ...item,
             originalQuantity: item.quantity || 1,
             quantity: item.quantity || 1,
             originalMatchedProductId: matchedId,
-            matched_product_id: matchedId
+            matched_product_id: matchedId,
+            skuQuery: prod?.sku || ''
         };
       });
       setEditableItems(initialEdits);
@@ -1656,7 +1658,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
             width: '100%',
-            maxWidth: '1150px',
+            maxWidth: '1300px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -1799,6 +1801,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           if (r === 'cobertura') return 'Dirección fuera de la zona de cobertura en Bogotá';
                           if (r === 'monto_minimo') return 'El pedido no cumple con el monto mínimo de entrega de $100.000 COP';
                           if (r === 'no_comercializado') return 'Productos no comercializados por FruFresco (ej. materiales de construcción)';
+                          if (r === 'datos_incompletos') return 'Datos de contacto o dirección insuficientes en la solicitud';
+                          if (r === 'pedido_duplicado') return 'Solicitud ya procesada anteriormente (Pedido duplicado)';
+                          if (r === 'bloqueo_cartera') return 'Cliente con bloqueo de cartera o saldo vencido en mora';
+                          if (r === 'sin_stock') return 'Agotamiento de inventario en productos principales del pedido';
+                          if (r === 'fuera_de_horario') return 'Pedido recibido fuera del horario límite de programación operativa';
                           return r || 'No especificado';
                         })()
                       }</strong>
@@ -2010,7 +2017,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                  <div style={{ overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                    <thead>
+                     <thead>
                       <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
                         {isEditing && (
                           <th style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F3F4F6' }}>
@@ -2028,6 +2035,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '150px', minWidth: '150px' }}>SKU</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
@@ -2062,6 +2070,44 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         />
                                       </td>
                                     )}
+                                    <td style={{ padding: '1rem 0.5rem', width: '150px', minWidth: '150px', backgroundColor: '#F9FAFB' }}>
+                                      {isEditing ? (
+                                        <input
+                                          type="text"
+                                          value={matchedProd ? matchedProd.sku : (item.skuQuery || '')}
+                                          placeholder="SKU"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const found = products.find(p => p.sku === val);
+                                            const newEdits = [...editableItems];
+                                            if (found) {
+                                              newEdits[i].matched_product_id = found.id;
+                                              newEdits[i].searchQuery = found.name;
+                                              newEdits[i].skuQuery = found.sku || '';
+                                            } else {
+                                              newEdits[i].matched_product_id = null;
+                                              newEdits[i].searchQuery = '';
+                                              newEdits[i].skuQuery = val;
+                                            }
+                                            setEditableItems(newEdits);
+                                          }}
+                                          style={{
+                                            width: '100%',
+                                            padding: '0.5rem',
+                                            borderRadius: '6px',
+                                            border: '1px solid #D1D5DB',
+                                            fontSize: '0.9rem',
+                                            backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
+                                            fontWeight: 600,
+                                            color: '#111827'
+                                          }}
+                                        />
+                                      ) : (
+                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', fontWeight: 700 }}>
+                                          {matchedProd ? matchedProd.sku : '-'}
+                                        </div>
+                                      )}
+                                    </td>
                                     <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
                                       <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
@@ -2086,9 +2132,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         if (found) {
                                           newEdits[i].matched_product_id = found.id;
                                           newEdits[i].searchQuery = found.name;
+                                          newEdits[i].skuQuery = found.sku || '';
                                         } else {
                                           newEdits[i].matched_product_id = null;
                                           newEdits[i].searchQuery = val;
+                                          newEdits[i].skuQuery = '';
                                         }
                                         setEditableItems(newEdits);
                                       }}
@@ -2131,7 +2179,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         if (e.key === 'Enter') {
                                           e.preventDefault();
                                           // Añadir nueva fila
-                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '' }];
                                           setEditableItems(newEdits);
                                           // Focus el nuevo input en el siguiente render
                                           setTimeout(() => {
@@ -2172,7 +2220,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
                     <button
                       onClick={() => {
-                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '' }];
                         setEditableItems(newEdits);
                         setTimeout(() => {
                           const nextInput = productInputRefs.current[newEdits.length - 1];
@@ -2775,6 +2823,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <option value="cobertura">Falta de cobertura geográfica</option>
                 <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
                 <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
+                <option value="datos_incompletos">Datos de contacto o dirección insuficientes</option>
+                <option value="pedido_duplicado">Solicitud ya procesada (Pedido duplicado)</option>
+                <option value="bloqueo_cartera">Cliente con bloqueo de cartera o saldo en mora</option>
+                <option value="sin_stock">Agotamiento de inventario en productos principales</option>
+                <option value="fuera_de_horario">Pedido recibido fuera del horario límite de programación</option>
               </select>
             </div>
 
