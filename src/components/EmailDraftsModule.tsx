@@ -573,8 +573,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .update({ extracted_items: updatedExtractedItems })
         .eq('id', selectedDraft.id);
 
-      // 4. Redirect
-      window.location.href = `/admin/orders/create?draft_id=${selectedDraft.id}`;
+      // 4. Open in a new tab
+      window.open(`/admin/orders/create?draft_id=${selectedDraft.id}`, '_blank');
+      setSelectedDraft(null);
+      setSaving(false);
     } catch (e) {
       console.error('Error in handleApprove:', e);
       showToast('Error al guardar. Por favor intenta de nuevo.', 'error');
