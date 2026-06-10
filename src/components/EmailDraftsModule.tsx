@@ -531,6 +531,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     };
   };
 
+  // --- INVOICE FLOATING APPROVAL MODAL ---
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('contra_entrega');
+  const [deliverySlot, setDeliverySlot] = useState('AM');
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
+
   const handleApprove = async () => {
     if (!selectedDraft) return;
     setSaving(true);
@@ -573,12 +579,159 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .update({ extracted_items: updatedExtractedItems })
         .eq('id', selectedDraft.id);
 
-      // 4. Redirect
-      window.location.href = `/admin/orders/create?draft_id=${selectedDraft.id}`;
+      // 4. Open floating modal confirmation (invoice) instead of redirecting
+      setSaving(false);
+      setShowConfirmModal(true);
     } catch (e) {
       console.error('Error in handleApprove:', e);
-      showToast('Error al guardar. Por favor intenta de nuevo.', 'error');
+      showToast('Error al procesar el pedido. Por favor intenta de nuevo.', 'error');
       setSaving(false);
+    }
+  };
+
+  const handleConfirmOrderDirectly = async () => {
+    if (!selectedDraft) return;
+    setConfirmingOrder(true);
+
+    try {
+      const metadata = getDraftMetadata(selectedDraft);
+      let finalProfileId = selectedDraft.profile_id;
+      let finalAdminNotes = `[PEDIDO CORREO] Asunto: ${selectedDraft.email_subject || ''}\n---\n${selectedDraft.email_body || ''}\n---\n`;
+
+      // 1. If no profile exists (new client), create one
+      if (!finalProfileId) {
+        finalProfileId = crypto.randomUUID();
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: finalProfileId,
+            role: metadata?.clientType || 'b2c_client',
+            contact_name: selectedDraft.client_detected_name || 'Cliente por Correo',
+            contact_phone: metadata?.phone || '',
+            phone: metadata?.phone || '',
+            address: metadata?.address || '',
+            city: 'Bogotá',
+            company_name: selectedDraft.client_detected_name || 'Cliente por Correo',
+            created_at: new Date().toISOString(),
+            email: selectedDraft.source_email || null,
+            nit: metadata?.nit || null,
+            is_active: true
+          });
+
+        if (profileError) {
+          throw new Error('Error al crear perfil de cliente: ' + profileError.message);
+        }
+      }
+
+      // Calculate totals
+      let totalAmount = 0;
+      let totalWeight = 0;
+      const itemsData: any[] = [];
+
+      editableItems.forEach(item => {
+        if (item.matched_product_id) {
+          const prod = products.find(p => p.id === item.matched_product_id);
+          if (prod) {
+            const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+            totalAmount += prod.base_price * qtyNum;
+            const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+            totalWeight += qtyNum * w;
+
+            itemsData.push({
+              product_id: prod.id,
+              quantity: qtyNum,
+              unit_price: prod.base_price,
+              nickname: item.originalName || null,
+              variant_label: null
+            });
+          }
+        }
+      });
+
+      // 2. Create the order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          profile_id: finalProfileId,
+          total: totalAmount,
+          total_weight_kg: totalWeight,
+          status: 'pending_approval',
+          payment_status: 'Pendiente',
+          payment_method: paymentMethod,
+          origin: 'Email Ingest',
+          origin_source: 'email',
+          delivery_date: deliveryDate,
+          delivery_slot: deliverySlot,
+          admin_notes: finalAdminNotes,
+          shipping_address: metadata?.address || 'Dirección por definir',
+          document_type: metadata?.clientType === 'b2b_client' ? 'remission' : 'invoice',
+          remission_with_prices: true
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        throw new Error('Error al registrar pedido: ' + orderError.message);
+      }
+
+      // 3. Create order items
+      const finalItemsData = itemsData.map(itm => ({
+        order_id: order.id,
+        ...itm
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(finalItemsData);
+
+      if (itemsError) {
+        throw new Error('Error al registrar ítems: ' + itemsError.message);
+      }
+
+      // 4. Update the draft status to approved
+      await supabase
+        .from('order_drafts')
+        .update({ status: 'approved' })
+        .eq('id', selectedDraft.id);
+
+      // 5. Send confirmation email (queue in mail table)
+      if (selectedDraft.source_email) {
+        const formattedItems = editableItems.map(item => {
+          const prod = products.find(p => p.id === item.matched_product_id);
+          const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+          const unitPrice = prod?.base_price || 0;
+          return {
+            name: prod?.name || item.originalName || 'Producto',
+            quantity: qtyNum,
+            price: formatNumber(unitPrice),
+            total: formatNumber(unitPrice * qtyNum)
+          };
+        });
+
+        await supabase.from('mail').insert({
+          to_email: selectedDraft.source_email,
+          subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
+          template: {
+            name: 'order_confirmation',
+            data: {
+              client: selectedDraft.client_detected_name || 'Cliente',
+              order_number: order.id.slice(0, 6).toUpperCase(),
+              total_amount: formatNumber(totalAmount),
+              items: formattedItems
+            }
+          }
+        });
+      }
+
+      showToast('Pedido registrado exitosamente ✅', 'success');
+      setShowConfirmModal(false);
+      setSelectedDraft(null);
+      fetchDrafts();
+    } catch (e: any) {
+      console.error('Error creating order directly:', e);
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      setConfirmingOrder(false);
     }
   };
 
@@ -2287,6 +2440,162 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 }}
               >
                 {saving ? 'Procesando...' : 'Rechazar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && selectedDraft && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '24px',
+            padding: '2rem 2.5rem',
+            width: '90%',
+            maxWidth: '580px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: `1px solid ${THEME.colors.border}`,
+            textAlign: 'left'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                <div style={{ backgroundColor: '#D1FAE5', color: '#059669', width: '36px', height: '36px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Previsualización de Factura / Pedido
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                disabled={confirmingOrder}
+                style={{ background: '#F8FAF9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Client info summary */}
+            <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>CLIENTE DETECTADO</span>
+                <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
+                  {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem' }}>
+                <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
+                <div><strong>Celular:</strong> {getDraftMetadata(selectedDraft).phone || 'No especificado'}</div>
+                <div><strong>NIT/Cédula:</strong> {getDraftMetadata(selectedDraft).nit || 'No especificado'}</div>
+                <div><strong>Email:</strong> {selectedDraft.source_email || 'No especificado'}</div>
+                <div style={{ gridColumn: 'span 2' }}><strong>Dirección:</strong> {getDraftMetadata(selectedDraft).address || 'No especificada'}</div>
+              </div>
+            </div>
+
+            {/* Items details list */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.05em', marginBottom: '0.5rem', textTransform: 'uppercase' }}>PRODUCTOS DEL PEDIDO</div>
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#F8FAF9', borderBottom: '1px solid #E2E8F0', textAlign: 'left', fontWeight: 800, color: '#4B5563' }}>
+                      <th style={{ padding: '0.65rem 1rem' }}>Producto (Mapeado)</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>Cant.</th>
+                      <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editableItems.map((item: any, idx: number) => {
+                      if (!item.matched_product_id) return null;
+                      const prod = products.find(p => p.id === item.matched_product_id);
+                      const qty = parseFloat(item.quantity?.toString() || '0');
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', color: '#1E293B' }}>
+                          <td style={{ padding: '0.65rem 1rem' }}>
+                            <div style={{ fontWeight: 600 }}>{prod?.name}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{item.originalName}</div>
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'center', fontWeight: 'bold' }}>{qty}</td>
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>{formatMoney((prod?.base_price || 0) * qty)}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr style={{ backgroundColor: '#F8FAF9', borderTop: '2px solid #E2E8F0', fontWeight: 'bold', fontSize: '0.95rem', color: '#111827' }}>
+                      <td style={{ padding: '0.8rem 1rem' }}>TOTAL</td>
+                      <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>-</td>
+                      <td style={{ padding: '0.8rem 1rem', textAlign: 'right', color: '#059669', fontSize: '1.05rem', fontWeight: 900 }}>{formatMoney(totalValue)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Delivery and payment inputs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>FECHA DE ENTREGA:</label>
+                <input 
+                  type="date" 
+                  value={deliveryDate} 
+                  onChange={(e) => setDeliveryDate(e.target.value)} 
+                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>FRANJA HORARIA:</label>
+                <select 
+                  value={deliverySlot} 
+                  onChange={(e) => setDeliverySlot(e.target.value)} 
+                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', backgroundColor: 'white' }}
+                >
+                  <option value="AM">Mañana (AM)</option>
+                  <option value="PM">Tarde (PM)</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>MÉTODO DE PAGO:</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => setPaymentMethod(e.target.value)} 
+                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', backgroundColor: 'white' }}
+                >
+                  <option value="contra_entrega">Efectivo / Contra Entrega</option>
+                  <option value="transferencia">Transferencia Bancaria Bancolombia</option>
+                  <option value="wompi">Link de Pago / Tarjeta (Wompi)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Confirm Actions */}
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                disabled={confirmingOrder}
+                style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: '#4B5563', fontWeight: '700', cursor: 'pointer', transition: 'all 0.15s' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmOrderDirectly}
+                disabled={confirmingOrder}
+                style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '800', cursor: confirmingOrder ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 6px -1px rgba(5, 150, 105, 0.2)' }}
+              >
+                {confirmingOrder ? 'Procesando Pedido...' : 'CONFIRMAR Y CREAR PEDIDO'}
               </button>
             </div>
           </div>
