@@ -25,6 +25,7 @@ interface Product {
     variants?: any[];
     show_on_web?: boolean;
     iva_rate?: number;
+    pricing_model_prices?: { price: number }[];
 }
 
 export default function ProductDetailClient({ product }: { product: Product }) {
@@ -64,8 +65,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
     
     // Aplicar factor de conversión comercial
     const conversionFactor = product.web_conversion_factor || 1;
-    const basePrice = currentVariant ? currentVariant.price : product.base_price;
-    const currentPrice = basePrice * conversionFactor;
+    const basePrice = currentVariant ? currentVariant.price : (product.pricing_model_prices?.[0]?.price || product.base_price);
+    const currentPrice = Math.ceil((basePrice * conversionFactor) / 50) * 50;
 
     const getFormattedName = () => {
         const optionString = Object.entries(selections)

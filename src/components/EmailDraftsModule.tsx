@@ -2,9 +2,28 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle } from 'lucide-react';
+import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2 } from 'lucide-react';
 import Link from 'next/link';
+
+const getChannelBadge = (source: string) => {
+    switch (source) {
+        case 'whatsapp': 
+            return <span style={{ backgroundColor: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MessageSquare size={10} strokeWidth={1.5} /> WhatsApp</span>;
+        case 'phone': 
+            return <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Phone size={10} strokeWidth={1.5} /> Teléfono</span>;
+        case 'email': 
+            return <span style={{ backgroundColor: '#F3E8FF', color: '#6B21A8', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Mail size={10} strokeWidth={1.5} /> Correo</span>;
+        case 'file_upload': 
+            return <span style={{ backgroundColor: '#FEF3C7', color: '#B45309', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UploadCloud size={10} strokeWidth={1.5} /> Carga</span>;
+        case 'web_b2c': 
+            return <span style={{ backgroundColor: '#FCE7F3', color: '#9D174D', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Home size={10} strokeWidth={1.5} /> Web Hogar</span>;
+        case 'web_b2b': 
+            return <span style={{ backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> Web Horeca</span>;
+        default: 
+            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
+    }
+};
 
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
@@ -19,6 +38,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
+  const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<string[]>([]);
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
@@ -28,6 +48,49 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
+  useEffect(() => {
+    setRecentlyDeletedItems([]);
+  }, [selectedDraft?.id]);
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    step: 1 | 2;
+    productName: string;
+    onConfirmNotify: () => Promise<void>;
+    onConfirmOnlyDelete: () => Promise<void>;
+  } | null>(null);
+  const [actionConfirm, setActionConfirm] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDanger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedRowIndices, setSelectedRowIndices] = useState<number[]>([]);
+  useEffect(() => {
+    setSelectedRowIndices([]);
+  }, [isEditing, selectedDraft?.id]);
+  const [rejectReason, setRejectReason] = useState<string>('');
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    draftId: string;
+    address: string;
+    sourceEmail: string;
+    totalValue: number;
+  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const DEFAULT_B2C_POLYGON = [
     { lat: 4.647, lng: -74.062 },
@@ -121,37 +184,45 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return inside;
   };
 
-  const handleRejectForCoverage = async () => {
+  const handleRejectForCoverage = () => {
     if (!selectedDraft) return;
-    if (!confirm('¿Estás seguro de que deseas rechazar este pedido por falta de cobertura? Se enviará un correo electrónico de notificación al cliente.')) return;
-    
-    setSaving(true);
-    try {
-      const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
-      const res = await fetch('/api/orders/reject-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftId: selectedDraft.id,
-          address: addressStr,
-          sourceEmail: selectedDraft.source_email
-        })
-      });
+    setActionConfirm({
+      isOpen: true,
+      title: '¿Rechazar por falta de cobertura?',
+      message: '¿Estás seguro de que deseas rechazar este pedido por falta de cobertura? Se enviará un correo electrónico de notificación al cliente.',
+      confirmText: 'Rechazar',
+      cancelText: 'Cancelar',
+      isDanger: true,
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          const addressStr = getDraftMetadata(selectedDraft).address || 'No especificada';
+          const res = await fetch('/api/orders/reject-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId: selectedDraft.id,
+              address: addressStr,
+              sourceEmail: selectedDraft.source_email
+            })
+          });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Error en el servidor');
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Error en el servidor');
+          }
+
+          showToast('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️', 'success');
+          setSelectedDraft(null);
+          fetchDrafts();
+        } catch (e: any) {
+          console.error('Error in handleRejectForCoverage:', e);
+          showToast(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`, 'error');
+        } finally {
+          setSaving(false);
+        }
       }
-
-      alert('Borrador de pedido rechazado. Se ha enviado el correo electrónico de notificación al cliente. ✉️');
-      setSelectedDraft(null);
-      fetchDrafts();
-    } catch (e: any) {
-      console.error('Error in handleRejectForCoverage:', e);
-      alert(`Error al rechazar el borrador: ${e.message}. Por favor intenta de nuevo.`);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const fetchProducts = async () => {
@@ -161,6 +232,125 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleToggleEdit = async () => {
+    if (isEditing) {
+      setSaving(true);
+      try {
+        const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+        const updatedMetaItem = {
+          ...metaItem,
+          deliveryDate: deliveryDate
+        };
+        const updatedExtractedItems = [
+          updatedMetaItem,
+          ...editableItems
+        ];
+
+        const { error } = await supabase
+          .from('order_drafts')
+          .update({ extracted_items: updatedExtractedItems })
+          .eq('id', selectedDraft.id);
+
+        if (error) throw error;
+        
+        setSelectedDraft((prev: any) => ({
+          ...prev,
+          extracted_items: updatedExtractedItems
+        }));
+        showToast('Borrador de pedido guardado exitosamente.', 'success');
+      } catch (e: any) {
+        console.warn('Error saving edits:', e?.message || e);
+        showToast('Error al guardar las modificaciones del borrador: ' + (e?.message || e), 'error');
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedRowIndices.length === 0) return;
+    const namesToDelete = selectedRowIndices.map(idx => {
+      const item = editableItems[idx];
+      if (!item) return '';
+      const mProd = products.find(p => p.id === item.matched_product_id);
+      return mProd ? mProd.name : (item.searchQuery || item.originalName || 'Producto sin nombre');
+    }).filter(Boolean);
+
+    setDeleteConfirm({
+      isOpen: true,
+      step: 1,
+      productName: namesToDelete.join(', '),
+      onConfirmNotify: async () => {
+        setSaving(true);
+        try {
+          const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
+          setRecentlyDeletedItems(updatedDeleted);
+
+          const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+          setEditableItems(remainingItems);
+          setSelectedRowIndices([]);
+
+          const emailItems = remainingItems.map(itm => {
+            const mProd = products.find(p => p.id === itm.matched_product_id);
+            return {
+              productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+              quantity: itm.quantity,
+              unitPrice: mProd ? mProd.base_price : 0,
+              unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+            };
+          });
+
+          const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+          const dbItems = [
+            { ...metaItem, deliveryDate: deliveryDate },
+            ...remainingItems.map(itm => ({
+              originalName: itm.originalName || '',
+              quantity: itm.quantity,
+              matched_product_id: itm.matched_product_id
+            }))
+          ];
+
+          const res = await fetch('/api/orders/notify-deleted-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId: selectedDraft.id,
+              deletedItem: updatedDeleted,
+              sourceEmail: selectedDraft.source_email,
+              clientName: selectedDraft.client_detected_name || 'Cliente',
+              dbItems,
+              emailItems
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Error en el servidor');
+          }
+
+          setRecentlyDeletedItems([]);
+          showToast('Productos eliminados y novedades notificadas por correo. ✉️', 'success');
+        } catch (err: any) {
+          console.warn('Error deleting and notifying:', err);
+          showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+        } finally {
+          setSaving(false);
+        }
+      },
+      onConfirmOnlyDelete: async () => {
+        const updatedDeleted = [...recentlyDeletedItems, ...namesToDelete];
+        setRecentlyDeletedItems(updatedDeleted);
+        
+        const remainingItems = editableItems.filter((_, idx) => !selectedRowIndices.includes(idx));
+        setEditableItems(remainingItems);
+        setSelectedRowIndices([]);
+        showToast('Productos eliminados de la lista (novedades pendientes de notificar). ⚠️', 'success');
+      }
+    });
   };
 
   const fetchAliases = async () => {
@@ -192,25 +382,35 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?')) return;
-    try {
-      const { error } = await supabase
-        .from('order_drafts')
-        .update({ status: 'rejected' })
-        .eq('id', id);
+    setActionConfirm({
+      isOpen: true,
+      title: '¿Rechazar y eliminar borrador?',
+      message: '¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?',
+      confirmText: 'Rechazar y Eliminar',
+      cancelText: 'Cancelar',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('order_drafts')
+            .update({ status: 'rejected' })
+            .eq('id', id);
 
-      if (error) throw error;
-      setDrafts(prev => prev.filter(d => d.id !== id));
-      if (selectedDraft?.id === id) setSelectedDraft(null);
-    } catch (err) {
-      console.error('Error deleting draft:', err);
-    }
+          if (error) throw error;
+          setDrafts(prev => prev.filter(d => d.id !== id));
+          if (selectedDraft?.id === id) setSelectedDraft(null);
+        } catch (err) {
+          console.error('Error deleting draft:', err);
+        }
+      }
+    });
   };
 
   useEffect(() => {
     if (selectedDraft) {
+      setIsEditing(false);
       const meta = getDraftMetadata(selectedDraft);
       if (meta.address && meta.address !== 'No detectado') {
         setGeocoding(true);
@@ -377,7 +577,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       window.location.href = `/admin/orders/create?draft_id=${selectedDraft.id}`;
     } catch (e) {
       console.error('Error in handleApprove:', e);
-      alert('Error al guardar. Por favor intenta de nuevo.');
+      showToast('Error al guardar. Por favor intenta de nuevo.', 'error');
       setSaving(false);
     }
   };
@@ -412,6 +612,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const matchedProd = products.find(p => p.id === item.matched_product_id);
     return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
   }, 0);
+
+  const hasUnmatchedItems = editableItems.some(item => !item.matched_product_id);
 
   return (
     <div style={{ padding: '0', maxWidth: '100%', margin: '0' }}>
@@ -606,7 +808,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         {/* Info Icon */}
         <div 
-          onClick={() => alert('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.')}
+          onClick={() => showToast('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.', 'info')}
           title="Ayuda del módulo"
           style={{ 
             display: 'flex', 
@@ -682,14 +884,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE DETECTADO</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN EXTRACT. / GPS</th>
-                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO</th>
-                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS</th>
-                <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR EST.</th>
-                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}></th>
+                <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ACCIONES</th>
               </tr>
             </thead>
             <tbody>
@@ -700,6 +902,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 const estimatedTotal = items.reduce((acc: number, item: any) => {
                   const matchedProd = products.find(p => p.id === item.matched_product_id);
                   return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                }, 0);
+
+                const estimatedWeight = items.reduce((acc: number, item: any) => {
+                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
+                  const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
+                  return acc + (weightFactor * (item.quantity || 0));
                 }, 0);
 
                 return (
@@ -729,6 +938,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
                     <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                       <Mail size={10} strokeWidth={1.5} /> {draft.source_email}
+                      {meta.phone && meta.phone !== 'No detectado' && (
+                        <>
+                          <span style={{ margin: '0 4px', color: '#94A3B8' }}>|</span>
+                          <Phone size={10} strokeWidth={1.5} /> {meta.phone}
+                        </>
+                      )}
                     </div>
                   </td>
                   <td style={{ padding: '0.8rem 1rem' }}>
@@ -741,13 +956,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
                     )}
                   </td>
-                  <td style={{ padding: '0.8rem 1rem' }}>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
                     <div style={{ fontSize: '0.8rem', color: '#4B5563', fontWeight: '500', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {draft.email_subject || '-'}
                     </div>
+                    <div style={{ marginTop: '2px' }}>
+                      {getChannelBadge('email')}
+                    </div>
                   </td>
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
-                    {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                    <div style={{ fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
+                      {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: '700', marginTop: '2px' }}>
+                      {formatNumber(estimatedWeight, 1)} kg
+                    </div>
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
                     {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
@@ -761,10 +984,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       PENDIENTE
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '1rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={() => setSelectedDraft(draft)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: THEME.colors.primary, 
+                        cursor: 'pointer', 
+                        padding: '5px', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Revisar / Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#EF4444', 
+                        cursor: 'pointer', 
+                        padding: '5px', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                       title="Rechazar"
                     >
                       <Trash2 size={16} />
@@ -842,13 +1098,48 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
                     {itemsCount} productos
                   </span>
-                  <button 
-                    onClick={(e) => handleDelete(draft.id, e)}
-                    style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                    title="Rechazar"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSelectedDraft(draft)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: THEME.colors.primary, 
+                        cursor: 'pointer', 
+                        padding: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Revisar / Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={(e) => handleDelete(draft.id, e)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#EF4444', 
+                        cursor: 'pointer', 
+                        padding: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Rechazar"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -884,9 +1175,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 800 }}>Revisión de Correo</h2>
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
-              <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
-                <X size={24} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {isEditing && selectedRowIndices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBatchDelete}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#FEE2E2',
+                      color: '#991B1B',
+                      border: '1px solid #FCA5A5',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}
+                  >
+                    <Trash2 size={16} />
+                    Eliminar Seleccionados ({selectedRowIndices.length})
+                  </button>
+                )}
+                <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
@@ -981,6 +1297,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <input
                       type="date"
                       value={deliveryDate}
+                      disabled={!isEditing}
                       onChange={(e) => setDeliveryDate(e.target.value)}
                       style={{
                         padding: '6px 12px',
@@ -1022,17 +1339,65 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
               {/* Tabla de Productos Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
-                <div style={{ overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleToggleEdit}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: isEditing ? '#DEF7EC' : 'white',
+                      border: `1px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
+                      borderRadius: '8px',
+                      color: isEditing ? '#03543F' : '#4B5563',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Check size={16} />
+                        {saving ? 'Guardando...' : 'Finalizar Edición'}
+                      </>
+                    ) : (
+                      <>
+                        <Edit2 size={16} />
+                        Modificar Pedido
+                      </>
+                    )}
+                  </button>
+                </div>
+                 <div style={{ overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                        {isEditing && (
+                          <th style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F3F4F6' }}>
+                            <input
+                              type="checkbox"
+                              checked={editableItems.length > 0 && selectedRowIndices.length === editableItems.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRowIndices(editableItems.map((_, idx) => idx));
+                                } else {
+                                  setSelectedRowIndices([]);
+                                }
+                              }}
+                              style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                            />
+                          </th>
+                        )}
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '50px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1045,6 +1410,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                               return (
                                 <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    {isEditing && (
+                                      <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F9FAFB' }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedRowIndices.includes(i)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedRowIndices(prev => [...prev, i]);
+                                            } else {
+                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
+                                            }
+                                          }}
+                                          style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                        />
+                                      </td>
+                                    )}
                                     <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
                                       <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
@@ -1059,6 +1440,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <input
                                       ref={el => { productInputRefs.current[i] = el; }}
                                       list={`products-list-${i}`}
+                                      disabled={!isEditing}
                                       value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
                                       placeholder="-- Buscar Producto --"
                                       onChange={(e) => {
@@ -1102,6 +1484,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
                                       <input 
                                         type="number"
+                                        disabled={!isEditing}
                                         value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
                                         onChange={(e) => {
                                         const newEdits = [...editableItems];
@@ -1138,32 +1521,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
                                   </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '50px' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const newEdits = editableItems.filter((_, idx) => idx !== i);
-                                        setEditableItems(newEdits);
-                                      }}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#EF4444',
-                                        cursor: 'pointer',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        transition: 'background-color 0.2s'
-                                      }}
-                                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                                      title="Eliminar producto"
-                                    >
-                                      <X size={16} strokeWidth={2.5} />
-                                    </button>
-                                  </td>
                                 </tr>
                               );
                             })}
@@ -1175,33 +1532,121 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </table>
                 </div>
                 
-                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start' }}>
-                  <button
-                    onClick={() => {
-                      const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
-                      setEditableItems(newEdits);
-                      setTimeout(() => {
-                        const nextInput = productInputRefs.current[newEdits.length - 1];
-                        if (nextInput) nextInput.focus();
-                      }, 50);
-                    }}
-                    style={{
-                      padding: '0.6rem 1rem',
-                      backgroundColor: '#F3F4F6',
-                      color: '#4B5563',
-                      border: '1px dashed #D1D5DB',
-                      borderRadius: '8px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    + Añadir Producto Manualmente
-                  </button>
-                </div>
+                {isEditing && (
+                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => {
+                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '' }];
+                        setEditableItems(newEdits);
+                        setTimeout(() => {
+                          const nextInput = productInputRefs.current[newEdits.length - 1];
+                          if (nextInput) nextInput.focus();
+                        }, 50);
+                      }}
+                      style={{
+                        padding: '0.6rem 1rem',
+                        backgroundColor: '#F3F4F6',
+                        color: '#4B5563',
+                        border: '1px dashed #D1D5DB',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      + Añadir Producto Manualmente
+                    </button>
+
+
+                    {recentlyDeletedItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionConfirm({
+                            isOpen: true,
+                            title: '¿Notificar novedades de productos agotados?',
+                            message: `Se enviará un correo electrónico de notificación consolidado al cliente por los siguientes productos que no están disponibles:\n\n${recentlyDeletedItems.map(item => `• ${item}`).join('\n')}\n\n¿Estás seguro de que deseas proceder?`,
+                            confirmText: 'Enviar Notificación',
+                            cancelText: 'Cancelar',
+                            isDanger: false,
+                            onConfirm: async () => {
+                              // Preparar ítems para tabla de correo
+                              const emailItems = editableItems.map(itm => {
+                                const mProd = products.find(p => p.id === itm.matched_product_id);
+                                return {
+                                  productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
+                                  quantity: itm.quantity,
+                                  unitPrice: mProd ? mProd.base_price : 0,
+                                  unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+                                };
+                              });
+
+                              // Preparar dbItems (ya están actualizados en la base de datos)
+                              const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+                              const dbItems = [
+                                { ...metaItem, deliveryDate: deliveryDate },
+                                ...editableItems.map(itm => ({
+                                  originalName: itm.originalName || '',
+                                  quantity: itm.quantity,
+                                  matched_product_id: itm.matched_product_id
+                                }))
+                              ];
+
+                              setSaving(true);
+                              try {
+                                const res = await fetch('/api/orders/notify-deleted-item', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    draftId: selectedDraft.id,
+                                    deletedItem: recentlyDeletedItems,
+                                    sourceEmail: selectedDraft.source_email,
+                                    clientName: selectedDraft.client_detected_name || 'Cliente',
+                                    dbItems,
+                                    emailItems
+                                  })
+                                });
+
+                                if (!res.ok) {
+                                  const errData = await res.json();
+                                  throw new Error(errData.error || 'Error en el servidor');
+                                }
+
+                                setRecentlyDeletedItems([]);
+                                showToast('Novedades notificadas consolidadas al cliente por correo. ✉️', 'success');
+                              } catch (err: any) {
+                                console.warn('Error sending batch notification:', err);
+                                showToast(`Error al notificar al cliente: ${err.message || 'Error de conexión'}`, 'error');
+                              } finally {
+                                setSaving(false);
+                              }
+                            }
+                          });
+                        }}
+                        style={{
+                          padding: '0.6rem 1rem',
+                          backgroundColor: '#FEF3C7',
+                          color: '#B45309',
+                          border: '1px solid #FCD34D',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                        }}
+                      >
+                        <Mail size={16} />
+                        Notificar Novedades ({recentlyDeletedItems.length})
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Cuerpo del correo oculto en un acordeón al final */}
@@ -1279,27 +1724,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
                       </div>
 
+                      {hasUnmatchedItems && (
+                        <div style={{ display: 'flex', alignItems: 'center', color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                          ⚠️ Debe mapear todos los productos
+                        </div>
+                      )}
+
                       <button 
                         onClick={handleApprove}
-                        disabled={saving}
+                        disabled={saving || hasUnmatchedItems}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px',
                           padding: '0.65rem 1.25rem',
-                          backgroundColor: '#F59E0B',
+                          backgroundColor: hasUnmatchedItems ? '#9CA3AF' : '#F59E0B',
                           border: 'none',
                           borderRadius: '24px',
                           color: 'white',
                           fontWeight: '800',
-                          cursor: saving ? 'not-allowed' : 'pointer',
+                          cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
                           fontSize: '0.85rem',
                           transition: 'all 0.15s',
-                          opacity: saving ? 0.7 : 1,
-                          boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
+                          opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
+                          boxShadow: hasUnmatchedItems ? 'none' : '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
                         }}
-                        onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
-                        onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
+                        onMouseEnter={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
+                        onMouseLeave={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
                       >
                         <AlertTriangle size={16} /> Autorizar Excepción
                       </button>
@@ -1354,6 +1805,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
                     </div>
 
+                    {hasUnmatchedItems && (
+                      <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                        ⚠️ Debe mapear todos los productos
+                      </span>
+                    )}
+
                     <button 
                       onClick={() => setSelectedDraft(null)}
                       style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
@@ -1362,19 +1819,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </button>
                     <button 
                       onClick={handleApprove}
-                      disabled={saving}
+                      disabled={saving || hasUnmatchedItems}
                       style={{
                         padding: '0.75rem 1.5rem',
-                        backgroundColor: THEME.colors.primary,
+                        backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
                         color: 'white',
                         borderRadius: '10px',
                         fontWeight: '700',
                         border: 'none',
-                        cursor: saving ? 'not-allowed' : 'pointer',
-                        opacity: saving ? 0.7 : 1,
+                        cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
+                        opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px'
+                        gap: '8px',
+                        boxShadow: hasUnmatchedItems ? 'none' : undefined
                       }}
                     >
                       {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
@@ -1384,6 +1842,505 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               );
             })()}
           </div>
+        </div>
+      )}
+
+      {deleteConfirm && deleteConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'center'
+          }}>
+            {deleteConfirm.step === 1 ? (
+              <>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FEF2F2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.5rem',
+                  color: '#EF4444'
+                }}>
+                  <AlertTriangle size={28} />
+                </div>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: '#111827',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  ¿Eliminar producto?
+                </h3>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: '#6B7280',
+                  margin: '0 0 1.5rem 0',
+                  lineHeight: '1.5'
+                }}>
+                  ¿Estás seguro de que deseas eliminar <strong>{deleteConfirm.productName}</strong> de la lista?
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(null)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#F3F4F6',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: '#4B5563',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#EF4444',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FEF3C7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.5rem',
+                  color: '#D97706'
+                }}>
+                  <Mail size={28} />
+                </div>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: '#111827',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  ¿Notificar al cliente?
+                </h3>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: '#6B7280',
+                  margin: '0 0 1.5rem 0',
+                  lineHeight: '1.5'
+                }}>
+                  ¿Deseas enviar el correo de notificación por <strong>{deleteConfirm.productName}</strong> ahora, o prefieres solo eliminarlo de la lista y notificar más tarde?
+                  {recentlyDeletedItems.length > 0 && (
+                    <span style={{ display: 'block', marginTop: '8px', fontSize: '0.85rem', color: '#B45309', fontWeight: 600 }}>
+                      ⚠️ Se enviará junto con los productos ya eliminados: {recentlyDeletedItems.join(', ')}
+                    </span>
+                  )}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      await deleteConfirm.onConfirmNotify();
+                      setDeleteConfirm(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#D97706',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    {saving ? 'Enviando...' : 'Eliminar y Enviar Correo'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      await deleteConfirm.onConfirmOnlyDelete();
+                      setDeleteConfirm(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#10B981',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1
+                    }}
+                  >
+                    {saving ? 'Eliminando...' : 'Solo Eliminar (Notificar Después)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setDeleteConfirm(prev => prev ? { ...prev, step: 1 } : null)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: '#F3F4F6',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontWeight: 700,
+                      color: '#4B5563',
+                      cursor: saving ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Atrás
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {actionConfirm && actionConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: actionConfirm.isDanger ? '#FEF2F2' : '#ECFDF5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              color: actionConfirm.isDanger ? '#EF4444' : THEME.colors.primary
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 0.5rem 0'
+            }}>
+              {actionConfirm.title}
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#6B7280',
+              margin: '0 0 1.5rem 0',
+              lineHeight: '1.5'
+            }}>
+              {actionConfirm.message}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setActionConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                {actionConfirm.cancelText || 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  actionConfirm.onConfirm();
+                  setActionConfirm(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: actionConfirm.isDanger ? '#EF4444' : THEME.colors.primary,
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {actionConfirm.confirmText || 'Aceptar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectModal && rejectModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '420px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'left'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#FEF2F2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              color: '#EF4444'
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+            
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: '#111827',
+              margin: '0 0 1rem 0',
+              textAlign: 'center'
+            }}>
+              Rechazar Solicitud de Pedido
+            </h3>
+            
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem' }}>
+                Causa de Reclamación / Cancelación:
+              </label>
+              <select
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  border: `1px solid ${THEME.colors.border}`,
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="">-- Selecciona una causa --</option>
+                <option value="cobertura">Falta de cobertura geográfica</option>
+                <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
+              </select>
+            </div>
+
+            {rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000 && (
+              <div style={{
+                backgroundColor: '#FEF2F2',
+                borderLeft: '4px solid #EF4444',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: '#991B1B',
+                marginBottom: '1.25rem'
+              }}>
+                ⚠️ No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setRejectModal(null)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: '#4B5563',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !rejectReason || 
+                  (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) ||
+                  saving
+                }
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    const res = await fetch('/api/orders/reject-draft', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        draftId: rejectModal.draftId,
+                        address: rejectModal.address,
+                        sourceEmail: rejectModal.sourceEmail,
+                        reason: rejectReason
+                      })
+                    });
+
+                    if (!res.ok) {
+                      const errData = await res.json();
+                      throw new Error(errData.error || 'Error en el servidor');
+                    }
+
+                    showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : 'monto mínimo'}. Se ha notificado al cliente. ✉️`, 'success');
+                    setRejectModal(null);
+                    setSelectedDraft(null);
+                    fetchDrafts();
+                  } catch (e: any) {
+                    console.error('Error rejecting draft:', e);
+                    showToast(`Error al rechazar el borrador: ${e.message}`, 'error');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#EF4444',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: 'pointer',
+                  opacity: (!rejectReason || (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) || saving) ? 0.5 : 1
+                }}
+              >
+                {saving ? 'Procesando...' : 'Rechazar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: toast.type === 'success' ? 'rgba(6, 78, 59, 0.95)' : toast.type === 'error' ? 'rgba(153, 27, 27, 0.95)' : 'rgba(30, 41, 59, 0.95)',
+          backdropFilter: 'blur(8px)',
+          color: 'white',
+          padding: '1rem 1.5rem',
+          borderRadius: '16px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          maxWidth: '400px',
+          animation: 'slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          border: `1px solid ${toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#EF4444' : '#475569'}`
+        }}>
+          <style>{`
+            @keyframes slideIn {
+              from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+              to { transform: translateY(0) scale(1); opacity: 1; }
+            }
+          `}</style>
+          <div style={{ flexShrink: 0 }}>
+            {toast.type === 'success' && <Check size={20} />}
+            {toast.type === 'error' && <AlertTriangle size={20} />}
+            {toast.type === 'info' && <Info size={20} />}
+          </div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}>
+            {toast.message}
+          </div>
+          <button 
+            onClick={() => setToast(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.6)',
+              cursor: 'pointer',
+              marginLeft: 'auto',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
     </div>

@@ -11,6 +11,7 @@ interface Profile {
     contact_name?: string;
     company_name?: string;
     price_list_id?: string;
+    pricing_model_id?: string;
     address_main?: string;
     specialty?: string;
     needs_crates?: boolean;

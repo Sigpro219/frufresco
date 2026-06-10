@@ -5,12 +5,14 @@ import { useState, Suspense, useEffect } from 'react';
 import { Search, X, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { translations, Locale } from '../lib/translations';
+import { useAuth } from '@/lib/authContext';
 
 function SearchBarContent({ placeholder }: { placeholder?: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
+    const { profile } = useAuth();
     const [query, setQuery] = useState(searchParams.get('q') || '');
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -36,7 +38,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
         setQuery(searchParams.get('q') || '');
     }, [searchParams]);
 
-    // 3. Predictive Search Logic
+    // 3. Sync suggestions based on query and user profile pricing model
     useEffect(() => {
         const fetchSuggestions = async () => {
             if (query.trim().length < 2) {
@@ -45,24 +47,41 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                 return;
             }
 
-            const { data } = await supabase
+            const pricingModelId = profile?.pricing_model_id || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
+
+            let fetchedData: any[] = [];
+            const { data, error } = await supabase
                 .from('products')
-                .select('id, name, category, base_price, image_url, display_name, web_conversion_factor')
+                .select('id, name, category, base_price, image_url, display_name, web_conversion_factor, pricing_model_prices(price)')
                 .eq('is_active', true)
                 .eq('show_on_web', true)
+                .eq('pricing_model_prices.model_id', pricingModelId)
                 .ilike('name', `%${query}%`)
                 .order('image_url', { ascending: false, nullsFirst: false })
                 .limit(6);
 
-            if (data) {
-                setSuggestions(data);
-                setShowDropdown(true);
+            if (error) {
+                console.error("Predictive query error, using fallback:", error.message);
+                const { data: fallbackData } = await supabase
+                    .from('products')
+                    .select('id, name, category, base_price, image_url, display_name, web_conversion_factor')
+                    .eq('is_active', true)
+                    .eq('show_on_web', true)
+                    .ilike('name', `%${query}%`)
+                    .order('image_url', { ascending: false, nullsFirst: false })
+                    .limit(6);
+                fetchedData = fallbackData || [];
+            } else {
+                fetchedData = data || [];
             }
+
+            setSuggestions(fetchedData);
+            setShowDropdown(true);
         };
 
         const timer = setTimeout(fetchSuggestions, 300);
         return () => clearTimeout(timer);
-    }, [query]);
+    }, [query, profile]);
 
     // Handle manual search
     const handleSearch = () => {
@@ -236,7 +255,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.95rem' }}>{p.display_name || p.name}</div>
                                         <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                                            ${(Math.ceil(((p.base_price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString()}
+                                            ${(Math.ceil(((p.pricing_model_prices?.[0]?.price || p.base_price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString()}
                                         </div>
                                     </div>
                                     <ChevronRight size={18} color="#d1d5db" />

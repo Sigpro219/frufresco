@@ -8,6 +8,7 @@ import Link from 'next/link';
 import FeaturedProductsCarousel from './FeaturedProductsCarousel';
 import ProductGridClient from './ProductGridClient';
 import { supabase } from '../lib/supabase';
+import { createServerSideClient } from '@/lib/supabase/server';
 
 interface Props {
     q?: string;
@@ -18,23 +19,34 @@ interface Props {
 export default async function ProductGridContainer({ q, category, locale }: Props) {
     const t = translations[locale];
 
+    const serverSupabase = await createServerSideClient();
+    const { data: { session } } = await serverSupabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+    if (userId) {
+        const { data: profile } = await serverSupabase
+            .from('profiles')
+            .select('pricing_model_id')
+            .eq('id', userId)
+            .single();
+        if (profile?.pricing_model_id) {
+            pricingModelId = profile.pricing_model_id;
+        }
+    }
+
     // 1. Data Fetching for the Grid (Optimized with Cache)
     const [
         allVisible,
-        sessionResponse,
         translationCache
     ] = await Promise.all([
-        getVisibleProducts(),
-        supabase.auth.getSession(),
+        getVisibleProducts(pricingModelId),
         locale === 'en' ? getTranslationCache() : Promise.resolve({})
     ]);
 
-    const session = sessionResponse.data?.session;
-    const userId = session?.user?.id;
-
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 
-        ? await supabase.from('product_nicknames').select('product_id, nickname').eq('customer_id', userId)
+        ? await serverSupabase.from('product_nicknames').select('product_id, nickname').eq('customer_id', userId)
         : { data: [] };
 
     const nicknameMap = (nicknamesData || []).reduce((acc, item) => ({
@@ -108,26 +120,61 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             });
         });
 
-        const { data: dbProducts, error: dbErr } = await supabase
+        let dbProducts: any[] = [];
+        let dbErr: any = null;
+
+        const resSearch = await serverSupabase
             .from('products')
-            .select('*')
+            .select('*, pricing_model_prices(price)')
             .eq('is_active', true)
             .eq('show_on_web', true)
+            .eq('pricing_model_prices.model_id', pricingModelId)
             .or(orConditions.join(','))
             .limit(100);
+
+        if (resSearch.error) {
+            console.error("Search query failed, running fallback:", resSearch.error.message);
+            const resFallback = await serverSupabase
+                .from('products')
+                .select('*')
+                .eq('is_active', true)
+                .eq('show_on_web', true)
+                .or(orConditions.join(','))
+                .limit(100);
+            dbProducts = resFallback.data || [];
+            dbErr = resFallback.error;
+        } else {
+            dbProducts = resSearch.data || [];
+        }
 
         console.log("DEBUG SEARCH:", { q, searchQueries, searchTerms, orConditionsLen: orConditions.length, dbErr: dbErr?.message, dbCount: dbProducts?.length });
 
         const foundProducts = applyNicknames(dbProducts || []);
 
         if (foundProducts.length === 0 && suggestedCatCode) {
-            const { data: catProducts } = await supabase
+            let catProducts: any[] = [];
+            const resCat = await serverSupabase
                 .from('products')
-                .select('*')
+                .select('*, pricing_model_prices(price)')
                 .eq('is_active', true)
                 .eq('show_on_web', true)
+                .eq('pricing_model_prices.model_id', pricingModelId)
                 .eq('category', suggestedCatCode)
                 .limit(40);
+
+            if (resCat.error) {
+                console.error("Cat query failed, running fallback:", resCat.error.message);
+                const resCatFallback = await serverSupabase
+                    .from('products')
+                    .select('*')
+                    .eq('is_active', true)
+                    .eq('show_on_web', true)
+                    .eq('category', suggestedCatCode)
+                    .limit(40);
+                catProducts = resCatFallback.data || [];
+            } else {
+                catProducts = resCat.data || [];
+            }
             
             if (catProducts && catProducts.length > 0) {
                 rawProducts = applyNicknames(catProducts);

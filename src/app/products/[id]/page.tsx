@@ -4,6 +4,7 @@ import ProductCard from '@/components/ProductCard';
 import { notFound } from 'next/navigation';
 import { Apple } from 'lucide-react';
 import { translations, Locale } from '@/lib/translations';
+import { createServerSideClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,27 +14,73 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     const locale = (lang === 'en' ? 'en' : 'es') as Locale;
     const t = translations[locale];
 
+    const serverSupabase = await createServerSideClient();
+    const { data: { session } } = await serverSupabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    let pricingModelId = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee'; // Default B2C
+    if (userId) {
+        const { data: profile } = await serverSupabase
+            .from('profiles')
+            .select('pricing_model_id')
+            .eq('id', userId)
+            .single();
+        if (profile?.pricing_model_id) {
+            pricingModelId = profile.pricing_model_id;
+        }
+    }
+
     // 1. Fetch Current Product
-    const { data: product, error } = await supabase
+    let product: any = null;
+    const resProduct = await serverSupabase
         .from('products')
-        .select('*')
+        .select('*, pricing_model_prices(price)')
         .eq('id', id)
+        .eq('pricing_model_prices.model_id', pricingModelId)
         .single();
 
-    if (error || !product) {
-        return notFound();
+    if (resProduct.error) {
+        console.error("Fetch product details failed, running fallback:", resProduct.error.message);
+        const resFallback = await serverSupabase
+            .from('products')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (resFallback.error || !resFallback.data) {
+            return notFound();
+        }
+        product = resFallback.data;
+    } else {
+        product = resProduct.data;
     }
 
     // 2. Fetch "You May Also Like" - Priorizar misma categoría y con foto
     // Traemos 50 para poder barajar y quedarnos con los mejores 12
-    const { data: relatedProductsRaw } = await supabase
+    let relatedProductsRaw: any[] = [];
+    const resRelated = await serverSupabase
         .from('products')
-        .select('*')
+        .select('*, pricing_model_prices(price)')
         .eq('is_active', true)
         .eq('show_on_web', true)
+        .eq('pricing_model_prices.model_id', pricingModelId)
         .neq('id', id)
         .order('image_url', { ascending: false, nullsFirst: false }) // Fotos primero
         .limit(50);
+
+    if (resRelated.error) {
+        console.error("Fetch related products failed, running fallback:", resRelated.error.message);
+        const resFallback = await serverSupabase
+            .from('products')
+            .select('*')
+            .eq('is_active', true)
+            .eq('show_on_web', true)
+            .neq('id', id)
+            .order('image_url', { ascending: false, nullsFirst: false }) // Fotos primero
+            .limit(50);
+        relatedProductsRaw = resFallback.data || [];
+    } else {
+        relatedProductsRaw = resRelated.data || [];
+    }
 
     const dailySeed = new Date().getDate();
     
