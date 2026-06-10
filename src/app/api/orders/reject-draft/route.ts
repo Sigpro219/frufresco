@@ -13,10 +13,36 @@ export async function POST(req: Request) {
 
     const supabaseAdmin = createAdminClient();
 
-    // 1. Update draft status to 'rejected' first to unblock UI instantly
+    // 1. Fetch draft items first to update metadata
+    const { data: draftRecord } = await supabaseAdmin
+      .from('order_drafts')
+      .select('extracted_items')
+      .eq('id', draftId)
+      .single();
+
+    let updatedExtractedItems = draftRecord?.extracted_items || [];
+    if (Array.isArray(updatedExtractedItems)) {
+      const metaIdx = updatedExtractedItems.findIndex((itm: any) => itm.isMetadata);
+      if (metaIdx > -1) {
+        updatedExtractedItems[metaIdx] = {
+          ...updatedExtractedItems[metaIdx],
+          rejectReason: reason || 'cobertura'
+        };
+      } else {
+        updatedExtractedItems.unshift({
+          isMetadata: true,
+          rejectReason: reason || 'cobertura'
+        });
+      }
+    }
+
+    // 2. Update draft status to 'rejected' and save metadata
     const { error: draftError } = await supabaseAdmin
       .from('order_drafts')
-      .update({ status: 'rejected' })
+      .update({ 
+        status: 'rejected',
+        extracted_items: updatedExtractedItems
+      })
       .eq('id', draftId);
 
     if (draftError) {

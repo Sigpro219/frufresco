@@ -208,7 +208,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             body: JSON.stringify({
               draftId: selectedDraft.id,
               address: addressStr,
-              sourceEmail: selectedDraft.source_email
+              sourceEmail: selectedDraft.source_email,
+              reason: 'cobertura'
             })
           });
 
@@ -501,7 +502,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliveryDate: meta?.deliveryDate || null,
       deliverySlot: meta?.deliverySlot || null,
       attachmentUrl: meta?.attachmentUrl || null,
-      attachmentName: meta?.attachmentName || null
+      attachmentName: meta?.attachmentName || null,
+      rejectReason: meta?.rejectReason || null
     };
   };
 
@@ -1692,74 +1694,78 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 )}
                 
                 {/* Modificar Pedido button */}
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={handleToggleEdit}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '0.5rem 1rem',
-                    backgroundColor: isEditing ? '#DEF7EC' : 'white',
-                    border: `1.5px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
-                    borderRadius: '8px',
-                    color: isEditing ? '#03543F' : '#4B5563',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                  }}
-                >
-                  {isEditing ? (
-                    <>
-                      <Check size={16} />
-                      {saving ? 'Guardando...' : 'Finalizar Edición'}
-                    </>
-                  ) : (
-                    <>
-                      <Edit2 size={16} />
-                      Modificar Pedido
-                    </>
-                  )}
-                </button>
-
-                {/* Rechazar Pedido button */}
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => {
-                    setRejectReason('');
-                    setRejectModal({
-                      isOpen: true,
-                      draftId: selectedDraft.id,
-                      address: getDraftMetadata(selectedDraft).address || 'No detectada',
-                      sourceEmail: selectedDraft.source_email,
-                      totalValue: totalValue
-                    });
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '0.5rem 1.25rem',
-                    backgroundColor: '#FEF2F2',
-                    border: '1.5px solid #FCA5A5',
-                    borderRadius: '8px',
-                    color: '#DC2626',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                  }}
-                  onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
-                  onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEF2F2'; } }}
-                >
-                  <Trash2 size={16} />
-                  Rechazar Pedido
-                </button>
+                {selectedDraft.status === 'pending' && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleToggleEdit}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: isEditing ? '#DEF7EC' : 'white',
+                      border: `1.5px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
+                      borderRadius: '8px',
+                      color: isEditing ? '#03543F' : '#4B5563',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Check size={16} />
+                        {saving ? 'Guardando...' : 'Finalizar Edición'}
+                      </>
+                    ) : (
+                      <>
+                        <Edit2 size={16} />
+                        Modificar Pedido
+                      </>
+                    )}
+                  </button>
+                 )}
+ 
+                 {/* Rechazar Pedido button */}
+                 {selectedDraft.status === 'pending' && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setRejectReason('');
+                      setRejectModal({
+                        isOpen: true,
+                        draftId: selectedDraft.id,
+                        address: getDraftMetadata(selectedDraft).address || 'No detectada',
+                        sourceEmail: selectedDraft.source_email,
+                        totalValue: totalValue
+                      });
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '0.5rem 1.25rem',
+                      backgroundColor: '#FEF2F2',
+                      border: '1.5px solid #FCA5A5',
+                      borderRadius: '8px',
+                      color: '#DC2626',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}
+                    onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
+                    onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEF2F2'; } }}
+                  >
+                    <Trash2 size={16} />
+                    Rechazar Pedido
+                  </button>
+                 )}
 
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
@@ -1769,6 +1775,38 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Modal Body */}
             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {selectedDraft.status === 'rejected' && (
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  borderRadius: '8px',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left'
+                }}>
+                  <AlertTriangle size={24} style={{ color: '#EF4444', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem' }}>
+                      🚫 BORRADOR DE PEDIDO RECHAZADO
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', fontWeight: 600, marginTop: '2px' }}>
+                      Motivo: <strong>{
+                        (() => {
+                          const r = getDraftMetadata(selectedDraft).rejectReason;
+                          if (r === 'cobertura') return 'Dirección fuera de la zona de cobertura en Bogotá';
+                          if (r === 'monto_minimo') return 'El pedido no cumple con el monto mínimo de entrega de $100.000 COP';
+                          if (r === 'no_comercializado') return 'Productos no comercializados por FruFresco (ej. materiales de construcción)';
+                          return r || 'No especificado';
+                        })()
+                      }</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {checkIsNewClient(selectedDraft) && (
                 <div style={{
                   backgroundColor: '#FEF3C7',
@@ -2351,26 +2389,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 >
                   Cancelar
                 </button>
-                <button 
-                  onClick={handleApprove}
-                  disabled={saving || hasUnmatchedItems}
-                  style={{
-                    padding: '0.75rem 1.5rem',
-                    backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
-                    color: 'white',
-                    borderRadius: '10px',
-                    fontWeight: '700',
-                    border: 'none',
-                    cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
-                    opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: hasUnmatchedItems ? 'none' : undefined
-                  }}
-                >
-                  {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
-                </button>
+                {selectedDraft.status === 'pending' && (
+                  <button 
+                    onClick={handleApprove}
+                    disabled={saving || hasUnmatchedItems}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
+                      color: 'white',
+                      borderRadius: '10px',
+                      fontWeight: '700',
+                      border: 'none',
+                      cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
+                      opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: hasUnmatchedItems ? 'none' : undefined
+                    }}
+                  >
+                    {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
+                  </button>
+                )}
               </div>
             </div>
           </div>

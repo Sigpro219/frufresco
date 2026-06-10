@@ -1407,7 +1407,7 @@ export default function OrderLoadingPage() {
                             backgroundColor: 'white',
                             borderRadius: '24px',
                             width: '95%',
-                            maxWidth: '900px',
+                            maxWidth: '1100px',
                             maxHeight: '90vh',
                             display: 'flex',
                             flexDirection: 'column',
@@ -1665,7 +1665,8 @@ export default function OrderLoadingPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO / SKU</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>SKU</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
                                                 <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>SUBTOTAL</th>
@@ -1678,6 +1679,9 @@ export default function OrderLoadingPage() {
                                                     borderBottom: '1px solid #F1F5F9',
                                                     backgroundColor: item.isNew ? '#F0F9FF' : 'transparent'
                                                 }}>
+                                                    <td style={{ padding: '1.25rem 2rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#475569', fontWeight: 'bold' }}>
+                                                        {item.products?.sku || '-'}
+                                                    </td>
                                                     <td style={{ padding: '1.25rem 2rem' }}>
                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
                                                             {item.products?.name}
@@ -1688,9 +1692,6 @@ export default function OrderLoadingPage() {
                                                                  <Sparkles size={10} strokeWidth={1.5} /> {item.variant_label}
                                                              </div>
                                                          )}
-                                                        <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontFamily: 'monospace', marginTop: '2px' }}>
-                                                            REF: {item.products?.sku}
-                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
@@ -1748,7 +1749,7 @@ export default function OrderLoadingPage() {
                                             ))}
                                             {orderItems.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={editMode ? 5 : 4} style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8' }}>
+                                                    <td colSpan={editMode ? 6 : 5} style={{ padding: '4rem', textAlign: 'center', color: '#94A3B8' }}>
                                                         No se encontraron productos en este pedido
                                                     </td>
                                                 </tr>
