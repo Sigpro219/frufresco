@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
-import { Mail, Search, RefreshCw, Eye, X, Send, Calendar } from 'lucide-react';
+import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2 } from 'lucide-react';
 
 interface EmailOutboxModuleProps {
   onOutboxChange?: (count: number) => void;
@@ -15,6 +15,39 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; emailId: string | null }>({ isOpen: false, emailId: null });
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteEmail = async () => {
+    if (!deleteConfirm.emailId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('mail')
+        .delete()
+        .eq('id', deleteConfirm.emailId);
+
+      if (error) throw error;
+
+      const updatedList = emails.filter(email => email.id !== deleteConfirm.emailId);
+      setEmails(updatedList);
+      if (onOutboxChange) {
+        onOutboxChange(updatedList.length);
+      }
+
+      if (typeof window !== 'undefined' && (window as any).showToast) {
+        (window as any).showToast('Correo eliminado con éxito de la bandeja de salida', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error deleting email:', err);
+      if (typeof window !== 'undefined' && (window as any).showToast) {
+        (window as any).showToast('Error al eliminar el correo: ' + (err.message || err), 'error');
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm({ isOpen: false, emailId: null });
+    }
+  };
 
   useEffect(() => {
     fetchEmails();
@@ -243,25 +276,46 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                       )}
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
-                      <button
-                        onClick={() => setSelectedEmail(email)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: THEME.colors.primary,
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                        title="Ver correo enviado"
-                      >
-                        <Eye size={16} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setSelectedEmail(email)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: THEME.colors.primary,
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            borderRadius: '4px',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ECFDF5'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          title="Ver correo enviado"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm({ isOpen: true, emailId: email.id })}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#EF4444',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            borderRadius: '4px',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          title="Eliminar registro"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -356,6 +410,79 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '2rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '450px',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            textAlign: 'left',
+            padding: '1.5rem'
+          }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#111827', fontWeight: 800 }}>
+              ¿Eliminar registro de correo?
+            </h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              Esta acción eliminará de forma permanente el registro de este correo enviado de la bandeja de salida. No se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                onClick={() => setDeleteConfirm({ isOpen: false, emailId: null })}
+                disabled={deleting}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: 'white',
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  color: '#4B5563',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => !deleting && (e.currentTarget.style.backgroundColor = '#F9FAFB')}
+                onMouseLeave={e => !deleting && (e.currentTarget.style.backgroundColor = 'white')}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteEmail}
+                disabled={deleting}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: deleting ? '#FDA4AF' : '#EF4444',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  color: 'white',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => !deleting && (e.currentTarget.style.backgroundColor = '#DC2626')}
+                onMouseLeave={e => !deleting && (e.currentTarget.style.backgroundColor = '#EF4444')}
+              >
+                {deleting ? 'Eliminando...' : 'Sí, eliminar'}
               </button>
             </div>
           </div>
