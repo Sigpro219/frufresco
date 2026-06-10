@@ -104,7 +104,14 @@ export async function POST(req: Request) {
     const smtpPass = process.env.SMTP_PASS;
     let messageId = 'simulated-id';
 
-    if (resendApiKey) {
+    const cleanToEmail = (to_email || '').toLowerCase().trim();
+    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const isCorporate = corporateEmails.includes(cleanToEmail) || cleanToEmail.endsWith('@frufresco.com') || cleanToEmail.endsWith('@frufresco.co');
+
+    if (isCorporate) {
+      console.log('[Mail Queue Processor] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', cleanToEmail);
+      messageId = 'simulated-corporate-id';
+    } else if (resendApiKey) {
       console.log('[Mail Queue Processor] Sending via Resend API...');
       const emailPayload = {
         from: 'Investments Cortés (Pedidos) <pedidos@frufresco.com>',

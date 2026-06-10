@@ -128,7 +128,23 @@ export async function POST(req: Request) {
     const textAlternative = `Hola. Queremos informarte que en este momento no contamos con disponibilidad de ${isMultiple ? 'los siguientes productos' : 'el siguiente producto'}: "${deletedItemsText}" en nuestro inventario. ${isMultiple ? 'Han' : 'Este ítem ha'} sido removido de tu solicitud de pedido. El valor total estimado de tu pedido es ahora ${formattedTotal}.`;
 
     console.log('[Notify Deleted API] Sending notification email...');
-    if (smtpUser && smtpPass) {
+    const cleanSourceEmail = (sourceEmail || '').toLowerCase().trim();
+    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const isCorporate = corporateEmails.includes(cleanSourceEmail) || cleanSourceEmail.endsWith('@frufresco.com') || cleanSourceEmail.endsWith('@frufresco.co');
+
+    if (isCorporate) {
+      console.log('[Notify Deleted API] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', cleanSourceEmail);
+      await supabaseAdmin.from('mail').insert({
+        to_email: sourceEmail,
+        subject: `${emailSubject} (Simulado)`,
+        message: {
+          text: `[SIMULADO] ${textAlternative}`,
+          html: emailHtml
+        },
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+    } else if (smtpUser && smtpPass) {
       try {
         const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransport({

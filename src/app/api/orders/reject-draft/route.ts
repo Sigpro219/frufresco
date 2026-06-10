@@ -76,7 +76,26 @@ export async function POST(req: Request) {
     `;
 
     console.log('[Reject Draft API] Sending rejection email...');
-    if (smtpUser && smtpPass) {
+    const cleanSourceEmail = (sourceEmail || '').toLowerCase().trim();
+    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const isCorporate = corporateEmails.includes(cleanSourceEmail) || cleanSourceEmail.endsWith('@frufresco.com') || cleanSourceEmail.endsWith('@frufresco.co');
+
+    if (isCorporate) {
+      console.log('[Reject Draft API] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', cleanSourceEmail);
+      const { error: insertError } = await supabaseAdmin.from('mail').insert({
+        to_email: sourceEmail,
+        subject: 'Novedad sobre tu pedido - FruFresco (Simulado)',
+        message: {
+          text: `[SIMULADO] ${textAlternative}`,
+          html: emailHtml
+        },
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      });
+      if (insertError) {
+        console.error('[Reject Draft API] Failed to log simulated mail in database:', insertError);
+      }
+    } else if (smtpUser && smtpPass) {
       try {
         const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransport({
