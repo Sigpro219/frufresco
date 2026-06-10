@@ -1163,7 +1163,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
             width: '100%',
-            maxWidth: '800px',
+            maxWidth: '1150px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
@@ -1505,8 +1505,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         }
                                       }}
                                       style={{
-                                        width: '60px',
-                                        padding: '0.5rem',
+                                        width: '90px',
+                                        padding: '0.5rem 0.25rem',
                                         textAlign: 'center',
                                         borderRadius: '6px',
                                         border: '1px solid #10B981',
