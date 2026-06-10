@@ -19,6 +19,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
+  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -295,11 +296,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         };
       });
       setEditableItems(initialEdits);
+
+      // Initialize delivery date from metadata if present
+      const metadata = getDraftMetadata(selectedDraft);
+      if (metadata.deliveryDate) {
+        setDeliveryDate(metadata.deliveryDate);
+      } else {
+        setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      }
       
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
       setEditableItems([]);
+      setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
   }, [selectedDraft, products, aliases]);
 
@@ -316,7 +326,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
-      clientType: meta?.clientType || draft.profiles?.role || 'b2c_client'
+      clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
+      deliveryDate: meta?.deliveryDate || null
     };
   };
 
@@ -347,9 +358,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
 
       // 3. Update the draft's extracted_items to include our manual edits
-      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata);
+      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      const updatedMetaItem = {
+        ...metaItem,
+        deliveryDate: deliveryDate
+      };
       const updatedExtractedItems = [
-        ...(metaItem ? [metaItem] : []),
+        updatedMetaItem,
         ...editableItems
       ];
 
@@ -663,69 +678,96 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No se encontraron correos con los filtros actuales.</p>
         </div>
       ) : viewMode === 'list' ? (
-        <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ backgroundColor: '#F9FAFB', borderBottom: `1px solid ${THEME.colors.border}`, color: THEME.colors.textSecondary, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>FECHA / TIPO</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>CLIENTE DETECTADO</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>DIRECCIÓN EXTRACT.</th>
-                <th style={{ padding: '1rem', textAlign: 'left' }}>ASUNTO</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>ITEMS</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>ACCIONES</th>
+              <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE DETECTADO</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN EXTRACT. / GPS</th>
+                <th style={{ padding: '1rem', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO</th>
+                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS</th>
+                <th style={{ padding: '1rem', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR EST.</th>
+                <th style={{ padding: '1rem', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
               {filteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
-                const itemsCount = getDraftItems(draft).length;
+                const items = getDraftItems(draft);
+                const itemsCount = items.length;
+                const estimatedTotal = items.reduce((acc: number, item: any) => {
+                  const matchedProd = products.find(p => p.id === item.matched_product_id);
+                  return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                }, 0);
+
                 return (
                 <tr 
                   key={draft.id} 
                   onClick={() => setSelectedDraft(draft)}
-                  style={{ borderBottom: `1px solid ${THEME.colors.border}`, cursor: 'pointer', transition: 'background-color 0.15s' }}
+                  style={{ 
+                    borderBottom: '1px solid #F1F5F9', 
+                    cursor: 'pointer', 
+                    transition: 'all 0.1s',
+                    backgroundColor: 'transparent'
+                  }}
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ fontWeight: 800, color: '#111827', fontSize: '0.9rem' }}>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>
                       {new Date(draft.created_at).toLocaleDateString()}
                     </div>
-                    <span style={{ 
-                      color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
-                      fontWeight: 700, 
-                      fontSize: '0.75rem' 
-                    }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: meta.clientType === 'b2b_client' ? '#6366F1' : '#EC4899' }}>
                       {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>{draft.client_detected_name || 'Desconocido'}</div>
-                    <div style={{ color: '#6B7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                      <Mail size={12} /> {draft.source_email}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ color: '#4B5563', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {meta.address !== 'No detectado' ? meta.address : '-'}
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>
+                      {draft.client_detected_name || 'Desconocido'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      <Mail size={10} strokeWidth={1.5} /> {draft.source_email}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', maxWidth: '250px' }}>
-                    <div style={{ color: '#4B5563', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>
+                      {meta.address !== 'No detectado' ? (meta.address.slice(0, 35) + '...') : '-'}
+                    </div>
+                    {meta.address !== 'No detectado' ? (
+                      <span style={{ fontSize: '0.6rem', color: '#059669', fontWeight: '900' }}>📍 GPS OK</span>
+                    ) : (
+                      <span style={{ fontSize: '0.6rem', color: '#9CA3AF', fontWeight: '700' }}>⚠ SIN GPS</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#4B5563', fontWeight: '500', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {draft.email_subject || '-'}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
-                    <div style={{ fontWeight: 800, color: '#111827' }}>{itemsCount}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>prods</div>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', fontWeight: '800', color: '#4B5563', fontSize: '0.85rem' }}>
+                    {itemsCount} <span style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 'normal' }}>prods</span>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
+                    {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
+                  </td>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
+                    <div style={{
+                      padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                      backgroundColor: '#FEF3C7',
+                      color: '#92400E'
+                    }}>
+                      PENDIENTE
+                    </div>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={(e) => handleDelete(draft.id, e)}
-                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px' }}
+                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                       title="Rechazar"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>
@@ -901,14 +943,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#4B5563', fontSize: '0.9rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MapPin size={16} /> {getDraftMetadata(selectedDraft).address || 'Dirección no detectada'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={16} style={{ color: THEME.colors.primary }} />
+                    {getDraftMetadata(selectedDraft).address ? (
+                      <a
+                        href={draftCoordinates 
+                          ? `https://www.google.com/maps/search/?api=1&query=${draftCoordinates.lat},${draftCoordinates.lng}` 
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getDraftMetadata(selectedDraft).address)}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: THEME.colors.primary,
+                          textDecoration: 'underline',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title="Ver ubicación en Google Maps"
+                      >
+                        {getDraftMetadata(selectedDraft).address}
+                        <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>↗</span>
+                      </a>
+                    ) : (
+                      <span>Dirección no detectada</span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} /> {getDraftMetadata(selectedDraft).phone || 'Teléfono no detectado'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
+                  
+                  {/* Delivery Date Selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
+                    <Calendar size={16} style={{ color: THEME.colors.primary }} />
+                    <span style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>Fecha de Entrega:</span>
+                    <input
+                      type="date"
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${THEME.colors.border}`,
+                        fontSize: '0.85rem',
+                        color: '#374151',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    />
+                  </div>
                   {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
                   {draftCoordinates && (
                     <div style={{
                       fontSize: '0.8rem',
-                      color: checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client'
+                      color: checkIsNewClient(selectedDraft)
                         ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
                         : '#059669',
                       fontWeight: 600,
@@ -918,7 +1008,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }}>
                       <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
                       <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
-                      {checkIsNewClient(selectedDraft) && getDraftMetadata(selectedDraft).clientType === 'b2c_client' && (
+                      {checkIsNewClient(selectedDraft) && (
                         <span>
                           {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
                             ? '✅ En Zona de Cobertura'
@@ -942,6 +1032,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '50px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1047,6 +1138,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
                                   </td>
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '50px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newEdits = editableItems.filter((_, idx) => idx !== i);
+                                        setEditableItems(newEdits);
+                                      }}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#EF4444',
+                                        cursor: 'pointer',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEE2E2'; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                      title="Eliminar producto"
+                                    >
+                                      <X size={16} strokeWidth={2.5} />
+                                    </button>
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -1105,8 +1222,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const hasCoords = draftCoordinates !== null;
               const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
 
-              // If it's a new B2C client AND we have coordinates AND it's OUT of coverage
-              if (isB2c && isNewClient && hasCoords && !isCovered) {
+              // If it's a new client AND we have coordinates AND it's OUT of coverage
+              if (isNewClient && hasCoords && !isCovered) {
                 return (
                   <div style={{
                     padding: '1.5rem',
@@ -1203,9 +1320,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   borderBottomLeftRadius: THEME.radius.xl,
                   borderBottomRightRadius: THEME.radius.xl
                 }}>
-                  {/* Left Side: Coverage status (only if new B2C client) */}
+                  {/* Left Side: Coverage status (only if new client) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                    {isNewClient && isB2c && (
+                    {isNewClient && (
                       <>
                         <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
                         {geocoding ? (
