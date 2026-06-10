@@ -108,24 +108,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'Ignored automatic email/loop prevention.' });
     }
 
+    // Determine if the email was sent to our corporate email address (which is normal for orders)
+    let recipientEmail = toField;
+    const matchTo = toField.match(/<([^>]+)>/);
+    if (matchTo) {
+      recipientEmail = matchTo[1];
+    }
+    recipientEmail = recipientEmail.trim().toLowerCase();
+
+    const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
+
     if (isCorporateSender && toField) {
-      let recipientEmail = toField;
-      const matchTo = toField.match(/<([^>]+)>/);
-      if (matchTo) {
-        recipientEmail = matchTo[1];
-      }
-      recipientEmail = recipientEmail.trim().toLowerCase();
+      // Si el emisor es corporativo (frufrescodigital@gmail.com), se trata de un correo saliente
+      // (ej. enviado con CCO a la plataforma). En este caso, el cliente es el destinatario (recipientEmail).
       
-      // Si el destinatario también es corporativo o es el mismo correo, no procesar para evitar bucles infinitos
-      if (corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co')) {
-        console.log(`[Email Inbound] Ignorando correo corporativo interno para evitar bucles. De: ${senderEmail} Para: ${recipientEmail}`);
-        return NextResponse.json({ success: true, message: 'Ignored internal corporate email.' });
+      // Si el destinatario también es corporativo, se aborta para evitar bucles.
+      if (isCorporateRecipient) {
+        console.log(`[Email Inbound] Ignorando correo corporativo interno de loop. De: ${senderEmail} Para: ${recipientEmail}`);
+        return NextResponse.json({ success: true, message: 'Ignored internal corporate email loop.' });
       }
 
       console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
-      senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente
+      senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente y responderle
     } else {
-      console.log(`[Email Inbound] Correo entrante recibido desde: ${senderEmail} con asunto: ${subject}`);
+      // Si el emisor NO es corporativo (ej: higuera200@gmail.com), el cliente es el senderEmail.
+      // El correo fue enviado TO a nuestra cuenta corporativa (recipientEmail).
+      console.log(`[Email Inbound] Correo entrante recibido de cliente: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject}`);
     }
 
     // 1. Declare client profile reference
