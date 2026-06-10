@@ -55,6 +55,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   
   useEffect(() => {
     setRecentlyDeletedItems([]);
+    setScrollPercent(0);
+    setIsScrolled(false);
   }, [selectedDraft?.id]);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -76,6 +78,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const [isEditing, setIsEditing] = useState(false);
   const [selectedRowIndices, setSelectedRowIndices] = useState<number[]>([]);
+  const [scrollPercent, setScrollPercent] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -1654,6 +1658,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           zIndex: 9999,
           padding: '1rem'
         }}>
+          <style>{`
+            /* Estilos para Scrollbar Premium */
+            .premium-scrollbar::-webkit-scrollbar {
+              width: 6px;
+              height: 6px;
+            }
+            .premium-scrollbar::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .premium-scrollbar::-webkit-scrollbar-thumb {
+              background: rgba(16, 185, 129, 0.25);
+              border-radius: 10px;
+              transition: all 0.3s ease;
+            }
+            .premium-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: rgba(16, 185, 129, 0.6);
+            }
+            
+            /* Animación de entrada suave para filas */
+            @keyframes fadeInUp {
+              from {
+                opacity: 0;
+                transform: translateY(8px) scale(0.99);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+              }
+            }
+            
+            .scroll-row-animate {
+              animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+            }
+          `}</style>
           <div style={{
             backgroundColor: 'white',
             borderRadius: THEME.radius.xl,
@@ -1662,10 +1700,38 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            position: 'relative',
+            overflow: 'hidden'
           }}>
             {/* Modal Header */}
-            <div style={{ padding: '1.5rem', borderBottom: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{
+              padding: '1.5rem',
+              borderBottom: `1px solid ${THEME.colors.border}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              backgroundColor: isScrolled ? 'rgba(255, 255, 255, 0.85)' : 'white',
+              backdropFilter: isScrolled ? 'blur(12px)' : 'none',
+              transition: 'all 0.3s ease',
+              boxShadow: isScrolled ? '0 4px 20px -5px rgba(0, 0, 0, 0.08)' : 'none',
+              borderTopLeftRadius: THEME.radius.xl,
+              borderTopRightRadius: THEME.radius.xl
+            }}>
+              {/* Barra de progreso de lectura premium */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                width: `${scrollPercent}%`,
+                height: '3px',
+                background: 'linear-gradient(to right, #10B981, #34D399)',
+                transition: 'width 0.1s ease-out',
+                zIndex: 11
+              }} />
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 800 }}>Revisión de Correo</h2>
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
@@ -1776,7 +1842,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+            <div 
+              className="premium-scrollbar"
+              onScroll={(e) => {
+                const target = e.currentTarget;
+                const pct = (target.scrollTop / (target.scrollHeight - target.clientHeight)) * 100;
+                setScrollPercent(isNaN(pct) ? 0 : pct);
+                setIsScrolled(target.scrollTop > 10);
+              }}
+              style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}
+            >
               {selectedDraft.status === 'rejected' && (
                 <div style={{
                   padding: '1rem',
@@ -2053,7 +2128,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
 
                               return (
-                                <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                <tr 
+                                  key={i} 
+                                  className="scroll-row-animate"
+                                  style={{ 
+                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                    animationDelay: `${i * 0.04}s`
+                                  }}
+                                >
                                     {isEditing && (
                                       <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F9FAFB' }}>
                                         <input
