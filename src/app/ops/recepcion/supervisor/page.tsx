@@ -364,6 +364,17 @@ export default function SupervisorDashboard() {
 
         if (pErr) throw pErr;
 
+        // Resolve any active provider novelties for this purchase (e.g. quality warnings)
+        await supabase
+          .from('provider_novelties')
+          .update({
+            resolved: true,
+            resolution_action: 'approved_by_supervisor',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('purchase_id', selectedQuarantine.id)
+          .eq('resolved', false);
+
         // 2. Transfer stock from in_process to available
         // Call handle_inventory_movement using RPC
         const { error: rpcErr } = await supabase.rpc('handle_inventory_movement', {
@@ -396,6 +407,17 @@ export default function SupervisorDashboard() {
           .eq('id', selectedQuarantine.id);
 
         if (pErr) throw pErr;
+
+        // Resolve any active provider novelties for this purchase (e.g. quality warnings)
+        await supabase
+          .from('provider_novelties')
+          .update({
+            resolved: true,
+            resolution_action: 'rejected_by_supervisor',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('purchase_id', selectedQuarantine.id)
+          .eq('resolved', false);
 
         // 2. Discard/Exit from in_process stock
         const { error: rpcErr } = await supabase.rpc('handle_inventory_movement', {

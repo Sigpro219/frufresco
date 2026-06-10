@@ -48,6 +48,52 @@ interface ProcurementTask {
   hasWarning?: boolean;
 }
 
+function formatNumber(num: number | string | null | undefined, maxDecimals = 2): string {
+  if (num === null || num === undefined || isNaN(Number(num))) return '0';
+  const parsed = Number(num);
+  
+  if (parsed % 1 === 0) {
+    return parsed.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  const formatted = parsed.toFixed(maxDecimals);
+  const parts = formatted.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  let decimalPart = parts[1] || '';
+  while (decimalPart.endsWith('0')) {
+    decimalPart = decimalPart.slice(0, -1);
+  }
+  
+  if (decimalPart.length > 0) {
+    return `${parts[0]},${decimalPart}`;
+  }
+  return parts[0];
+}
+
+function formatMoney(num: number | string | null | undefined): string {
+  if (num === null || num === undefined || isNaN(Number(num))) return '$0';
+  const parsed = Number(num);
+  
+  if (parsed % 1 === 0) {
+    return `$${parsed.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+  }
+  
+  const formatted = parsed.toFixed(2);
+  const parts = formatted.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  let decimalPart = parts[1] || '';
+  while (decimalPart.endsWith('0')) {
+    decimalPart = decimalPart.slice(0, -1);
+  }
+  
+  if (decimalPart.length > 0) {
+    return `$${parts[0]},${decimalPart}`;
+  }
+  return `$${parts[0]}`;
+}
+
 export default function ProcurementPage() {
   console.log("ProcurementPage rendering...");
   const { user, profile } = useAuth();
@@ -2127,7 +2173,7 @@ export default function ProcurementPage() {
                     <span
                       style={{ fontWeight: "800", color: "var(--ops-text)" }}
                     >
-                      {selectedTask.total_requested} {selectedTask.unit}
+                      {formatNumber(selectedTask.total_requested)} {selectedTask.unit}
                     </span>
                   </p>
                   {selectedTask.total_requested -
@@ -2142,8 +2188,8 @@ export default function ProcurementPage() {
                     >
                       Faltan:{" "}
                       <span style={{ fontWeight: "800" }}>
-                        {selectedTask.total_requested -
-                          (selectedTask.total_purchased || 0)}{" "}
+                        {formatNumber(selectedTask.total_requested -
+                          (selectedTask.total_purchased || 0))}{" "}
                         {selectedTask.unit}
                       </span>
                     </p>
@@ -2158,8 +2204,8 @@ export default function ProcurementPage() {
                       Extra:{" "}
                       <span style={{ fontWeight: "800" }}>
                         +
-                        {(selectedTask.total_purchased || 0) -
-                          selectedTask.total_requested}{" "}
+                        {formatNumber((selectedTask.total_purchased || 0) -
+                          selectedTask.total_requested)}{" "}
                         {selectedTask.unit}
                       </span>
                     </p>
@@ -2176,7 +2222,7 @@ export default function ProcurementPage() {
                     display: "flex",
                     alignItems: "center"
                   }}>
-                    Ped: {selectedTask.raw_order_qty} | Stock: -{selectedTask.applied_stock} | Seg: +{selectedTask.min_inventory_level} → Meta: {selectedTask.meta_neteo}
+                    Ped: {formatNumber(selectedTask.raw_order_qty)} | Stock: -{formatNumber(selectedTask.applied_stock)} | Seg: +{formatNumber(selectedTask.min_inventory_level)} → Meta: {formatNumber(selectedTask.meta_neteo)}
                   </div>
                 </div>
               </div>
@@ -2282,11 +2328,11 @@ export default function ProcurementPage() {
                         }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
                             <span>👤 {purchase.provider?.name || "Proveedor Desconocido"}</span>
-                            <span style={{ color: "var(--ops-primary)" }}>+{purchase.quantity} {purchase.purchase_unit || "Kg"}</span>
+                            <span style={{ color: "var(--ops-primary)" }}>+{formatNumber(purchase.quantity)} {purchase.purchase_unit || "Kg"}</span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", color: "var(--ops-text-muted)", fontSize: "0.75rem" }}>
-                            <span>Precio: ${purchase.unit_price} / {purchase.purchase_unit || "Kg"}</span>
-                            <span>Total: ${purchase.total_cost}</span>
+                            <span>Precio: {formatMoney(purchase.unit_price)} / {purchase.purchase_unit || "Kg"}</span>
+                            <span>Total: {formatMoney(purchase.total_cost)}</span>
                           </div>
                           {purchase.estimated_pickup_time && (
                             <div style={{ fontSize: "0.75rem", color: "#F59E0B" }}>
@@ -2295,10 +2341,28 @@ export default function ProcurementPage() {
                           )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem", borderTop: "1px dashed var(--ops-border)", paddingTop: "0.25rem" }}>
                             <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)" }}>
-                              Estado: <span style={{
-                                fontWeight: "bold",
-                                color: purchase.status === "completed" ? "var(--ops-primary)" : purchase.status === "rejected" ? "#EF4444" : "#F59E0B"
-                              }}>{purchase.status === "completed" ? "Recogido ✓" : purchase.status === "rejected" ? "Devuelto/Rechazado 🔴" : "Pendiente Recogida ⏳"}</span>
+                              Estado:{" "}
+                              {(() => {
+                                switch (purchase.status) {
+                                  case 'received_ok':
+                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }}>Recibido Conforme ✓</span>;
+                                  case 'received_partial':
+                                    return <span style={{ fontWeight: "bold", color: "var(--ops-primary)" }}>Recibido Parcial ✓</span>;
+                                  case 'received_rejected':
+                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }}>Rechazado en Recepción 🔴</span>;
+                                  case 'rejected':
+                                    return <span style={{ fontWeight: "bold", color: "#EF4444" }}>Rechazado en Recogida 🔴</span>;
+                                  case 'picked_up':
+                                    return <span style={{ fontWeight: "bold", color: "#3B82F6" }}>En Tránsito / Recogido 🚚</span>;
+                                  case 'partial_pickup':
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>Recogida Parcial ⏳</span>;
+                                  case 'receiving':
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>En Recepción 🏢</span>;
+                                  case 'pending_pickup':
+                                  default:
+                                    return <span style={{ fontWeight: "bold", color: "#F59E0B" }}>Pendiente Recogida ⏳</span>;
+                                }
+                              })()}
                             </span>
                             {purchase.voucher_image_url && (
                               <a href={purchase.voucher_image_url} target="_blank" rel="noreferrer" style={{

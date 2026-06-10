@@ -106,8 +106,13 @@ export default function PickingExecutionPage() {
             const cutoffEnabled = settings?.value !== 'false';
 
             if (cutoffEnabled) {
-                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-                const targetDate = now.toISOString().split('T')[0];
+                const bogotaOffsetMs = -5 * 60 * 60 * 1000;
+                const nowUTC = new Date();
+                const nowBogota = new Date(nowUTC.getTime() + bogotaOffsetMs);
+                const year = nowBogota.getUTCFullYear();
+                const month = String(nowBogota.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(nowBogota.getUTCDate()).padStart(2, '0');
+                const targetDate = `${year}-${month}-${day}`;
                 query = query.eq('delivery_date', targetDate);
                 console.log(`🔍 Picking filtered for operational date: ${targetDate}`);
             } else {
@@ -458,36 +463,21 @@ export default function PickingExecutionPage() {
 
             if (orderItemError) throw orderItemError;
 
-            // Inventory Integration
-            if (exceptionQuality === 'red' || qty < exceptionItem.quantity) {
+            // Inventory Integration: Si el producto es rechazado (rojo), registramos movimiento a cuarentena.
+            // Los movimientos normales de alistamiento (exits) se manejan automáticamente vía trigger de base de datos.
+            if (exceptionQuality === 'red') {
                 const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
-                
                 if (warehouseData) {
-                    const diff = exceptionItem.quantity - qty;
-                    
-                    if (exceptionQuality === 'red') {
-                        await supabase.from('inventory_movements').insert([{
-                            product_id: exceptionItem.product_id,
-                            warehouse_id: warehouseData.id,
-                            quantity: -exceptionItem.quantity,
-                            type: 'adjustment',
-                            status_to: 'in_process',
-                            notes: `Rechazo en picking: ${exceptionReason}`,
-                            reference_type: 'order_picking',
-                            reference_id: exceptionItem.id
-                        }]);
-                    } else if (qty < exceptionItem.quantity) {
-                        await supabase.from('inventory_movements').insert([{
-                            product_id: exceptionItem.product_id,
-                            warehouse_id: warehouseData.id,
-                            quantity: -diff,
-                            type: 'exit',
-                            status_to: 'available',
-                            notes: `Faltante en picking: ${exceptionReason || 'No especificado'}`,
-                            reference_type: 'order_picking',
-                            reference_id: exceptionItem.id
-                        }]);
-                    }
+                    await supabase.from('inventory_movements').insert([{
+                        product_id: exceptionItem.product_id,
+                        warehouse_id: warehouseData.id,
+                        quantity: -exceptionItem.quantity,
+                        type: 'adjustment',
+                        status_to: 'in_process',
+                        notes: `Rechazo por calidad en picking: ${exceptionReason || 'No especificado'}`,
+                        reference_type: 'order_picking',
+                        reference_id: exceptionItem.id
+                    }]);
                 }
             }
 

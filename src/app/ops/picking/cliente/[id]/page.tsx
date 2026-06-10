@@ -16,6 +16,7 @@ import {
 
 interface ProductItem {
     id: string; // order_item_id
+    product_id: string;
     product_name: string;
     category: string;
     unit_of_measure: string;
@@ -54,7 +55,7 @@ function PickingClientContent() {
                         id, company_name, contact_name, role
                     ),
                     order_items (
-                        id, quantity, picked_quantity, nickname, variant_label,
+                        id, product_id, quantity, picked_quantity, nickname, variant_label,
                         products (name, category, unit_of_measure)
                     )
                 `)
@@ -79,6 +80,7 @@ function PickingClientContent() {
                     const dispName = variant ? `${item.products?.name} (${variant})` : item.products?.name;
                     return {
                         id: item.id,
+                        product_id: item.product_id,
                         product_name: dispName,
                         category: item.products?.category,
                         unit_of_measure: item.products?.unit_of_measure,
@@ -106,10 +108,29 @@ function PickingClientContent() {
                 .from('order_items')
                 .update({
                     picked_quantity: qty,
+                    quality_status: quality
                 })
                 .eq('id', selectedItem.id);
 
             if (error) throw error;
+
+            // Integración de Inventario: Si el producto es rechazado (rojo), registramos movimiento a cuarentena.
+            // Los movimientos normales de alistamiento (exits) se manejan automáticamente vía trigger de base de datos.
+            if (quality === 'red') {
+                const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
+                if (warehouseData) {
+                    await supabase.from('inventory_movements').insert([{
+                        product_id: selectedItem.product_id,
+                        warehouse_id: warehouseData.id,
+                        quantity: -selectedItem.quantity,
+                        type: 'adjustment',
+                        status_to: 'in_process',
+                        notes: `Rechazo por calidad en alistamiento de cliente`,
+                        reference_type: 'order_picking',
+                        reference_id: selectedItem.id
+                    }]);
+                }
+            }
 
             setSelectedItem(null);
             fetchData();

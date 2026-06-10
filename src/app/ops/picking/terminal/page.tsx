@@ -7,6 +7,7 @@ import { isAbortError } from '@/lib/errorUtils';
 // Types
 type PickingItem = {
     id: string; // OrderItem ID
+    product_id: string;
     product_name: string;
     quantity: number;
     picked_quantity: number;
@@ -17,9 +18,11 @@ type PickingItem = {
 
 interface SupabaseOrderItem {
     id: string;
+    product_id: string;
     quantity: number;
     picked_quantity: number | null;
     products: {
+        id: string;
         name: string;
         unit_of_measure: string;
     };
@@ -58,8 +61,8 @@ export default function PickingTerminal() {
             const { data, error } = await supabase
                 .from('order_items')
                 .select(`
-                    id, quantity, picked_quantity,
-                    products!inner (name, unit_of_measure),
+                    id, product_id, quantity, picked_quantity,
+                    products!inner (id, name, unit_of_measure),
                     orders!inner (
                         status,
                         profiles:profile_id (
@@ -92,6 +95,7 @@ export default function PickingTerminal() {
                     }
                     return {
                         id: item.id,
+                        product_id: item.product_id || item.products.id,
                         product_name: item.products.name,
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || 0,
@@ -149,7 +153,10 @@ export default function PickingTerminal() {
         if (error) {
             alert('Error al guardar. Recarga.');
             loadTasks(selectedCell!);
+            return;
         }
+
+        // Integración de Inventario: Se maneja automáticamente vía trigger de base de datos al actualizar picked_quantity.
 
         // Auto-clear message
         setTimeout(() => setLastAction(null), 3000);

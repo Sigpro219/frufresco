@@ -169,7 +169,7 @@ export default function OpsHome() {
                         <div className="op-icon-wrapper">
                             <ShieldAlert size={24} strokeWidth={1.5} />
                         </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>SUPERVISOR RECEPCIÓN</div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '1.1rem', color: 'var(--ops-text)' }}>SUPERVISOR</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--ops-text-muted)' }}>Autorizaciones y Cuarentena</div>
                     </div>
                 </Link>

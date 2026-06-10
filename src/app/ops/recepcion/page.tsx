@@ -141,25 +141,28 @@ export default function ReceptionPage() {
     const fetchIncoming = async () => {
         setLoading(true);
         try {
-            const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-            const year = nowBogota.getFullYear();
-            const month = String(nowBogota.getMonth() + 1).padStart(2, '0');
-            const day = String(nowBogota.getDate()).padStart(2, '0');
+            // Bogota is always UTC-5
+            const bogotaOffsetMs = -5 * 60 * 60 * 1000;
+            const nowUTC = new Date();
+            const nowBogota = new Date(nowUTC.getTime() + bogotaOffsetMs);
+
+            const year = nowBogota.getUTCFullYear();
+            const month = String(nowBogota.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(nowBogota.getUTCDate()).padStart(2, '0');
             const todayBogota = `${year}-${month}-${day}`;
             setTargetDateLabel(todayBogota);
 
             // Jornada de Compra starts at 5:00 PM (17:00) of previous day (Colombia time)
-            const startOfShift = new Date(nowBogota);
-            if (nowBogota.getHours() >= 17) {
-                startOfShift.setHours(17, 0, 0, 0);
-            } else {
-                startOfShift.setDate(nowBogota.getDate() - 1);
-                startOfShift.setHours(17, 0, 0, 0);
+            const shiftDate = new Date(nowBogota);
+            if (nowBogota.getUTCHours() < 17) {
+                // If before 5:00 PM Bogota time, the shift started the previous day
+                shiftDate.setUTCDate(nowBogota.getUTCDate() - 1);
             }
-            const y = startOfShift.getFullYear();
-            const m = String(startOfShift.getMonth() + 1).padStart(2, '0');
-            const d = String(startOfShift.getDate()).padStart(2, '0');
-            const shiftStartISO = `${y}-${m}-${d}T22:00:00.000Z`; // 17:00 Bogota is 22:00 UTC
+            
+            const sy = shiftDate.getUTCFullYear();
+            const sm = String(shiftDate.getUTCMonth() + 1).padStart(2, '0');
+            const sd = String(shiftDate.getUTCDate()).padStart(2, '0');
+            const shiftStartISO = `${sy}-${sm}-${sd}T22:00:00.000Z`; // 17:00 Bogota is 22:00 UTC
 
             // Fetch ALL relevant statuses for Reception context to calculate global progress (since shift start)
             const { data, error } = await supabase
@@ -177,8 +180,7 @@ export default function ReceptionPage() {
                         name
                     )
                 `)
-                .gte('created_at', shiftStartISO)
-                .in('status', ['picked_up', 'partial_pickup', 'receiving', 'received_ok', 'received_review', 'received_rejected', 'received_partial'])
+                .or(`status.in.(picked_up,partial_pickup,receiving),and(status.in.(received_ok,received_review,received_rejected,received_partial),created_at.gte.${shiftStartISO})`)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -296,6 +298,17 @@ export default function ReceptionPage() {
                 .eq('id', selectedItem.id);
 
             if (purchaseError) throw purchaseError;
+
+            // Resolve any active provider novelties for this purchase (e.g. quality warnings from pickup)
+            await supabase
+                .from('provider_novelties')
+                .update({
+                    resolved: true,
+                    resolution_action: finalStatus === 'received_rejected' ? 'rejected' : 'received',
+                    resolved_at: new Date().toISOString()
+                })
+                .eq('purchase_id', selectedItem.id)
+                .eq('resolved', false);
 
             // Reopen buyer task and log provider novelty if rejected in receiving
             if (finalStatus === 'received_rejected' && selectedItem.task_id) {

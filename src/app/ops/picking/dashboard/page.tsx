@@ -18,7 +18,9 @@ import {
     Calendar,
     X,
     XCircle,
-    Target
+    Target,
+    Package,
+    Filter
 } from 'lucide-react';
 
 // Types
@@ -123,6 +125,53 @@ export default function PickingDashboard() {
     const [currentTime, setCurrentTime] = useState('');
     const [isConnected, setIsConnected] = useState(false);
     const [showBannerModal, setShowBannerModal] = useState(false);
+
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const popoverRef = useRef<HTMLDivElement>(null);
+
+    // Click outside handler to close category filter popover
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Load category selection from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('picking_dashboard_selected_categories');
+        if (saved) {
+            try {
+                setSelectedCategories(JSON.parse(saved));
+            } catch (e) {
+                console.error("Error loading categories", e);
+            }
+        }
+    }, []);
+
+    const handleCategoryToggle = (categoryName: string) => {
+        setSelectedCategories(prev => {
+            const next = prev.includes(categoryName)
+                ? prev.filter(c => c !== categoryName)
+                : [...prev, categoryName];
+            localStorage.setItem('picking_dashboard_selected_categories', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const handleSelectAllCategories = () => {
+        setSelectedCategories([]);
+        localStorage.removeItem('picking_dashboard_selected_categories');
+    };
+
+    const handleSelectNoneCategories = () => {
+        setSelectedCategories([]);
+        localStorage.setItem('picking_dashboard_selected_categories', JSON.stringify([]));
+    };
 
     useEffect(() => {
         // Hydration fix for time
@@ -260,28 +309,39 @@ export default function PickingDashboard() {
             if (isMounted.current) setClients(formattedClients);
 
             // 3. Fetch Products with Stock Info
-            const { data: prods } = await supabase
-                .from('products')
-                .select(`
-                    id, name, category, buying_team, unit_of_measure, min_inventory_level,
-                    inventory_stocks (quantity, status)
-                `)
-                .order('buying_team')
-                .order('name')
-                .abortSignal(signal as any);
-            
-            const processedProds = (prods || []).map((p: any) => {
-                const currentStock = (p.inventory_stocks as any[])
-                    ?.filter(s => s.status === 'available')
-                    .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0) || 0;
+            const activeProductIds = Array.from(new Set(
+                activeOrders.flatMap(o => (o.order_items || []).map(item => item.product_id))
+            )).filter(Boolean);
+
+            let processedProds: Product[] = [];
+            if (activeProductIds.length > 0) {
+                let prodsQuery = supabase
+                    .from('products')
+                    .select(`
+                        id, name, category, buying_team, unit_of_measure, min_inventory_level,
+                        inventory_stocks (quantity, status)
+                    `)
+                    .in('id', activeProductIds)
+                    .order('buying_team')
+                    .order('name');
                 
-                return {
-                    ...p,
-                    current_stock: currentStock
-                };
-            });
+                if (signal) prodsQuery = prodsQuery.abortSignal(signal);
                 
-            if (isMounted.current) setProducts(processedProds as Product[]);
+                const { data: prods } = await prodsQuery;
+                
+                processedProds = (prods || []).map((p: any) => {
+                    const currentStock = (p.inventory_stocks as any[])
+                        ?.filter(s => s.status === 'available')
+                        .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0) || 0;
+                    
+                    return {
+                        ...p,
+                        current_stock: currentStock
+                    };
+                }) as Product[];
+            }
+                
+            if (isMounted.current) setProducts(processedProds);
 
             // 4. Build Matrix
             const newMatrix: Record<string, Record<string, CellData>> = {};
@@ -387,17 +447,17 @@ export default function PickingDashboard() {
         // Update Backend
         if (cellData.items.length > 0) {
             const firstItem = cellData.items[0];
-            await supabase.from('order_items').update({ picked_quantity: newPickedTotal }).eq('id', firstItem.id);
+            const { error: updateError } = await supabase.from('order_items').update({ picked_quantity: newPickedTotal }).eq('id', firstItem.id);
+            if (updateError) {
+                console.error("Error updating picked quantity:", updateError);
+                return;
+            }
+
+            // Integración de Inventario: Se maneja automáticamente vía trigger de base de datos al actualizar picked_quantity.
         }
     };
 
-    // Group Products by Alistamiento Category (buying_team)
-    const productsByBuyingTeam = products.reduce((acc, p) => {
-        const team = p.buying_team || 'SIN ASIGNAR';
-        if (!acc[team]) acc[team] = [];
-        acc[team].push(p);
-        return acc;
-    }, {} as Record<string, Product[]>);
+    // Grouping is handled below based on selected categories and sorting.
 
     const getZoneColor = (zone: string) => {
         switch (zone) {
@@ -513,10 +573,38 @@ export default function PickingDashboard() {
         ? sortedClients.filter(c => !isClientComplete(c.id))
         : sortedClients;
 
+    // Get all unique categories (buying_team values)
+    const allCategories = Array.from(new Set(products.map(p => p.buying_team || 'SIN ASIGNAR'))).sort();
+
+    // Filter products based on selected categories (if any selected)
+    const filteredProductsByCategories = selectedCategories.length > 0
+        ? products.filter(p => selectedCategories.includes(p.buying_team || 'SIN ASIGNAR'))
+        : products;
+
     // In FIDS mode, hide completed products.
     const visibleProducts = isFidsMode
-        ? products.filter(p => !isProductComplete(p.id))
-        : products;
+        ? filteredProductsByCategories.filter(p => !isProductComplete(p.id))
+        : filteredProductsByCategories;
+
+    // Group Products by Alistamiento Category (buying_team)
+    const productsByBuyingTeam = visibleProducts.reduce((acc, p) => {
+        const team = p.buying_team || 'SIN ASIGNAR';
+        if (!acc[team]) acc[team] = [];
+        acc[team].push(p);
+        return acc;
+    }, {} as Record<string, Product[]>);
+
+    // Sort products inside each category: incomplete first, completed last
+    Object.keys(productsByBuyingTeam).forEach(team => {
+        productsByBuyingTeam[team].sort((a, b) => {
+            const completeA = isProductComplete(a.id);
+            const completeB = isProductComplete(b.id);
+            if (completeA !== completeB) {
+                return completeA ? 1 : -1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+    });
 
     const zoneHeaders: { name: string; count: number; color: string; percent: number; departureTime?: string }[] = [];
     let currentZone = '';
@@ -739,7 +827,7 @@ export default function PickingDashboard() {
                 background: '#0F1820',
                 boxSizing: 'border-box',
                 flexShrink: 0,
-                zIndex: 10
+                zIndex: 150
             }}>
                 <div
                     onClick={() => router.push('/ops')}
@@ -816,6 +904,127 @@ export default function PickingDashboard() {
                         </div>
 
                          <div style={{ fontSize: density === 'tv' ? '1.2rem' : '2rem', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', minWidth: density === 'tv' ? '90px' : '150px', textAlign: 'right' }}>{currentTime}</div>
+
+                        {/* CATEGORY FILTER MULTI-SELECT */}
+                        <div style={{ position: 'relative', marginLeft: '15px' }} ref={popoverRef}>
+                            <button 
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '8px',
+                                    background: isDropdownOpen ? '#0D7A57' : '#0A111C',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    color: '#fff',
+                                    fontSize: density === 'tv' ? '0.7rem' : '0.8rem',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.2s',
+                                    height: '32px'
+                                }}
+                            >
+                                <Filter size={14} />
+                                <span style={{ whiteSpace: 'nowrap' }}>
+                                    Células: {selectedCategories.length === 0 ? 'Todas' : `${selectedCategories.length}`}
+                                </span>
+                            </button>
+                            
+                            {isDropdownOpen && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    right: 0,
+                                    marginTop: '8px',
+                                    width: '280px',
+                                    background: '#0B1319',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                                    padding: '12px',
+                                    zIndex: 1000,
+                                    maxHeight: '400px',
+                                    overflowY: 'auto'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+                                        <button 
+                                            onClick={handleSelectAllCategories}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#34D399',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                padding: '2px 6px'
+                                            }}
+                                        >
+                                            Todas (Reset)
+                                        </button>
+                                        <button 
+                                            onClick={handleSelectNoneCategories}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#EF4444',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                padding: '2px 6px'
+                                            }}
+                                        >
+                                            Ninguna
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        {allCategories.map(cat => {
+                                            const isChecked = selectedCategories.includes(cat);
+                                            const catProducts = products.filter(p => (p.buying_team || 'SIN ASIGNAR') === cat);
+                                            const catPercent = getCategoryPercent(cat, catProducts);
+
+                                            return (
+                                                <label 
+                                                    key={cat} 
+                                                    style={{ 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        gap: '8px', 
+                                                        color: isChecked ? '#fff' : '#94A3B8',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '6px',
+                                                        background: isChecked ? 'rgba(255,255,255,0.03)' : 'transparent',
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={isChecked}
+                                                        onChange={() => handleCategoryToggle(cat)}
+                                                        style={{ cursor: 'pointer', accentColor: '#0D7A57' }}
+                                                    />
+                                                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {cat.toUpperCase()}
+                                                    </span>
+                                                    <span style={{ 
+                                                        fontSize: '0.7rem', 
+                                                        background: catPercent === 100 ? 'rgba(16,185,129,0.1)' : 'rgba(250,204,21,0.1)',
+                                                        color: catPercent === 100 ? '#34D399' : '#FACC15',
+                                                        padding: '1px 6px',
+                                                        borderRadius: '10px',
+                                                        fontWeight: 'bold'
+                                                    }}>
+                                                        {catPercent}%
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {/* DENSITY SELECTOR */}
                         <div style={{ 
@@ -909,7 +1118,48 @@ export default function PickingDashboard() {
 
             {/* SCROLLABLE GRID */}
             <div style={{ flex: 1, overflow: 'auto', position: 'relative', paddingBottom: '32px' }}>
-                <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
+                {Object.keys(productsByBuyingTeam).length === 0 ? (
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        color: '#94A3B8',
+                        padding: '40px',
+                        textAlign: 'center'
+                    }}>
+                        <Filter size={48} style={{ marginBottom: '16px', opacity: 0.5, color: '#3B82F6' }} />
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff', marginBottom: '8px' }}>
+                            No hay células seleccionadas o no hay tareas pendientes
+                        </h3>
+                        <p style={{ fontSize: '0.9rem', maxWidth: '400px', margin: '0 auto 16px', lineHeight: '1.4' }}>
+                            {selectedCategories.length === 0 && isFidsMode
+                                ? 'Todos los productos han sido alistados. ¡Buen trabajo!'
+                                : 'Selecciona una o más células en el filtro de la parte superior para visualizar la matriz de alistamiento.'}
+                        </p>
+                        {selectedCategories.length > 0 && (
+                            <button
+                                onClick={handleSelectAllCategories}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    background: '#0D7A57',
+                                    border: 'none',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#0b6648')}
+                                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#0D7A57')}
+                            >
+                                Mostrar todas las células
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
                     <thead>
                         {/* ROW 1: ZONES (Sticky Top) */}
                         <tr>
@@ -1115,40 +1365,62 @@ export default function PickingDashboard() {
                                 return (
                                     <Fragment key={team}>
                                         {/* Category Header */}
-                                        <tr>
+                                        <tr style={{ height: '28px' }}>
                                             <td colSpan={visibleClients.length + 1} style={{
-                                                background: '#0F1820', color: '#94A3B8',
-                                                fontWeight: 'bold', fontSize: cfg.fontSize,
-                                                padding: density === 'tv' ? '0.2rem 1rem' : '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                                position: 'sticky', left: 0
+                                                background: '#131F2E',
+                                                borderBottom: '1.5px solid rgba(0,0,0,0.3)',
+                                                borderTop: '1px solid rgba(255,255,255,0.06)',
+                                                borderLeft: `4px solid ${isCatComplete ? '#10B981' : '#3B82F6'}`,
+                                                padding: '0.2rem 0.75rem',
+                                                position: 'sticky',
+                                                left: 0,
+                                                zIndex: 9
                                             }}>
-                                                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '20px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '16px' }}>
+                                                    {/* Category Tag Pill */}
                                                     <span style={{ 
-                                                        minWidth: '250px', 
-                                                        display: 'inline-block',
-                                                        color: isCatComplete ? '#34D399' : '#94A3B8'
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        color: isCatComplete ? '#34D399' : '#F8FAFC',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '900',
+                                                        letterSpacing: '1.2px',
+                                                        textTransform: 'uppercase',
+                                                        backgroundColor: 'rgba(255,255,255,0.04)',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid rgba(255,255,255,0.06)'
                                                     }}>
-                                                        {isCatComplete ? '✓ ' : ''}{team.toUpperCase()}
+                                                        <Package size={11} style={{ color: isCatComplete ? '#10B981' : '#3B82F6' }} />
+                                                        {team.toUpperCase()}
                                                     </span>
 
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    {/* Progress Indicator */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         {/* Mini Progress Bar Background */}
-                                                        <div style={{ width: '100px', height: '6px', background: '#080D12', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                                        <div style={{ width: '80px', height: '5px', background: '#080D12', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', display: 'flex' }}>
                                                             <div style={{
                                                                 width: `${catPercent}%`,
                                                                 height: '100%',
-                                                                background: isCatComplete ? '#0D7A57' : '#FACC15',
-                                                                transition: 'width 0.5s ease'
+                                                                background: isCatComplete ? '#10B981' : '#FACC15',
+                                                                transition: 'width 0.5s ease-out'
                                                             }} />
                                                         </div>
 
+                                                        {/* Percentage Pill */}
                                                         <span style={{
-                                                            color: catPercent === 0 ? '#fff' : (isCatComplete ? '#34D399' : '#FACC15'),
-                                                            fontWeight: 'bold',
-                                                            minWidth: '35px', textAlign: 'right',
-                                                             fontSize: '0.9rem'
-                                                         }}>
-                                                             {catPercent}%
+                                                            background: isCatComplete ? 'rgba(16,185,129,0.1)' : 'rgba(250,204,21,0.1)',
+                                                            color: isCatComplete ? '#34D399' : '#FACC15',
+                                                            border: `1px solid ${isCatComplete ? 'rgba(16,185,129,0.15)' : 'rgba(250,204,21,0.15)'}`,
+                                                            fontWeight: '900',
+                                                            fontSize: '0.68rem',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '10px',
+                                                            minWidth: '32px',
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            {catPercent}%
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1292,6 +1564,7 @@ export default function PickingDashboard() {
                         })}
                     </tbody>
                 </table>
+                )}
             </div>
 
             {/* Footer Ticker */}
