@@ -26,7 +26,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,6 +71,7 @@ export async function POST(req: Request) {
     const envelope = payload.envelope || {};
 
     const fromField = headers.from || headers.From || envelope.from || '';
+    const toField = headers.to || headers.To || envelope.to || '';
     const subject = headers.subject || headers.Subject || '';
     const plainText = payload.plain || '';
     const attachments = payload.attachments || [];
@@ -83,7 +84,22 @@ export async function POST(req: Request) {
     }
     senderEmail = senderEmail.trim().toLowerCase();
 
-    console.log(`[Email Inbound] Received mail from ${senderEmail} with subject: ${subject}`);
+    // Cuentas corporativas conocidas de FruFresco y del administrador
+    const corporateEmails = ['higuera200@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
+
+    if (isCorporateSender && toField) {
+      let recipientEmail = toField;
+      const matchTo = toField.match(/<([^>]+)>/);
+      if (matchTo) {
+        recipientEmail = matchTo[1];
+      }
+      recipientEmail = recipientEmail.trim().toLowerCase();
+      console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
+      senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente
+    } else {
+      console.log(`[Email Inbound] Correo entrante recibido desde: ${senderEmail} con asunto: ${subject}`);
+    }
 
     // 1. Declare client profile reference
     let profile: any = null;

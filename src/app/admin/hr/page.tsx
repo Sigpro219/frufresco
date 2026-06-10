@@ -977,7 +977,7 @@ export default function HRManagement() {
                         <div style={{ display: 'flex', gap: '0.8rem' }}>
                             <button 
                                 onClick={() => {
-                                    const printWin = window.open('', '_blank');
+                                    const printWin = window.open('', '_blank', 'width=700,height=700,scrollbars=yes');
                                     if (!printWin) return alert('Por favor, permite las ventanas emergentes (popups) para poder imprimir la etiqueta.');
                                     
                                     const roleLabel = ROLES.find(r => r.value === printingUser.role)?.label || printingUser.role;
