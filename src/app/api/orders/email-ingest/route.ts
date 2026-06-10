@@ -214,19 +214,24 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
-        3. Extrae la dirección de entrega, ciudad, número de teléfono y cédula/NIT si están presentes en el texto o en la firma.
-        4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa, usualmente sin NIT de empresa o con cédula de ciudadanía).
+        3. Extrae la dirección de entrega de forma limpia.
+           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
+           Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
+           Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
+        4. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacio.
+        5. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
         - Las cantidades deben ser numéricas.
-        - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos. Muchos clientes listan productos separados por guiones (-). Debes ignorar los guiones y extraer el nombre del producto y su cantidad.
+        - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre o Empresa Detectada",
           "documentType": "Email",
-          "address": "Dirección extraída o vacio",
+          "address": "Dirección física limpia extraída o vacio",
+          "deliverySlot": "AM / PM / Mañana / Tarde / null",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
@@ -479,6 +484,7 @@ export async function POST(req: Request) {
           { 
             isMetadata: true, 
             address: extractedData.address || null,
+            deliverySlot: extractedData.deliverySlot || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
             clientType: clientType

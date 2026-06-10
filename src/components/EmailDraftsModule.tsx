@@ -43,6 +43,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
+  const [editableDeliverySlot, setEditableDeliverySlot] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedChannel, setSelectedChannel] = useState('all');
@@ -244,6 +245,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const updatedMetaItem = {
           ...metaItem,
           address: editableAddress,
+          deliverySlot: editableDeliverySlot || null,
           deliveryDate: deliveryDate
         };
         const updatedExtractedItems = [
@@ -522,6 +524,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
+      setEditableDeliverySlot(metadata.deliverySlot || '');
       if (metadata.deliveryDate) {
         setDeliveryDate(metadata.deliveryDate);
       } else {
@@ -532,6 +535,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setDraftCoordinates(null);
       setGeocoding(false);
       setEditableItems([]);
+      setEditableDeliverySlot('');
       setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
   }, [selectedDraft, products, aliases]);
@@ -550,7 +554,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
-      deliveryDate: meta?.deliveryDate || null
+      deliveryDate: meta?.deliveryDate || null,
+      deliverySlot: meta?.deliverySlot || null
     };
   };
 
@@ -591,6 +596,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const updatedMetaItem = {
         ...metaItem,
         address: editableAddress,
+        deliverySlot: editableDeliverySlot || null,
         deliveryDate: deliveryDate
       };
       const updatedExtractedItems = [
@@ -685,7 +691,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           origin: 'Email Ingest',
           origin_source: 'email',
           delivery_date: deliveryDate,
-          delivery_slot: deliverySlot,
+          delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
           admin_notes: finalAdminNotes,
           shipping_address: metadata?.address || 'Dirección por definir',
           document_type: metadata?.clientType === 'b2b_client' ? 'remission' : 'invoice',
@@ -1648,6 +1654,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       }}
                     />
                   </div>
+
+                  {/* Horario de Entrega Selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
+                    <Send size={16} style={{ color: THEME.colors.primary }} />
+                    <span style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>Horario de Entrega:</span>
+                    {isEditing ? (
+                      <select
+                        value={editableDeliverySlot}
+                        onChange={(e) => setEditableDeliverySlot(e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: `1.5px solid ${THEME.colors.primary}`,
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          color: '#111827',
+                          backgroundColor: '#F0FDF4',
+                          outline: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="">-- PENDIENTE --</option>
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                        <option value="Cualquier hora">Cualquier hora</option>
+                      </select>
+                    ) : (
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: editableDeliverySlot ? '#059669' : '#D97706',
+                        fontSize: '0.85rem',
+                        backgroundColor: editableDeliverySlot ? '#E6F4EA' : '#FFF3CD',
+                        padding: '2px 8px',
+                        borderRadius: '6px'
+                      }}>
+                        {editableDeliverySlot || 'PENDIENTE'}
+                      </span>
+                    )}
+                  </div>
+
                   {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
                   {draftCoordinates && (
                     <div style={{
