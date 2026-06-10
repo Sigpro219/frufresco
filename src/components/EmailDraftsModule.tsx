@@ -642,6 +642,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         .update({ extracted_items: updatedExtractedItems })
         .eq('id', selectedDraft.id);
 
+      setSelectedDraft((prev: any) => ({
+        ...prev,
+        extracted_items: updatedExtractedItems
+      }));
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+
       // 4. Open floating modal confirmation (invoice) instead of redirecting
       setSaving(false);
       setSendConfirmationEmail(true);
