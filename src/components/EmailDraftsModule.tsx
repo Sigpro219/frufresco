@@ -1064,6 +1064,165 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           )}
         </div>
 
+        {/* Status Dropdown */}
+        <div 
+          onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+          style={{ 
+            position: 'relative',
+            display: 'flex', 
+            alignItems: 'center', 
+            backgroundColor: '#F9FAFB', 
+            border: 'none', 
+            borderRadius: THEME.radius.md,
+            padding: '0.6rem 1rem',
+            gap: '12px',
+            cursor: 'pointer'
+          }}
+        >
+          <span style={{ 
+            fontWeight: 800, 
+            fontSize: '0.85rem', 
+            color: selectedStatus === 'pending' ? '#B45309' : selectedStatus === 'rejected' ? '#DC2626' : selectedStatus === 'approved' ? '#059669' : '#111827',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            {selectedStatus === 'pending' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>}
+            {selectedStatus === 'rejected' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>}
+            {selectedStatus === 'approved' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }}></span>}
+            {selectedStatus === 'all' ? `Todos (${countAll})` : selectedStatus === 'pending' ? `Pendientes (${countPending})` : selectedStatus === 'rejected' ? `Rechazados (${countRejected})` : `Gestionados (${countApproved})`}
+          </span>
+          <ChevronDown size={16} color="#6B7280" />
+          
+          {isStatusDropdownOpen && (
+            <div style={{
+              position: 'absolute',
+              top: '45px',
+              right: 0,
+              backgroundColor: 'white',
+              border: `1px solid ${THEME.colors.border}`,
+              borderRadius: THEME.radius.md,
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              zIndex: 100,
+              minWidth: '200px',
+              overflow: 'hidden'
+            }}>
+              {/* Todos */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStatus('all');
+                  setIsStatusDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedStatus === 'all' ? THEME.colors.primary : '#4B5563',
+                  backgroundColor: selectedStatus === 'all' ? '#ECFDF5' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'all' ? '#ECFDF5' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'all' ? '#ECFDF5' : 'transparent'}
+              >
+                <span>Todos los correos</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280' }}>{countAll}</span>
+              </div>
+              
+              {/* Pendientes */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStatus('pending');
+                  setIsStatusDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedStatus === 'pending' ? '#B45309' : '#4B5563',
+                  backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'pending' ? '#FFFBEB' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'pending' ? '#FFFBEB' : 'transparent'}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>
+                  Pendientes
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#B45309' }}>{countPending}</span>
+              </div>
+
+              {/* Rechazados */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStatus('rejected');
+                  setIsStatusDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedStatus === 'rejected' ? '#DC2626' : '#4B5563',
+                  backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'rejected' ? '#FEF2F2' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'rejected' ? '#FEF2F2' : 'transparent'}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>
+                  Rechazados
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#DC2626' }}>{countRejected}</span>
+              </div>
+
+              {/* Gestionados */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedStatus('approved');
+                  setIsStatusDropdownOpen(false);
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: selectedStatus === 'approved' ? '#059669' : '#4B5563',
+                  backgroundColor: selectedStatus === 'approved' ? '#E6F4EA' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'approved' ? '#E6F4EA' : '#F9FAFB'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'approved' ? '#E6F4EA' : 'transparent'}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
+                  Gestionados
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#059669' }}>{countApproved}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Info Icon */}
         <div 
           onClick={() => showToast('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.', 'info')}
@@ -1129,10 +1288,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       </div>
 
-      {/* Main Container: Flex layout with left content and right sidebar */}
-      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap', width: '100%' }}>
-        <div style={{ flex: 1, minWidth: '320px' }}>
-          {loading ? (
+      {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
       ) : sortedFilteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
@@ -1164,6 +1320,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   let matchedProd = products.find(p => p.id === item.matched_product_id);
                   if (!matchedProd && !item.matched_product_id && item.originalName) {
                     matchedProd = findMatchedProduct(item.originalName);
+                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched dynamically to: ${matchedProd ? matchedProd.name : 'NULL'} (Price: ${matchedProd ? matchedProd.base_price : 0})`);
+                  } else if (matchedProd) {
+                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched from DB to: ${matchedProd.name} (Price: ${matchedProd.base_price})`);
+                  } else {
+                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} has NO MATCH (matched_product_id: ${item.matched_product_id})`);
                   }
                   return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
                 }, 0);
@@ -1462,123 +1623,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           })}
         </div>
       )}
-        </div>
-
-        {/* Sidebar Status Filter Metrics */}
-        <div style={{
-          width: '260px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.85rem',
-          backgroundColor: 'white',
-          borderRadius: THEME.radius.lg,
-          border: `1px solid ${THEME.colors.border}`,
-          padding: '1.25rem',
-          boxShadow: THEME.shadow.sm,
-          minWidth: '240px'
-        }}>
-          <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4B5563', margin: '0 0 0.4rem 0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Variables y Filtros
-          </h3>
-          
-          {/* Card: Todos */}
-          <div 
-            onClick={() => setSelectedStatus('all')}
-            style={{
-              padding: '1rem',
-              borderRadius: '12px',
-              border: `2px solid ${selectedStatus === 'all' ? THEME.colors.primary : '#F1F5F9'}`,
-              backgroundColor: selectedStatus === 'all' ? '#ECFDF5' : '#F8FAF9',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B' }}>Todos los Correos</div>
-              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Total en bandeja</div>
-            </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#1E293B' }}>{countAll}</span>
-          </div>
-
-          {/* Card: Pendientes / No Ejecutados */}
-          <div 
-            onClick={() => setSelectedStatus('pending')}
-            style={{
-              padding: '1rem',
-              borderRadius: '12px',
-              border: `2px solid ${selectedStatus === 'pending' ? '#D97706' : '#F1F5F9'}`,
-              backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : '#F8FAF9',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>
-                Pendientes
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Por gestionar (No ejecutados)</div>
-            </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#B45309' }}>{countPending}</span>
-          </div>
-
-          {/* Card: Rechazados */}
-          <div 
-            onClick={() => setSelectedStatus('rejected')}
-            style={{
-              padding: '1rem',
-              borderRadius: '12px',
-              border: `2px solid ${selectedStatus === 'rejected' ? '#EF4444' : '#F1F5F9'}`,
-              backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : '#F8FAF9',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>
-                Rechazados
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Descartados</div>
-            </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#DC2626' }}>{countRejected}</span>
-          </div>
-
-          {/* Card: Gestionados / Ejecutados */}
-          <div 
-            onClick={() => setSelectedStatus('approved')}
-            style={{
-              padding: '1rem',
-              borderRadius: '12px',
-              border: `2px solid ${selectedStatus === 'approved' ? '#059669' : '#F1F5F9'}`,
-              backgroundColor: selectedStatus === 'approved' ? '#E6F4EA' : '#F8FAF9',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
-                Gestionados
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Aprobados / Ejecutados</div>
-            </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{countApproved}</span>
-          </div>
-        </div>
-      </div>
 
       {/* Modal de Aprobación */}
       {selectedDraft && (
