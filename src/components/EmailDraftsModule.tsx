@@ -1903,196 +1903,60 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
 
             {/* Modal Footer */}
-            {(() => {
-              const meta = getDraftMetadata(selectedDraft);
-              const isB2c = meta.clientType === 'b2c_client';
-              const isNewClient = checkIsNewClient(selectedDraft);
-              const hasCoords = draftCoordinates !== null;
-              const isCovered = hasCoords ? checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) : false;
+            <div style={{
+              padding: '1.5rem',
+              borderTop: `1px solid ${THEME.colors.border}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#F9FAFB',
+              borderBottomLeftRadius: THEME.radius.xl,
+              borderBottomRightRadius: THEME.radius.xl
+            }}>
+              {/* Left Side: Empty space to push buttons to the right */}
+              <div></div>
 
-              // If it's a new client AND we have coordinates AND it's OUT of coverage
-              if (isNewClient && hasCoords && !isCovered) {
-                return (
-                  <div style={{
-                    padding: '1.5rem',
-                    borderTop: `1px solid ${THEME.colors.border}`,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#F9FAFB',
-                    borderBottomLeftRadius: THEME.radius.xl,
-                    borderBottomRightRadius: THEME.radius.xl
-                  }}>
-                    {/* Left Side: Coverage Status */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <X size={16} strokeWidth={3} /> Fuera de Zona de Cobertura
-                        </span>
-                        <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '600' }}>
-                          ({draftCoordinates.lat.toFixed(5)}, {draftCoordinates.lng.toFixed(5)})
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Right Side: Decision Buttons */}
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
-                      <button 
-                        onClick={() => {
-                          setRejectReason('cobertura');
-                          setRejectModal({
-                            isOpen: true,
-                            draftId: selectedDraft.id,
-                            address: getDraftMetadata(selectedDraft).address || 'No detectada',
-                            sourceEmail: selectedDraft.source_email,
-                            totalValue: totalValue
-                          });
-                        }}
-                        disabled={saving}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '0.65rem 1.25rem',
-                          backgroundColor: '#FAF5F5',
-                          border: '1px solid #FECACA',
-                          borderRadius: '24px',
-                          color: '#DC2626',
-                          fontWeight: '700',
-                          cursor: saving ? 'not-allowed' : 'pointer',
-                          fontSize: '0.85rem',
-                          transition: 'background-color 0.15s',
-                          opacity: saving ? 0.7 : 1
-                        }}
-                        onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
-                        onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FAF5F5'; } }}
-                      >
-                        <X size={16} strokeWidth={3} /> Rechazar Dirección
-                      </button>
-                      
-                      <div style={{ marginLeft: '1rem', marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
-                        <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
-                      </div>
-
-                      {hasUnmatchedItems && (
-                        <div style={{ display: 'flex', alignItems: 'center', color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
-                          ⚠️ Debe mapear todos los productos
-                        </div>
-                      )}
-
-                      <button 
-                        onClick={handleApprove}
-                        disabled={saving || hasUnmatchedItems}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '0.65rem 1.25rem',
-                          backgroundColor: hasUnmatchedItems ? '#9CA3AF' : '#F59E0B',
-                          border: 'none',
-                          borderRadius: '24px',
-                          color: 'white',
-                          fontWeight: '800',
-                          cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
-                          fontSize: '0.85rem',
-                          transition: 'all 0.15s',
-                          opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
-                          boxShadow: hasUnmatchedItems ? 'none' : '0 4px 6px -1px rgba(245, 158, 11, 0.2)'
-                        }}
-                        onMouseEnter={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#D97706'; } }}
-                        onMouseLeave={e => { if(!saving && !hasUnmatchedItems) { e.currentTarget.style.backgroundColor = '#F59E0B'; } }}
-                      >
-                        <AlertTriangle size={16} /> Autorizar Excepción
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-
-              // Otherwise, render the standard footer but include coverage status if coordinates are available or loading
-              return (
-                <div style={{
-                  padding: '1.5rem',
-                  borderTop: `1px solid ${THEME.colors.border}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  backgroundColor: '#F9FAFB',
-                  borderBottomLeftRadius: THEME.radius.xl,
-                  borderBottomRightRadius: THEME.radius.xl
-                }}>
-                  {/* Left Side: Coverage status (only if new client) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                    {isNewClient && (
-                      <>
-                        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', letterSpacing: '0.05em' }}>ESTADO DE COBERTURA</span>
-                        {geocoding ? (
-                          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            🔍 Validando cobertura...
-                          </span>
-                        ) : hasCoords && isCovered ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Check size={16} strokeWidth={3} /> En Zona de Cobertura
-                            </span>
-                            <span style={{ fontSize: '0.8rem', color: '#6B7280', fontWeight: '500' }}>
-                              ({draftCoordinates!.lat.toFixed(5)}, {draftCoordinates!.lng.toFixed(5)})
-                            </span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
-                            ⚠️ Sin dirección o coordenadas detectadas
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Right Side: Standard Buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
-                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
-                    </div>
-
-                    {hasUnmatchedItems && (
-                      <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
-                        ⚠️ Debe mapear todos los productos
-                      </span>
-                    )}
-
-                    <button 
-                      onClick={() => setSelectedDraft(null)}
-                      style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleApprove}
-                      disabled={saving || hasUnmatchedItems}
-                      style={{
-                        padding: '0.75rem 1.5rem',
-                        backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
-                        color: 'white',
-                        borderRadius: '10px',
-                        fontWeight: '700',
-                        border: 'none',
-                        cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
-                        opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        boxShadow: hasUnmatchedItems ? 'none' : undefined
-                      }}
-                    >
-                      {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
-                    </button>
-                  </div>
+              {/* Right Side: Standard Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280', letterSpacing: '0.05em' }}>TOTAL ESTIMADO</span>
+                  <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669' }}>{formatMoney(totalValue)}</span>
                 </div>
-              );
-            })()}
+
+                {hasUnmatchedItems && (
+                  <span style={{ color: '#EF4444', fontSize: '0.8rem', fontWeight: 800 }}>
+                    ⚠️ Debe mapear todos los productos
+                  </span>
+                )}
+
+                <button 
+                  onClick={() => setSelectedDraft(null)}
+                  style={{ padding: '0.75rem 1.5rem', backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '10px', fontWeight: 600, color: '#4B5563', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleApprove}
+                  disabled={saving || hasUnmatchedItems}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: hasUnmatchedItems ? '#9CA3AF' : THEME.colors.primary,
+                    color: 'white',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    border: 'none',
+                    cursor: (saving || hasUnmatchedItems) ? 'not-allowed' : 'pointer',
+                    opacity: (saving || hasUnmatchedItems) ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: hasUnmatchedItems ? 'none' : undefined
+                  }}
+                >
+                  {saving ? 'Procesando...' : 'Aprobar y Procesar Pedido'} <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
