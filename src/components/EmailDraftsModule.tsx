@@ -42,6 +42,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
+  const [editableAddress, setEditableAddress] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedChannel, setSelectedChannel] = useState('all');
@@ -241,6 +242,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
         const updatedMetaItem = {
           ...metaItem,
+          address: editableAddress,
           deliveryDate: deliveryDate
         };
         const updatedExtractedItems = [
@@ -408,27 +410,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     });
   };
 
+  const triggerGeocoding = (addressVal: string) => {
+    if (addressVal && addressVal !== 'No detectado') {
+      setGeocoding(true);
+      setDraftCoordinates(null);
+      fetch(`/api/geocode?address=${encodeURIComponent(addressVal)}&city=Bogotá`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const loc = data.results[0].geometry.location;
+            setDraftCoordinates({ lat: loc.lat, lng: loc.lng });
+          }
+        })
+        .catch(err => console.error("Geocode error", err))
+        .finally(() => setGeocoding(false));
+    } else {
+      setDraftCoordinates(null);
+      setGeocoding(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedDraft) {
       setIsEditing(false);
       const meta = getDraftMetadata(selectedDraft);
-      if (meta.address && meta.address !== 'No detectado') {
-        setGeocoding(true);
-        setDraftCoordinates(null);
-        fetch(`/api/geocode?address=${encodeURIComponent(meta.address)}&city=Bogotá`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.status === 'OK' && data.results && data.results.length > 0) {
-              const loc = data.results[0].geometry.location;
-              setDraftCoordinates({ lat: loc.lat, lng: loc.lng });
-            }
-          })
-          .catch(err => console.error("Geocode error", err))
-          .finally(() => setGeocoding(false));
-      } else {
-        setDraftCoordinates(null);
-        setGeocoding(false);
-      }
+      setEditableAddress(meta.address || '');
+      triggerGeocoding(meta.address);
       
       // Initialize editable items
       const rawItems = getDraftItems(selectedDraft);
@@ -1352,6 +1359,77 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     Eliminar Seleccionados ({selectedRowIndices.length})
                   </button>
                 )}
+                
+                {/* Modificar Pedido button */}
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleToggleEdit}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: isEditing ? '#DEF7EC' : 'white',
+                    border: `1.5px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
+                    borderRadius: '8px',
+                    color: isEditing ? '#03543F' : '#4B5563',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                  }}
+                >
+                  {isEditing ? (
+                    <>
+                      <Check size={16} />
+                      {saving ? 'Guardando...' : 'Finalizar Edición'}
+                    </>
+                  ) : (
+                    <>
+                      <Edit2 size={16} />
+                      Modificar Pedido
+                    </>
+                  )}
+                </button>
+
+                {/* Rechazar Pedido button */}
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setRejectReason('');
+                    setRejectModal({
+                      isOpen: true,
+                      draftId: selectedDraft.id,
+                      address: getDraftMetadata(selectedDraft).address || 'No detectada',
+                      sourceEmail: selectedDraft.source_email,
+                      totalValue: totalValue
+                    });
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0.5rem 1.25rem',
+                    backgroundColor: '#FEF2F2',
+                    border: '1.5px solid #FCA5A5',
+                    borderRadius: '8px',
+                    color: '#DC2626',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
+                  onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEF2F2'; } }}
+                >
+                  <Trash2 size={16} />
+                  Rechazar Pedido
+                </button>
+
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
                 </button>
@@ -1492,39 +1570,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
               {/* Tabla de Productos Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={handleToggleEdit}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '0.5rem 1rem',
-                      backgroundColor: isEditing ? '#DEF7EC' : 'white',
-                      border: `1px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
-                      borderRadius: '8px',
-                      color: isEditing ? '#03543F' : '#4B5563',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: saving ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {isEditing ? (
-                      <>
-                        <Check size={16} />
-                        {saving ? 'Guardando...' : 'Finalizar Edición'}
-                      </>
-                    ) : (
-                      <>
-                        <Edit2 size={16} />
-                        Modificar Pedido
-                      </>
-                    )}
-                  </button>
-                </div>
+
                  <div style={{ overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead>
@@ -1849,7 +1895,16 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {/* Right Side: Decision Buttons */}
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
                       <button 
-                        onClick={handleRejectForCoverage}
+                        onClick={() => {
+                          setRejectReason('cobertura');
+                          setRejectModal({
+                            isOpen: true,
+                            draftId: selectedDraft.id,
+                            address: getDraftMetadata(selectedDraft).address || 'No detectada',
+                            sourceEmail: selectedDraft.source_email,
+                            totalValue: totalValue
+                          });
+                        }}
                         disabled={saving}
                         style={{
                           display: 'flex',
