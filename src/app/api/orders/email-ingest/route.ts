@@ -714,23 +714,29 @@ export async function POST(req: Request) {
 </div>
         `;
 
-        await transporter.sendMail({
-          from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
-          to: senderEmail,
-          subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-          html: emailHtml,
-        });
-        console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
+        // EVITAR enviar correos de confirmación al propio correo corporativo/administrador para no saturar la bandeja de entrada
+        const isCorporateRecipient = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
+        if (!isCorporateRecipient) {
+          await transporter.sendMail({
+            from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
+            to: senderEmail,
+            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
+            html: emailHtml,
+          });
+          console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
 
-        // Guarda copia en la tabla mail para el historial
-        await supabaseAdmin.from('mail').insert({
-          to_email: senderEmail,
-          subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-          message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
-        });
+          // Guarda copia en la tabla mail para el historial
+          await supabaseAdmin.from('mail').insert({
+            to_email: senderEmail,
+            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
+            message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
+          });
+        } else {
+          console.log('[Email Inbound] Correo destinatario es corporativo/admin. Saltando envío de confirmación e historial para evitar spam.', senderEmail);
+        }
 
       } catch (emailError) {
         console.error('[Email Inbound] Failed to send confirmation email:', emailError);

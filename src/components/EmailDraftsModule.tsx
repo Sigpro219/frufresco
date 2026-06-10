@@ -136,9 +136,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   useEffect(() => {
     if (onDraftsChange) {
-      onDraftsChange(drafts.length);
+      const pendingCount = drafts.filter((d: any) => d.status === 'pending').length;
+      onDraftsChange(pendingCount);
     }
-  }, [drafts.length, onDraftsChange]);
+  }, [drafts, onDraftsChange]);
 
   useEffect(() => {
     // Refresh every 30s only when modal is not open to avoid any interruption
@@ -372,7 +373,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const { data, error } = await supabase
         .from('order_drafts')
         .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active)')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -401,7 +402,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             .eq('id', id);
 
           if (error) throw error;
-          setDrafts(prev => prev.filter(d => d.id !== id));
+          setDrafts(prev => prev.map(d => d.id === id ? { ...d, status: 'rejected' } : d));
           if (selectedDraft?.id === id) setSelectedDraft(null);
         } catch (err) {
           console.error('Error deleting draft:', err);
@@ -784,6 +785,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return matchesSearch && matchesDate && matchesChannel;
   });
 
+  const STATUS_PRIORITY: Record<string, number> = {
+    pending: 1,
+    rejected: 2,
+    approved: 3
+  };
+
+  const sortedFilteredDrafts = [...filteredDrafts].sort((a, b) => {
+    const priorityA = STATUS_PRIORITY[a.status] || 99;
+    const priorityB = STATUS_PRIORITY[b.status] || 99;
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
   const totalValue = editableItems.reduce((acc, item) => {
     const matchedProd = products.find(p => p.id === item.matched_product_id);
     return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
@@ -1049,7 +1065,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary }}>Cargando correos...</div>
-      ) : filteredDrafts.length === 0 ? (
+      ) : sortedFilteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
           <Mail size={32} style={{ opacity: 0.3, marginBottom: '1rem', color: '#9CA3AF' }} />
           <h3 style={{ fontSize: '1.1rem', color: '#4B5563', margin: '0 0 4px 0' }}>Bandeja Vacía</h3>
@@ -1071,7 +1087,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </tr>
             </thead>
             <tbody>
-              {filteredDrafts.map((draft) => {
+              {sortedFilteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
                 const items = getDraftItems(draft);
                 const itemsCount = items.length;
@@ -1152,13 +1168,31 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                    <div style={{
-                      padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
-                      backgroundColor: '#FEF3C7',
-                      color: '#92400E'
-                    }}>
-                      PENDIENTE
-                    </div>
+                    {draft.status === 'approved' ? (
+                      <div style={{
+                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        backgroundColor: '#DEF7EC',
+                        color: '#03543F'
+                      }}>
+                        GESTIONADO
+                      </div>
+                    ) : draft.status === 'rejected' ? (
+                      <div style={{
+                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        backgroundColor: '#FDE8E8',
+                        color: '#9B1C1C'
+                      }}>
+                        RECHAZADO
+                      </div>
+                    ) : (
+                      <div style={{
+                        padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
+                        backgroundColor: '#FEF3C7',
+                        color: '#92400E'
+                      }}>
+                        PENDIENTE
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                     <button 
@@ -1210,7 +1244,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-          {filteredDrafts.map((draft) => {
+          {sortedFilteredDrafts.map((draft) => {
             const meta = getDraftMetadata(draft);
             const itemsCount = getDraftItems(draft).length;
             return (
@@ -1238,17 +1272,34 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <span style={{ 
-                    backgroundColor: meta.clientType === 'b2b_client' ? '#EFF6FF' : '#ECFDF5', 
-                    color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
-                    padding: '2px 8px', 
-                    borderRadius: '12px', 
-                    fontSize: '0.7rem', 
-                    fontWeight: 800 
-                  }}>
-                    {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span style={{ 
+                      backgroundColor: meta.clientType === 'b2b_client' ? '#EFF6FF' : '#ECFDF5', 
+                      color: meta.clientType === 'b2b_client' ? '#2563EB' : THEME.colors.primary, 
+                      padding: '2px 8px', 
+                      borderRadius: '12px', 
+                      fontSize: '0.7rem', 
+                      fontWeight: 800 
+                    }}>
+                      {meta.clientType === 'b2b_client' ? 'EMAIL B2B' : 'EMAIL B2C'}
+                    </span>
+                    {draft.status === 'approved' && (
+                      <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
+                        GESTIONADO
+                      </span>
+                    )}
+                    {draft.status === 'rejected' && (
+                      <span style={{ backgroundColor: '#FDE8E8', color: '#9B1C1C', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
+                        RECHAZADO
+                      </span>
+                    )}
+                    {draft.status === 'pending' && (
+                      <span style={{ backgroundColor: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>
+                        PENDIENTE
+                      </span>
+                    )}
+                  </div>
                   <span style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 600 }}>
                     {new Date(draft.created_at).toLocaleDateString()}
                   </span>
