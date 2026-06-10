@@ -1165,7 +1165,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'right', fontWeight: '900', color: '#10B981', fontSize: '0.95rem' }}>
-                    {estimatedTotal > 0 ? formatMoney(estimatedTotal) : '-'}
+                    {formatMoney(estimatedTotal)}
                   </td>
                   <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
                     {draft.status === 'approved' ? (
@@ -1322,9 +1322,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '8px' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
-                    {itemsCount} productos
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>
+                      {itemsCount} productos
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 800, marginTop: '2px' }}>
+                      {(() => {
+                        const estimatedTotal = getDraftItems(draft).reduce((acc: number, item: any) => {
+                          const matchedProd = products.find(p => p.id === item.matched_product_id);
+                          return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                        }, 0);
+                        return formatMoney(estimatedTotal);
+                      })()}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => setSelectedDraft(draft)}
