@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     senderEmail = senderEmail.trim().toLowerCase();
 
     // Cuentas corporativas conocidas de FruFresco y del administrador
-    const corporateEmails = ['higuera200@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
     const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
 
     // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
