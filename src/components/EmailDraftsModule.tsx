@@ -266,6 +266,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           ...prev,
           extracted_items: updatedExtractedItems
         }));
+        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
         showToast('Borrador de pedido guardado exitosamente.', 'success');
       } catch (e: any) {
         console.warn('Error saving edits:', e?.message || e);
@@ -493,7 +494,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
       deliveryDate: meta?.deliveryDate || null,
-      deliverySlot: meta?.deliverySlot || null
+      deliverySlot: meta?.deliverySlot || null,
+      attachmentUrl: meta?.attachmentUrl || null,
+      attachmentName: meta?.attachmentName || null
     };
   };
 
@@ -2233,11 +2236,72 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 )}
               </div>
 
-              {/* Cuerpo del correo oculto en un acordeón al final */}
+              {/* Cuerpo del correo / Adjuntos ocultos en un acordeón al final */}
               <details style={{ backgroundColor: '#F3F4F6', borderRadius: '8px', padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #E5E7EB' }}>
-                <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>Ver texto original del correo enviado por el cliente</summary>
-                <div style={{ padding: '1rem 0 0.5rem 0', fontSize: '0.85rem', color: '#6B7280', whiteSpace: 'pre-wrap', cursor: 'text' }}>
-                  {selectedDraft.email_body || '(Sin cuerpo)'}
+                <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>Ver texto original / adjunto del correo enviado por el cliente</summary>
+                <div style={{ padding: '1rem 0 0.5rem 0', fontSize: '0.85rem', color: '#6B7280', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {getDraftMetadata(selectedDraft).attachmentUrl && (
+                    <div style={{
+                      backgroundColor: 'white',
+                      border: '1.5px solid #E2E8F0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      cursor: 'default'
+                    }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          backgroundColor: '#FEE2E2',
+                          color: '#EF4444',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold',
+                          fontSize: '0.8rem'
+                        }}>
+                          PDF
+                        </div>
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {getDraftMetadata(selectedDraft).attachmentName || 'documento_adjunto.pdf'}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>Documento original de solicitud</div>
+                        </div>
+                      </div>
+                      <a 
+                        href={getDraftMetadata(selectedDraft).attachmentUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          backgroundColor: '#EF4444',
+                          color: 'white',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          textDecoration: 'none',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'background-color 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DC2626'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EF4444'}
+                      >
+                        <FileText size={14} /> Ver PDF Original
+                      </a>
+                    </div>
+                  )}
+                  <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: getDraftMetadata(selectedDraft).attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: getDraftMetadata(selectedDraft).attachmentUrl ? '12px' : '0' }}>
+                    {selectedDraft.email_body || '(Sin cuerpo)'}
+                  </div>
                 </div>
               </details>
 
