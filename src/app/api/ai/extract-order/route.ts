@@ -17,8 +17,7 @@ export async function POST(req: Request) {
 
     // Inicializar Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
+    
     // Convertir archivo a Base64 para Gemini
     const arrayBuffer = await file.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString('base64');
@@ -53,15 +52,39 @@ export async function POST(req: Request) {
       }
     `;
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type
+    // Modelos alternativos en caso de indisponibilidad por alta demanda
+    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`[AI Extract] Intentando procesar orden con modelo: ${modelName}`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        
+        result = await model.generateContent([
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: file.type
+            }
+          },
+          { text: prompt }
+        ]);
+        
+        if (result) {
+          console.log(`[AI Extract] Procesado exitosamente con modelo: ${modelName}`);
+          break;
         }
-      },
-      { text: prompt }
-    ]);
+      } catch (err: any) {
+        console.error(`[AI Extract] Error con modelo ${modelName}:`, err.message);
+        lastError = err;
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error("No se pudo establecer comunicación con ningún modelo de Gemini.");
+    }
 
     const response = await result.response;
     let text = response.text().trim();
