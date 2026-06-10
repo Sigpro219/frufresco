@@ -574,6 +574,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
       const updatedMetaItem = {
         ...metaItem,
+        address: editableAddress,
         deliveryDate: deliveryDate
       };
       const updatedExtractedItems = [
@@ -1492,11 +1493,39 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#4B5563', fontSize: '0.9rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <MapPin size={16} style={{ color: THEME.colors.primary }} />
-                    {getDraftMetadata(selectedDraft).address ? (
+                    {isEditing ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <input
+                          type="text"
+                          value={editableAddress}
+                          onChange={(e) => setEditableAddress(e.target.value)}
+                          onBlur={() => triggerGeocoding(editableAddress)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              triggerGeocoding(editableAddress);
+                            }
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${THEME.colors.primary}`,
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            color: '#111827',
+                            width: '100%',
+                            outline: 'none',
+                            backgroundColor: '#F0FDF4'
+                          }}
+                          placeholder="Editar dirección de entrega..."
+                        />
+                        {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600, whiteSpace: 'nowrap' }}>🔍 Validando...</span>}
+                      </div>
+                    ) : (editableAddress || getDraftMetadata(selectedDraft).address) ? (
                       <a
                         href={draftCoordinates 
                           ? `https://www.google.com/maps/search/?api=1&query=${draftCoordinates.lat},${draftCoordinates.lng}` 
-                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getDraftMetadata(selectedDraft).address)}`
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(editableAddress || getDraftMetadata(selectedDraft).address)}`
                         }
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1511,7 +1540,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         }}
                         title="Ver ubicación en Google Maps"
                       >
-                        {getDraftMetadata(selectedDraft).address}
+                        {editableAddress || getDraftMetadata(selectedDraft).address}
                         <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>↗</span>
                       </a>
                     ) : (
