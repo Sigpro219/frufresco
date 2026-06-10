@@ -341,6 +341,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           }
 
           setRecentlyDeletedItems([]);
+          setSelectedDraft((prev: any) => ({
+            ...prev,
+            extracted_items: dbItems
+          }));
+          setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: dbItems } : d));
           showToast('Productos eliminados y novedades notificadas por correo. ✉️', 'success');
         } catch (err: any) {
           console.warn('Error deleting and notifying:', err);
