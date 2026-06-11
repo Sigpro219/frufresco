@@ -98,9 +98,13 @@ export default function CreditPrintPage() {
 
 
     return (
-        <div style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif', fontSize: '9px', lineHeight: '1.2' }}>
+        <div style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif', fontSize: '8.5px', lineHeight: '1.2' }}>
             <style>
                 {`
+                @page {
+                    size: letter portrait;
+                    margin: 8mm 10mm;
+                }
                 @media print {
                     .no-print { display: none !important; }
                     .page-break { page-break-after: always; display: block; clear: both; }
@@ -109,11 +113,11 @@ export default function CreditPrintPage() {
                 .form-table {
                     width: 100%;
                     border-collapse: collapse;
-                    margin-bottom: 8px;
+                    margin-bottom: 6px;
                 }
                 .form-table td, .form-table th {
                     border: 1px solid #000;
-                    padding: 4px 6px;
+                    padding: 3px 5px;
                     vertical-align: middle;
                 }
                 .form-table th {
@@ -127,23 +131,23 @@ export default function CreditPrintPage() {
                     border: 1px solid #000;
                     text-align: center;
                     font-weight: bold;
-                    font-size: 10px;
-                    padding: 4px;
-                    margin-bottom: 4px;
+                    font-size: 9.5px;
+                    padding: 3px;
+                    margin-bottom: 3px;
                     text-transform: uppercase;
                 }
                 .signature-box {
                     border: 1px solid #000;
-                    height: 50px;
-                    margin-top: 5px;
+                    height: 40px;
+                    margin-top: 4px;
                 }
                 .checkbox-container {
                     display: inline-flex;
                     align-items: center;
-                    margin-right: 10px;
+                    margin-right: 8px;
                 }
                 .checkbox-container input {
-                    margin-right: 3px;
+                    margin-right: 2px;
                 }
                 `}
             </style>
@@ -160,7 +164,7 @@ export default function CreditPrintPage() {
             <div className="no-print" style={{ height: '50px' }}></div>
 
             {/* PAGE 1: SOLICITUD DE CRÉDITO / CONOCIMIENTO DE CLIENTES */}
-            <div className="page-break" style={{ padding: '20px 30px' }}>
+            <div className="page-break" style={{ padding: '8px 12px' }}>
                 {/* Header Table */}
                 <table className="form-table" style={{ marginBottom: '10px' }}>
                     <tbody>
@@ -336,7 +340,7 @@ export default function CreditPrintPage() {
             </div>
 
             {/* PAGE 2: OPERATIONS, FINANCIAL, REFERENCES, NEGOCIACIÓN */}
-            <div className="page-break" style={{ padding: '20px 30px' }}>
+            <div className="page-break" style={{ padding: '8px 12px' }}>
                 <div className="section-header">4. Información de Operaciones Internacionales</div>
                 <table className="form-table">
                     <tbody>
@@ -521,7 +525,7 @@ export default function CreditPrintPage() {
             </div>
 
             {/* PAGE 3: PAGARÉ */}
-            <div className="page-break" style={{ padding: '40px 50px', fontSize: '10px', lineHeight: '1.4' }}>
+            <div className="page-break" style={{ padding: '20px 30px', fontSize: '9.5px', lineHeight: '1.3' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '20px' }}>
                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '40px', objectFit: 'contain' }} />
                     <div style={{ textAlign: 'right' }}>
@@ -588,7 +592,7 @@ export default function CreditPrintPage() {
             </div>
 
             {/* PAGE 4: CARTA DE INSTRUCCIONES */}
-            <div className="page-break" style={{ padding: '40px 50px', fontSize: '10px', lineHeight: '1.4' }}>
+            <div className="page-break" style={{ padding: '20px 30px', fontSize: '9.5px', lineHeight: '1.3' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '20px' }}>
                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '40px', objectFit: 'contain' }} />
                     <div style={{ textAlign: 'right' }}>
@@ -646,7 +650,7 @@ export default function CreditPrintPage() {
             </div>
 
             {/* PAGE 5: USO EXCLUSIVO Y DOCUMENTACIÓN */}
-            <div style={{ padding: '20px 30px' }}>
+            <div style={{ padding: '8px 12px' }}>
                 <div className="section-header" style={{ marginBottom: '15px' }}>8. Espacio Exclusivo de la Administración (Investments Cortés)</div>
                 <table className="form-table">
                     <tbody>
