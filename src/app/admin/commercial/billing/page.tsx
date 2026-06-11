@@ -198,6 +198,7 @@ export default function BillingDashboard() {
         try {
             const { data: profilesData } = await supabase
                 .from('profiles')
+                .select('*')
                 .eq('role', 'b2b_client')
                 .order('company_name');
             setB2bClients(profilesData || []);
