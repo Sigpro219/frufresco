@@ -29,7 +29,8 @@ import {
     Settings,
     HelpCircle,
     ArrowUpRight,
-    Trophy
+    Trophy,
+    Loader2
 } from 'lucide-react';
 
 declare global {
@@ -497,7 +498,7 @@ export default function AdminClientsPage() {
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '10rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <Package size={64} strokeWidth={1.5} style={{ color: THEME.colors.primary, animation: 'bounce 1s infinite' }} />
+                            <Loader2 size={64} className="animate-spin" style={{ color: THEME.colors.primary }} />
                         </div>
                         <p style={{ fontWeight: '600', color: THEME.colors.textSecondary, marginTop: '1rem' }}>Sincronizando base de datos...</p>
                     </div>

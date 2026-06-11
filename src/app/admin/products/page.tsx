@@ -264,118 +264,25 @@ export default function AdminProductsPage() {
         }
     };
 
-    // --- SYNC B2C PRICES LOGIC ---
+    // --- SYNC B2C PRICES LOGIC (API Call) ---
     const syncB2CWebPrices = async () => {
         if (!confirm('¿Sincronizar precios en tienda? Se calculará (Costo + Margen B2C + IVA) redondeando al siguiente múltiplo de $50.')) return;
 
         setIsSyncingPrices(true);
         try {
-            console.log('🚀 Iniciando sincronización de tienda desde Panel B2C...');
-
-            // 1. Obtener Modelo B2C y sus reglas
-            const { data: b2cModel } = await supabase
-                .from('pricing_models')
-                .select('*')
-                .eq('name', 'Clientes B2C')
-                .single();
-
-            if (!b2cModel) {
-                alert('No se encontró el modelo \"Clientes B2C\". Créalo en la configuración de precios primero.');
-                setIsSyncingPrices(false);
-                return;
-            }
-
-            const { data: b2cRules } = await supabase
-                .from('pricing_rules')
-                .select('*')
-                .eq('model_id', b2cModel.id);
-
-            const rulesMap: Record<string, number> = {};
-            b2cRules?.forEach(r => { rulesMap[r.product_id] = r.margin_adjustment; });
-
-            // 1.1 Obtener TODAS las conversiones para el cálculo
-            const { data: convData } = await supabase
-                .from('product_conversions')
-                .select('*');
-            
-            const conversions = convData || [];
-
-            // 2. Obtener Costos (Matriz) con sus unidades
-            const { data: lastPurchases } = await supabase
-                .from('purchases')
-                .select('product_id, unit_price, purchase_unit')
-                .order('created_at', { ascending: false });
-
-            const costMap: Record<string, { price: number, unit: string }> = {};
-            lastPurchases?.forEach(p => {
-                if (!costMap[p.product_id]) {
-                    costMap[p.product_id] = { price: p.unit_price, unit: p.purchase_unit };
-                }
+            console.log('🚀 Iniciando sincronización de tienda...');
+            const token = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+            const res = await fetch(`/api/products/sync-prices?token=${token}`, {
+                method: 'POST'
             });
 
-            // 3. Procesar Productos
-            const updates = products.map(prod => {
-                const purchaseInfo = costMap[prod.id];
-                if (!purchaseInfo || purchaseInfo.price === 0) return null;
-
-                let realCost = purchaseInfo.price;
-
-                // --- LÓGICA DE CONVERSIÓN ---
-                if (purchaseInfo.unit && purchaseInfo.unit !== prod.unit_of_measure) {
-                    // Buscar si 1 Unidad de Compra = X Unidades de Venta
-                    const convAB = conversions.find(c => 
-                        c.product_id === prod.id && 
-                        c.from_unit === purchaseInfo.unit && 
-                        c.to_unit === prod.unit_of_measure
-                    );
-
-                    if (convAB && convAB.conversion_factor) {
-                        realCost = purchaseInfo.price / convAB.conversion_factor;
-                    } else {
-                        // Buscar si 1 Unidad de Venta = X Unidades de Compra
-                        const convBA = conversions.find(c => 
-                            c.product_id === prod.id && 
-                            c.from_unit === prod.unit_of_measure && 
-                            c.to_unit === purchaseInfo.unit
-                        );
-                        if (convBA && convBA.conversion_factor) {
-                            realCost = purchaseInfo.price * convBA.conversion_factor;
-                        }
-                    }
-                }
-
-                const baseMargin = b2cModel.base_margin_percent;
-                const adjustment = rulesMap[prod.id] || 0;
-                const finalMargin = (baseMargin + adjustment) / 100;
-                
-                // Formula: Costo Real x (1 + Margen) x (1 + IVA) -> Redondear $50
-                const priceBeforeTax = realCost * (1 + finalMargin);
-                const ivaRate = (prod.iva_rate || 0) / 100;
-                const rawFinalPrice = priceBeforeTax * (1 + ivaRate);
-                
-                // Redondeo al siguiente múltiplo de $50:
-                const roundedPrice = Math.ceil(rawFinalPrice / 50) * 50;
-
-                return {
-                    id: prod.id,
-                    name: prod.name,
-                    base_price: roundedPrice
-                };
-            }).filter(Boolean);
-
-            if (updates.length === 0) {
-                alert('No se encontraron productos con costos válidos para actualizar.');
-                return;
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Error en la respuesta del servidor');
             }
 
-            // 4. Update Masivo
-            for (let i = 0; i < updates.length; i += 50) {
-                const batch = updates.slice(i, i + 50);
-                const { error } = await supabase.from('products').upsert(batch);
-                if (error) throw error;
-            }
-
-            showToast(`¡Tienda Actualizada! ${updates.length} precios sincronizados con IVA y redondeo $50.`, 'success');
+            const data = await res.json();
+            showToast(`¡Tienda Actualizada! Se sincronizaron ${data.products_processed} precios públicos en la web.`, 'success');
             fetchProducts(); // Refrescar lista
 
         } catch (err: any) {

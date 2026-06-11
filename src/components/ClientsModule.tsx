@@ -1003,7 +1003,9 @@ export default function ClientsModule() {
 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '10rem' }}>
-                        <div style={{ fontSize: '4rem', animation: 'bounce 1s infinite' }}>📦</div>
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <Loader2 size={64} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                        </div>
                         <p style={{ fontWeight: '700', color: '#718096', marginTop: '1rem' }}>Sincronizando base de datos...</p>
                     </div>
                 ) : (
