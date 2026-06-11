@@ -92,7 +92,7 @@ export default function CreditPrintPage() {
         return new Date(dateStr).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
     };
 
-    const displayVal = (val: any, placeholder: string = '____________________') => {
+    const displayInlineVal = (val: any, placeholder: string = '____________________') => {
         const hasVal = !isBlankMode && val;
         if (!hasVal) {
             if (placeholder.startsWith('_')) {
@@ -112,15 +112,22 @@ export default function CreditPrintPage() {
         return val;
     };
 
+    const displayCellVal = (val: any) => {
+        if (isBlankMode || !val) {
+            return '';
+        }
+        return val;
+    };
+
     const renderCheckbox = (checked: boolean) => (
         <span style={{
             display: 'inline-block',
-            width: '9px',
-            height: '9px',
+            width: '12px',
+            height: '12px',
             border: '1px solid #000',
-            lineHeight: '7px',
+            lineHeight: '10px',
             textAlign: 'center',
-            fontSize: '7px',
+            fontSize: '9px',
             fontFamily: 'Arial, sans-serif',
             fontWeight: 'bold',
             verticalAlign: 'middle',
@@ -133,7 +140,7 @@ export default function CreditPrintPage() {
     );
 
     return (
-        <div style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif', fontSize: '8.5px', lineHeight: '1.2' }}>
+        <div style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif', fontSize: '9.5px', lineHeight: '1.2' }}>
             <style>
                 {`
                 @page {
@@ -168,8 +175,11 @@ export default function CreditPrintPage() {
                 }
                 .form-table td, .form-table th {
                     border: 1px solid #000;
-                    padding: 3px 5px;
+                    padding: 5px 6px;
                     vertical-align: middle;
+                }
+                .form-table tr {
+                    height: 28px;
                 }
                 .form-table th {
                     background-color: #f2f2f2;
@@ -182,9 +192,9 @@ export default function CreditPrintPage() {
                     border: 1px solid #000;
                     text-align: center;
                     font-weight: bold;
-                    font-size: 9.5px;
-                    padding: 3px;
-                    margin-bottom: 3px;
+                    font-size: 10px;
+                    padding: 4px;
+                    margin-bottom: 4px;
                     text-transform: uppercase;
                 }
                 .signature-box {
@@ -232,7 +242,7 @@ export default function CreditPrintPage() {
                             <td style={{ fontWeight: 'bold' }}>VERSIÓN: 07</td>
                         </tr>
                         <tr>
-                            <td style={{ fontWeight: 'bold' }}>PÁGINA: 1 de 4</td>
+                            <td style={{ fontWeight: 'bold' }}>PÁGINA: 1 de 5</td>
                         </tr>
                         <tr>
                             <td style={{ fontWeight: 'bold' }}>FECHA: ENE 2025</td>
@@ -249,15 +259,15 @@ export default function CreditPrintPage() {
                             <td style={{ width: '15%' }}><b>SUPERMERCADO:</b></td>
                             <td style={{ width: '10%', textAlign: 'center' }}>{renderCheckbox(!isBlankMode && !!d.supermercado)}</td>
                             <td style={{ width: '10%' }}><b>CIUDAD:</b></td>
-                            <td style={{ width: '15%' }}>{displayVal(d.ciudad, '____________________')}</td>
+                            <td style={{ width: '15%' }}>{displayCellVal(d.ciudad)}</td>
                             <td style={{ width: '10%' }}><b>CUPO:</b></td>
                             <td style={{ width: '15%' }}>{(!isBlankMode && d.cupo_solicitado) ? `$${d.cupo_solicitado.toLocaleString('es-CO')}` : '____________________'}</td>
                         </tr>
                         <tr>
                             <td><b>PLAZO:</b></td>
-                            <td>{(!isBlankMode && d.plazo_solicitado) ? `${d.plazo_solicitado} Días` : '____________________'}</td>
+                            <td>{displayCellVal((!isBlankMode && d.plazo_solicitado) ? `${d.plazo_solicitado} Días` : '')}</td>
                             <td><b>FECHA SOLICITUD:</b></td>
-                            <td>{displayVal(d.fecha_solicitud, '____________________')}</td>
+                            <td>{displayCellVal(d.fecha_solicitud)}</td>
                             <td><b>SOLICITUD:</b></td>
                             <td colSpan={3}>
                                 <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'creacion')} Creación</span>
@@ -282,35 +292,35 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td><b>Razón Social:</b></td>
-                            <td colSpan={4} style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.razon_social || client.razon_social || client.company_name, '__________________________________________________')}</td>
+                            <td colSpan={4} style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayCellVal(d.razon_social || client.razon_social || client.company_name)}</td>
                             <td><b>NIT / C.C:</b></td>
-                            <td style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.nit || client.nit, '____________________')}</td>
+                            <td style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayCellVal(d.nit || client.nit)}</td>
                         </tr>
                         <tr>
                             <td><b>Nombre Comercial:</b></td>
-                            <td colSpan={6}>{displayVal(d.nombre_comercial || client.company_name, '__________________________________________________')}</td>
+                            <td colSpan={6}>{displayCellVal(d.nombre_comercial || client.company_name)}</td>
                         </tr>
                         <tr>
                             <td><b>Dirección:</b></td>
-                            <td colSpan={2}>{displayVal(d.direccion || client.address, '________________________________________')}</td>
+                            <td colSpan={2}>{displayCellVal(d.direccion || client.address)}</td>
                             <td><b>Ciudad:</b></td>
-                            <td>{displayVal(d.ciudad_info || client.city, '____________________')}</td>
+                            <td>{displayCellVal(d.ciudad_info || client.city)}</td>
                             <td><b>Dpto:</b></td>
-                            <td>{displayVal(d.departamento_info || client.department, '____________________')}</td>
+                            <td>{displayCellVal(d.departamento_info || client.department)}</td>
                         </tr>
                         <tr>
                             <td><b>Teléfono:</b></td>
-                            <td>{displayVal(d.telefono || client.phone || client.contact_phone, '____________________')}</td>
+                            <td>{displayCellVal(d.telefono || client.phone || client.contact_phone)}</td>
                             <td><b>Celular:</b></td>
-                            <td>{displayVal(pagareDeudor.celular, '____________________')}</td>
+                            <td>{displayCellVal(pagareDeudor.celular)}</td>
                             <td><b>E-mail:</b></td>
-                            <td colSpan={2}>{displayVal(pagareDeudor.email, '________________________________________')}</td>
+                            <td colSpan={2}>{displayCellVal(pagareDeudor.email)}</td>
                         </tr>
                         <tr>
                             <td><b>Actividad Econ. Ppal:</b></td>
-                            <td colSpan={2}>{displayVal(d.actividad_economica_principal, '________________________________________')}</td>
+                            <td colSpan={2}>{displayCellVal(d.actividad_economica_principal)}</td>
                             <td><b>CIIU:</b></td>
-                            <td>{displayVal(d.ciiu_principal, '____________')}</td>
+                            <td>{displayCellVal(d.ciiu_principal)}</td>
                             <td><b>¿Es PEP?:</b></td>
                             <td>
                                 SI {renderCheckbox(!isBlankMode && !!d.rep_legal_es_pep)}
@@ -320,11 +330,11 @@ export default function CreditPrintPage() {
                         </tr>
                         <tr>
                             <td><b>Representante Legal:</b></td>
-                            <td colSpan={2} style={{ fontWeight: 'bold' }}>{displayVal(d.rep_legal_nombre || client.contact_name, '__________________________________________________')}</td>
+                            <td colSpan={2} style={{ fontWeight: 'bold' }}>{displayCellVal(d.rep_legal_nombre || client.contact_name)}</td>
                             <td><b>Identificación:</b></td>
-                            <td>{displayVal(d.rep_legal_identificacion, '____________________')}</td>
+                            <td>{displayCellVal(d.rep_legal_identificacion)}</td>
                             <td><b>Dir. Residencia:</b></td>
-                            <td>{displayVal(d.rep_legal_direccion, '________________________________________')}</td>
+                            <td>{displayCellVal(d.rep_legal_direccion)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -334,14 +344,14 @@ export default function CreditPrintPage() {
                 <table className="form-table">
                     <tbody>
                         <tr>
-                            <td style={{ width: '33%' }}><b>1.</b> {d.sucursales_a_crear?.[0] || '____________________'}</td>
-                            <td style={{ width: '33%' }}><b>2.</b> {d.sucursales_a_crear?.[1] || '____________________'}</td>
-                            <td style={{ width: '33%' }}><b>3.</b> {d.sucursales_a_crear?.[2] || '____________________'}</td>
+                            <td style={{ width: '33%' }}><b>1.</b> {displayCellVal(d.sucursales_a_crear?.[0])}</td>
+                            <td style={{ width: '33%' }}><b>2.</b> {displayCellVal(d.sucursales_a_crear?.[1])}</td>
+                            <td style={{ width: '33%' }}><b>3.</b> {displayCellVal(d.sucursales_a_crear?.[2])}</td>
                         </tr>
                         <tr>
-                            <td><b>4.</b> {d.sucursales_a_crear?.[3] || '____________________'}</td>
-                            <td><b>5.</b> {d.sucursales_a_crear?.[4] || '____________________'}</td>
-                            <td><b>6.</b> {d.sucursales_a_crear?.[5] || '____________________'}</td>
+                            <td><b>4.</b> {displayCellVal(d.sucursales_a_crear?.[3])}</td>
+                            <td><b>5.</b> {displayCellVal(d.sucursales_a_crear?.[4])}</td>
+                            <td><b>6.</b> {displayCellVal(d.sucursales_a_crear?.[5])}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -362,10 +372,10 @@ export default function CreditPrintPage() {
                         {contacts.map((contact: any, i: number) => (
                             <tr key={i}>
                                 <td><b>{contact.area}</b></td>
-                                <td>{contact.nombre || '________________________________'}</td>
-                                <td>{contact.telefono || '_____________'}</td>
-                                <td>{contact.celular || '_____________'}</td>
-                                <td>{contact.email || '________________________'}</td>
+                                <td>{displayCellVal(contact.nombre)}</td>
+                                <td>{displayCellVal(contact.telefono)}</td>
+                                <td>{displayCellVal(contact.celular)}</td>
+                                <td>{displayCellVal(contact.email)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -429,7 +439,7 @@ export default function CreditPrintPage() {
                                 NO {renderCheckbox(!isBlankMode && !d.tiene_productos_financieros_internacionales)}
                             </td>
                             <td><b>Detalles Operación:</b></td>
-                            <td colSpan={3}>{displayVal(internationalOps.otros, '________________________________________')}</td>
+                            <td colSpan={3}>{displayCellVal(internationalOps.otros)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -464,7 +474,7 @@ export default function CreditPrintPage() {
                             <td><b>Egresos Mensuales:</b></td>
                             <td>{isBlankMode ? '____________________' : (d.egresos_mensuales ? `$${d.egresos_mensuales.toLocaleString('es-CO')}` : '$ 0')}</td>
                             <td><b>Fecha de Corte:</b></td>
-                            <td>{displayVal(d.fecha_corte_financiero, '____________________')}</td>
+                            <td>{displayCellVal(d.fecha_corte_financiero)}</td>
                         </tr>
                         <tr>
                             <td><b>Activos:</b></td>
@@ -476,9 +486,9 @@ export default function CreditPrintPage() {
                         </tr>
                         <tr>
                             <td><b>Responsable FE:</b></td>
-                            <td colSpan={2}>{displayVal(d.responsable_factura_nombre, '________________________________________')}</td>
+                            <td colSpan={2}>{displayCellVal(d.responsable_factura_nombre)}</td>
                             <td><b>Email FE:</b></td>
-                            <td colSpan={2}>{displayVal(d.responsable_factura_email, '________________________________________')}</td>
+                            <td colSpan={2}>{displayCellVal(d.responsable_factura_email)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -501,12 +511,12 @@ export default function CreditPrintPage() {
                     <tbody>
                         {commercialRefs.map((ref: any, idx: number) => (
                             <tr key={idx}>
-                                <td>{displayVal(ref.entidad, '__________________________')}</td>
-                                <td>{displayVal(ref.contacto, '__________________')}</td>
-                                <td>{displayVal(ref.telefono, '___________')}</td>
-                                <td>{displayVal(ref.ciudad, '__________')}</td>
+                                <td>{displayCellVal(ref.entidad)}</td>
+                                <td>{displayCellVal(ref.contacto)}</td>
+                                <td>{displayCellVal(ref.telefono)}</td>
+                                <td>{displayCellVal(ref.ciudad)}</td>
                                 <td>{(!isBlankMode && ref.cupo) ? `$${ref.cupo.toLocaleString('es-CO')}` : '___________'}</td>
-                                <td>{displayVal(ref.plazo, '_____')}</td>
+                                <td>{displayCellVal(ref.plazo)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -532,11 +542,11 @@ export default function CreditPrintPage() {
                             </tr>
                         ) : (isBlankMode ? personalRefs : personalRefs).map((ref: any, idx: number) => (
                             <tr key={idx}>
-                                <td>{displayVal(ref.nombre, '________________________________________')}</td>
-                                <td>{displayVal(ref.direccion, '________________________________________')}</td>
-                                <td>{displayVal(ref.telefono, '________________')}</td>
-                                <td>{displayVal(ref.celular, '________________')}</td>
-                                <td>{displayVal(ref.relacion, '________________')}</td>
+                                <td>{displayCellVal(ref.nombre)}</td>
+                                <td>{displayCellVal(ref.direccion)}</td>
+                                <td>{displayCellVal(ref.telefono)}</td>
+                                <td>{displayCellVal(ref.celular)}</td>
+                                <td>{displayCellVal(ref.relacion)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -553,18 +563,18 @@ export default function CreditPrintPage() {
                                 <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!paymentCond.cheque)} Cheque</span>
                             </td>
                             <td style={{ width: '15%' }}><b>Plazo Aprobado:</b></td>
-                            <td style={{ width: '15%', fontWeight: 'bold' }}>{isBlankMode ? '______' : (d.plazo_pago_dias || 0)} Días</td>
+                            <td style={{ width: '15%', fontWeight: 'bold' }}>{displayCellVal((!isBlankMode && d.plazo_pago_dias) ? d.plazo_pago_dias.toString() : '')} Días</td>
                         </tr>
                         <tr>
                             <td><b>Observaciones Pago:</b></td>
-                            <td colSpan={4}>{displayVal(d.negociacion_dias_pago_soporte, '________________________________________')}</td>
+                            <td colSpan={4}>{displayCellVal(d.negociacion_dias_pago_soporte)}</td>
                         </tr>
                     </tbody>
                 </table>
 
                 <div className="section-header">8. Declaraciones, Firmas y Autorizaciones</div>
                 <div style={{ border: '1px solid #000', padding: '8px', fontSize: '7.5px', textAlign: 'justify', marginBottom: '8px' }}>
-                    <b>Declaración de Origen de Recursos:</b> Yo, el abajo firmante, actuando en nombre propio y/o en representación de la persona jurídica solicitante, declaro de manera libre y voluntaria que los recursos que manejo provienen del giro ordinario de mis negocios lícitos ({displayVal(d.declaracion_origen_fondos_fuentes, 'Actividad comercial ordinaria')}), y no provienen de ninguna actividad ilegal contemplada en el código penal colombiano. Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> a consultar ante las centrales de riesgo y bases de datos crediticias mi comportamiento financiero, comercial y de pago, así como el historial de las cuentas.
+                    <b>Declaración de Origen de Recursos:</b> Yo, el abajo firmante, actuando en nombre propio y/o en representación de la persona jurídica solicitante, declaro de manera libre y voluntaria que los recursos que manejo provienen del giro ordinario de mis negocios lícitos ({displayInlineVal(d.declaracion_origen_fondos_fuentes, 'Actividad comercial ordinaria')}), y no provienen de ninguna actividad ilegal contemplada en el código penal colombiano. Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> a consultar ante las centrales de riesgo y bases de datos crediticias mi comportamiento financiero, comercial y de pago, así como el historial de las cuentas.
                 </div>
 
                 <table style={{ width: '100%' }}>
@@ -574,7 +584,7 @@ export default function CreditPrintPage() {
                                 <div style={{ borderBottom: '1px solid #000', height: '40px', marginTop: '20px' }}></div>
                                 <div style={{ marginTop: '5px' }}>
                                     <b>Firma Representante Legal / Cliente</b><br />
-                                    Nombre: {pagareDeudor.nombre}<br />
+                                    Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
                                     NIT / C.C: {pagareDeudor.identificacion}
                                 </div>
                             </td>
@@ -585,7 +595,7 @@ export default function CreditPrintPage() {
                                     </div>
                                     <div style={{ fontSize: '8px', flex: 1 }}>
                                         <b>Fecha de Firma:</b> {formatDate(d.pagare_fecha_firma)}<br />
-                                        <b>Ciudad:</b> {displayVal(d.pagare_ciudad_firma, 'Cali')}
+                                        <b>Ciudad:</b> {displayInlineVal(d.pagare_ciudad_firma, 'Cali')}
                                     </div>
                                 </div>
                             </td>
@@ -600,7 +610,7 @@ export default function CreditPrintPage() {
                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '40px', objectFit: 'contain' }} />
                     <div style={{ textAlign: 'right' }}>
                         <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PAGARÉ</h2>
-                        <div style={{ fontWeight: 'bold', fontSize: '12px' }}>PAGARÉ No. {displayVal(d.pagare_numero, '____________________')}</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '12px' }}>PAGARÉ No. {displayInlineVal(d.pagare_numero, '____________________')}</div>
                     </div>
                 </div>
 
@@ -610,14 +620,14 @@ export default function CreditPrintPage() {
                         <b>NIT:</b> 901.393.217-1
                     </div>
                     <div>
-                        <b>DEUDOR / SOLICITANTE:</b> {displayVal(pagareDeudor.nombre, '________________________________')}<br />
-                        <b>NIT / C.C:</b> {displayVal(pagareDeudor.identificacion, '____________________')}
+                        <b>DEUDOR / SOLICITANTE:</b> {displayInlineVal(pagareDeudor.nombre, '________________________________')}<br />
+                        <b>NIT / C.C:</b> {displayInlineVal(pagareDeudor.identificacion, '____________________')}
                     </div>
                 </div>
 
                 <div style={{ textAlign: 'justify', marginBottom: '25px' }}>
                     <p>
-                        <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo (nos obligamos) a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos represente, en la ciudad de <b>{displayVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día __________ del mes ____________________ del año __________, la suma de: ____________________________________________________________________________ ($______________________) moneda legal colombiana, más los intereses de ley a la tasa máxima permitida por la Superintendencia Financiera de Colombia.
+                        <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo (nos obligamos) a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos represente, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día __________ del mes ____________________ del año __________, la suma de: ____________________________________________________________________________ ($______________________) moneda legal colombiana, más los intereses de ley a la tasa máxima permitida por la Superintendencia Financiera de Colombia.
                     </p>
                     <p>
                         <b>SEGUNDA - INTERESES MORATORIOS:</b> A partir del vencimiento de este Pagaré, reconoceré un interés moratorio a la tasa máxima autorizada por la ley mercantil aplicable.
@@ -626,7 +636,7 @@ export default function CreditPrintPage() {
                         <b>TERCERA - CLÁUSULA ACELERATORIA:</b> El tenedor de este Pagaré podrá declarar vencido el plazo y exigir el pago total de la obligación en caso de mora en el pago de facturas correspondientes a despachos de mercancía, giro de cheques sin provisión de fondos, o incumplimiento de cualquier otra obligación mercantil o tributaria.
                     </p>
                     <p>
-                        <b>CUARTO:</b> Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
+                        <b>CUARTO:</b> Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
                     </p>
                 </div>
 
@@ -637,23 +647,23 @@ export default function CreditPrintPage() {
                             <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
                                 <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
                                     <b>DEUDOR (FIRMA)</b><br />
-                                    Nombre: {pagareDeudor.nombre}<br />
-                                    C.C./NIT: {pagareDeudor.identificacion}<br />
-                                    Dirección: {pagareDeudor.direccion || '____________________'}<br />
-                                    Barrio: {pagareDeudor.barrio || '____________________'}<br />
-                                    Teléfono / Celular: {pagareDeudor.celular || '____________________'}<br />
-                                    Email: {pagareDeudor.email || '____________________'}
+                                    Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
+                                    C.C./NIT: {displayInlineVal(pagareDeudor.identificacion, '____________________')}<br />
+                                    Dirección: {displayInlineVal(pagareDeudor.direccion, '________________________________________')}<br />
+                                    Barrio: {displayInlineVal(pagareDeudor.barrio, '____________________')}<br />
+                                    Teléfono / Celular: {displayInlineVal(pagareDeudor.celular, '____________________')}<br />
+                                    Email: {displayInlineVal(pagareDeudor.email, '________________________________________')}
                                 </div>
                             </td>
                             <td style={{ width: '50%', paddingLeft: '20px', verticalAlign: 'top' }}>
                                 <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
                                     <b>CODEUDOR / GARANTE (FIRMA)</b><br />
-                                    Nombre: {pagareCodeudor.nombre || '________________________________'}<br />
-                                    C.C.: {pagareCodeudor.identificacion || '____________________'}<br />
-                                    Dirección: {pagareCodeudor.direccion || '____________________'}<br />
-                                    Barrio: {pagareCodeudor.barrio || '____________________'}<br />
-                                    Teléfono / Celular: {pagareCodeudor.celular || '____________________'}<br />
-                                    Email: {pagareCodeudor.email || '____________________'}
+                                    Nombre: {displayInlineVal(pagareCodeudor.nombre, '________________________________________')}<br />
+                                    C.C.: {displayInlineVal(pagareCodeudor.identificacion, '____________________')}<br />
+                                    Dirección: {displayInlineVal(pagareCodeudor.direccion, '________________________________________')}<br />
+                                    Barrio: {displayInlineVal(pagareCodeudor.barrio, '____________________')}<br />
+                                    Teléfono / Celular: {displayInlineVal(pagareCodeudor.celular, '____________________')}<br />
+                                    Email: {displayInlineVal(pagareCodeudor.email, '________________________________________')}
                                 </div>
                             </td>
                         </tr>
@@ -667,14 +677,14 @@ export default function CreditPrintPage() {
                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '40px', objectFit: 'contain' }} />
                     <div style={{ textAlign: 'right' }}>
                         <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>CARTA DE INSTRUCCIONES</h2>
-                        <div style={{ fontWeight: 'bold' }}>ANEXA AL PAGARÉ No. {displayVal(d.pagare_numero, '____________________')}</div>
+                        <div style={{ fontWeight: 'bold' }}>ANEXA AL PAGARÉ No. {displayInlineVal(d.pagare_numero, '____________________')}</div>
                     </div>
                 </div>
 
                 <div style={{ textAlign: 'justify', marginBottom: '20px' }}>
                     <p>Señores:<br /><b>INVESTMENTS CORTES S.A.S.</b><br />Ciudad.</p>
                     <p>
-                        Yo (Nosotros), <b>{displayVal(pagareDeudor.nombre, '________________________________')}</b>, identificado(s) como aparece al pie de mi (nuestras) firma(s), en calidad de Deudor(es), autorizo(amos) de manera expresa e irrevocable a <b>INVESTMENTS CORTES S.A.S.</b> para llenar los espacios que han sido dejados en blanco en el Pagaré adjunto, que he (hemos) firmado a su favor, con arreglo a las siguientes instrucciones:
+                        Yo (Nosotros), <b>{displayInlineVal(pagareDeudor.nombre, '________________________________')}</b>, identificado(s) como aparece al pie de mi (nuestras) firma(s), en calidad de Deudor(es), autorizo(amos) de manera expresa e irrevocable a <b>INVESTMENTS CORTES S.A.S.</b> para llenar los espacios que han sido dejados en blanco en el Pagaré adjunto, que he (hemos) firmado a su favor, con arreglo a las siguientes instrucciones:
                     </p>
                     <p>
                         <b>1. IMPORTE:</b> El importe del pagaré será igual al total de las obligaciones vigentes, exigibles y no pagadas que en cualquier momento tenga el deudor a favor de <b>INVESTMENTS CORTES S.A.S.</b> por concepto de compra de mercancías (frutas, verduras, procesados), facturas pendientes, intereses moratorios y gastos de cobranza.
@@ -683,10 +693,10 @@ export default function CreditPrintPage() {
                         <b>2. FECHA DE VENCIMIENTO:</b> La fecha de vencimiento será aquella que determine el acreedor <b>INVESTMENTS CORTES S.A.S.</b>, la cual corresponderá al día siguiente en el que ocurra la mora en el pago de una o más obligaciones.
                     </p>
                     <p>
-                        <b>3. LUGAR DE PAGO:</b> El lugar de pago será la ciudad de <b>{displayVal(d.pagare_ciudad_firma, 'Cali')}</b> en las oficinas del acreedor.
+                        <b>3. LUGAR DE PAGO:</b> El lugar de pago será la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b> en las oficinas del acreedor.
                     </p>
                     <p>
-                        Para constancia de lo anterior, se firma en la ciudad de <b>{displayVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
+                        Para constancia de lo anterior, se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
                     </p>
                 </div>
 
@@ -697,8 +707,8 @@ export default function CreditPrintPage() {
                             <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
                                 <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
                                     <b>FIRMA DEL DEUDOR</b><br />
-                                    Nombre: {pagareDeudor.nombre}<br />
-                                    C.C./NIT: {pagareDeudor.identificacion}
+                                    Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
+                                    C.C./NIT: {displayInlineVal(pagareDeudor.identificacion, '____________________')}
                                 </div>
                                 <div style={{ border: '1px solid #000', width: '50px', height: '60px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
                                     HUELLA INDICE<br />DERECHO
@@ -708,7 +718,7 @@ export default function CreditPrintPage() {
                                 <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
                                     <b>FIRMA DEL CODEUDOR</b><br />
                                     Nombre: {pagareCodeudor.nombre || '____________________'}<br />
-                                    C.C.: {pagareCodeudor.identificacion || '____________________'}
+                                    C.C.: {displayInlineVal(pagareCodeudor.identificacion, '____________________')}
                                 </div>
                                 <div style={{ border: '1px solid #000', width: '50px', height: '60px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
                                     HUELLA INDICE<br />DERECHO
@@ -721,7 +731,7 @@ export default function CreditPrintPage() {
 
             {/* PAGE 5: USO EXCLUSIVO Y DOCUMENTACIÓN */}
             <div style={{ padding: '8px 12px' }}>
-                <div className="section-header" style={{ marginBottom: '15px' }}>8. Espacio Exclusivo de la Administración (Investments Cortés)</div>
+                <div className="section-header" style={{ marginBottom: '15px' }}>9. Espacio Exclusivo de la Administración (Investments Cortés)</div>
                 <table className="form-table">
                     <tbody>
                         <tr>
@@ -736,21 +746,21 @@ export default function CreditPrintPage() {
                         </tr>
                         <tr>
                             <td><b>Plazo Aprobado:</b></td>
-                            <td style={{ fontWeight: 'bold' }}>{isBlankMode ? '____________________' : (d.plazo_aprobado ? `${d.plazo_aprobado} Días` : 'N/A')}</td>
+                            <td style={{ fontWeight: 'bold' }}>{displayCellVal((!isBlankMode && d.plazo_aprobado) ? `${d.plazo_aprobado} Días` : '')}</td>
                             <td><b>Visto Bueno Comercial:</b></td>
-                            <td>{displayVal(d.vo_bo, '____________________')}</td>
+                            <td>{displayCellVal(d.vo_bo)}</td>
                         </tr>
                         <tr>
                             <td><b>Autorización Gerencia:</b></td>
-                            <td colSpan={3}>{displayVal(d.autorizacion_gerencia, '____________________')}</td>
+                            <td colSpan={3}>{displayCellVal(d.autorizacion_gerencia)}</td>
                         </tr>
                         <tr>
                             <td><b>Concepto Coord. Comercial:</b></td>
-                            <td colSpan={3} style={{ height: '40px' }}>{displayVal(d.concepto_coordinador, '________________________________________')}</td>
+                            <td colSpan={3} style={{ height: '40px' }}>{displayCellVal(d.concepto_coordinador)}</td>
                         </tr>
                         <tr>
                             <td><b>Observaciones Director:</b></td>
-                            <td colSpan={3} style={{ height: '40px' }}>{displayVal(d.observaciones_director, '________________________________________')}</td>
+                            <td colSpan={3} style={{ height: '40px' }}>{displayCellVal(d.observaciones_director)}</td>
                         </tr>
                     </tbody>
                 </table>
