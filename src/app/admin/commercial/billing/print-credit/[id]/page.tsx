@@ -93,7 +93,23 @@ export default function CreditPrintPage() {
     };
 
     const displayVal = (val: any, placeholder: string = '____________________') => {
-        return isBlankMode ? placeholder : (val || placeholder);
+        const hasVal = !isBlankMode && val;
+        if (!hasVal) {
+            if (placeholder.startsWith('_')) {
+                return (
+                    <span style={{
+                        display: 'inline-block',
+                        borderBottom: '1px solid #000',
+                        width: '95%',
+                        height: '1px',
+                        verticalAlign: 'bottom',
+                        marginBottom: '2px'
+                    }}></span>
+                );
+            }
+            return placeholder;
+        }
+        return val;
     };
 
     const renderCheckbox = (checked: boolean) => (
@@ -254,12 +270,21 @@ export default function CreditPrintPage() {
                 {/* BASIC INFO */}
                 <div className="section-header">1. Información Básica</div>
                 <table className="form-table">
+                    <colgroup>
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '12.5%' }} />
+                        <col style={{ width: '12.5%' }} />
+                        <col style={{ width: '12.5%' }} />
+                        <col style={{ width: '12.5%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '25%' }} />
+                    </colgroup>
                     <tbody>
                         <tr>
-                            <td style={{ width: '15%' }}><b>Razón Social:</b></td>
+                            <td><b>Razón Social:</b></td>
                             <td colSpan={4} style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.razon_social || client.razon_social || client.company_name, '__________________________________________________')}</td>
-                            <td style={{ width: '10%' }}><b>NIT / C.C:</b></td>
-                            <td style={{ width: '25%', fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.nit || client.nit, '____________________')}</td>
+                            <td><b>NIT / C.C:</b></td>
+                            <td style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.nit || client.nit, '____________________')}</td>
                         </tr>
                         <tr>
                             <td><b>Nombre Comercial:</b></td>
