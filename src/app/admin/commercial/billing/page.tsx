@@ -991,6 +991,16 @@ export default function BillingDashboard() {
                                         >
                                             <Plus size={15} /> Crear Nuevo Expediente
                                         </button>
+                                        <a
+                                            href="/admin/commercial/billing/print-credit/blank"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{ backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMain, padding: '0.6rem 1.2rem', borderRadius: THEME.radius.md, fontWeight: '750', fontSize: '0.8rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.2s' }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        >
+                                            🖨️ Imprimir Vacío
+                                        </a>
                                         <div style={{ position: 'relative', width: '250px' }}>
                                             <input
                                                 type="text"
