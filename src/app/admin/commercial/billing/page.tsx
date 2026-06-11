@@ -93,7 +93,7 @@ export default function BillingDashboard() {
                 .from('billing_invoices')
                 .select(`
                     *,
-                    orders (
+                    orders:orders!billing_invoices_order_id_fkey (
                         sequence_id,
                         created_at,
                         profiles (
