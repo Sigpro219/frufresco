@@ -96,6 +96,25 @@ export default function CreditPrintPage() {
         return isBlankMode ? placeholder : (val || placeholder);
     };
 
+    const renderCheckbox = (checked: boolean) => (
+        <span style={{
+            display: 'inline-block',
+            width: '9px',
+            height: '9px',
+            border: '1px solid #000',
+            lineHeight: '7px',
+            textAlign: 'center',
+            fontSize: '7px',
+            fontFamily: 'Arial, sans-serif',
+            fontWeight: 'bold',
+            verticalAlign: 'middle',
+            backgroundColor: '#fff',
+            color: '#000',
+            userSelect: 'none'
+        }}>
+            {checked ? 'X' : ''}
+        </span>
+    );
 
     return (
         <div style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif', fontSize: '8.5px', lineHeight: '1.2' }}>
@@ -108,7 +127,23 @@ export default function CreditPrintPage() {
                 @media print {
                     .no-print { display: none !important; }
                     .page-break { page-break-after: always; display: block; clear: both; }
-                    body { background: white; margin: 0; padding: 0; }
+                    body { background: white !important; margin: 0 !important; padding: 0 !important; }
+                    .print-paper-container {
+                        max-width: none !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        box-shadow: none !important;
+                        border-radius: 0 !important;
+                    }
+                }
+                .print-paper-container {
+                    max-width: 800px;
+                    margin: 20px auto;
+                    background-color: #fff;
+                    padding: 15px 20px;
+                    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+                    border-radius: 8px;
+                    box-sizing: border-box;
                 }
                 .form-table {
                     width: 100%;
@@ -146,9 +181,6 @@ export default function CreditPrintPage() {
                     align-items: center;
                     margin-right: 8px;
                 }
-                .checkbox-container input {
-                    margin-right: 2px;
-                }
                 `}
             </style>
 
@@ -163,8 +195,9 @@ export default function CreditPrintPage() {
             {/* Offset for toolbar */}
             <div className="no-print" style={{ height: '50px' }}></div>
 
-            {/* PAGE 1: SOLICITUD DE CRÉDITO / CONOCIMIENTO DE CLIENTES */}
-            <div className="page-break" style={{ padding: '8px 12px' }}>
+            <div className="print-paper-container">
+                {/* PAGE 1: SOLICITUD DE CRÉDITO / CONOCIMIENTO DE CLIENTES */}
+                <div className="page-break" style={{ padding: '8px 12px' }}>
                 {/* Header Table */}
                 <table className="form-table" style={{ marginBottom: '10px' }}>
                     <tbody>
@@ -196,9 +229,9 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td style={{ width: '15%' }}><b>AGENCIA:</b></td>
-                            <td style={{ width: '10%' }}>{!isBlankMode && d.agencia ? '[X]' : '[ ]'}</td>
+                            <td style={{ width: '10%', textAlign: 'center' }}>{renderCheckbox(!isBlankMode && !!d.agencia)}</td>
                             <td style={{ width: '15%' }}><b>SUPERMERCADO:</b></td>
-                            <td style={{ width: '10%' }}>{!isBlankMode && d.supermercado ? '[X]' : '[ ]'}</td>
+                            <td style={{ width: '10%', textAlign: 'center' }}>{renderCheckbox(!isBlankMode && !!d.supermercado)}</td>
                             <td style={{ width: '10%' }}><b>CIUDAD:</b></td>
                             <td style={{ width: '15%' }}>{displayVal(d.ciudad, '____________________')}</td>
                             <td style={{ width: '10%' }}><b>CUPO:</b></td>
@@ -211,8 +244,8 @@ export default function CreditPrintPage() {
                             <td>{displayVal(d.fecha_solicitud, '____________________')}</td>
                             <td><b>SOLICITUD:</b></td>
                             <td colSpan={3}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && d.tipo_solicitud === 'creacion'} /> Creación</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && d.tipo_solicitud === 'actualizacion'} /> Actualización</span>
+                                <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'creacion')} Creación</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'actualizacion')} Actualización</span>
                             </td>
                         </tr>
                     </tbody>
@@ -224,13 +257,13 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td style={{ width: '15%' }}><b>Razón Social:</b></td>
-                            <td colSpan={3} style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.razon_social || client.razon_social || client.company_name, '__________________________________________________')}</td>
+                            <td colSpan={4} style={{ fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.razon_social || client.razon_social || client.company_name, '__________________________________________________')}</td>
                             <td style={{ width: '10%' }}><b>NIT / C.C:</b></td>
                             <td style={{ width: '25%', fontSize: '10px', fontWeight: 'bold' }}>{displayVal(d.nit || client.nit, '____________________')}</td>
                         </tr>
                         <tr>
                             <td><b>Nombre Comercial:</b></td>
-                            <td colSpan={5}>{displayVal(d.nombre_comercial || client.company_name, '__________________________________________________')}</td>
+                            <td colSpan={6}>{displayVal(d.nombre_comercial || client.company_name, '__________________________________________________')}</td>
                         </tr>
                         <tr>
                             <td><b>Dirección:</b></td>
@@ -254,7 +287,11 @@ export default function CreditPrintPage() {
                             <td><b>CIIU:</b></td>
                             <td>{displayVal(d.ciiu_principal, '____________')}</td>
                             <td><b>¿Es PEP?:</b></td>
-                            <td>{isBlankMode ? 'SI [ ] NO [ ]' : (d.rep_legal_es_pep ? 'SI [X] NO [ ]' : 'SI [ ] NO [X]')}</td>
+                            <td>
+                                SI {renderCheckbox(!isBlankMode && !!d.rep_legal_es_pep)}
+                                &nbsp;&nbsp;&nbsp;
+                                NO {renderCheckbox(!isBlankMode && !d.rep_legal_es_pep)}
+                            </td>
                         </tr>
                         <tr>
                             <td><b>Representante Legal:</b></td>
@@ -346,18 +383,26 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td style={{ width: '35%' }}><b>¿Realiza Operaciones Internacionales?</b></td>
-                            <td style={{ width: '15%' }}>{isBlankMode ? 'SI [ ] NO [ ]' : (d.realiza_operaciones_internacionales ? 'SI [X] NO [ ]' : 'SI [ ] NO [X]')}</td>
+                            <td style={{ width: '15%' }}>
+                                SI {renderCheckbox(!isBlankMode && !!d.realiza_operaciones_internacionales)}
+                                &nbsp;&nbsp;&nbsp;
+                                NO {renderCheckbox(!isBlankMode && !d.realiza_operaciones_internacionales)}
+                            </td>
                             <td style={{ width: '15%' }}><b>Tipo de Operación:</b></td>
                             <td colSpan={3}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!internationalOps.transferencias} /> Transferencias</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!internationalOps.importaciones} /> Importaciones</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!internationalOps.exportaciones} /> Exportaciones</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!internationalOps.giros} /> Giros</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.transferencias)} Transferencias</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.importaciones)} Importaciones</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.exportaciones)} Exportaciones</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.giros)} Giros</span>
                             </td>
                         </tr>
                         <tr>
                             <td><b>¿Tiene Cuentas en el Exterior?</b></td>
-                            <td>{isBlankMode ? 'SI [ ] NO [ ]' : (d.tiene_productos_financieros_internacionales ? 'SI [X] NO [ ]' : 'SI [ ] NO [X]')}</td>
+                            <td>
+                                SI {renderCheckbox(!isBlankMode && !!d.tiene_productos_financieros_internacionales)}
+                                &nbsp;&nbsp;&nbsp;
+                                NO {renderCheckbox(!isBlankMode && !d.tiene_productos_financieros_internacionales)}
+                            </td>
                             <td><b>Detalles Operación:</b></td>
                             <td colSpan={3}>{displayVal(internationalOps.otros, '________________________________________')}</td>
                         </tr>
@@ -370,22 +415,22 @@ export default function CreditPrintPage() {
                         <tr>
                             <td style={{ width: '15%' }}><b>Tipo de Persona:</b></td>
                             <td colSpan={2}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && d.tipo_contribuyente === 'persona_natural'} /> Persona Natural</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && d.tipo_contribuyente === 'persona_juridica'} /> Persona Jurídica</span>
+                                <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && d.tipo_contribuyente === 'persona_natural')} Persona Natural</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_contribuyente === 'persona_juridica')} Persona Jurídica</span>
                             </td>
                             <td style={{ width: '15%' }}><b>Responsable de IVA:</b></td>
                             <td colSpan={2}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.regimen_comun} /> Régimen Común</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.regimen_simplificado} /> Simplificado</span>
+                                <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.regimen_comun)} Régimen Común</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simplificado)} Simplificado</span>
                             </td>
                         </tr>
                         <tr>
                             <td><b>Clase Contribuyente:</b></td>
                             <td colSpan={5}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.gran_contribuyente} /> Gran Contribuyente</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.auto_retenedor} /> Autorretenedor</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.regimen_simple} /> Régimen Simple</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!taxClasses.sin_animo_lucro} /> Sin Ánimo de Lucro</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.gran_contribuyente)} Gran Contribuyente</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.auto_retenedor)} Autorretenedor</span>
+                                <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simple)} Régimen Simple</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.sin_animo_lucro)} Sin Ánimo de Lucro</span>
                             </td>
                         </tr>
                         <tr>
@@ -417,7 +462,7 @@ export default function CreditPrintPage() {
                 <table className="form-table">
                     <thead>
                         <tr>
-                            <th colSpan={7}>Referencias Comerciales</th>
+                            <th colSpan={6}>Referencias Comerciales</th>
                         </tr>
                         <tr>
                             <th>Entidad / Proveedor</th>
@@ -478,9 +523,9 @@ export default function CreditPrintPage() {
                         <tr>
                             <td style={{ width: '20%' }}><b>Condición de Pago:</b></td>
                             <td colSpan={2}>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!paymentCond.consignacion} /> Consignación</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!paymentCond.transferencia} /> Transferencia Electrónica</span>
-                                <span className="checkbox-container"><input type="checkbox" readOnly checked={!isBlankMode && !!paymentCond.cheque} /> Cheque</span>
+                                <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!paymentCond.consignacion)} Consignación</span>
+                                <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!paymentCond.transferencia)} Transferencia Electrónica</span>
+                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!paymentCond.cheque)} Cheque</span>
                             </td>
                             <td style={{ width: '15%' }}><b>Plazo Aprobado:</b></td>
                             <td style={{ width: '15%', fontWeight: 'bold' }}>{isBlankMode ? '______' : (d.plazo_pago_dias || 0)} Días</td>
@@ -656,7 +701,11 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td style={{ width: '30%' }}><b>Crédito Aprobado:</b></td>
-                            <td style={{ width: '20%', fontWeight: 'bold' }}>{isBlankMode ? 'SÍ [ ] NO [ ]' : (d.credito_aprobado ? 'SÍ [X] NO [ ]' : 'SÍ [ ] NO [X]')}</td>
+                            <td style={{ width: '20%', fontWeight: 'bold' }}>
+                                SÍ {renderCheckbox(!isBlankMode && !!d.credito_aprobado)}
+                                &nbsp;&nbsp;&nbsp;
+                                NO {renderCheckbox(!isBlankMode && !d.credito_aprobado)}
+                            </td>
                             <td style={{ width: '20%' }}><b>Cupo Autorizado:</b></td>
                             <td style={{ width: '30%', fontWeight: 'bold', fontSize: '11px', color: THEME.colors.primary }}>{isBlankMode ? '____________________' : (d.cupo_aprobado ? `$${d.cupo_aprobado.toLocaleString('es-CO')}` : 'N/A')}</td>
                         </tr>
@@ -692,25 +741,26 @@ export default function CreditPrintPage() {
                     <tbody>
                         <tr>
                             <td>
-                                [ ] Copia de cédula de ciudadanía<br />
-                                [ ] RUT actualizado<br />
-                                [ ] Extractos bancarios últimos 3 meses<br />
-                                [ ] Última declaración de renta<br />
-                                [ ] Cámara de Comercio menor a 30 días<br />
-                                [ ] Pagaré y Carta de instrucciones firmados
+                                {renderCheckbox(false)} Copia de cédula de ciudadanía<br />
+                                {renderCheckbox(false)} RUT actualizado<br />
+                                {renderCheckbox(false)} Extractos bancarios últimos 3 meses<br />
+                                {renderCheckbox(false)} Última declaración de renta<br />
+                                {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
+                                {renderCheckbox(false)} Pagaré y Carta de instrucciones firmados
                             </td>
                             <td>
-                                [ ] Copia de cédula del Representante Legal<br />
-                                [ ] RUT actualizado de la empresa<br />
-                                [ ] Cámara de Comercio menor a 30 días<br />
-                                [ ] Estados Financieros del último período<br />
-                                [ ] 2 Referencias comerciales recientes<br />
-                                [ ] 1 Referencia bancaria<br />
-                                [ ] Pagaré y Carta de instrucciones firmados
+                                {renderCheckbox(false)} Copia de cédula del Representante Legal<br />
+                                {renderCheckbox(false)} RUT actualizado de la empresa<br />
+                                {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
+                                {renderCheckbox(false)} Estados Financieros del último período<br />
+                                {renderCheckbox(false)} 2 Referencias comerciales recientes<br />
+                                {renderCheckbox(false)} 1 Referencia bancaria<br />
+                                {renderCheckbox(false)} Pagaré y Carta de instrucciones firmados
                             </td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
             </div>
         </div>
     );
