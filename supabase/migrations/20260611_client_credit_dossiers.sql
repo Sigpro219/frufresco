@@ -98,3 +98,24 @@ CREATE TABLE IF NOT EXISTS client_credit_dossiers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Enable Row Level Security
+ALTER TABLE client_credit_dossiers ENABLE ROW LEVEL SECURITY;
+
+-- Policy to allow authenticated users to perform all operations
+DROP POLICY IF EXISTS "Allow authenticated full access to credit dossiers" ON client_credit_dossiers;
+CREATE POLICY "Allow authenticated full access to credit dossiers" 
+ON client_credit_dossiers 
+FOR ALL 
+TO authenticated 
+USING (true) 
+WITH CHECK (true);
+
+-- Policy to allow anonymous read access (required for printing / reading profiles)
+DROP POLICY IF EXISTS "Allow anonymous read access to credit dossiers" ON client_credit_dossiers;
+CREATE POLICY "Allow anonymous read access to credit dossiers" 
+ON client_credit_dossiers 
+FOR SELECT 
+TO anon 
+USING (true);
+
