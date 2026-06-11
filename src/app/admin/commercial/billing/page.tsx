@@ -73,6 +73,8 @@ export default function BillingDashboard() {
     const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
     const [isSavingDossier, setIsSavingDossier] = useState(false);
     const [activeDossierSection, setActiveDossierSection] = useState<'general' | 'contacts' | 'financial' | 'references' | 'negociacion' | 'codeudores'>('general');
+    const [isRegisteringNewClient, setIsRegisteringNewClient] = useState(false);
+    const [selectedB2bClientAssocId, setSelectedB2bClientAssocId] = useState('');
     
     const initialDossierForm = {
         agencia: false,
@@ -273,14 +275,81 @@ export default function BillingDashboard() {
         setActiveDossierSection('general');
     };
 
+    const handleCreateNewDossier = () => {
+        setDossierForm({
+            ...initialDossierForm,
+            profile_id: 'new',
+            razon_social: '',
+            nombre_comercial: '',
+            nit: '',
+            direccion: '',
+            ciudad: '',
+            ciudad_info: '',
+            departamento_info: '',
+            telefono: '',
+            rep_legal_nombre: '',
+            rep_legal_email: '',
+            rep_legal_celular: '',
+            pagare_firma_deudor: { nombre: '', identificacion: '', direccion: '', barrio: '', celular: '', telefono: '', email: '' }
+        });
+        setSelectedB2bClient({ id: 'new', company_name: 'Nuevo Cliente', nit: '' });
+        setIsRegisteringNewClient(false);
+        setSelectedB2bClientAssocId('');
+        setIsDossierModalOpen(true);
+        setActiveDossierSection('general');
+    };
+
     const handleSaveDossier = async () => {
         setIsSavingDossier(true);
         try {
+            let targetProfileId = selectedB2bClient.id;
+
+            if (selectedB2bClient.id === 'new') {
+                if (!isRegisteringNewClient) {
+                    if (!selectedB2bClientAssocId) {
+                        alert('Por favor selecciona un cliente B2B existente.');
+                        setIsSavingDossier(false);
+                        return;
+                    }
+                    targetProfileId = selectedB2bClientAssocId;
+                } else {
+                    if (!dossierForm.nombre_comercial || !dossierForm.nit) {
+                        alert('Por favor completa el Nombre Comercial y NIT del nuevo cliente.');
+                        setIsSavingDossier(false);
+                        return;
+                    }
+                    // Create new profile
+                    const { data: newProfile, error: profileErr } = await supabase
+                        .from('profiles')
+                        .insert([{
+                            role: 'b2b_client',
+                            company_name: dossierForm.nombre_comercial,
+                            razon_social: dossierForm.razon_social || dossierForm.nombre_comercial,
+                            nit: dossierForm.nit,
+                            address: dossierForm.direccion,
+                            city: dossierForm.ciudad_info,
+                            department: dossierForm.departamento_info,
+                            phone: dossierForm.telefono,
+                            contact_name: dossierForm.rep_legal_nombre,
+                            contact_phone: dossierForm.rep_legal_celular,
+                            email: dossierForm.rep_legal_email,
+                            profile_type: 'employee',
+                            is_active: true
+                        }])
+                        .select('id')
+                        .single();
+                    
+                    if (profileErr) throw profileErr;
+                    if (!newProfile) throw new Error('No se pudo crear el perfil del cliente.');
+                    targetProfileId = newProfile.id;
+                }
+            }
+
             const { error } = await supabase
                 .from('client_credit_dossiers')
                 .upsert({
                     ...dossierForm,
-                    profile_id: selectedB2bClient.id,
+                    profile_id: targetProfileId,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'profile_id' });
 
@@ -915,15 +984,23 @@ export default function BillingDashboard() {
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, padding: '1.5rem', boxShadow: THEME.shadow.md }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                                     <h3 style={{ fontSize: '1rem', fontWeight: '850', margin: 0 }}>Fichas de Conocimiento y Pagarés de Clientes B2B</h3>
-                                    <div style={{ position: 'relative', width: '300px' }}>
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar cliente por nombre o NIT..."
-                                            value={dossiersSearchTerm}
-                                            onChange={(e) => setDossiersSearchTerm(e.target.value)}
-                                            style={{ ...inputStyle, paddingLeft: '2.2rem' }}
-                                        />
-                                        <Search size={15} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                                        <button
+                                            onClick={handleCreateNewDossier}
+                                            style={{ backgroundColor: THEME.colors.primary, color: 'white', border: 'none', padding: '0.6rem 1.2rem', borderRadius: THEME.radius.md, fontWeight: '750', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                        >
+                                            <Plus size={15} /> Crear Nuevo Expediente
+                                        </button>
+                                        <div style={{ position: 'relative', width: '250px' }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar cliente por nombre o NIT..."
+                                                value={dossiersSearchTerm}
+                                                onChange={(e) => setDossiersSearchTerm(e.target.value)}
+                                                style={{ ...inputStyle, paddingLeft: '2.2rem' }}
+                                            />
+                                            <Search size={15} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1141,6 +1218,71 @@ export default function BillingDashboard() {
                             <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', marginBottom: '1rem' }}>
                                 {activeDossierSection === 'general' && (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                                        {selectedB2bClient.id === 'new' && (
+                                            <div style={{ gridColumn: 'span 2', backgroundColor: THEME.colors.background, padding: '1rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginBottom: '0.5rem' }}>
+                                                <h5 style={{ margin: '0 0 0.6rem 0', fontSize: '0.85rem', fontWeight: '800', color: THEME.colors.primary }}>Asociar con Cliente B2B</h5>
+                                                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.8rem' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                        <input type="radio" name="client_assoc_type" checked={!isRegisteringNewClient} onChange={() => setIsRegisteringNewClient(false)} /> Seleccionar Cliente Existente
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                        <input type="radio" name="client_assoc_type" checked={isRegisteringNewClient} onChange={() => setIsRegisteringNewClient(true)} /> Registrar y Asociar con Cliente Nuevo
+                                                    </label>
+                                                </div>
+
+                                                {!isRegisteringNewClient ? (
+                                                    <div>
+                                                        <label style={labelStyle}>Seleccionar de Perfiles B2B Disponibles</label>
+                                                        <select
+                                                            value={selectedB2bClientAssocId}
+                                                            onChange={(e) => {
+                                                                const profileId = e.target.value;
+                                                                setSelectedB2bClientAssocId(profileId);
+                                                                const found = b2bClients.find(c => c.id === profileId);
+                                                                if (found) {
+                                                                    setDossierForm({
+                                                                        ...dossierForm,
+                                                                        profile_id: found.id,
+                                                                        razon_social: found.razon_social || found.company_name || '',
+                                                                        nombre_comercial: found.company_name || '',
+                                                                        nit: found.nit || '',
+                                                                        direccion: found.address || '',
+                                                                        ciudad: found.city || '',
+                                                                        ciudad_info: found.city || '',
+                                                                        departamento_info: found.department || '',
+                                                                        telefono: found.phone || found.contact_phone || '',
+                                                                        rep_legal_nombre: found.contact_name || '',
+                                                                        rep_legal_email: found.email || '',
+                                                                        rep_legal_celular: found.contact_phone || '',
+                                                                        pagare_firma_deudor: {
+                                                                            nombre: found.contact_name || '',
+                                                                            identificacion: found.nit || '',
+                                                                            direccion: found.address || '',
+                                                                            barrio: found.municipality || '',
+                                                                            celular: found.contact_phone || '',
+                                                                            telefono: found.phone || '',
+                                                                            email: found.email || ''
+                                                                        }
+                                                                    });
+                                                                }
+                                                            }}
+                                                            style={inputStyle}
+                                                        >
+                                                            <option value="">-- Selecciona un cliente --</option>
+                                                            {b2bClients.filter(c => !dossiersDataMap[c.id]).map(c => (
+                                                                <option key={c.id} value={c.id}>
+                                                                    {c.company_name || c.razon_social} (NIT: {c.nit})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                ) : (
+                                                    <p style={{ margin: 0, fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
+                                                        Diligencia la información comercial y tributaria abajo. Al guardar, se creará un perfil de cliente B2B y su respectivo expediente de crédito.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                         <div>
                                             <h4 style={{ margin: '0 0 0.8rem 0', fontSize: '0.9rem', color: THEME.colors.primary }}>Solicitud de Crédito</h4>
                                             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.8rem' }}>
