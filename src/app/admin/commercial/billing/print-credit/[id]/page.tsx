@@ -311,13 +311,13 @@ export default function CreditPrintPage() {
                             onClick={() => setPrintDoc('all')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'all' ? '#0D7A57' : 'transparent', color: printDoc === 'all' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📄 Todo (5 Págs)
+                            📄 Todo (6 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('solicitud')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'solicitud' ? '#0D7A57' : 'transparent', color: printDoc === 'solicitud' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📝 Solicitud (3 Págs)
+                            📝 Solicitud (4 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('pagare')} 
@@ -365,7 +365,7 @@ export default function CreditPrintPage() {
                     <>
                         {/* PÁGINA 1: SOLICITUD DE CRÉDITO - HEADER & BASIC INFO */}
                         <div className="print-page-sheet page-break">
-                            {renderPageHeader(1, 3)}
+                            {renderPageHeader(1, 4)}
 
                             {/* Form Header Info */}
                             <table className="form-table">
@@ -526,6 +526,11 @@ export default function CreditPrintPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* PÁGINA 2: SOLICITUD DE CRÉDITO - INTERNATIONAL OPS & FINANCIALS */}
+                        <div className="print-page-sheet page-break">
+                            {renderPageHeader(2, 4)}
 
                             {/* INTERNATIONAL OPS WITH DYNAMIC CATEGORIES AND PRODUCTS TABLE */}
                             <div className="section-header">4. Información de Operaciones Internacionales</div>
@@ -583,11 +588,6 @@ export default function CreditPrintPage() {
                                     })}
                                 </tbody>
                             </table>
-                        </div>
-
-                        {/* PÁGINA 2: SOLICITUD DE CRÉDITO - FINANCIALS & REFERENCES */}
-                        <div className="print-page-sheet page-break">
-                            {renderPageHeader(2, 3)}
 
                             {/* FINANCIAL & TAX INFO GRID */}
                             <div className="section-header">5. Información Financiera y Tributaria</div>
@@ -663,7 +663,7 @@ export default function CreditPrintPage() {
                                     </tr>
                                 </tbody>
                             </table>
-
+                            
                             <div className="section-header">7. Referencias Comerciales y Personales</div>
                             <table className="form-table">
                                 <thead>
@@ -718,10 +718,15 @@ export default function CreditPrintPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - NEGOTIATION & DECLARATIONS */}
+                        <div className="print-page-sheet page-break">
+                            {renderPageHeader(3, 4)}
 
                             {/* NEGOCIACIÓN COMERCIAL WITH FULL DETAILS */}
                             <div className="section-header">8. Condiciones de Negociación Comercial</div>
-                            <table className="form-table">
+                            <table className="form-table" style={{ marginBottom: '8px' }}>
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '20%' }}><b>Condición de Pago:</b></td>
@@ -783,17 +788,9 @@ export default function CreditPrintPage() {
                             <div className="legal-text">
                                 <b>3.</b> No admitiré que terceros efectúen depósitos a nombre mío con fondos provienen de actividades ilícitas contempladas en el Código Penal colombiano o en cualquier norma que lo modifique o adicione, ni efectuaré transacciones destinadas a tales actividades a favor de personas relacionadas con la misma.
                             </div>
-                            <div className="legal-text" style={{ marginBottom: '0px' }}>
+                            <div className="legal-text">
                                 <b>4.</b> Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> a cancelar el contrato y/o relación comercial que mantenga conmigo y/o la sociedad que represento, en el caso de comprobarse cualquier infracción de las normas legales tendientes al control de lavado de activos, la financiación del terrorismo y/o financiación de la proliferación de armas de destrucción masiva y al programa de transparencia, la ley antisoborno de acuerdo con la legislación colombiana vigente y eximo a <b>INVESTMENTS CORTES S.A.S.</b> de toda responsabilidad que de ella se derive por información errónea, falsa o inexacta que hubiera proporcionado en este documento o de la violación del mismo.
                             </div>
-                        </div>
-
-                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - CLAUSES PART 2, REQUIRED DOCS & SIGNATURES */}
-                        <div className="print-page-sheet page-break">
-                            {renderPageHeader(3, 3)}
-
-                            <div className="section-header" style={{ marginBottom: '4px' }}>9. Declaraciones y Autorización (Continuación)</div>
-                            
                             <div className="legal-text">
                                 <b>5.</b> Que la información suministrada es verídica y se encuentra actualizada. Que he sido informado que los datos correspondientes a dirección principal y/o dirección electrónica serán los que <b>INVESTMENTS CORTES S.A.S.</b> tendrá en cuenta para enviar la información, la cual una vez de enviada a dichas direcciones se entenderá legalmente notificada.
                             </div>
@@ -811,9 +808,9 @@ export default function CreditPrintPage() {
                             </div>
                             
                             <div className="legal-text" style={{ fontWeight: 'bold', marginTop: '4px' }}>
-                                Autorizo expresa e irrevocable Investment Cortés o a quien sea el futuro a quien sea en el futuro el acreedor del crédito solicitado a mi nombre y de la empresa que represento para:
+                                Autorizo expresa e irrevocable Investment Cortés o a quien sea en el futuro el acreedor del crédito solicitado a mi nombre y de la empresa que represento para:
                             </div>
-                            <div className="legal-text" style={{ fontSize: '7.1px', lineHeight: '1.15' }}>
+                            <div className="legal-text" style={{ fontSize: '7.0px', lineHeight: '1.15' }}>
                                 <b>a)</b> consultar en cualquier tiempo en las centrales de riesgo toda la información relevante para conocer mi desempeño como deudor, mi capacidad de pago o para valorar el riesgo futuro de concederme un crédito.
                                 <br />
                                 <b>b)</b> Reportar a las centrales de riesgo de manera indirecta y también por medio de entidades públicas que ejercen funciones de vigilancia y control, datos tanto en tanto sobre el cumplimiento oportuno como sobre el incumplimiento si lo hubiere de mis obligaciones crediticias o de mis deberes legales de contenido patrimonial.
@@ -822,9 +819,14 @@ export default function CreditPrintPage() {
                                 <br />
                                 <b>d)</b> Suministrar a las centrales de información de riesgo datos relativos a mis solicitudes de crédito así como otros atinentes a mis relaciones comerciales, financieras y en general socioeconómicas que yo haya entregado o que consten en registros públicos, bases de datos públicas o documentos públicos. Igualmente manifiesto que los datos consignados son ciertos y que se ajustan fielmente a la realidad. Autorizo a Investment Cortés a verificarlos en caso de haber incurrido en cualquier omisión o falsedad. Esta solicitud puede ser anulada y acepto someterme a las consecuencias legales a que diera lugar.
                             </div>
+                        </div>
+
+                        {/* PÁGINA 4: SOLICITUD DE CRÉDITO - REQUIRED DOCS & SIGNATURES */}
+                        <div className="print-page-sheet page-break">
+                            {renderPageHeader(4, 4)}
 
                             <div className="section-header" style={{ marginTop: '4px', marginBottom: '4px' }}>Lista de Documentos Requeridos</div>
-                            <table className="form-table" style={{ marginBottom: '6px', fontSize: '8.5px' }}>
+                            <table className="form-table" style={{ marginBottom: '8px', fontSize: '8.5px' }}>
                                 <thead>
                                     <tr>
                                         <th style={{ width: '50%', padding: '2px 6px' }}>PERSONA NATURAL</th>
@@ -833,7 +835,7 @@ export default function CreditPrintPage() {
                                 </thead>
                                 <tbody>
                                     <tr style={{ height: 'auto' }}>
-                                        <td style={{ padding: '2px 6px' }}>
+                                        <td style={{ padding: '4px 6px', lineHeight: '1.3' }}>
                                             {renderCheckbox(false)} Copia de cédula de ciudadanía<br />
                                             {renderCheckbox(false)} RUT actualizado<br />
                                             {renderCheckbox(false)} Extractos bancarios últimos 3 meses<br />
@@ -841,7 +843,7 @@ export default function CreditPrintPage() {
                                             {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
                                             {renderCheckbox(false)} Pagaré y Carta de instrucciones firmados
                                         </td>
-                                        <td style={{ padding: '2px 6px' }}>
+                                        <td style={{ padding: '4px 6px', lineHeight: '1.3' }}>
                                             {renderCheckbox(false)} Copia de cédula del Representante Legal<br />
                                             {renderCheckbox(false)} RUT actualizado de la empresa<br />
                                             {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
@@ -855,26 +857,26 @@ export default function CreditPrintPage() {
                             </table>
 
                             {/* Firmas y Espacio para Sello */}
-                            <table style={{ width: '100%', marginBottom: '6px' }}>
+                            <table style={{ width: '100%', marginBottom: '10px', marginTop: '10px' }}>
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
-                                            <div style={{ borderBottom: '1.2px solid #000', height: '40px', marginTop: '15px' }}></div>
-                                            <div style={{ marginTop: '5px', fontSize: '8.2px' }}>
+                                            <div style={{ borderBottom: '1.2px solid #000', height: '60px', marginTop: '20px' }}></div>
+                                            <div style={{ marginTop: '8px', fontSize: '8.2px', lineHeight: '1.4' }}>
                                                 <b>Firma y Sello de Representante Legal / Cliente</b><br />
                                                 Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
                                                 Cédula: {displayInlineVal(pagareDeudor.identificacion, '____________________')}
                                             </div>
                                         </td>
                                         <td style={{ width: '50%', paddingLeft: '20px', verticalAlign: 'top' }}>
-                                            <div style={{ display: 'flex', gap: '20px', marginTop: '5px' }}>
-                                                <div style={{ border: '1.2px dashed #555', width: '55px', height: '70px', textAlign: 'center', fontSize: '5.5px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontWeight: 'bold', borderRadius: '2px', backgroundColor: '#fdfdfd' }}>
+                                            <div style={{ display: 'flex', gap: '20px', marginTop: '10px' }}>
+                                                <div style={{ border: '1.2px dashed #555', width: '65px', height: '85px', textAlign: 'center', fontSize: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontWeight: 'bold', borderRadius: '2px', backgroundColor: '#fdfdfd' }}>
                                                     HUELLA ÍNDICE<br />DERECHO
                                                 </div>
-                                                <div style={{ border: '1px solid #b2b2b2', width: '85px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center', padding: '2px' }}>
+                                                <div style={{ border: '1px solid #b2b2b2', width: '95px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5.5px', color: '#666', textAlign: 'center', padding: '2px' }}>
                                                     SELLO CON NIT PARA<br />PERSONA JURÍDICA
                                                 </div>
-                                                <div style={{ fontSize: '8.2px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div style={{ fontSize: '8.2px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
                                                     <div><b>Fecha:</b> {formatDate(d.pagare_fecha_firma)}</div>
                                                     <div><b>Ciudad:</b> {displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</div>
                                                 </div>
@@ -884,10 +886,10 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
-                            <div className="section-header" style={{ marginBottom: '4px' }}>Para uso exclusivo de Frutícola de Colombia</div>
+                            <div className="section-header" style={{ marginBottom: '4px', marginTop: '10px' }}>Para uso exclusivo de Frutícola de Colombia</div>
                             <table className="form-table" style={{ marginBottom: '0px' }}>
                                 <tbody>
-                                    <tr style={{ height: '28px' }}>
+                                    <tr style={{ height: '32px' }}>
                                         <td style={{ width: '30%' }}><b>Crédito Aprobado:</b></td>
                                         <td style={{ width: '20%', fontWeight: 'bold' }}>
                                             SÍ {renderCheckbox(!isBlankMode && !!d.credito_aprobado)}
@@ -899,19 +901,19 @@ export default function CreditPrintPage() {
                                             {isBlankMode ? '' : (d.cupo_aprobado ? `$${d.cupo_aprobado.toLocaleString('es-CO')}` : 'N/A')}
                                         </td>
                                     </tr>
-                                    <tr style={{ height: '28px' }}>
+                                    <tr style={{ height: '32px' }}>
                                         <td><b>Plazo:</b></td>
                                         <td style={{ fontWeight: 'bold' }}>{displayCellVal((!isBlankMode && d.plazo_aprobado) ? `${d.plazo_aprobado} Días` : '')}</td>
                                         <td><b>Autorización Venta / Gerencia General:</b></td>
                                         <td>{displayCellVal(d.autorizacion_gerencia)}</td>
                                     </tr>
-                                    <tr style={{ height: '40px' }}>
+                                    <tr style={{ height: '65px' }}>
                                         <td><b>Observaciones Director de la Agencia:</b></td>
-                                        <td colSpan={3} style={{ height: '40px', verticalAlign: 'top' }}>{displayCellVal(d.observaciones_director)}</td>
+                                        <td colSpan={3} style={{ height: '65px', verticalAlign: 'top', padding: '6px' }}>{displayCellVal(d.observaciones_director)}</td>
                                     </tr>
-                                    <tr style={{ height: '40px' }}>
+                                    <tr style={{ height: '65px' }}>
                                         <td><b>Concepto Coordinador Comercial:</b></td>
-                                        <td colSpan={3} style={{ height: '40px', verticalAlign: 'top' }}>{displayCellVal(d.concepto_coordinador)}</td>
+                                        <td colSpan={3} style={{ height: '65px', verticalAlign: 'top', padding: '6px' }}>{displayCellVal(d.concepto_coordinador)}</td>
                                     </tr>
                                 </tbody>
                             </table>
