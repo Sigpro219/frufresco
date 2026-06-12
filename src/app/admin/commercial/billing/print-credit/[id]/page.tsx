@@ -105,7 +105,17 @@ export default function CreditPrintPage() {
     const pagareCodeudor = d.pagare_firma_codeudor || { nombre: '', identificacion: '', direccion: '', barrio: '', celular: '', telefono: '', email: '' };
 
     const formatDate = (dateStr?: string) => {
-        if (!dateStr || isBlankMode) return '______ de _________________ de 202__';
+        if (!dateStr || isBlankMode) {
+            return (
+                <>
+                    <span style={{ display: 'inline-block', borderBottom: '1px dotted #000', width: '2.5em', height: '1px', verticalAlign: 'bottom', margin: '0 2px' }}></span>
+                    {` de `}
+                    <span style={{ display: 'inline-block', borderBottom: '1px dotted #000', width: '8.5em', height: '1px', verticalAlign: 'bottom', margin: '0 2px' }}></span>
+                    {` de 202`}
+                    <span style={{ display: 'inline-block', borderBottom: '1px dotted #000', width: '1.2em', height: '1px', verticalAlign: 'bottom', margin: '0 2px' }}></span>
+                </>
+            );
+        }
         return new Date(dateStr).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
     };
 
@@ -114,14 +124,15 @@ export default function CreditPrintPage() {
         const hasVal = !isBlankMode && val;
         if (!hasVal) {
             if (placeholder.startsWith('_')) {
+                const len = placeholder.length;
                 return (
                     <span style={{
                         display: 'inline-block',
-                        borderBottom: '1.2px solid #000',
-                        width: '95%',
+                        borderBottom: '1px dotted #000',
+                        width: `${len * 0.48}em`,
                         height: '1px',
                         verticalAlign: 'bottom',
-                        marginBottom: '2px'
+                        margin: '0 2px'
                     }}></span>
                 );
             }
@@ -955,7 +966,7 @@ export default function CreditPrintPage() {
 
                                     <div style={{ textAlign: 'justify', marginBottom: '15px' }}>
                                         <p style={{ margin: '0 0 8px 0' }}>
-                                            <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo (nos obligamos) a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos represente, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día __________ del mes ____________________ del año __________, la suma de: ____________________________________________________________________________ ($______________________) moneda legal colombiana, más los intereses de ley a la tasa máxima permitida por la Superintendencia Financiera de Colombia.
+                                            <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo (nos obligamos) a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos represente, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día {displayInlineVal(null, '__________')} del mes {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}, la suma de: {displayInlineVal(null, '____________________________________________________________________________')} (${displayInlineVal(null, '______________________')}) moneda legal colombiana, más los intereses de ley a la tasa máxima permitida por la Superintendencia Financiera de Colombia.
                                         </p>
                                         <p style={{ margin: '0 0 8px 0' }}>
                                             <b>SEGUNDA - INTERESES MORATORIOS:</b> A partir del vencimiento de este Pagaré, reconoceré un interés moratorio a la tasa máxima autorizada por la ley mercantil aplicable (Superintendencia Financiera de Colombia).
@@ -1006,14 +1017,14 @@ export default function CreditPrintPage() {
                                             <b>Yo (Nosotros)</b> {displayInlineVal(pagareDeudor.nombre, '__________________________________________________')} mayor(es) de edad e identificado(s) como aparece al pie de nuestras firmas actuando en nombre propio, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
                                         <p style={{ margin: '0 0 6px 0' }}>
-                                            <b>Yo</b> {displayInlineVal(isBlankMode ? '' : pagareDeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(isBlankMode ? '' : pagareDeudor.identificacion, '____________________')} de ____________________ actuando en representación de {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '__________________________________________________')} sociedad legalmente constituida ante la Cámara de Comercio de ____________________ y con NIT {displayInlineVal(isBlankMode ? '' : (d.nit || client.nit), '____________________')}, por medio del presente escrito manifiesto lo siguiente:
+                                            <b>Yo</b> {displayInlineVal(isBlankMode ? '' : pagareDeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(isBlankMode ? '' : pagareDeudor.identificacion, '____________________')} de {displayInlineVal(null, '____________________')} actuando en representación de {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '__________________________________________________')} sociedad legalmente constituida ante la Cámara de Comercio de {displayInlineVal(null, '____________________')} y con NIT {displayInlineVal(isBlankMode ? '' : (d.nit || client.nit), '____________________')}, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
                                         <p style={{ margin: '0 0 6px 0' }}>
-                                            <b>Deudor Solidario,</b> {displayInlineVal(pagareCodeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(pagareCodeudor.identificacion, '____________________')} de ____________________ actuando en nombre propio, por medio del presente escrito manifiesto lo siguiente:
+                                            <b>Deudor Solidario,</b> {displayInlineVal(pagareCodeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(pagareCodeudor.identificacion, '____________________')} de {displayInlineVal(null, '____________________')} actuando en nombre propio, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
 
                                         <p style={{ margin: '8px 0 6px 0' }}>
-                                            <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos representen, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día __________ del mes ____________________ del año __________, la suma de: ____________________________________________________________________________ ($______________________) moneda legal, más los intereses señalados en la cláusula segunda de este documento.
+                                            <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos representen, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día {displayInlineVal(null, '__________')} del mes {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}, la suma de: {displayInlineVal(null, '____________________________________________________________________________')} (${displayInlineVal(null, '______________________')}) moneda legal, más los intereses señalados en la cláusula segunda de este documento.
                                         </p>
                                         <p style={{ margin: '0 0 6px 0' }}>
                                             <b>SEGUNDA:</b> A partir del vencimiento de este Pagaré, reconoceré un interés moratorio a la tasa máxima autorizada por la Superintendencia Financiera de Colombia.
@@ -1031,7 +1042,7 @@ export default function CreditPrintPage() {
                                             <b>CUARTO:</b> En el caso de incumplir o quedar en mora con cualquiera de las obligaciones adquiridas en este título, acepto(amos) pagar los honorarios que se generen a mi acreedor por concepto de cobro Pre-jurídico o Jurídico que tenga que iniciar en mi contra, así como los gastos y costas judiciales, al igual que los gastos que se generen por el retiro y/o actualización de las bases de datos en las que se encuentre reportado por causa de mi incumplimiento.
                                         </p>
                                         <p style={{ margin: '0 0 10px 0' }}>
-                                            Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los __________ días del mes de ____________________ del año __________.
+                                            Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los {displayInlineVal(null, '__________')} días del mes de {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}.
                                         </p>
                                     </div>
 
@@ -1187,7 +1198,7 @@ export default function CreditPrintPage() {
                                             Las presentes las presento de conformidad con lo dispuesto al Art. 622, inciso 2 del Código de Comercio para todos los efectos allí previstos. Dejo constancia que recibí copia de la Carta de Instrucciones y Pagaré.
                                         </p>
                                         <p style={{ margin: '0 0 10px 0' }}>
-                                            Para constancia de lo anterior se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los __________ días del mes de ________________....
+                                            Para constancia de lo anterior se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los {displayInlineVal(null, '__________')} días del mes de {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}.
                                         </p>
                                     </div>
 
