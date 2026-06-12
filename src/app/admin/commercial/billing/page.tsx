@@ -188,8 +188,8 @@ export default function BillingDashboard() {
         
         pagare_numero: '',
         pagare_acreedor: 'INVESTMENTS CORTES S.A.S.',
-        pagare_ciudad_firma: 'Cali',
-        pagare_fecha_firma: new Date().toISOString().split('T')[0],
+        pagare_ciudad_firma: '',
+        pagare_fecha_firma: '',
         pagare_firma_deudor: { nombre: '', identificacion: '', direccion: '', barrio: '', celular: '', telefono: '', email: '' },
         pagare_firma_codeudor: { nombre: '', identificacion: '', direccion: '', barrio: '', celular: '', telefono: '', email: '' }
     };
