@@ -927,21 +927,21 @@ export default function CreditPrintPage() {
                 {showPagare && (
                     <>
                         {/* PAGE 5: PAGARÉ (DYNAMIC BASED ON CONTRIBUTOR TYPE) */}
-                        <div className="print-page-sheet page-break" style={{ padding: '15px 25px', fontSize: '9px', lineHeight: '1.25' }}>
+                        <div className="print-page-sheet page-break" style={{ padding: '25px 30px', fontSize: '10.5px', lineHeight: '1.5' }}>
                             
                             {/* Promissory Note Header with Logo */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '6px', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '20px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '35px', objectFit: 'contain' }} />
+                                    <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '38px', objectFit: 'contain' }} />
                                     <div>
-                                        <div style={{ fontSize: '9px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
-                                        <div style={{ fontSize: '7px', color: '#555' }}>NIT: 901.393.217-1</div>
+                                        <div style={{ fontSize: '9.5px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
+                                        <div style={{ fontSize: '7.5px', color: '#555' }}>NIT: 901.393.217-1</div>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold' }}>PAGARÉ</h2>
-                                    <div style={{ fontWeight: 'bold', fontSize: '10px' }}>
-                                        PAGARÉ No. {displayInlineVal(d.pagare_numero, '____________________')}
+                                    <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>PAGARÉ</h2>
+                                    <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                                        PAGARÉ No. {displayInlineVal(null, '____________________')}
                                         {formatMode === 'juridica' && ` / Valor $ ${isBlankMode ? '____________________' : (d.cupo_aprobado ? d.cupo_aprobado.toLocaleString('es-CO') : '____________________')}`}
                                     </div>
                                 </div>
@@ -950,7 +950,7 @@ export default function CreditPrintPage() {
                             {/* RENDER NATURAL PERSON PROMISSORY NOTE (Page 5) */}
                             {formatMode === 'natural' ? (
                                 <>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px', backgroundColor: '#f9f9f9', padding: '8px', border: '1px solid #ddd' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '10px', border: '1px solid #ddd' }}>
                                         <div>
                                             <b>ACREEDOR:</b> INVESTMENTS CORTES S.A.S.<br />
                                             <b>NIT:</b> 901.393.217-1
@@ -961,28 +961,29 @@ export default function CreditPrintPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ textAlign: 'justify', marginBottom: '15px' }}>
-                                        <p style={{ margin: '0 0 8px 0' }}>
+                                    <div style={{ textAlign: 'justify', marginBottom: '20px' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo (nos obligamos) a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos represente, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día {displayInlineVal(null, '__________')} del mes {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}, la suma de: {displayInlineVal(null, '____________________________________________________________________________')} (${displayInlineVal(null, '______________________')}) moneda legal colombiana, más los intereses de ley a la tasa máxima permitida por la Superintendencia Financiera de Colombia.
                                         </p>
-                                        <p style={{ margin: '0 0 8px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>SEGUNDA - INTERESES MORATORIOS:</b> A partir del vencimiento de este Pagaré, reconoceré un interés moratorio a la tasa máxima autorizada por la ley mercantil aplicable (Superintendencia Financiera de Colombia).
                                         </p>
-                                        <p style={{ margin: '0 0 8px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>TERCERA - CLÁUSULA ACELERATORIA:</b> El tenedor de este Pagaré podrá declarar vencido el plazo y exigir el pago total de la obligación en caso de mora en el pago de facturas correspondientes a despachos de mercancía, giro de cheques sin provisión de fondos, o incumplimiento de cualquier otra obligación mercantil o tributaria.
                                         </p>
-                                        <p style={{ margin: '0 0 8px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>CUARTO:</b> Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
                                         </p>
                                     </div>
 
                                     {/* Signatures */}
-                                    <table style={{ width: '100%', marginTop: '15px' }}>
+                                    <table style={{ width: '100%', marginTop: '20px' }}>
                                         <tbody>
                                             <tr>
                                                 <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '10px', lineHeight: '1.6' }}>
                                                         <b>DEUDOR (FIRMA)</b><br />
+                                                        <div style={{ height: '45px' }}></div>
                                                         Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
                                                         C.C./NIT: {displayInlineVal(pagareDeudor.identificacion, '____________________')}<br />
                                                         Dirección: {displayInlineVal(pagareDeudor.direccion, '________________________________________')}<br />
@@ -992,8 +993,9 @@ export default function CreditPrintPage() {
                                                     </div>
                                                 </td>
                                                 <td style={{ width: '50%', paddingLeft: '20px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '10px', lineHeight: '1.6' }}>
                                                         <b>CODEUDOR / GARANTE (FIRMA)</b><br />
+                                                        <div style={{ height: '45px' }}></div>
                                                         Nombre: {displayInlineVal(pagareCodeudor.nombre, '________________________________________')}<br />
                                                         C.C.: {displayInlineVal(pagareCodeudor.identificacion, '____________________')}<br />
                                                         Dirección: {displayInlineVal(pagareCodeudor.direccion, '________________________________________')}<br />
@@ -1007,26 +1009,26 @@ export default function CreditPrintPage() {
                                     </table>
                                 </>
                             ) : (
-                                /* RENDER CORPORATE (PERSONA JURÍDICA) PROMISSORY NOTE (Page 8) */
+                                /* RENDER CORPORATE (PERSONA JURÍDICA) PROMISSORY NOTE (Page 5) */
                                 <>
-                                    <div style={{ textAlign: 'justify', fontSize: '8.8px', lineHeight: '1.2' }}>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                    <div style={{ textAlign: 'justify', fontSize: '10.2px', lineHeight: '1.45' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>Yo (Nosotros)</b> {displayInlineVal(pagareDeudor.nombre, '__________________________________________________')} mayor(es) de edad e identificado(s) como aparece al pie de nuestras firmas actuando en nombre propio, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>Yo</b> {displayInlineVal(isBlankMode ? '' : pagareDeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(isBlankMode ? '' : pagareDeudor.identificacion, '____________________')} de {displayInlineVal(null, '____________________')} actuando en representación de {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '__________________________________________________')} sociedad legalmente constituida ante la Cámara de Comercio de {displayInlineVal(null, '____________________')} y con NIT {displayInlineVal(isBlankMode ? '' : (d.nit || client.nit), '____________________')}, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>Deudor Solidario,</b> {displayInlineVal(pagareCodeudor.nombre, '__________________________________________________')} mayor de edad e identificado(a) con la C.C. No. {displayInlineVal(pagareCodeudor.identificacion, '____________________')} de {displayInlineVal(null, '____________________')} actuando en nombre propio, por medio del presente escrito manifiesto lo siguiente:
                                         </p>
 
-                                        <p style={{ margin: '8px 0 6px 0' }}>
+                                        <p style={{ margin: '12px 0 10px 0' }}>
                                             <b>PRIMERO - OBJETO:</b> Que por virtud del presente título valor (Pagaré), me obligo a pagar solidaria e incondicionalmente a la orden de <b>INVESTMENTS CORTES S.A.S.</b>, o a quien sus derechos representen, en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, el día {displayInlineVal(null, '__________')} del mes {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}, la suma de: {displayInlineVal(null, '____________________________________________________________________________')} (${displayInlineVal(null, '______________________')}) moneda legal, más los intereses señalados en la cláusula segunda de este documento.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>SEGUNDA:</b> A partir del vencimiento de este Pagaré, reconoceré un interés moratorio a la tasa máxima autorizada por la Superintendencia Financiera de Colombia.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>TERCERA:</b> El tenedor del presente Pagaré podrá declarar vencido el plazo y exigir el pago total de la obligación, más el de los intereses de plazo y mora y demás accesorios, en los siguientes casos:
                                             <br />
                                             a) Mora o retardo en el pago de uno o más de los vencimientos de capital o intereses señalados respecto al deudor (deudores);
@@ -1035,52 +1037,52 @@ export default function CreditPrintPage() {
                                             <br />
                                             c) El giro de cheques sin provisión de fondos o el no pago de los mismos.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>CUARTO:</b> En el caso de incumplir o quedar en mora con cualquiera de las obligaciones adquiridas en este título, acepto(amos) pagar los honorarios que se generen a mi acreedor por concepto de cobro Pre-jurídico o Jurídico que tenga que iniciar en mi contra, así como los gastos y costas judiciales, al igual que los gastos que se generen por el retiro y/o actualización de las bases de datos en las que se encuentre reportado por causa de mi incumplimiento.
                                         </p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                        <p style={{ margin: '0 0 15px 0' }}>
                                             Para constancia de lo anterior se firma y otorga el presente pagaré en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los {displayInlineVal(null, '__________')} días del mes de {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}.
                                         </p>
                                     </div>
 
                                     {/* Corporate Signatures */}
-                                    <table style={{ width: '100%', marginTop: '15px' }}>
+                                    <table style={{ width: '100%', marginTop: '20px' }}>
                                         <tbody>
                                             <tr>
                                                 <td style={{ width: '50%', paddingRight: '15px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px', fontSize: '8px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '8px', fontSize: '9.5px', lineHeight: '1.4' }}>
                                                         <b>Nombre / Razón Social:</b> {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '________________________________________')}<br />
                                                         <b>Firma Representante Legal:</b><br />
-                                                        <div style={{ height: '35px' }}></div>
+                                                        <div style={{ height: '50px' }}></div>
                                                         <b>C.C.:</b> {displayInlineVal(isBlankMode ? '' : (d.rep_legal_identificacion || pagareDeudor.identificacion), '____________________')}<br />
                                                         <b>Dirección:</b> {displayInlineVal(pagareDeudor.direccion, '________________________________________')}<br />
                                                         <b>Teléfono / Celular:</b> {displayInlineVal(pagareDeudor.celular, '____________________')}<br />
                                                         <b>Email:</b> {displayInlineVal(pagareDeudor.email, '________________________________________')}
                                                         
                                                         {/* Sello Box and Huella */}
-                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                                                            <div style={{ border: '1px solid #000', width: '90px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5.5px', color: '#666', textAlign: 'center', padding: '2px' }}>
+                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '12px' }}>
+                                                            <div style={{ border: '1px solid #000', width: '100px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5.5px', color: '#666', textAlign: 'center', padding: '2px' }}>
                                                                 SELLO CON NIT PARA<br />PERSONA JURÍDICA
                                                             </div>
-                                                            <div style={{ border: '1px solid #000', width: '45px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
+                                                            <div style={{ border: '1px solid #000', width: '55px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
                                                                 HUELLA INDICE<br />DERECHO
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td style={{ width: '50%', paddingLeft: '15px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px', fontSize: '8px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '8px', fontSize: '9.5px', lineHeight: '1.4' }}>
                                                         <b>Nombre Deudor Solidario:</b> {displayInlineVal(pagareCodeudor.nombre, '________________________________________')}<br />
                                                         <b>Firma:</b><br />
-                                                        <div style={{ height: '35px' }}></div>
+                                                        <div style={{ height: '50px' }}></div>
                                                         <b>C.C.:</b> {displayInlineVal(pagareCodeudor.identificacion, '____________________')}<br />
                                                         <b>Dirección:</b> {displayInlineVal(pagareCodeudor.direccion, '________________________________________')}<br />
                                                         <b>Teléfono / Celular:</b> {displayInlineVal(pagareCodeudor.celular, '____________________')}<br />
                                                         <b>Email:</b> {displayInlineVal(pagareCodeudor.email, '________________________________________')}
                                                         
                                                         {/* Huella only */}
-                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                                                            <div style={{ border: '1px solid #000', width: '45px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '12px' }}>
+                                                            <div style={{ border: '1px solid #000', width: '55px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
                                                                 HUELLA INDICE<br />DERECHO
                                                             </div>
                                                         </div>
@@ -1094,25 +1096,25 @@ export default function CreditPrintPage() {
                         </div>
 
                         {/* PAGE 6: CARTA DE INSTRUCCIONES (DYNAMIC BASED ON CONTRIBUTOR TYPE) */}
-                        <div className="print-page-sheet page-break" style={{ padding: '15px 25px', fontSize: '9px', lineHeight: '1.25' }}>
+                        <div className="print-page-sheet page-break" style={{ padding: '25px 30px', fontSize: '10.5px', lineHeight: '1.5' }}>
                             
                             {/* Instructions Header with Logo */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '6px', marginBottom: '15px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '20px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '35px', objectFit: 'contain' }} />
+                                    <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '38px', objectFit: 'contain' }} />
                                     <div>
-                                        <div style={{ fontSize: '9px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
-                                        <div style={{ fontSize: '7px', color: '#555' }}>NIT: 901.393.217-1</div>
+                                        <div style={{ fontSize: '9.5px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
+                                        <div style={{ fontSize: '7.5px', color: '#555' }}>NIT: 901.393.217-1</div>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <h2 style={{ margin: 0, fontSize: '11px', fontWeight: 'bold' }}>
+                                    <h2 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold' }}>
                                         {formatMode === 'natural' ? 'CARTA DE INSTRUCCIONES ANEXA AL PAGARÉ' : 'CARTA DE INSTRUCCIONES'}
                                     </h2>
-                                    <div style={{ fontWeight: 'bold', fontSize: '8.5px' }}>
+                                    <div style={{ fontWeight: 'bold', fontSize: '9.5px' }}>
                                         {formatMode === 'natural' 
-                                            ? `ANEXA AL PAGARÉ No. ${displayInlineVal(d.pagare_numero, '____________________')}` 
-                                            : `ESTE DOCUMENTO HACE PARTE INTEGRAL DEL PAGARÉ No. ${displayInlineVal(d.pagare_numero, '____________________')}`}
+                                            ? `ANEXA AL PAGARÉ No. {displayInlineVal(null, '____________________')}` 
+                                            : `ESTE DOCUMENTO HACE PARTE INTEGRAL DEL PAGARÉ No. {displayInlineVal(null, '____________________')}`}
                                     </div>
                                 </div>
                             </div>
@@ -1120,46 +1122,48 @@ export default function CreditPrintPage() {
                             {/* RENDER NATURAL PERSON CARTA DE INSTRUCCIONES (Page 6) */}
                             {formatMode === 'natural' ? (
                                 <>
-                                    <div style={{ textAlign: 'justify', marginBottom: '15px' }}>
-                                        <p style={{ margin: '0 0 10px 0' }}>Señores:<br /><b>INVESTMENTS CORTES S.A.S.</b><br />Ciudad.</p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                    <div style={{ textAlign: 'justify', marginBottom: '20px' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>Señores:<br /><b>INVESTMENTS CORTES S.A.S.</b><br />Ciudad.</p>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             Yo (Nosotros), <b>{displayInlineVal(pagareDeudor.nombre, '________________________________')}</b>, identificado(s) como aparece al pie de mi (nuestras) firma(s), en calidad de Deudor(es), autorizo(amos) de manera expresa e irrevocable a <b>INVESTMENTS CORTES S.A.S.</b> para llenar los espacios que han sido dejados en blanco en el Pagaré adjunto, que he (hemos) firmado a su favor, con arreglo a las siguientes instrucciones:
                                         </p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>1. IMPORTE:</b> El importe del pagaré será igual al total de las obligaciones vigentes, exigibles y no pagadas que en cualquier momento tenga el deudor a favor de <b>INVESTMENTS CORTES S.A.S.</b> por concepto de compra de mercancías (frutas, verduras, procesados), facturas pendientes, intereses moratorios y gastos de cobranza.
                                         </p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>2. FECHA DE VENCIMIENTO:</b> La fecha de vencimiento será aquella que determine el acreedor <b>INVESTMENTS CORTES S.A.S.</b>, la cual corresponderá al día siguiente en el que ocurra la mora en el pago de una o más obligaciones.
                                         </p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                        <p style={{ margin: '0 0 12px 0' }}>
                                             <b>3. LUGAR DE PAGO:</b> El lugar de pago será la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b> en las oficinas del acreedor.
                                         </p>
-                                        <p style={{ margin: '0 0 15px 0' }}>
+                                        <p style={{ margin: '0 0 20px 0' }}>
                                             Para constancia de lo anterior, se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, hoy: {formatDate(d.pagare_fecha_firma)}.
                                         </p>
                                     </div>
 
                                     {/* Signatures */}
-                                    <table style={{ width: '100%', marginTop: '20px' }}>
+                                    <table style={{ width: '100%', marginTop: '25px' }}>
                                         <tbody>
                                             <tr>
                                                 <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '12px' }}>
                                                         <b>FIRMA DEL DEUDOR</b><br />
+                                                        <div style={{ height: '45px' }}></div>
                                                         Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
                                                         C.C./NIT: {displayInlineVal(pagareDeudor.identificacion, '____________________')}
                                                     </div>
-                                                    <div style={{ border: '1px solid #000', width: '50px', height: '60px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
+                                                    <div style={{ border: '1px solid #000', width: '55px', height: '65px', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
                                                         HUELLA INDICE<br />DERECHO
                                                     </div>
                                                 </td>
                                                 <td style={{ width: '50%', paddingLeft: '20px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '10px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '12px' }}>
                                                         <b>FIRMA DEL CODEUDOR</b><br />
+                                                        <div style={{ height: '45px' }}></div>
                                                         Nombre: {displayInlineVal(pagareCodeudor.nombre, '________________________________________')}<br />
                                                         C.C.: {displayInlineVal(pagareCodeudor.identificacion, '____________________')}
                                                     </div>
-                                                    <div style={{ border: '1px solid #000', width: '50px', height: '60px', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
+                                                    <div style={{ border: '1px solid #000', width: '55px', height: '65px', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#666', textAlign: 'center' }}>
                                                         HUELLA INDICE<br />DERECHO
                                                     </div>
                                                 </td>
@@ -1170,73 +1174,73 @@ export default function CreditPrintPage() {
                             ) : (
                                 /* RENDER CORPORATE (PERSONA JURÍDICA) CARTA DE INSTRUCCIONES (Page 7) */
                                 <>
-                                    <div style={{ textAlign: 'justify', fontSize: '8.8px', lineHeight: '1.22' }}>
-                                        <p style={{ margin: '0 0 8px 0' }}>
+                                    <div style={{ textAlign: 'justify', fontSize: '10.2px', lineHeight: '1.45' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             <b>Yo (Nosotros)</b> {displayInlineVal(pagareDeudor.nombre, '__________________________________________________')}, identificado(s) como aparece al pie de mi (nuestras) firma(s), autorizo (amos) a <b>INVESTMENTS CORTES S.A.S.</b> de manera expresa e irrevocablemente para que haciendo uso del derecho conferido por el artículo 622 del Código de Comercio, llene los espacios que se han dejado en blanco en el pagaré adjunto, de acuerdo con las siguientes Instrucciones:
                                         </p>
                                         
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 8px 0' }}>
                                             <b>a)</b> El importe del título valor será igual al valor de todas las obligaciones exigibles que a mi (nuestro) cargo y a favor de <b>INVESTMENTS CORTES S.A.S.</b>, existan al momento de ser llenados los espacios en blanco, incluyéndose en dicho importe no sólo el capital, sino intereses, gastos, comisiones, multas, honorarios de cobranza, etc.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 8px 0' }}>
                                             <b>b)</b> La tasa de interés corriente y/o mora será la máxima autorizada por la Ley (Superintendencia Financiera de Colombia).
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 8px 0' }}>
                                             <b>c)</b> El espacio correspondiente al día de vencimiento deberá ser llenado el día en que el pagaré sea diligenciado de conformidad con lo dispuesto en el numeral subsiguiente.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 8px 0' }}>
                                             <b>d)</b> Los espacios dejados en blanco se podrán llenar de conformidad con lo aquí señalado, en cualquiera de los siguientes eventos: a) Mora o retardo en el pago de uno o más de los vencimientos de capital o intereses señalados respecto al deudor (deudores); b) El incumplimiento de cualquier otra obligación que directa o indirectamente tenga el deudor (deudores) para con el acreedor; c) El giro de cheques sin provisión de fondos o el no pago de los mismos.
                                         </p>
                                         
-                                        <p style={{ margin: '8px 0 6px 0' }}>
+                                        <p style={{ margin: '12px 0 10px 0' }}>
                                             Que el Pagaré así llenado presta Mérito Ejecutivo, pudiendo el <b>ACREEDOR</b> exigir su cancelación por vía judicial sin perjuicio de las demás acciones legales que el ACREEDOR pueda tener.
                                         </p>
-                                        <p style={{ margin: '0 0 6px 0' }}>
+                                        <p style={{ margin: '0 0 10px 0' }}>
                                             Las presentes las presento de conformidad con lo dispuesto al Art. 622, inciso 2 del Código de Comercio para todos los efectos allí previstos. Dejo constancia que recibí copia de la Carta de Instrucciones y Pagaré.
                                         </p>
-                                        <p style={{ margin: '0 0 10px 0' }}>
+                                        <p style={{ margin: '0 0 15px 0' }}>
                                             Para constancia de lo anterior se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los {displayInlineVal(null, '__________')} días del mes de {displayInlineVal(null, '____________________')} del año {displayInlineVal(null, '__________')}.
                                         </p>
                                     </div>
 
                                     {/* Corporate Signatures */}
-                                    <table style={{ width: '100%', marginTop: '15px' }}>
+                                    <table style={{ width: '100%', marginTop: '20px' }}>
                                         <tbody>
                                             <tr>
                                                 <td style={{ width: '50%', paddingRight: '15px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px', fontSize: '8px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '8px', fontSize: '9.5px', lineHeight: '1.4' }}>
                                                         <b>Nombre / Razón Social:</b> {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '________________________________________')}<br />
                                                         <b>Firma Representante Legal:</b><br />
-                                                        <div style={{ height: '35px' }}></div>
+                                                        <div style={{ height: '50px' }}></div>
                                                         <b>C.C.:</b> {displayInlineVal(isBlankMode ? '' : (d.rep_legal_identificacion || pagareDeudor.identificacion), '____________________')}<br />
                                                         <b>Dirección:</b> {displayInlineVal(pagareDeudor.direccion, '________________________________________')}<br />
                                                         <b>Teléfono / Celular:</b> {displayInlineVal(pagareDeudor.celular, '____________________')}<br />
                                                         <b>Email:</b> {displayInlineVal(pagareDeudor.email, '________________________________________')}
                                                         
                                                         {/* Sello Box and Huella */}
-                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                                                            <div style={{ border: '1px solid #000', width: '90px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5.5px', color: '#666', textAlign: 'center', padding: '2px' }}>
+                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '12px' }}>
+                                                            <div style={{ border: '1px solid #000', width: '100px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5.5px', color: '#666', textAlign: 'center', padding: '2px' }}>
                                                                 SELLO CON NIT PARA<br />PERSONA JURÍDICA
                                                             </div>
-                                                            <div style={{ border: '1px solid #000', width: '45px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
+                                                            <div style={{ border: '1px solid #000', width: '55px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
                                                                 HUELLA INDICE<br />DERECHO
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td style={{ width: '50%', paddingLeft: '15px', verticalAlign: 'top' }}>
-                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '6px', fontSize: '8px' }}>
+                                                    <div style={{ borderTop: '1px solid #000', paddingTop: '8px', fontSize: '9.5px', lineHeight: '1.4' }}>
                                                         <b>Nombre Deudor Solidario:</b> {displayInlineVal(pagareCodeudor.nombre, '________________________________________')}<br />
                                                         <b>Firma:</b><br />
-                                                        <div style={{ height: '35px' }}></div>
+                                                        <div style={{ height: '50px' }}></div>
                                                         <b>C.C.:</b> {displayInlineVal(pagareCodeudor.identificacion, '____________________')}<br />
                                                         <b>Dirección:</b> {displayInlineVal(pagareCodeudor.direccion, '________________________________________')}<br />
                                                         <b>Teléfono / Celular:</b> {displayInlineVal(pagareCodeudor.celular, '____________________')}<br />
                                                         <b>Email:</b> {displayInlineVal(pagareCodeudor.email, '________________________________________')}
                                                         
                                                         {/* Huella only */}
-                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                                                            <div style={{ border: '1px solid #000', width: '45px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', gap: '15px', marginTop: '12px' }}>
+                                                            <div style={{ border: '1px solid #000', width: '55px', height: '65px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center' }}>
                                                                 HUELLA INDICE<br />DERECHO
                                                             </div>
                                                         </div>
