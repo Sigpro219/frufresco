@@ -311,13 +311,13 @@ export default function CreditPrintPage() {
                             onClick={() => setPrintDoc('all')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'all' ? '#0D7A57' : 'transparent', color: printDoc === 'all' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📄 Todo (6 Págs)
+                            📄 Todo (5 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('solicitud')} 
                             style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: printDoc === 'solicitud' ? '#0D7A57' : 'transparent', color: printDoc === 'solicitud' ? '#fff' : '#495057', transition: 'all 0.15s' }}
                         >
-                            📝 Solicitud (4 Págs)
+                            📝 Solicitud (3 Págs)
                         </button>
                         <button 
                             onClick={() => setPrintDoc('pagare')} 
@@ -365,7 +365,7 @@ export default function CreditPrintPage() {
                     <>
                         {/* PÁGINA 1: SOLICITUD DE CRÉDITO - HEADER & BASIC INFO */}
                         <div className="print-page-sheet page-break">
-                            {renderPageHeader(1, 4)}
+                            {renderPageHeader(1, 3)}
 
                             {/* Form Header Info */}
                             <table className="form-table">
@@ -501,11 +501,6 @@ export default function CreditPrintPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
-
-                        {/* PÁGINA 2: SOLICITUD DE CRÉDITO - SHAREHOLDERS & FINANCIALS */}
-                        <div className="print-page-sheet page-break">
-                            {renderPageHeader(2, 4)}
 
                             {/* SHAREHOLDERS */}
                             <div className="section-header">3. Participación Accionaria (Accionistas con &gt; 5% capital social)</div>
@@ -588,6 +583,11 @@ export default function CreditPrintPage() {
                                     })}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* PÁGINA 2: SOLICITUD DE CRÉDITO - FINANCIALS & REFERENCES */}
+                        <div className="print-page-sheet page-break">
+                            {renderPageHeader(2, 3)}
 
                             {/* FINANCIAL & TAX INFO GRID */}
                             <div className="section-header">5. Información Financiera y Tributaria</div>
@@ -663,11 +663,6 @@ export default function CreditPrintPage() {
                                     </tr>
                                 </tbody>
                             </table>
-                        </div>
-
-                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - REFERENCES, NEGOTIATIONS & DECLARATIONS PART 1 */}
-                        <div className="print-page-sheet page-break">
-                            {renderPageHeader(3, 4)}
 
                             <div className="section-header">7. Referencias Comerciales y Personales</div>
                             <table className="form-table">
@@ -793,9 +788,9 @@ export default function CreditPrintPage() {
                             </div>
                         </div>
 
-                        {/* PÁGINA 4: SOLICITUD DE CRÉDITO - CLAUSES PART 2, REQUIRED DOCS & SIGNATURES */}
+                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - CLAUSES PART 2, REQUIRED DOCS & SIGNATURES */}
                         <div className="print-page-sheet page-break">
-                            {renderPageHeader(4, 4)}
+                            {renderPageHeader(3, 3)}
 
                             <div className="section-header" style={{ marginBottom: '4px' }}>9. Declaraciones y Autorización (Continuación)</div>
                             
