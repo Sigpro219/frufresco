@@ -281,10 +281,10 @@ export default function CreditPrintPage() {
                     margin-right: 8px;
                 }
                 .legal-text {
-                    font-size: 7.2px;
+                    font-size: 8.8px;
                     text-align: justify;
-                    line-height: 1.15;
-                    margin-bottom: 4px;
+                    line-height: 1.45;
+                    margin-bottom: 6px;
                     color: #222;
                 }
                 .legal-title {
@@ -767,7 +767,7 @@ export default function CreditPrintPage() {
 
                             {/* SECCIÓN INFORMACIÓN BANCARIA */}
                             <div className="section-header">Información Bancaria (Donde se debe realizar el pago)</div>
-                            <div style={{ border: '1.2px solid #b2b2b2', padding: '6px 8px', fontSize: '7.8px', lineHeight: '1.25', textAlign: 'justify', marginBottom: '8px' }}>
+                            <div style={{ border: '1.2px solid #b2b2b2', padding: '6px 8px', fontSize: '8.5px', lineHeight: '1.35', textAlign: 'justify', marginBottom: '8px' }}>
                                 En el momento de realizar un pago a nombre de <b>INVESTMENTS CORTES S.A.S.</b> debe hacerse a través de las siguientes cuentas bancarias oficiales:<br />
                                 • <b>Banco de Occidente:</b> Cuenta corriente No. <b>001138239</b><br />
                                 • <b>Bancolombia:</b> Cuenta corriente No. <b>81267590541</b><br />
@@ -810,7 +810,7 @@ export default function CreditPrintPage() {
                             <div className="legal-text" style={{ fontWeight: 'bold', marginTop: '4px' }}>
                                 Autorizo expresa e irrevocable Investment Cortés o a quien sea en el futuro el acreedor del crédito solicitado a mi nombre y de la empresa que represento para:
                             </div>
-                            <div className="legal-text" style={{ fontSize: '7.0px', lineHeight: '1.15' }}>
+                            <div className="legal-text" style={{ fontSize: '8.5px', lineHeight: '1.35' }}>
                                 <b>a)</b> consultar en cualquier tiempo en las centrales de riesgo toda la información relevante para conocer mi desempeño como deudor, mi capacidad de pago o para valorar el riesgo futuro de concederme un crédito.
                                 <br />
                                 <b>b)</b> Reportar a las centrales de riesgo de manera indirecta y también por medio de entidades públicas que ejercen funciones de vigilancia y control, datos tanto en tanto sobre el cumplimiento oportuno como sobre el incumplimiento si lo hubiere de mis obligaciones crediticias o de mis deberes legales de contenido patrimonial.
