@@ -424,16 +424,11 @@ export default function CreditPrintPage() {
                                     </tr>
                                     <tr>
                                         <td><b>Actividad Econ. Ppal:</b></td>
-                                        <td colSpan={2}>{displayCellVal(d.actividad_economica_principal)}</td>
+                                        <td colSpan={3}>{displayCellVal(d.actividad_economica_principal)}</td>
                                         <td><b>CIIU:</b></td>
-                                        <td>{displayCellVal(d.ciiu_principal)}</td>
-                                        <td><b>¿Es PEP?:</b></td>
-                                        <td>
-                                            SI {renderCheckbox(!isBlankMode && !!d.rep_legal_es_pep)}
-                                            &nbsp;&nbsp;&nbsp;
-                                            NO {renderCheckbox(!isBlankMode && !d.rep_legal_es_pep)}
-                                        </td>
+                                        <td colSpan={2}>{displayCellVal(d.ciiu_principal)}</td>
                                     </tr>
+                                    {/* REPRESENTANTE LEGAL WITH NEW FIELDS */}
                                     <tr>
                                         <td><b>Representante Legal:</b></td>
                                         <td colSpan={2} style={{ fontWeight: 'bold' }}>{displayCellVal(d.rep_legal_nombre || client.contact_name)}</td>
@@ -441,6 +436,15 @@ export default function CreditPrintPage() {
                                         <td>{displayCellVal(d.rep_legal_identificacion)}</td>
                                         <td><b>Dir. Residencia:</b></td>
                                         <td colSpan={2}>{displayCellVal(d.rep_legal_direccion)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Teléfono Rep. Legal:</b></td>
+                                        <td>{displayCellVal(d.rep_legal_telefono)}</td>
+                                        <td><b>Celular Rep. Legal:</b></td>
+                                        <td>{displayCellVal(d.rep_legal_celular)}</td>
+                                        <td><b>E-mail Rep. Legal:</b></td>
+                                        <td>{displayCellVal(d.rep_legal_email)}</td>
+                                        <td><b>¿Es PEP?:</b> SI {renderCheckbox(!isBlankMode && !!d.rep_legal_es_pep)} NO {renderCheckbox(!isBlankMode && !d.rep_legal_es_pep)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -517,6 +521,7 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
+                            {/* INTERNATIONAL OPS WITH DYNAMIC CATEGORIES AND PRODUCTS TABLE */}
                             <div className="section-header">4. Información de Operaciones Internacionales</div>
                             <table className="form-table">
                                 <tbody>
@@ -528,48 +533,79 @@ export default function CreditPrintPage() {
                                             NO {renderCheckbox(!isBlankMode && !d.realiza_operaciones_internacionales)}
                                         </td>
                                         <td style={{ width: '15%' }}><b>Tipo de Operación:</b></td>
-                                        <td colSpan={3}>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.transferencias)} Transferencias</span>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.importaciones)} Importaciones</span>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!internationalOps.exportaciones)} Exportaciones</span>
+                                        <td colSpan={3} style={{ fontSize: '8px' }}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.transferencias)} Transferencias</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.importaciones)} Importaciones</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.exportaciones)} Exportaciones</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.inversiones)} Inversiones</span>
                                             <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.giros)} Giros</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.pago_servicio)} Pago servicio</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!internationalOps.otros)} Otros</span>
                                         </td>
-                                    </tr>
-                                    <tr>
-                                        <td><b>¿Tiene Cuentas en el Exterior?</b></td>
-                                        <td>
-                                            SI {renderCheckbox(!isBlankMode && !!d.tiene_productos_financieros_internacionales)}
-                                            &nbsp;&nbsp;&nbsp;
-                                            NO {renderCheckbox(!isBlankMode && !d.tiene_productos_financieros_internacionales)}
-                                        </td>
-                                        <td><b>Detalles Operación:</b></td>
-                                        <td colSpan={3}>{displayCellVal(internationalOps.otros)}</td>
                                     </tr>
                                 </tbody>
                             </table>
 
+                            {/* PRODUCTOS FINANCIEROS INTERNACIONALES TABLE */}
+                            <div style={{ fontSize: '9px', fontWeight: 'bold', marginBottom: '3px' }}>
+                                ¿Tiene productos financieros en el exterior?
+                                &nbsp;&nbsp;&nbsp;
+                                SI {renderCheckbox(!isBlankMode && !!d.tiene_productos_financieros_internacionales)}
+                                &nbsp;&nbsp;&nbsp;
+                                NO {renderCheckbox(!isBlankMode && !d.tiene_productos_financieros_internacionales)}
+                            </div>
+                            <table className="form-table" style={{ marginBottom: '8px' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '25%', padding: '3px 6px' }}>Tipo de Producto</th>
+                                        <th style={{ width: '25%', padding: '3px 6px' }}>Moneda</th>
+                                        <th style={{ width: '25%', padding: '3px 6px' }}>País</th>
+                                        <th style={{ width: '25%', padding: '3px 6px' }}>Ciudad</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[0, 1].map((idx) => {
+                                        const prod = (d.productos_financieros_internacionales_detalle?.productos || [])[idx] || {};
+                                        return (
+                                            <tr key={idx} style={{ height: '28px' }}>
+                                                <td>{displayCellVal(prod.tipo)}</td>
+                                                <td>{displayCellVal(prod.moneda)}</td>
+                                                <td>{displayCellVal(prod.pais)}</td>
+                                                <td>{displayCellVal(prod.ciudad)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+
+                            {/* FINANCIAL & TAX INFO GRID */}
                             <div className="section-header">5. Información Financiera y Tributaria</div>
                             <table className="form-table">
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '15%' }}><b>Tipo de Persona:</b></td>
-                                        <td colSpan={2}>
-                                            <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && d.tipo_contribuyente === 'persona_natural')} Persona Natural</span>
+                                        <td style={{ width: '15%' }}><b>Tipo Persona:</b></td>
+                                        <td style={{ width: '35%' }}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_contribuyente === 'persona_natural')} Persona Natural</span>
                                             <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_contribuyente === 'persona_juridica')} Persona Jurídica</span>
                                         </td>
-                                        <td style={{ width: '15%' }}><b>Responsable de IVA:</b></td>
-                                        <td colSpan={2}>
-                                            <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.regimen_comun)} Régimen Común</span>
-                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simplificado)} Simplificado</span>
+                                        <td style={{ width: '15%' }}><b>Responsable IVA:</b></td>
+                                        <td style={{ width: '35%' }}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_comun)} Régimen Común (Resp.)</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simplificado)} Régimen Simplificado (No Resp.)</span>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td><b>Clase Contribuyente:</b></td>
-                                        <td colSpan={5}>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.gran_contribuyente)} Gran Contribuyente</span>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.auto_retenedor)} Autorretenedor</span>
-                                            <span className="checkbox-container" style={{ marginRight: '10px' }}>{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simple)} Régimen Simple</span>
-                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.sin_animo_lucro)} Sin Ánimo de Lucro</span>
+                                        <td colSpan={3} style={{ fontSize: '8px' }}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.gran_contribuyente)} Gran Contribuyente</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.auto_retenedor)} Autorretenedor</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simple)} Régimen Simple (RST)</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.sin_animo_lucro)} Entidad sin Ánimo de Lucro</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.corporacion)} Corporación</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.agente_retenedor)} Agente Retenedor</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_especial)} Régimen Especial</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.no_contribuyente)} No Contribuyente</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.codigo_ica)} Código ICA: {taxClasses.codigo_ica_val || ''}</span>
                                         </td>
                                     </tr>
                                     <tr>
@@ -577,40 +613,48 @@ export default function CreditPrintPage() {
                                         <td>{(!isBlankMode && d.ingresos_mensuales) ? `$${d.ingresos_mensuales.toLocaleString('es-CO')}` : ''}</td>
                                         <td><b>Egresos Mensuales:</b></td>
                                         <td>{(!isBlankMode && d.egresos_mensuales) ? `$${d.egresos_mensuales.toLocaleString('es-CO')}` : ''}</td>
-                                        <td><b>Fecha de Corte:</b></td>
-                                        <td>{displayCellVal(d.fecha_corte_financiero)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Otros Ingresos:</b></td>
+                                        <td>{(!isBlankMode && d.otros_ingresos) ? `$${d.otros_ingresos.toLocaleString('es-CO')}` : ''}</td>
+                                        <td><b>Concepto Otros Ing:</b></td>
+                                        <td>{displayCellVal(d.otros_ingresos_concepto)}</td>
                                     </tr>
                                     <tr>
                                         <td><b>Activos:</b></td>
                                         <td>{(!isBlankMode && d.activo) ? `$${d.activo.toLocaleString('es-CO')}` : ''}</td>
                                         <td><b>Pasivos:</b></td>
                                         <td>{(!isBlankMode && d.pasivo) ? `$${d.pasivo.toLocaleString('es-CO')}` : ''}</td>
-                                        <td><b>Patrimonio:</b></td>
-                                        <td>{(!isBlankMode && d.patrimonio) ? `$${d.patrimonio.toLocaleString('es-CO')}` : ''}</td>
                                     </tr>
                                     <tr>
-                                        <td><b>Otros Ingresos:</b></td>
-                                        <td>{(!isBlankMode && d.otros_ingresos) ? `$${d.otros_ingresos.toLocaleString('es-CO')}` : ''}</td>
-                                        <td><b>Concepto Otros Ing:</b></td>
-                                        <td colSpan={3}>{displayCellVal(d.otros_ingresos_concepto)}</td>
+                                        <td><b>Patrimonio:</b></td>
+                                        <td>{(!isBlankMode && d.patrimonio) ? `$${d.patrimonio.toLocaleString('es-CO')}` : ''}</td>
+                                        <td><b>Fecha de Corte:</b></td>
+                                        <td>{displayCellVal(d.fecha_corte_financiero)}</td>
                                     </tr>
                                 </tbody>
                             </table>
 
+                            {/* ELECTRONIC INVOICING CONSENT */}
                             <div className="section-header">6. Facturación Electrónica</div>
+                            <div style={{ border: '1.2px solid #b2b2b2', padding: '6px 8px', fontSize: '8px', textAlign: 'justify', marginBottom: '5px', lineHeight: '1.2' }}>
+                                Aceptación y consentimiento para ser remitidas por medios electrónicos las facturas de venta y notas créditos fruto de las relaciones comerciales existentes.
+                            </div>
                             <table className="form-table" style={{ marginBottom: '0px' }}>
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '15%' }}><b>Responsable FE:</b></td>
+                                        <td style={{ width: '15%' }}><b>Nombre Responsable:</b></td>
                                         <td style={{ width: '35%' }}>{displayCellVal(d.responsable_factura_nombre)}</td>
-                                        <td style={{ width: '15%' }}><b>Email FE:</b></td>
-                                        <td style={{ width: '35%' }}>{displayCellVal(d.responsable_factura_email)}</td>
+                                        <td style={{ width: '10%' }}><b>Email:</b></td>
+                                        <td style={{ width: '22%' }}>{displayCellVal(d.responsable_factura_email)}</td>
+                                        <td style={{ width: '10%' }}><b>Contacto Cel:</b></td>
+                                        <td style={{ width: '13%' }}>{displayCellVal(d.responsable_factura_telefono)}</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - REFERENCES, BANK INFO & CLAUSES PART 1 */}
+                        {/* PÁGINA 3: SOLICITUD DE CRÉDITO - REFERENCES, NEGOTIATIONS & DECLARATIONS PART 1 */}
                         <div className="print-page-sheet page-break">
                             {renderPageHeader(3, 4)}
 
@@ -625,7 +669,7 @@ export default function CreditPrintPage() {
                                         <th>Contacto</th>
                                         <th>Teléfono</th>
                                         <th>Ciudad</th>
-                                        <th>Cupo Aprobado</th>
+                                        <th>Cupo</th>
                                         <th>Plazo (Días)</th>
                                     </tr>
                                 </thead>
@@ -669,44 +713,72 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
+                            {/* NEGOCIACIÓN COMERCIAL WITH FULL DETAILS */}
                             <div className="section-header">8. Condiciones de Negociación Comercial</div>
                             <table className="form-table">
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '20%' }}><b>Condición de Pago:</b></td>
-                                        <td colSpan={2}>
-                                            <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!paymentCond.consignacion)} Consignación</span>
-                                            <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && !!paymentCond.transferencia)} Transferencia Electrónica</span>
-                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!paymentCond.cheque)} Cheque</span>
+                                        <td colSpan={3}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && paymentCond.consignacion)} Consignación</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && paymentCond.transferencia)} Transferencia electrónica</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && paymentCond.cheque)} Cheque</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!paymentCond.otro)} Otro: {paymentCond.otro || ''}</span>
                                         </td>
-                                        <td style={{ width: '15%' }}><b>Plazo Solicitado:</b></td>
-                                        <td style={{ width: '15%', fontWeight: 'bold' }}>{displayCellVal((!isBlankMode && d.plazo_pago_dias) ? d.plazo_pago_dias.toString() : '')} Días</td>
                                     </tr>
                                     <tr>
-                                        <td><b>Observaciones Pago:</b></td>
-                                        <td colSpan={4}>{displayCellVal(d.negociacion_dias_pago_soporte)}</td>
+                                        <td><b>Pago en Plazo:</b></td>
+                                        <td colSpan={3} style={{ fontSize: '8.5px' }}>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_pago_dias === 8)} 8 días</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_pago_dias === 15)} 15 días</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_pago_dias === 30)} 30 días</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_pago_dias === 45)} 45 días</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_pago_dias === 60)} 60 días</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && ![8, 15, 30, 45, 60].includes(d.plazo_pago_dias) && !!d.plazo_pago_dias)} Otro: {(![8, 15, 30, 45, 60].includes(d.plazo_pago_dias) && d.plazo_pago_dias) ? `${d.plazo_pago_dias} días` : ''}</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Observaciones:</b></td>
+                                        <td colSpan={3}>{displayCellVal(d.observaciones_negociacion)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><b>Días de pagos y/o soportes:</b></td>
+                                        <td colSpan={3}>{displayCellVal(d.negociacion_dias_pago_soporte)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style={{ width: '20%' }}><b>Sección:</b></td>
+                                        <td style={{ width: '30%' }}>{displayCellVal(d.negociacion_seccion)}</td>
+                                        <td style={{ width: '20%' }}><b>Responsable Negociación:</b></td>
+                                        <td style={{ width: '30%' }}>{displayCellVal(d.responsable_negociacion)}</td>
                                     </tr>
                                 </tbody>
                             </table>
 
-                            {/* SECCIÓN INFORMACIÓN BANCARIA (From original PDF Page 2) */}
+                            {/* SECCIÓN INFORMACIÓN BANCARIA */}
                             <div className="section-header">Información Bancaria (Donde se debe realizar el pago)</div>
-                            <div style={{ border: '1px solid #b2b2b2', padding: '6px 8px', fontSize: '7.8px', lineHeight: '1.25', textAlign: 'justify', marginBottom: '8px' }}>
+                            <div style={{ border: '1.2px solid #b2b2b2', padding: '6px 8px', fontSize: '7.8px', lineHeight: '1.25', textAlign: 'justify', marginBottom: '8px' }}>
                                 En el momento de realizar un pago a nombre de <b>INVESTMENTS CORTES S.A.S.</b> debe hacerse a través de las siguientes cuentas bancarias oficiales:<br />
                                 • <b>Banco de Occidente:</b> Cuenta corriente No. <b>001138239</b><br />
                                 • <b>Bancolombia:</b> Cuenta corriente No. <b>81267590541</b><br />
                                 • <b>Banco de Bogotá:</b> Cuenta corriente No. <b>045053030</b> y/o cheque con sello (páguese únicamente al primer beneficiario) a nombre de <b>INVESTMENTS CORTES S.A.S.</b> conforme al Artículo 26 de la Ley 1430 de 2010.
                             </div>
 
-                            <div className="section-header">9. Declaraciones y Autorizaciones</div>
+                            {/* DECLARACIONES Y AUTORIZACION (DICTATED PART 1) */}
+                            <div className="section-header">9. Declaraciones y Autorización</div>
                             <div className="legal-text">
-                                Yo, el abajo firmante, actuando en nombre propio y/o en representación de la persona jurídica solicitante, declaro de manera libre y voluntaria que los recursos que manejo provienen del giro ordinario de mis negocios lícitos ({displayInlineVal(d.declaracion_origen_fondos_fuentes, 'Actividad comercial ordinaria')}), y no provienen de ninguna actividad ilegal contemplada en el código penal colombiano.
+                                Yo, {displayInlineVal(pagareDeudor.nombre, '________________________________________')}, identificado con el documento de identidad número {displayInlineVal(pagareDeudor.identificacion, '____________________')}, expedido en {displayInlineVal(pagareDeudor.barrio, '____________________')}, obrando en nombre propio y/o como representante legal de {displayInlineVal(isBlankMode ? '' : (d.razon_social || client.company_name), '________________________________________')}, con NIT {displayInlineVal(isBlankMode ? '' : (d.nit || client.nit), '____________________')}, de manera voluntaria y dando certeza de todo lo aquí consignado es cierto, realizo la siguiente declaración de fuente de fondos:
                             </div>
                             <div className="legal-text">
-                                <b>3.</b> No admitiré que terceros efectúen depósitos a nombre mío, con fondos provenientes de actividades ilícitas contempladas en el Código Penal Colombiano o en cualquier norma que lo modifique o adicione, ni efectuaré transacciones destinadas a tales actividades o a favor de personas relacionadas con las mismas.
+                                <b>1.</b> Los recursos que manejo y mis recursos propios provienen de las siguientes fuentes: {displayInlineVal(d.declaracion_origen_fondos_fuentes, '________________________________________')}.
+                            </div>
+                            <div className="legal-text">
+                                <b>2.</b> Declaro que estos recursos no provienen de ninguna actividad ilícita de las contempladas en el Código Penal colombiano o en cualquier norma que lo modifique o adicione.
+                            </div>
+                            <div className="legal-text">
+                                <b>3.</b> No admitiré que terceros efectúen depósitos a nombre mío con fondos provienen de actividades ilícitas contempladas en el Código Penal colombiano o en cualquier norma que lo modifique o adicione, ni efectuaré transacciones destinadas a tales actividades a favor de personas relacionadas con la misma.
                             </div>
                             <div className="legal-text" style={{ marginBottom: '0px' }}>
-                                <b>4.</b> Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> a cancelar el contrato y/o relación comercial que mantenga conmigo y/o la sociedad que represento en el caso de comprobarse cualquier infracción de las normas legales tendientes al control de lavado de activos, la financiación del terrorismo y/o el financiamiento de la proliferación de armas de destrucción masiva.
+                                <b>4.</b> Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> a cancelar el contrato y/o relación comercial que mantenga conmigo y/o la sociedad que represento, en el caso de comprobarse cualquier infracción de las normas legales tendientes al control de lavado de activos, la financiación del terrorismo y/o financiación de la proliferación de armas de destrucción masiva y al programa de transparencia, la ley antisoborno de acuerdo con la legislación colombiana vigente y eximo a <b>INVESTMENTS CORTES S.A.S.</b> de toda responsabilidad que de ella se derive por información errónea, falsa o inexacta que hubiera proporcionado en este documento o de la violación del mismo.
                             </div>
                         </div>
 
@@ -714,34 +786,35 @@ export default function CreditPrintPage() {
                         <div className="print-page-sheet page-break">
                             {renderPageHeader(4, 4)}
 
-                            <div className="section-header" style={{ marginBottom: '4px' }}>9. Declaraciones y Autorizaciones (Continuación)</div>
+                            <div className="section-header" style={{ marginBottom: '4px' }}>9. Declaraciones y Autorización (Continuación)</div>
                             
                             <div className="legal-text">
-                                <b>1.</b> Que la información suministrada es verídica y se encuentra actualizada. Que he sido informado que los datos correspondientes a dirección principal y/o direcciones de correo electrónico serán los que <b>INVESTMENTS CORTES S.A.S.</b> tendrá en cuenta para enviar información, la cual una vez de enviada a dichas direcciones se entenderá legalmente notificada.
+                                <b>5.</b> Que la información suministrada es verídica y se encuentra actualizada. Que he sido informado que los datos correspondientes a dirección principal y/o dirección electrónica serán los que <b>INVESTMENTS CORTES S.A.S.</b> tendrá en cuenta para enviar la información, la cual una vez de enviada a dichas direcciones se entenderá legalmente notificada.
                             </div>
                             <div className="legal-text">
-                                <b>2.</b> De manera expresa, voluntaria y dando certeza de que todo lo registrado en el presente documento es cierto, el cliente declara que sus ingresos provienen de actividades lícitas, que no se encuentra registrado en listados nacionales y/o internacionales relacionados con los delitos de lavado de activos, financiación del terrorismo y/o proliferación de armas.
+                                <b>6.</b> De manera expresa y voluntaria y dando certeza de que todo lo registrado en el presente documento es cierto, el cliente declara que sus ingresos provienen de actividades lícitas que no se encuentran registrados en listados nacionales y/o internacionales relacionados con los delitos de lavado de activos, financiación del terrorismo, financiación o proliferación de armas de destrucción masiva y/o cualquiera de los delitos de las fuentes.
                             </div>
                             <div className="legal-text">
-                                <b>3.</b> Ni el suscrito y/o mi representada están relacionados, ni pretenden involucrar a <b>INVESTMENTS CORTES S.A.S.</b> en actividades relacionadas con delitos de lavado de activos o financiación del terrorismo.
+                                <b>7.</b> Ni el suscrito y/o su representada están relacionados ni pretenden involucrar a <b>INVESTMENTS CORTES S.A.S.</b> en actividades relacionadas con delitos tales como lavado de activos y/o financiación del terrorismo o cualquier actividad de carácter ilícito.
                             </div>
                             <div className="legal-text">
-                                <b>4.</b> Autorizo a <b>INVESTMENTS CORTES S.A.S.</b> para realizar las consultas que considere pertinentes en dichos listados y dar por terminada la relación comercial si se evidencia que se encuentra en ellos y se obliga a responder por los perjuicios que pueda ocasionar.
+                                <b>8.</b> Que autoriza a <b>INVESTMENTS CORTES S.A.S.</b> para realizar las consultas que considere pertinentes en dichos listados y dar por terminada la relación comercial si se evidencia que se encuentra en los listados anteriormente mencionados o llega a ser incluido en ellos y se obliga a responder por los perjuicios que pueda ocasionar y además exonera a <b>INVESTMENTS CORTES S.A.S.</b> de toda responsabilidad que tal hecho ocasionare.
                             </div>
                             <div className="legal-text">
-                                <b>5.</b> Que los datos personales que se encuentran registrados en el presente formato y los que sean entregados a <b>INVESTMENTS CORTES S.A.S.</b>, han sido autorizados para ser recolectados, almacenados y tratados por el titular de los mismos en cumplimiento de la Ley 1581 de protección de datos personales.
+                                <b>9.</b> Que los datos personales que se encuentran registrados en el presente formato y los que sean entregados a <b>INVESTMENTS CORTES S.A.S.</b> en desarrollo con la relación comercial han sido autorizados para ser recolectados, almacenados y tratados por el titular de los mismos en cumplimiento de la Ley 1581 de protección de datos personales y demás normas reglamentarias.
                             </div>
-                            <div className="legal-text" style={{ fontWeight: 'bold' }}>
-                                Autorizo expresa e irrevocablemente a INVESTMENTS CORTES S.A.S. o a quien sea en el futuro el acreedor del crédito solicitado a mi nombre para:
+                            
+                            <div className="legal-text" style={{ fontWeight: 'bold', marginTop: '4px' }}>
+                                Autorizo expresa e irrevocable Investment Cortés o a quien sea el futuro a quien sea en el futuro el acreedor del crédito solicitado a mi nombre y de la empresa que represento para:
                             </div>
-                            <div className="legal-text" style={{ fontSize: '7.1px' }}>
-                                <b>a)</b> Consultar, en cualquier tiempo, en las centrales de riesgo toda la información relevante para conocer mi desempeño como deudor, mi capacidad de pago o para valorar el riesgo de concederme un crédito.
+                            <div className="legal-text" style={{ fontSize: '7.1px', lineHeight: '1.15' }}>
+                                <b>a)</b> consultar en cualquier tiempo en las centrales de riesgo toda la información relevante para conocer mi desempeño como deudor, mi capacidad de pago o para valorar el riesgo futuro de concederme un crédito.
                                 <br />
-                                <b>b)</b> Reportar a las centrales de riesgo de manera directa y también por intermedio de las entidades públicas de vigilancia, datos tanto sobre el cumplimiento oportuno como sobre el incumplimiento, si lo hubiere, de mis obligaciones crediticias.
+                                <b>b)</b> Reportar a las centrales de riesgo de manera indirecta y también por medio de entidades públicas que ejercen funciones de vigilancia y control, datos tanto en tanto sobre el cumplimiento oportuno como sobre el incumplimiento si lo hubiere de mis obligaciones crediticias o de mis deberes legales de contenido patrimonial.
                                 <br />
-                                <b>c)</b> Conservar tanto en <b>INVESTMENTS CORTES S.A.S.</b> como en las centrales de riesgo con las debidas actualizaciones la información comercial y crediticia.
+                                <b>c)</b> Conservar tanto en Investment Cortés como en las centrales de riesgo con la debida actualizaciones durante el periodo necesario señalado en sus reglamentos, información indicada en el literal B de esta cláusula.
                                 <br />
-                                <b>d)</b> Suministrar a las centrales de información de riesgo datos relativos a mis solicitudes de crédito, así como otros atinentes a mis relaciones comerciales, financieras y socioeconómicas. Igualmente manifiesto que los datos consignados son ciertos, autorizo a verificarlos y en caso de haber incurrido en omisión o falsedad, esta solicitud puede ser anulada.
+                                <b>d)</b> Suministrar a las centrales de información de riesgo datos relativos a mis solicitudes de crédito así como otros atinentes a mis relaciones comerciales, financieras y en general socioeconómicas que yo haya entregado o que consten en registros públicos, bases de datos públicas o documentos públicos. Igualmente manifiesto que los datos consignados son ciertos y que se ajustan fielmente a la realidad. Autorizo a Investment Cortés a verificarlos en caso de haber incurrido en cualquier omisión o falsedad. Esta solicitud puede ser anulada y acepto someterme a las consecuencias legales a que diera lugar.
                             </div>
 
                             <div className="section-header" style={{ marginTop: '4px', marginBottom: '4px' }}>Lista de Documentos Requeridos</div>
@@ -775,26 +848,29 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
-                            {/* Firmas */}
+                            {/* Firmas y Espacio para Sello */}
                             <table style={{ width: '100%', marginBottom: '6px' }}>
                                 <tbody>
                                     <tr>
                                         <td style={{ width: '50%', paddingRight: '20px', verticalAlign: 'top' }}>
                                             <div style={{ borderBottom: '1.2px solid #000', height: '40px', marginTop: '15px' }}></div>
                                             <div style={{ marginTop: '5px', fontSize: '8.2px' }}>
-                                                <b>Firma Representante Legal / Cliente</b><br />
+                                                <b>Firma y Sello de Representante Legal / Cliente</b><br />
                                                 Nombre: {displayInlineVal(pagareDeudor.nombre, '________________________________________')}<br />
-                                                NIT / C.C: {displayInlineVal(pagareDeudor.identificacion, '____________________')}
+                                                Cédula: {displayInlineVal(pagareDeudor.identificacion, '____________________')}
                                             </div>
                                         </td>
                                         <td style={{ width: '50%', paddingLeft: '20px', verticalAlign: 'top' }}>
-                                            <div style={{ display: 'flex', gap: '25px', marginTop: '5px' }}>
+                                            <div style={{ display: 'flex', gap: '20px', marginTop: '5px' }}>
                                                 <div style={{ border: '1.2px dashed #555', width: '55px', height: '70px', textAlign: 'center', fontSize: '5.5px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontWeight: 'bold', borderRadius: '2px', backgroundColor: '#fdfdfd' }}>
                                                     HUELLA ÍNDICE<br />DERECHO
                                                 </div>
+                                                <div style={{ border: '1px solid #b2b2b2', width: '85px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', color: '#666', textAlign: 'center', padding: '2px' }}>
+                                                    SELLO CON NIT PARA<br />PERSONA JURÍDICA
+                                                </div>
                                                 <div style={{ fontSize: '8.2px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                    <div><b>Fecha de Firma:</b> {formatDate(d.pagare_fecha_firma)}</div>
-                                                    <div><b>Ciudad de Firma:</b> {displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</div>
+                                                    <div><b>Fecha:</b> {formatDate(d.pagare_fecha_firma)}</div>
+                                                    <div><b>Ciudad:</b> {displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</div>
                                                 </div>
                                             </div>
                                         </td>
@@ -802,7 +878,7 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
-                            <div className="section-header" style={{ marginBottom: '4px' }}>10. Espacio Exclusivo de la Administración (Investments Cortés)</div>
+                            <div className="section-header" style={{ marginBottom: '4px' }}>Para uso exclusivo de Frutícola de Colombia</div>
                             <table className="form-table" style={{ marginBottom: '0px' }}>
                                 <tbody>
                                     <tr style={{ height: '28px' }}>
@@ -812,23 +888,23 @@ export default function CreditPrintPage() {
                                             &nbsp;&nbsp;&nbsp;
                                             NO {renderCheckbox(!isBlankMode && !d.credito_aprobado)}
                                         </td>
-                                        <td style={{ width: '20%' }}><b>Cupo Autorizado:</b></td>
+                                        <td style={{ width: '20%' }}><b>Cupo:</b></td>
                                         <td style={{ width: '30%', fontWeight: 'bold', fontSize: '10px', color: THEME.colors.primary }}>
                                             {isBlankMode ? '' : (d.cupo_aprobado ? `$${d.cupo_aprobado.toLocaleString('es-CO')}` : 'N/A')}
                                         </td>
                                     </tr>
                                     <tr style={{ height: '28px' }}>
-                                        <td><b>Plazo Aprobado:</b></td>
+                                        <td><b>Plazo:</b></td>
                                         <td style={{ fontWeight: 'bold' }}>{displayCellVal((!isBlankMode && d.plazo_aprobado) ? `${d.plazo_aprobado} Días` : '')}</td>
-                                        <td><b>Visto Bueno Comercial:</b></td>
-                                        <td>{displayCellVal(d.vo_bo)}</td>
-                                    </tr>
-                                    <tr style={{ height: '28px' }}>
-                                        <td><b>Autorización Gerencia:</b></td>
-                                        <td colSpan={3}>{displayCellVal(d.autorizacion_gerencia)}</td>
+                                        <td><b>Autorización Venta / Gerencia General:</b></td>
+                                        <td>{displayCellVal(d.autorizacion_gerencia)}</td>
                                     </tr>
                                     <tr style={{ height: '40px' }}>
-                                        <td><b>Concepto Coord. Comercial:</b></td>
+                                        <td><b>Observaciones Director de la Agencia:</b></td>
+                                        <td colSpan={3} style={{ height: '40px', verticalAlign: 'top' }}>{displayCellVal(d.observaciones_director)}</td>
+                                    </tr>
+                                    <tr style={{ height: '40px' }}>
+                                        <td><b>Concepto Coordinador Comercial:</b></td>
                                         <td colSpan={3} style={{ height: '40px', verticalAlign: 'top' }}>{displayCellVal(d.concepto_coordinador)}</td>
                                     </tr>
                                 </tbody>
@@ -1111,7 +1187,7 @@ export default function CreditPrintPage() {
                                             Las presentes las presento de conformidad con lo dispuesto al Art. 622, inciso 2 del Código de Comercio para todos los efectos allí previstos. Dejo constancia que recibí copia de la Carta de Instrucciones y Pagaré.
                                         </p>
                                         <p style={{ margin: '0 0 10px 0' }}>
-                                            Para constancia de lo anterior se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los __________ días del mes de ____________________ del año __________.
+                                            Para constancia de lo anterior se firma en la ciudad de <b>{displayInlineVal(d.pagare_ciudad_firma, 'Cali')}</b>, a los __________ días del mes de ________________....
                                         </p>
                                     </div>
 
