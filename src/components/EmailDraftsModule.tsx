@@ -63,6 +63,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     setRecentlyDeletedItems([]);
     setScrollPercent(0);
     setIsScrolled(false);
+    setActiveVariantRow(null);
   }, [selectedDraft?.id]);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -86,6 +87,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [selectedRowIndices, setSelectedRowIndices] = useState<number[]>([]);
   const [scrollPercent, setScrollPercent] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeVariantRow, setActiveVariantRow] = useState<number | null>(null);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -164,6 +166,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
     return () => clearInterval(interval);
   }, [selectedDraft]);
+
+
 
   const fetchGeofence = async () => {
     try {
@@ -494,7 +498,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
             unit: item.unit || prod?.unit_of_measure || 'Kg',
-            observations: item.observations || ''
+            observations: item.observations || '',
+            selected_options: item.selected_options || {}
         };
       });
       setEditableItems(initialEdits);
@@ -614,6 +619,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
   const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (actionConfirm) { setActionConfirm(null); return; }
+        if (deleteConfirm) { setDeleteConfirm(null); return; }
+        if (obsModal) { setObsModal(null); return; }
+        if (rejectModal) { setRejectModal(null); return; }
+        if (showConfirmModal) { setShowConfirmModal(false); return; }
+        if (selectedDraft) { setSelectedDraft(null); return; }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [actionConfirm, deleteConfirm, obsModal, rejectModal, showConfirmModal, selectedDraft]);
 
   const isInvoiceModified = () => {
     if (!selectedDraft) return false;
@@ -748,7 +768,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               unit_price: prod.base_price,
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: item.observations || null,
-              unit: item.unit || prod.unit_of_measure || 'Kg'
+              unit: item.unit || prod.unit_of_measure || 'Kg',
+              selected_options: item.selected_options || {}
             });
           }
         }
@@ -947,7 +968,107 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       </div>
 
       {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', minHeight: '42px' }}>
+        {selectedDraftIds.length > 0 ? (
+          <div style={{
+            flex: 1,
+            backgroundColor: '#FFFBEB',
+            border: '1px solid #FCD34D',
+            borderRadius: THEME.radius.md,
+            padding: '0.3rem 1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: THEME.shadow.sm
+          }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400E' }}>
+              {selectedDraftIds.length} {selectedDraftIds.length === 1 ? 'borrador seleccionado' : 'borradores seleccionados'}
+            </span>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => {
+                  setActionConfirm({
+                    isOpen: true,
+                    title: '¿Rechazar borradores seleccionados?',
+                    message: `¿Estás seguro de que deseas rechazar y eliminar los ${selectedDraftIds.length} borradores seleccionados?`,
+                    confirmText: 'Rechazar y Eliminar',
+                    cancelText: 'Cancelar',
+                    isDanger: true,
+                    onConfirm: async () => {
+                      try {
+                        const draftsToProcess = drafts.filter(d => selectedDraftIds.includes(d.id));
+                        const alreadyRejectedIds = draftsToProcess.filter(d => d.status === 'rejected').map(d => d.id);
+                        const otherIds = draftsToProcess.filter(d => d.status !== 'rejected').map(d => d.id);
+
+                        if (otherIds.length > 0) {
+                          const { error: err1 } = await supabase
+                            .from('order_drafts')
+                            .update({ status: 'rejected' })
+                            .in('id', otherIds);
+                          if (err1) throw err1;
+                        }
+
+                        if (alreadyRejectedIds.length > 0) {
+                          const { error: err2 } = await supabase
+                            .from('order_drafts')
+                            .delete()
+                            .in('id', alreadyRejectedIds);
+                          if (err2) throw err2;
+                        }
+
+                        setDrafts(prev => prev
+                          .filter(d => !alreadyRejectedIds.includes(d.id))
+                          .map(d => otherIds.includes(d.id) ? { ...d, status: 'rejected' } : d)
+                        );
+                        setSelectedDraftIds([]);
+                        
+                        const msg = alreadyRejectedIds.length > 0 
+                          ? (otherIds.length > 0 ? 'Borradores procesados (eliminados y rechazados).' : 'Borradores eliminados permanentemente.')
+                          : 'Borradores rechazados con éxito.';
+                          
+                        showToast(msg, 'success');
+                      } catch (err: any) {
+                        console.error('Error rejecting/deleting multiple drafts:', err);
+                        showToast('Error al procesar los borradores seleccionados.', 'error');
+                      }
+                    }
+                  });
+                }}
+                style={{
+                  backgroundColor: '#EF4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.4rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Trash2 size={16} /> Rechazar/Eliminar Seleccionados
+              </button>
+              <button
+                onClick={() => setSelectedDraftIds([])}
+                style={{
+                  backgroundColor: 'white',
+                  color: '#4B5563',
+                  border: `1px solid ${THEME.colors.border}`,
+                  borderRadius: '8px',
+                  padding: '0.4rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Deseleccionar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Date Filter */}
         <div style={{ 
           display: 'flex', 
@@ -1271,6 +1392,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* Info Icon */}
         <div 
@@ -1347,82 +1470,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       ) : viewMode === 'list' ? (
         <>
-          {selectedDraftIds.length > 0 && (
-            <div style={{
-              backgroundColor: '#FFFBEB',
-              border: '1px solid #FCD34D',
-              borderRadius: THEME.radius.lg,
-              padding: '1rem',
-              marginBottom: '1rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              boxShadow: THEME.shadow.sm
-            }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400E' }}>
-                {selectedDraftIds.length} {selectedDraftIds.length === 1 ? 'borrador seleccionado' : 'borradores seleccionados'}
-              </span>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  onClick={() => {
-                    setActionConfirm({
-                      isOpen: true,
-                      title: '¿Rechazar borradores seleccionados?',
-                      message: `¿Estás seguro de que deseas rechazar y eliminar los ${selectedDraftIds.length} borradores seleccionados?`,
-                      confirmText: 'Rechazar y Eliminar',
-                      cancelText: 'Cancelar',
-                      isDanger: true,
-                      onConfirm: async () => {
-                        try {
-                          const { error } = await supabase
-                            .from('order_drafts')
-                            .update({ status: 'rejected' })
-                            .in('id', selectedDraftIds);
-                          if (error) throw error;
-                          setDrafts(prev => prev.map(d => selectedDraftIds.includes(d.id) ? { ...d, status: 'rejected' } : d));
-                          setSelectedDraftIds([]);
-                          showToast('Borradores rechazados con éxito.', 'success');
-                        } catch (err: any) {
-                          console.error('Error rejecting multiple drafts:', err);
-                          showToast('Error al rechazar borradores.', 'error');
-                        }
-                      }
-                    });
-                  }}
-                  style={{
-                    backgroundColor: '#EF4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <Trash2 size={16} /> Rechazar/Eliminar Seleccionados
-                </button>
-                <button
-                  onClick={() => setSelectedDraftIds([])}
-                  style={{
-                    backgroundColor: 'white',
-                    color: '#4B5563',
-                    border: `1px solid ${THEME.colors.border}`,
-                    borderRadius: '8px',
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Deseleccionar
-                </button>
-              </div>
-            </div>
-          )}
+
           <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -2276,40 +2324,194 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
                                       </div>
                                     </td>
-                                  <td style={{ padding: '1rem 0.5rem', width: '30%' }}>
-                                    <input
-                                      ref={el => { productInputRefs.current[i] = el; }}
-                                      list={`products-list-${i}`}
-                                      disabled={!isEditing}
-                                      value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
-                                      placeholder="-- Buscar Producto --"
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const found = products.find(p => p.name === val);
-                                        const newEdits = [...editableItems];
-                                        if (found) {
-                                          newEdits[i].matched_product_id = found.id;
-                                          newEdits[i].searchQuery = found.name;
-                                          newEdits[i].skuQuery = found.sku || '';
-                                          newEdits[i].unit = found.unit_of_measure || 'Kg';
-                                        } else {
-                                          newEdits[i].matched_product_id = null;
-                                          newEdits[i].searchQuery = val;
-                                          newEdits[i].skuQuery = '';
-                                        }
-                                        setEditableItems(newEdits);
-                                      }}
-                                      style={{
-                                        width: '100%',
-                                        padding: '0.5rem',
-                                        borderRadius: '6px',
-                                        border: '1px solid #D1D5DB',
-                                        fontSize: '0.9rem',
-                                        backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
-                                        fontWeight: 600,
-                                        color: '#111827'
-                                      }}
-                                    />
+                                  <td style={{ padding: '1rem 0.5rem', width: '30%', position: 'relative' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <input
+                                          ref={el => { productInputRefs.current[i] = el; }}
+                                          list={`products-list-${i}`}
+                                          disabled={!isEditing}
+                                          value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
+                                          placeholder="-- Buscar Producto --"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const found = products.find(p => p.name === val);
+                                            const newEdits = [...editableItems];
+                                            if (found) {
+                                              newEdits[i].matched_product_id = found.id;
+                                              newEdits[i].searchQuery = found.name;
+                                              newEdits[i].skuQuery = found.sku || '';
+                                              newEdits[i].unit = found.unit_of_measure || 'Kg';
+                                              newEdits[i].selected_options = {};
+                                            } else {
+                                              newEdits[i].matched_product_id = null;
+                                              newEdits[i].searchQuery = val;
+                                              newEdits[i].skuQuery = '';
+                                              newEdits[i].selected_options = {};
+                                            }
+                                            setEditableItems(newEdits);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+                                              e.preventDefault();
+                                              const matched = products.find(p => p.id === item.matched_product_id);
+                                              if (matched && matched.variants && matched.variants.length > 0) {
+                                                setActiveVariantRow(prev => prev === i ? null : i);
+                                                setTimeout(() => {
+                                                  const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                                                  if (firstSelect) firstSelect.focus();
+                                                }, 50);
+                                              }
+                                            }
+                                          }}
+                                          style={{
+                                            flex: 1,
+                                            padding: '0.5rem',
+                                            borderRadius: '6px',
+                                            border: '1px solid #D1D5DB',
+                                            fontSize: '0.9rem',
+                                            backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
+                                            fontWeight: 600,
+                                            color: '#111827',
+                                            minWidth: '0'
+                                          }}
+                                        />
+                                        
+                                        {/* Botón de variantes si aplica */}
+                                        {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveVariantRow(prev => prev === i ? null : i);
+                                              setTimeout(() => {
+                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                                                if (firstSelect) firstSelect.focus();
+                                              }, 50);
+                                            }}
+                                            style={{
+                                              padding: '0.45rem 0.75rem',
+                                              backgroundColor: Object.keys(item.selected_options || {}).length > 0 ? '#10B981' : '#F3F4F6',
+                                              color: Object.keys(item.selected_options || {}).length > 0 ? 'white' : '#374151',
+                                              border: '1px solid #D1D5DB',
+                                              borderRadius: '6px',
+                                              fontSize: '0.75rem',
+                                              fontWeight: 700,
+                                              cursor: 'pointer',
+                                              whiteSpace: 'nowrap',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
+                                              transition: 'all 0.2s',
+                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}
+                                            title="Ver / Modificar Variantes (Alt + V)"
+                                          >
+                                            ⚡ {Object.keys(item.selected_options || {}).length > 0 
+                                              ? Object.values(item.selected_options).join(', ') 
+                                              : 'Variantes'}
+                                          </button>
+                                        )}
+
+                                        {/* En modo lectura, si tiene opciones elegidas, las mostramos como etiqueta */}
+                                        {!isEditing && item.selected_options && Object.keys(item.selected_options).length > 0 && (
+                                          <span style={{
+                                            padding: '4px 8px',
+                                            backgroundColor: '#E6F4EA',
+                                            color: '#137333',
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            whiteSpace: 'nowrap',
+                                            display: 'inline-flex',
+                                            alignItems: 'center'
+                                          }}>
+                                            {Object.values(item.selected_options).join(' | ')}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Panel Flotante de Selección de Variantes (Popover) */}
+                                      {isEditing && activeVariantRow === i && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: '100%',
+                                          left: 0,
+                                          zIndex: 50,
+                                          backgroundColor: 'white',
+                                          border: '1px solid #D1D5DB',
+                                          borderRadius: '8px',
+                                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                          padding: '0.75rem',
+                                          marginTop: '4px',
+                                          minWidth: '240px',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          gap: '8px'
+                                        }}>
+                                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', borderBottom: '1px solid #F3F4F6', paddingBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>⚡ VARIANTES / VARIABLES</span>
+                                            <span style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>(Esc para cerrar)</span>
+                                          </div>
+                                          {matchedProd.variants.map((v: any, vIdx: number) => {
+                                            const currentValue = (item.selected_options || {})[v.name] || '';
+                                            return (
+                                              <div key={vIdx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#374151' }}>{v.name}:</label>
+                                                <select
+                                                  id={`variant-select-${i}-${vIdx}`}
+                                                  value={currentValue}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    const newEdits = [...editableItems];
+                                                    if (!newEdits[i].selected_options) {
+                                                      newEdits[i].selected_options = {};
+                                                    }
+                                                    newEdits[i].selected_options[v.name] = val;
+                                                    setEditableItems(newEdits);
+                                                  }}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Escape') {
+                                                      setActiveVariantRow(null);
+                                                      setTimeout(() => {
+                                                        if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                      }, 50);
+                                                    } else if (e.key === 'Enter') {
+                                                      e.preventDefault();
+                                                      const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                      if (nextSelect) {
+                                                        nextSelect.focus();
+                                                      } else {
+                                                        setActiveVariantRow(null);
+                                                        setTimeout(() => {
+                                                          if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                        }, 50);
+                                                      }
+                                                    }
+                                                  }}
+                                                  style={{
+                                                    width: '100%',
+                                                    padding: '0.35rem 0.5rem',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #D1D5DB',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 600,
+                                                    backgroundColor: currentValue ? '#ECFDF5' : 'white',
+                                                    color: '#111827',
+                                                    outline: 'none',
+                                                    cursor: 'pointer'
+                                                  }}
+                                                >
+                                                  <option value="">-- Seleccionar --</option>
+                                                  {v.options.map((opt: string, optIdx: number) => (
+                                                    <option key={optIdx} value={opt}>{opt}</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                     <datalist id={`products-list-${i}`}>
                                       {products
                                         .filter(p => {
