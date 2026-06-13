@@ -100,21 +100,14 @@ export function logError(context: string, err: unknown) {
             cause: (err as any).cause
         });
     } else if (err && typeof err === 'object') {
-        const errorObj = err as Record<string, unknown>;
-        if (!errorObj.message && !errorObj.stack) {
-            try {
-                const str = JSON.stringify(err);
-                if (str === '{}') {
-                    // Try to extract internal properties for standard objects that stringify empty
-                    const detailed = JSON.stringify(err, Object.getOwnPropertyNames(err));
-                    console.error(`❌ [${context}]`, detailed === '{}' ? err : detailed);
-                } else {
-                    console.error(`❌ [${context}]`, str);
-                }
-            } catch (e) {
-                console.error(`❌ [${context}]`, err);
-            }
-        } else {
+        try {
+            // Extract all properties (including non-enumerable ones) so it serializes properly in the console
+            const detailed: Record<string, any> = {};
+            Object.getOwnPropertyNames(err).forEach(key => {
+                detailed[key] = (err as any)[key];
+            });
+            console.error(`❌ [${context}]`, detailed);
+        } catch (e) {
             console.error(`❌ [${context}]`, err);
         }
     } else {

@@ -41,7 +41,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 if (
                     argStr.includes('Failed to fetch') || 
                     argStr.includes('TypeError: Failed to fetch') || 
-                    argStr.includes('Error fetching drafts')
+                    argStr.includes('Error fetching drafts') ||
+                    argStr.includes('The Google Maps JavaScript API could not load') ||
+                    argStr.includes('maps.googleapis.com')
                 ) {
                     return true;
                 }
@@ -64,6 +66,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <APIProvider 
             apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} 
             libraries={['places', 'marker', 'geometry']}
+            onError={(err) => {
+                console.warn('⚠️ Google Maps API failed to load (likely blocked by network or ad-blocker).', err);
+            }}
         >
             <AuthProvider>
                 <CartProvider>
