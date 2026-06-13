@@ -52,6 +52,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [obsModal, setObsModal] = useState<{
+    isOpen: boolean;
+    rowIndex: number;
+    text: string;
+  } | null>(null);
   
   useEffect(() => {
     setRecentlyDeletedItems([]);
@@ -402,25 +408,43 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const draftToModify = drafts.find(d => d.id === id);
+    const isAlreadyRejected = draftToModify?.status === 'rejected';
+
     setActionConfirm({
       isOpen: true,
-      title: '¿Rechazar y eliminar borrador?',
-      message: '¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?',
-      confirmText: 'Rechazar y Eliminar',
+      title: isAlreadyRejected ? '¿Eliminar borrador permanentemente?' : '¿Rechazar y eliminar borrador?',
+      message: isAlreadyRejected 
+        ? 'Este borrador ya está rechazado. ¿Deseas eliminarlo de forma permanente del sistema?' 
+        : '¿Estás seguro de que deseas rechazar y eliminar este borrador de pedido?',
+      confirmText: isAlreadyRejected ? 'Eliminar Permanentemente' : 'Rechazar y Eliminar',
       cancelText: 'Cancelar',
       isDanger: true,
       onConfirm: async () => {
         try {
-          const { error } = await supabase
-            .from('order_drafts')
-            .update({ status: 'rejected' })
-            .eq('id', id);
+          if (isAlreadyRejected) {
+            const { error } = await supabase
+              .from('order_drafts')
+              .delete()
+              .eq('id', id);
 
-          if (error) throw error;
-          setDrafts(prev => prev.map(d => d.id === id ? { ...d, status: 'rejected' } : d));
+            if (error) throw error;
+            setDrafts(prev => prev.filter(d => d.id !== id));
+            showToast('Borrador eliminado permanentemente.', 'success');
+          } else {
+            const { error } = await supabase
+              .from('order_drafts')
+              .update({ status: 'rejected' })
+              .eq('id', id);
+
+            if (error) throw error;
+            setDrafts(prev => prev.map(d => d.id === id ? { ...d, status: 'rejected' } : d));
+            showToast('Borrador rechazado.', 'success');
+          }
           if (selectedDraft?.id === id) setSelectedDraft(null);
         } catch (err) {
           console.error('Error deleting draft:', err);
+          showToast('Error al procesar la solicitud.', 'error');
         }
       }
     });
@@ -468,7 +492,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             quantity: item.quantity || 1,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
-            skuQuery: prod?.sku || ''
+            skuQuery: prod?.sku || '',
+            unit: item.unit || prod?.unit_of_measure || 'Kg',
+            observations: item.observations || ''
         };
       });
       setEditableItems(initialEdits);
@@ -720,8 +746,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               product_id: prod.id,
               quantity: qtyNum,
               unit_price: prod.base_price,
-              nickname: item.originalName || null,
-              variant_label: null
+              nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
+              variant_label: item.observations || null,
+              unit: item.unit || prod.unit_of_measure || 'Kg'
             });
           }
         }
@@ -1319,20 +1346,111 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No se encontraron correos con los filtros actuales.</p>
         </div>
       ) : viewMode === 'list' ? (
-        <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
-                <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
-                <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
-                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
-                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
-                <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ACCIONES</th>
-              </tr>
-            </thead>
+        <>
+          {selectedDraftIds.length > 0 && (
+            <div style={{
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FCD34D',
+              borderRadius: THEME.radius.lg,
+              padding: '1rem',
+              marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: THEME.shadow.sm
+            }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400E' }}>
+                {selectedDraftIds.length} {selectedDraftIds.length === 1 ? 'borrador seleccionado' : 'borradores seleccionados'}
+              </span>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  onClick={() => {
+                    setActionConfirm({
+                      isOpen: true,
+                      title: '¿Rechazar borradores seleccionados?',
+                      message: `¿Estás seguro de que deseas rechazar y eliminar los ${selectedDraftIds.length} borradores seleccionados?`,
+                      confirmText: 'Rechazar y Eliminar',
+                      cancelText: 'Cancelar',
+                      isDanger: true,
+                      onConfirm: async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('order_drafts')
+                            .update({ status: 'rejected' })
+                            .in('id', selectedDraftIds);
+                          if (error) throw error;
+                          setDrafts(prev => prev.map(d => selectedDraftIds.includes(d.id) ? { ...d, status: 'rejected' } : d));
+                          setSelectedDraftIds([]);
+                          showToast('Borradores rechazados con éxito.', 'success');
+                        } catch (err: any) {
+                          console.error('Error rejecting multiple drafts:', err);
+                          showToast('Error al rechazar borradores.', 'error');
+                        }
+                      }
+                    });
+                  }}
+                  style={{
+                    backgroundColor: '#EF4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Trash2 size={16} /> Rechazar/Eliminar Seleccionados
+                </button>
+                <button
+                  onClick={() => setSelectedDraftIds([])}
+                  style={{
+                    backgroundColor: 'white',
+                    color: '#4B5563',
+                    border: `1px solid ${THEME.colors.border}`,
+                    borderRadius: '8px',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Deseleccionar
+                </button>
+              </div>
+            </div>
+          )}
+          <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'hidden', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                  <th style={{ padding: '1rem', width: '40px', textAlign: 'center', ...THEME.typography?.tableHeader }}>
+                    <input
+                      type="checkbox"
+                      checked={sortedFilteredDrafts.length > 0 && selectedDraftIds.length === sortedFilteredDrafts.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDraftIds(sortedFilteredDrafts.map(d => d.id));
+                        } else {
+                          setSelectedDraftIds([]);
+                        }
+                      }}
+                      style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
+                    />
+                  </th>
+                  <th style={{ padding: '1rem', width: '12%', textAlign: 'left', ...THEME.typography?.tableHeader }}>FECHA / TIPO</th>
+                  <th style={{ padding: '1rem', width: '22%', textAlign: 'left', ...THEME.typography?.tableHeader }}>CLIENTE</th>
+                  <th style={{ padding: '1rem', width: '24%', textAlign: 'left', ...THEME.typography?.tableHeader }}>DIRECCIÓN / GPS</th>
+                  <th style={{ padding: '1rem', width: '15%', textAlign: 'left', ...THEME.typography?.tableHeader }}>ASUNTO / ORIGEN</th>
+                  <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
+                  <th style={{ padding: '1rem', width: '10%', textAlign: 'right', ...THEME.typography?.tableHeader }}>VALOR</th>
+                  <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ESTADO</th>
+                  <th style={{ padding: '1rem', width: '10%', textAlign: 'center', ...THEME.typography?.tableHeader }}>ACCIONES</th>
+                </tr>
+              </thead>
             <tbody>
               {sortedFilteredDrafts.map((draft) => {
                 const meta = getDraftMetadata(draft);
@@ -1374,6 +1492,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', width: '40px' }} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedDraftIds.includes(draft.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDraftIds(prev => [...prev, draft.id]);
+                        } else {
+                          setSelectedDraftIds(prev => prev.filter(id => id !== draft.id));
+                        }
+                      }}
+                      style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
+                    />
+                  </td>
                   <td style={{ padding: '0.8rem 1rem' }}>
                     <div style={{ fontWeight: '900', fontSize: '0.85rem', color: '#111827' }}>
                       {new Date(draft.created_at).toLocaleDateString()}
@@ -1454,26 +1586,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                     <button 
-                      onClick={() => setSelectedDraft(draft)}
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: THEME.colors.primary, 
-                        cursor: 'pointer', 
-                        padding: '5px', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        borderRadius: '4px',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ECFDF5'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      title="Revisar / Editar"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
                       onClick={(e) => handleDelete(draft.id, e)}
                       style={{ 
                         background: 'none', 
@@ -1500,6 +1612,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             </tbody>
           </table>
         </div>
+        </>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
           {sortedFilteredDrafts.map((draft) => {
@@ -2110,13 +2223,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '150px', minWidth: '150px' }}>SKU</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em', width: '130px' }}>UNIDADES</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>PRECIO U.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em' }}>SUBTOTAL</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#6B7280', fontSize: '0.75rem', letterSpacing: '0.05em', width: '80px' }}>OBS.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2152,44 +2266,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         />
                                       </td>
                                     )}
-                                    <td style={{ padding: '1rem 0.5rem', width: '150px', minWidth: '150px', backgroundColor: '#F9FAFB' }}>
-                                      {isEditing ? (
-                                        <input
-                                          type="text"
-                                          value={matchedProd ? matchedProd.sku : (item.skuQuery || '')}
-                                          placeholder="SKU"
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            const found = products.find(p => p.sku === val);
-                                            const newEdits = [...editableItems];
-                                            if (found) {
-                                              newEdits[i].matched_product_id = found.id;
-                                              newEdits[i].searchQuery = found.name;
-                                              newEdits[i].skuQuery = found.sku || '';
-                                            } else {
-                                              newEdits[i].matched_product_id = null;
-                                              newEdits[i].searchQuery = '';
-                                              newEdits[i].skuQuery = val;
-                                            }
-                                            setEditableItems(newEdits);
-                                          }}
-                                          style={{
-                                            width: '100%',
-                                            padding: '0.5rem',
-                                            borderRadius: '6px',
-                                            border: '1px solid #D1D5DB',
-                                            fontSize: '0.9rem',
-                                            backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
-                                            fontWeight: 600,
-                                            color: '#111827'
-                                          }}
-                                        />
-                                      ) : (
-                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', fontWeight: 700 }}>
-                                          {matchedProd ? matchedProd.sku : '-'}
-                                        </div>
-                                      )}
-                                    </td>
                                     <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
                                       <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                         {item.originalName || item.name || item.producto || item.item || ''}
@@ -2215,6 +2291,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           newEdits[i].matched_product_id = found.id;
                                           newEdits[i].searchQuery = found.name;
                                           newEdits[i].skuQuery = found.sku || '';
+                                          newEdits[i].unit = found.unit_of_measure || 'Kg';
                                         } else {
                                           newEdits[i].matched_product_id = null;
                                           newEdits[i].searchQuery = val;
@@ -2247,12 +2324,42 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       }
                                     </datalist>
                                   </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
-                                      <input 
-                                        type="number"
-                                        disabled={!isEditing}
-                                        value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
+                                    {isEditing ? (
+                                      <select
+                                        value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                         onChange={(e) => {
+                                          const newEdits = [...editableItems];
+                                          newEdits[i].unit = e.target.value;
+                                          setEditableItems(newEdits);
+                                        }}
+                                        style={{
+                                          width: '100%',
+                                          padding: '0.5rem 0.25rem',
+                                          borderRadius: '6px',
+                                          border: '1px solid #D1D5DB',
+                                          fontSize: '0.9rem',
+                                          backgroundColor: 'white',
+                                          fontWeight: 600,
+                                          color: '#111827'
+                                        }}
+                                      >
+                                        {Array.from(new Set(['Kg', 'Unidad', 'Paquete', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
+                                          <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 600 }}>
+                                        {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
+                                    <input 
+                                      type="number"
+                                      disabled={!isEditing}
+                                      value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                      onChange={(e) => {
                                         const newEdits = [...editableItems];
                                         newEdits[i].quantity = parseFloat(e.target.value) || 0;
                                         setEditableItems(newEdits);
@@ -2261,7 +2368,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         if (e.key === 'Enter') {
                                           e.preventDefault();
                                           // Añadir nueva fila
-                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '' }];
+                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
                                           setEditableItems(newEdits);
                                           // Focus el nuevo input en el siguiente render
                                           setTimeout(() => {
@@ -2287,6 +2394,37 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                     {matchedProd ? formatMoney(itemTotal) : '-'}
                                   </td>
+                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '80px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setObsModal({
+                                          isOpen: true,
+                                          rowIndex: i,
+                                          text: item.observations || ''
+                                        });
+                                      }}
+                                      title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: item.observations ? THEME.colors.primary : '#9CA3AF',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '6px',
+                                        borderRadius: '6px',
+                                        backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
+                                        transition: 'all 0.2s',
+                                        borderWidth: '1px',
+                                        borderStyle: item.observations ? 'solid' : 'dashed',
+                                        borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
+                                      }}
+                                    >
+                                      <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
+                                    </button>
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -2302,7 +2440,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-start', gap: '0.75rem', alignItems: 'center' }}>
                     <button
                       onClick={() => {
-                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '' }];
+                        const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
                         setEditableItems(newEdits);
                         setTimeout(() => {
                           const nextInput = productInputRefs.current[newEdits.length - 1];
@@ -2542,6 +2680,102 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {obsModal && obsModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 12000
+        }} onClick={() => setObsModal(null)}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '2rem',
+            width: '90%',
+            maxWidth: '450px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            textAlign: 'left'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', margin: 0 }}>
+                Observaciones del Producto
+              </h3>
+              <button
+                onClick={() => setObsModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '1rem' }}>
+              Agrega indicaciones o notas específicas para este producto (ej: "tomates bien maduros", "cebolla sin tallo", etc.).
+            </p>
+            <textarea
+              value={obsModal.text}
+              onChange={(e) => setObsModal(prev => prev ? { ...prev, text: e.target.value } : null)}
+              placeholder="Escribe las observaciones aquí..."
+              style={{
+                width: '100%',
+                height: '100px',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                border: '1.5px solid #D1D5DB',
+                fontSize: '0.9rem',
+                color: '#1F2937',
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+                marginBottom: '1.5rem'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setObsModal(null)}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  backgroundColor: 'white',
+                  color: '#4B5563',
+                  border: `1px solid ${THEME.colors.border}`,
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const newEdits = [...editableItems];
+                  newEdits[obsModal.rowIndex].observations = obsModal.text;
+                  setEditableItems(newEdits);
+                  setObsModal(null);
+                }}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  backgroundColor: THEME.colors.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Guardar Observación
+              </button>
             </div>
           </div>
         </div>
