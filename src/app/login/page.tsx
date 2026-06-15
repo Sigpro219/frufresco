@@ -14,6 +14,16 @@ export default function LoginPage() {
     const { signIn, profile, user, signOut } = useAuth();
     const router = useRouter();
 
+    // Capturar error de desactivación
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('error') === 'deactivated') {
+                setError('⚠️ Tu cuenta de acceso ha sido desactivada. Por favor, contacta a soporte técnico.');
+            }
+        }
+    }, []);
+
     // Redirección inteligente
     useEffect(() => {
         if (profile) {

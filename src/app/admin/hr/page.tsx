@@ -25,6 +25,7 @@ interface Profile {
     document_id?: string;
     avatar_url?: string;
     qr_token?: string;
+    login_requested?: boolean;
 }
 
 interface Role {
@@ -74,6 +75,7 @@ export default function HRManagement() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
     );
     const [users, setUsers] = useState<Profile[]>([]);
+    const [profiles, setProfiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showSearchHelp, setShowSearchHelp] = useState(false);
@@ -89,7 +91,8 @@ export default function HRManagement() {
         phone: '',
         role: '',
         specialty: '',
-        is_active: true
+        is_active: true,
+        login_requested: false
     });
     const [saving, setSaving] = useState(false);
     const [scrolled, setScrolled] = useState(false);
@@ -116,6 +119,13 @@ export default function HRManagement() {
 
             if (error) throw error;
             setUsers(data || []);
+
+            const { data: profilesData, error: profError } = await supabase
+                .from('profiles')
+                .select('id, role_id');
+            if (!profError) {
+                setProfiles(profilesData || []);
+            }
         } catch (err) {
             console.error('Error fetching HR data:', err);
         } finally {
@@ -189,7 +199,7 @@ export default function HRManagement() {
 
             if (error) throw error;
             setShowAdd(false);
-            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false });
+            setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false, login_requested: false });
             await fetchData();
         } catch (err: any) {
             alert(`Error al registrar: ${err.message}`);
@@ -821,15 +831,30 @@ export default function HRManagement() {
                                 </select>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
-                                <input 
-                                    type="checkbox" 
-                                    id="edit_is_temporary"
-                                    checked={editingUser.is_temporary || false} 
-                                    onChange={e => setEditingUser({...editingUser, is_temporary: e.target.checked})}
-                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
-                                />
-                                <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="edit_is_temporary"
+                                        checked={editingUser.is_temporary || false} 
+                                        onChange={e => setEditingUser({...editingUser, is_temporary: e.target.checked})}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                                    />
+                                    <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, opacity: profiles.some(p => p.role_id === editingUser.id) ? 0.7 : 1 }}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="edit_login_requested"
+                                        checked={profiles.some(p => p.role_id === editingUser.id) || editingUser.login_requested || false} 
+                                        disabled={profiles.some(p => p.role_id === editingUser.id)}
+                                        onChange={e => setEditingUser({...editingUser, login_requested: e.target.checked})}
+                                        style={{ width: '18px', height: '18px', cursor: profiles.some(p => p.role_id === editingUser.id) ? 'not-allowed' : 'pointer', accentColor: THEME.colors.primary }}
+                                    />
+                                    <label htmlFor="edit_login_requested" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: profiles.some(p => p.role_id === editingUser.id) ? 'not-allowed' : 'pointer' }}>
+                                        {profiles.some(p => p.role_id === editingUser.id) ? 'Acceso Activo' : 'Solicitar Acceso'}
+                                    </label>
+                                </div>
                             </div>
 
                             <button 
@@ -903,15 +928,27 @@ export default function HRManagement() {
                                 </select>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
-                                <input 
-                                    type="checkbox" 
-                                    id="is_temporary"
-                                    checked={newUser.is_temporary || false} 
-                                    onChange={e => setNewUser({...newUser, is_temporary: e.target.checked})}
-                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
-                                />
-                                <label htmlFor="is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="is_temporary"
+                                        checked={newUser.is_temporary || false} 
+                                        onChange={e => setNewUser({...newUser, is_temporary: e.target.checked})}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                                    />
+                                    <label htmlFor="is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}` }}>
+                                    <input 
+                                        type="checkbox" 
+                                        id="add_login_requested"
+                                        checked={newUser.login_requested || false} 
+                                        onChange={e => setNewUser({...newUser, login_requested: e.target.checked})}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: THEME.colors.primary }}
+                                    />
+                                    <label htmlFor="add_login_requested" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Solicitar Acceso Digital</label>
+                                </div>
                             </div>
 
                             <button 

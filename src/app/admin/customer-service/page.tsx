@@ -48,6 +48,7 @@ export default function CustomerServicePage() {
     const [selectedNovelty, setSelectedNovelty] = useState<any | null>(null);
     const [resolutionNotes, setResolutionNotes] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
+    const [resolutionOption, setResolutionOption] = useState<'opt1' | 'opt2' | 'opt3' | 'opt4'>('opt1');
 
     // Carousel state
     const [activePhotoIdx, setActivePhotoIdx] = useState(0);
@@ -111,6 +112,7 @@ export default function CustomerServicePage() {
         setSelectedItemId('');
         setNoveltyQty(0);
         setNoveltyReason('');
+        setResolutionOption('opt1');
 
         // If PQR has an associated order, load its items to allow registering novelties
         if (pqr.order_id) {
@@ -135,7 +137,7 @@ export default function CustomerServicePage() {
         }
     };
 
-    // Update PQR Status / Resolution
+    // Update PQR Status / Resolution with Option Concept
     const handleResolvePqr = async (status: 'resolved' | 'rejected') => {
         if (!selectedPqr || !resolutionNotes.trim()) {
             alert('Por favor, ingresa una nota de resolución antes de guardar.');
@@ -144,36 +146,268 @@ export default function CustomerServicePage() {
 
         setActionLoading(true);
         try {
+            let finalNotes = resolutionNotes;
+            let redirectUrl = null;
+
+            if (status === 'resolved') {
+                if (resolutionOption === 'opt1') {
+                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Cerrado sin cambios en factura (Entregado Conforme)]`;
+                } else if (resolutionOption === 'opt2') {
+                    if (!selectedPqr.order_id) {
+                        alert('Esta PQR no tiene un pedido asociado para reprogramar reposición.');
+                        setActionLoading(false);
+                        return;
+                    }
+
+                    // Fetch original order details
+                    const { data: originalOrder, error: orderErr } = await supabase
+                        .from('orders')
+                        .select('*')
+                        .eq('id', selectedPqr.order_id)
+                        .single();
+
+                    if (orderErr || !originalOrder) {
+                        throw new Error('No se pudo cargar el pedido original.');
+                    }
+
+                    // Fetch pending returns for this order to see if it is partial or total
+                    const { data: pendingReturns, error: returnsError } = await supabase
+                        .from('billing_returns')
+                        .select('*')
+                        .eq('order_id', selectedPqr.order_id)
+                        .eq('status', 'pending_review');
+
+                    if (returnsError) {
+                        throw new Error(`Error consultando devoluciones pendientes: ${returnsError.message}`);
+                    }
+
+                    // Copy items
+                    const { data: originalItems, error: itemsErr } = await supabase
+                        .from('order_items')
+                        .select('*')
+                        .eq('order_id', selectedPqr.order_id);
+
+                    if (itemsErr) {
+                        throw new Error('No se pudieron cargar los productos del pedido original.');
+                    }
+
+                    let itemsToReprogram: any[] = [];
+                    let isPartial = false;
+
+                    if (pendingReturns && pendingReturns.length > 0) {
+                        // Partial rejection: only copy items that have registered return novelties
+                        isPartial = true;
+                        pendingReturns.forEach(ret => {
+                            const matchedItem = originalItems?.find(item => item.product_id === ret.product_id);
+                            if (matchedItem) {
+                                itemsToReprogram.push({
+                                    product_id: ret.product_id,
+                                    quantity: ret.quantity_returned, // Reprogram the returned/rejected quantity
+                                    unit_price: matchedItem.unit_price,
+                                    nickname: matchedItem.nickname,
+                                    selected_options: matchedItem.selected_options,
+                                    variant_label: matchedItem.variant_label
+                                });
+                            }
+                        });
+                    }
+
+                    // If no returns are registered, or if we couldn't match any, treat it as a Total Rejection
+                    if (itemsToReprogram.length === 0) {
+                        isPartial = false;
+                        itemsToReprogram = (originalItems || []).map(item => ({
+                            product_id: item.product_id,
+                            quantity: item.quantity,
+                            unit_price: item.unit_price,
+                            nickname: item.nickname,
+                            selected_options: item.selected_options,
+                            variant_label: item.variant_label
+                        }));
+                    }
+
+                    // Calculate total and subtotal for the new order based on the reprogrammed items
+                    const newTotal = itemsToReprogram.reduce((acc, item) => acc + (item.quantity * item.unit_price), 0);
+
+                    // Create new order record
+                    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                    const { data: newOrder, error: newOrderErr } = await supabase
+                        .from('orders')
+                        .insert([{
+                            profile_id: originalOrder.profile_id,
+                            type: originalOrder.type,
+                            status: 'draft',
+                            origin_source: 'customer_service',
+                            delivery_date: tomorrow,
+                            delivery_slot: originalOrder.delivery_slot || 'AM',
+                            shipping_address: originalOrder.shipping_address,
+                            latitude: originalOrder.latitude,
+                            longitude: originalOrder.longitude,
+                            total: newTotal,
+                            subtotal: newTotal,
+                            total_weight_kg: 0,
+                            admin_notes: `[REPOSICIÓN DE PEDIDO - RECHAZO ${isPartial ? 'PARCIAL' : 'TOTAL'}] Generado automáticamente por PQR del Pedido original #${originalOrder.sequence_id}.\n\nNotas PQR: ${resolutionNotes}`
+                        }])
+                        .select()
+                        .single();
+
+                    if (newOrderErr || !newOrder) {
+                        throw new Error(`Error creando pedido de reposición: ${newOrderErr?.message}`);
+                    }
+
+                    // Insert the items under the new order ID
+                    const itemsWithOrderId = itemsToReprogram.map(item => ({
+                        ...item,
+                        order_id: newOrder.id
+                    }));
+
+                    const { error: insertItemsErr } = await supabase
+                        .from('order_items')
+                        .insert(itemsWithOrderId);
+
+                    if (insertItemsErr) {
+                        throw new Error(`Error copiando artículos del pedido: ${insertItemsErr.message}`);
+                    }
+
+                    // For partial rejections, we should approve the returns that were used for reprogramming
+                    if (isPartial) {
+                        for (const novelty of pendingReturns) {
+                            await supabase
+                                .from('billing_returns')
+                                .update({ status: 'approved', reason: `${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id}` })
+                                .eq('id', novelty.id);
+                        }
+                    }
+
+                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 2 - Reprogramar reposición (${isPartial ? 'Rechazo Parcial' : 'Rechazo Total'})]\n-> Nuevo pedido de reposición generado con folio #${newOrder.sequence_id}`;
+                    redirectUrl = `/admin/orders/${newOrder.id}`;
+
+                } else if (resolutionOption === 'opt3') {
+                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 3 - Generar Nota Crédito (Remitir novedad a facturación)]`;
+
+                } else if (resolutionOption === 'opt4') {
+                    if (!selectedPqr.order_id) {
+                        alert('Esta PQR no tiene un pedido asociado para cerrar con cantidad recibida.');
+                        setActionLoading(false);
+                        return;
+                    }
+
+                    // Fetch pending returns for this order
+                    const { data: pendingReturns, error: returnsError } = await supabase
+                        .from('billing_returns')
+                        .select('*')
+                        .eq('order_id', selectedPqr.order_id)
+                        .eq('status', 'pending_review');
+
+                    if (returnsError) {
+                        throw new Error(`Error consultando devoluciones pendientes: ${returnsError.message}`);
+                    }
+
+                    if (!pendingReturns || pendingReturns.length === 0) {
+                        alert('No se encontraron novedades de producto pendientes registradas para este pedido.\n\nPor favor, registra primero la cantidad devuelta/faltante en el panel derecho ("Registrar Novedad de Pedido") antes de aplicar esta opción.');
+                        setActionLoading(false);
+                        return;
+                    }
+
+                    // Automatically process and approve all pending returns to adjust order totals
+                    for (const novelty of pendingReturns) {
+                        const { data: itemData, error: itemError } = await supabase
+                            .from('order_items')
+                            .select('unit_price, quantity')
+                            .eq('order_id', novelty.order_id)
+                            .eq('product_id', novelty.product_id)
+                            .single();
+                        
+                        if (itemError) continue;
+
+                        const newQty = Math.max(0, Number(itemData.quantity) - Number(novelty.quantity_returned));
+                        const priceCredit = Number(novelty.quantity_returned) * Number(itemData.unit_price);
+
+                        // Subtract from items
+                        await supabase
+                            .from('order_items')
+                            .update({ quantity: newQty })
+                            .eq('order_id', novelty.order_id)
+                            .eq('product_id', novelty.product_id);
+
+                        // Subtract from order total
+                        const { data: orderData } = await supabase.from('orders').select('total').eq('id', novelty.order_id).single();
+                        const newTotal = Math.max(0, (Number(orderData?.total) || 0) - priceCredit);
+                        
+                        await supabase
+                            .from('orders')
+                            .update({ total: newTotal })
+                            .eq('id', novelty.order_id);
+
+                        // Recalculate billing_invoices details for this order
+                        const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', novelty.order_id).single();
+                        if (invoiceData) {
+                            const { data: orderProf } = await supabase
+                                .from('orders')
+                                .select('profiles(iva_responsible)')
+                                .eq('id', novelty.order_id)
+                                .single();
+                            const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
+                            const totalBase = isIva ? newTotal / 1.19 : newTotal;
+                            const totalTax = isIva ? newTotal - totalBase : 0;
+
+                            await supabase
+                                .from('billing_invoices')
+                                .update({
+                                    total_base: totalBase,
+                                    total_tax: totalTax,
+                                    total_final: newTotal
+                                })
+                                .eq('id', invoiceData.id);
+                        }
+
+                        // Update status of return to approved
+                        await supabase
+                            .from('billing_returns')
+                            .update({ status: 'approved' })
+                            .eq('id', novelty.id);
+                    }
+
+                    finalNotes = `${resolutionNotes}\n\n[CONCEPTO: Opción 4 - Cerrar pedido con cantidad real recibida]\n-> Novedades aprobadas y total recalculado automáticamente en facturación.`;
+                }
+            } else {
+                finalNotes = `${resolutionNotes}\n\n[CASO RECHAZADO / ARCHIVADO]`;
+            }
+
             const { error } = await supabase
                 .from('customer_service_pqrs')
                 .update({
                     status: status,
-                    resolution_notes: resolutionNotes,
+                    resolution_notes: finalNotes,
                     resolved_at: new Date().toISOString()
                 })
                 .eq('id', selectedPqr.id);
 
             if (error) throw error;
 
-            // Update local state
             setPqrs(pqrs.map(p => p.id === selectedPqr.id ? { 
                 ...p, 
                 status, 
-                resolution_notes: resolutionNotes, 
+                resolution_notes: finalNotes, 
                 resolved_at: new Date().toISOString() 
             } : p));
 
             setSelectedPqr({
                 ...selectedPqr,
                 status,
-                resolution_notes: resolutionNotes,
+                resolution_notes: finalNotes,
                 resolved_at: new Date().toISOString()
             });
 
-            alert('PQR actualizada correctamente.');
+            alert('PQR actualizada y cerrada con éxito.');
             fetchData();
+
+            if (redirectUrl) {
+                setTimeout(() => {
+                    window.location.href = redirectUrl;
+                }, 1000);
+            }
         } catch (e: any) {
-            alert('Error al actualizar PQR: ' + e.message);
+            alert('Error al procesar la resolución de PQR: ' + e.message);
         } finally {
             setActionLoading(false);
         }
@@ -739,6 +973,33 @@ export default function CustomerServicePage() {
                                         {/* Resolution Notes form */}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                             <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Notas de resolución comercial</h4>
+                                            
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748B', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                                    Concepto de Resolución Comercial
+                                                </label>
+                                                <select
+                                                    value={resolutionOption}
+                                                    onChange={e => setResolutionOption(e.target.value as any)}
+                                                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.8rem', fontWeight: '600', backgroundColor: 'white', outline: 'none', marginBottom: '8px' }}
+                                                >
+                                                    <option value="opt1">Cerrar caso sin cambios en factura (Entregado Conforme)</option>
+                                                    <option value="opt2">Opción 2: Reprogramar reposición (Total o Parcial según novedades)</option>
+                                                    <option value="opt3">Opción 3: Generar Nota Crédito (Remitir a Facturación)</option>
+                                                    <option value="opt4">Opción 4: Cerrar con cantidad real recibida (Ajustar Factura)</option>
+                                                </select>
+                                                {resolutionOption === 'opt3' && (
+                                                    <span style={{ fontSize: '0.7rem', color: '#B45309', display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                                                        ⚠️ Nota: Registra los productos devueltos en el panel de la derecha para que el módulo de facturación pueda procesar la nota crédito.
+                                                    </span>
+                                                )}
+                                                {resolutionOption === 'opt4' && (
+                                                    <span style={{ fontSize: '0.7rem', color: '#0F766E', display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                                                        ℹ️ Nota: Esta opción aprobará automáticamente las devoluciones pendientes registradas a la derecha, ajustando el pedido y recalculando la factura.
+                                                    </span>
+                                                )}
+                                            </div>
+
                                             <textarea
                                                 value={resolutionNotes}
                                                 onChange={e => setResolutionNotes(e.target.value)}

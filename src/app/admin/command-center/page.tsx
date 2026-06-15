@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapPin } from 'lucide-react';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import { APIProvider } from '@vis.gl/react-google-maps';
+import TechUserGovernance from '@/components/admin/TechUserGovernance';
 
 interface Point {
     lat: number;
@@ -641,10 +642,11 @@ export default function CommandCenter() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                             <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2.5rem', border: '1px solid #E5E7EB' }}>
                                 <h2>Flujos de Aprobación</h2>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                                     <div style={{ padding: '1.5rem', background: '#FDF2F2', borderRadius: '20px', opacity: 0.6 }}><h3>Geocercas</h3><p>Pendiente.</p></div>
-                                    <div style={{ padding: '1.5rem', background: '#F0FDF4', borderRadius: '20px' }}><h3>Usuarios Tech</h3><p>Control nivel 3.</p></div>
+                                    <div style={{ padding: '1.5rem', background: '#F0FDF4', borderRadius: '20px' }}><h3>Usuarios Tech</h3><p>Control nivel 3 activo.</p></div>
                                 </div>
+                                <TechUserGovernance />
                             </section>
                         </div>
                     )}

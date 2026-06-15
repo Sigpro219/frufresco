@@ -85,6 +85,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 logError('authContext fetchProfile', error);
             } else if (data) {
                 if (signal?.aborted) return;
+                if (data.is_active === false) {
+                    console.warn('🔒 El perfil de usuario está INACTIVO. Cerrando sesión...');
+                    setProfile(null);
+                    setUser(null);
+                    await supabase.auth.signOut();
+                    if (typeof window !== 'undefined') {
+                        localStorage.clear();
+                        window.location.href = '/login?error=deactivated';
+                    }
+                    return;
+                }
                 console.log('✅ Perfil cargado:', data.role);
                 setProfile(data as Profile);
             } else {
