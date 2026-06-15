@@ -122,7 +122,7 @@ export default function HRManagement() {
 
             const { data: profilesData, error: profError } = await supabase
                 .from('profiles')
-                .select('id, role_id');
+                .select('id, collaborator_id');
             if (!profError) {
                 setProfiles(profilesData || []);
             }
@@ -842,17 +842,17 @@ export default function HRManagement() {
                                     />
                                     <label htmlFor="edit_is_temporary" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: 'pointer' }}>Personal Temporal</label>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, opacity: profiles.some(p => p.role_id === editingUser.id) ? 0.7 : 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', backgroundColor: THEME.colors.background, borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, opacity: profiles.some(p => p.collaborator_id === editingUser.id) ? 0.7 : 1 }}>
                                     <input 
                                         type="checkbox" 
                                         id="edit_login_requested"
-                                        checked={profiles.some(p => p.role_id === editingUser.id) || editingUser.login_requested || false} 
-                                        disabled={profiles.some(p => p.role_id === editingUser.id)}
+                                        checked={profiles.some(p => p.collaborator_id === editingUser.id) || editingUser.login_requested || false} 
+                                        disabled={profiles.some(p => p.collaborator_id === editingUser.id)}
                                         onChange={e => setEditingUser({...editingUser, login_requested: e.target.checked})}
-                                        style={{ width: '18px', height: '18px', cursor: profiles.some(p => p.role_id === editingUser.id) ? 'not-allowed' : 'pointer', accentColor: THEME.colors.primary }}
+                                        style={{ width: '18px', height: '18px', cursor: profiles.some(p => p.collaborator_id === editingUser.id) ? 'not-allowed' : 'pointer', accentColor: THEME.colors.primary }}
                                     />
-                                    <label htmlFor="edit_login_requested" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: profiles.some(p => p.role_id === editingUser.id) ? 'not-allowed' : 'pointer' }}>
-                                        {profiles.some(p => p.role_id === editingUser.id) ? 'Acceso Activo' : 'Solicitar Acceso'}
+                                    <label htmlFor="edit_login_requested" style={{ fontSize: '0.85rem', fontWeight: '700', color: THEME.colors.textMain, cursor: profiles.some(p => p.collaborator_id === editingUser.id) ? 'not-allowed' : 'pointer' }}>
+                                        {profiles.some(p => p.collaborator_id === editingUser.id) ? 'Acceso Activo' : 'Solicitar Acceso'}
                                     </label>
                                 </div>
                             </div>

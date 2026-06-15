@@ -20,18 +20,18 @@ export async function GET() {
         // 2. Fetch all profiles
         const { data: profiles, error: pError } = await adminSupabase
             .from('profiles')
-            .select('id, role_id, email, role, is_active, created_at');
+            .select('id, collaborator_id, email, role, is_active, created_at');
 
         if (pError) {
             console.error('Error fetching profiles:', pError.message);
             return NextResponse.json({ error: pError.message }, { status: 500 });
         }
 
-        // Map profiles by role_id for quick lookups
+        // Map profiles by collaborator_id for quick lookups
         const profileMap = new Map<string, any>();
         profiles?.forEach(p => {
-            if (p.role_id) {
-                profileMap.set(p.role_id, p);
+            if (p.collaborator_id) {
+                profileMap.set(p.collaborator_id, p);
             }
         });
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
             const { data: existingProfile, error: pError } = await adminSupabase
                 .from('profiles')
                 .select('id')
-                .eq('role_id', collaboratorId)
+                .eq('collaborator_id', collaboratorId)
                 .maybeSingle();
 
             if (existingProfile) {
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
                 email,
                 password: finalPassword,
                 email_confirm: true,
-                user_metadata: { role_id: collaboratorId }
+                user_metadata: { collaborator_id: collaboratorId }
             });
 
             if (authError || !authData.user) {
@@ -130,16 +130,22 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: authError?.message || 'Error al crear usuario de autenticación' }, { status: 500 });
             }
 
+            // 4b. Dynamically fetch roles from database to match the collaborator's role
+            const { data: roles } = await adminSupabase.from('roles').select('id, name');
+            const matchedRole = roles?.find(r => r.name.toLowerCase() === (collaborator.role || '').toLowerCase());
+            const matchedRoleId = matchedRole ? matchedRole.id : null;
+
             // 5. Insert profile record linked to the collaborator
             const { error: profileError } = await adminSupabase
                 .from('profiles')
                 .insert([{
                     id: authData.user.id,
-                    role_id: collaboratorId,
+                    collaborator_id: collaboratorId,
+                    role_id: matchedRoleId,
                     email: email,
                     contact_name: collaborator.contact_name,
                     phone: collaborator.phone,
-                    role: 'employee', // standard staff role
+                    role: collaborator.role || 'employee',
                     is_active: true
                 }]);
 
