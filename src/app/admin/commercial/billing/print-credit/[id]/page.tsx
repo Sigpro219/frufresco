@@ -75,10 +75,15 @@ export default function CreditPrintPage() {
     
     // Clean fallback arrays for blank/empty modes (no underscores in empty cells)
     const contacts = (isBlankMode || !d.contactos || d.contactos.length === 0) ? [
-        { area: 'Compras/pedidos', nombre: '', telefono: '', celular: '', email: '' },
-        { area: 'Contabilidad/tesoreria', nombre: '', telefono: '', celular: '', email: '' },
-        { area: 'Oficial de Cumplimiento', nombre: '', telefono: '', celular: '', email: '' }
-    ] : d.contactos;
+        { area: 'Compras/pedidos', nombre: '', telefono: '', celular: '', email: '', cargo: '' },
+        { area: 'Contabilidad/tesoreria', nombre: '', telefono: '', celular: '', email: '', cargo: '' },
+        { area: 'Representante Legal', nombre: '', telefono: '', celular: '', email: '', cargo: '' }
+    ] : d.contactos.map((c: any) => {
+        if (c.area === 'Oficial de Cumplimiento') {
+            return { ...c, area: 'Representante Legal' };
+        }
+        return c;
+    });
 
     const shareholders = (isBlankMode || !d.participacion_accionaria || d.participacion_accionaria.length === 0) ? [
         { nombre: '', tipo_id: '', numero_id: '', participacion_pct: '', es_pep: false },
@@ -178,7 +183,7 @@ export default function CreditPrintPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                             <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '62px', objectFit: 'contain' }} />
                             <div style={{ fontSize: '8px', fontWeight: 'bold', color: '#000', lineHeight: '1.1' }}>INVESTMENTS CORTES S.A.S.</div>
-                            <div style={{ fontSize: '7px', color: '#555', lineHeight: '1.1' }}>NIT: 901.393.217-1 | Tel: 3154063876</div>
+                            <div style={{ fontSize: '7px', color: '#555', lineHeight: '1.1' }}>NIT: 901.393.217-5 | Tel: 3154063876</div>
                         </div>
                     </td>
                     <td rowSpan={4} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #333', verticalAlign: 'middle', padding: '4px' }}>
@@ -379,10 +384,8 @@ export default function CreditPrintPage() {
                             <table className="form-table">
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '15%' }}><b>AGENCIA:</b></td>
-                                        <td style={{ width: '10%', textAlign: 'center' }}>{renderCheckbox(!isBlankMode && !!d.agencia)}</td>
-                                        <td style={{ width: '15%' }}><b>SUPERMERCADO:</b></td>
-                                        <td style={{ width: '10%', textAlign: 'center' }}>{renderCheckbox(!isBlankMode && !!d.supermercado)}</td>
+                                        <td style={{ width: '25%' }}><b>TIPO DE ESTABLECIMIENTO:</b></td>
+                                        <td style={{ width: '25%' }}>{displayCellVal(d.tipo_establecimiento || d.tipo_negocio || '')}</td>
                                         <td style={{ width: '10%' }}><b>CIUDAD:</b></td>
                                         <td style={{ width: '15%' }}>{displayCellVal(d.ciudad)}</td>
                                         <td style={{ width: '10%' }}><b>CUPO:</b></td>
@@ -390,13 +393,23 @@ export default function CreditPrintPage() {
                                     </tr>
                                     <tr>
                                         <td><b>PLAZO:</b></td>
-                                        <td>{displayCellVal((!isBlankMode && d.plazo_solicitado) ? `${d.plazo_solicitado} Días` : '')}</td>
+                                        <td>
+                                            <div style={{ fontSize: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_solicitado === 8)} 8 días</span>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_solicitado === 15)} 15 días</span>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_solicitado === 30)} 30 días</span>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.plazo_solicitado === 45)} 45 días</span>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && ![8, 15, 30, 45].includes(d.plazo_solicitado) && !!d.plazo_solicitado)} Otro: {(![8, 15, 30, 45].includes(d.plazo_solicitado) && d.plazo_solicitado) ? `${d.plazo_solicitado}d` : ''}</span>
+                                            </div>
+                                        </td>
                                         <td><b>FECHA SOLICITUD:</b></td>
                                         <td>{displayCellVal(d.fecha_solicitud)}</td>
                                         <td><b>SOLICITUD:</b></td>
-                                        <td colSpan={3}>
-                                            <span className="checkbox-container" style={{ marginRight: '12px' }}>{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'creacion')} Creación</span>
-                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'actualizacion')} Actualización</span>
+                                        <td colSpan={1}>
+                                            <div style={{ fontSize: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'creacion')} Creación</span>
+                                                <span className="checkbox-container">{renderCheckbox(!isBlankMode && d.tipo_solicitud === 'actualizacion')} Actualización</span>
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -416,10 +429,20 @@ export default function CreditPrintPage() {
                                 </colgroup>
                                 <tbody>
                                     <tr>
-                                        <td><b>Razón Social:</b></td>
+                                        <td><b>Nombre o razón social:</b></td>
                                         <td colSpan={4} style={{ fontWeight: 'bold' }}>{displayCellVal(d.razon_social || client.razon_social || client.company_name)}</td>
                                         <td><b>NIT / C.C:</b></td>
-                                        <td style={{ fontWeight: 'bold' }}>{displayCellVal(d.nit || client.nit)}</td>
+                                        <td style={{ fontWeight: 'bold' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '100%' }}>
+                                                <span>{displayCellVal(isBlankMode ? '' : (d.nit || client.nit || '').split('-')[0])}</span>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '8px' }}>
+                                                    - DV: 
+                                                    <span style={{ display: 'inline-block', width: '14px', height: '14px', border: '1px solid #000', textAlign: 'center', lineHeight: '14px', fontSize: '9px', fontWeight: 'bold', backgroundColor: '#fff', marginLeft: '2px' }}>
+                                                        {displayCellVal(isBlankMode ? '' : (d.nit || client.nit || '').split('-')[1] || '')}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td><b>Nombre Comercial:</b></td>
@@ -428,7 +451,7 @@ export default function CreditPrintPage() {
                                     <tr>
                                         <td><b>Dirección:</b></td>
                                         <td colSpan={2}>{displayCellVal(d.direccion || client.address)}</td>
-                                        <td><b>Ciudad:</b></td>
+                                        <td><b>Ciudad o Municipio:</b></td>
                                         <td>{displayCellVal(d.ciudad_info || client.city)}</td>
                                         <td><b>Dpto:</b></td>
                                         <td>{displayCellVal(d.departamento_info || client.department)}</td>
@@ -444,7 +467,7 @@ export default function CreditPrintPage() {
                                     <tr>
                                         <td><b>Actividad Econ. Ppal:</b></td>
                                         <td colSpan={3}>{displayCellVal(d.actividad_economica_principal)}</td>
-                                        <td><b>CIIU:</b></td>
+                                        <td><b>Código CIIU:</b></td>
                                         <td colSpan={2}>{displayCellVal(d.ciiu_principal)}</td>
                                     </tr>
                                     {/* REPRESENTANTE LEGAL WITH NEW FIELDS */}
@@ -491,10 +514,11 @@ export default function CreditPrintPage() {
                                 <thead>
                                     <tr>
                                         <th style={{ width: '20%' }}>Área o Proceso</th>
-                                        <th style={{ width: '30%' }}>Nombre Completo</th>
-                                        <th style={{ width: '15%' }}>Teléfono</th>
-                                        <th style={{ width: '15%' }}>Celular</th>
-                                        <th style={{ width: '20%' }}>Email</th>
+                                        <th style={{ width: '25%' }}>Nombre Completo</th>
+                                        <th style={{ width: '12%' }}>Teléfono</th>
+                                        <th style={{ width: '13%' }}>Celular</th>
+                                        <th style={{ width: '18%' }}>Email</th>
+                                        <th style={{ width: '12%' }}>Cargo</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -505,6 +529,7 @@ export default function CreditPrintPage() {
                                             <td>{displayCellVal(contact.telefono)}</td>
                                             <td>{displayCellVal(contact.celular)}</td>
                                             <td>{displayCellVal(contact.email)}</td>
+                                            <td>{displayCellVal(contact.cargo)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -611,6 +636,7 @@ export default function CreditPrintPage() {
                                         <td style={{ width: '35%' }}>
                                             <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_comun)} Régimen Común (Resp.)</span>
                                             <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simplificado)} Régimen Simplificado (No Resp.)</span>
+                                            <span className="checkbox-container">{renderCheckbox(!isBlankMode && !!taxClasses.regimen_simple)} Régimen Simple (RST)</span>
                                         </td>
                                     </tr>
                                     <tr>
@@ -777,9 +803,10 @@ export default function CreditPrintPage() {
                             <div className="section-header">Información Bancaria (Donde se debe realizar el pago)</div>
                             <div style={{ border: '1.2px solid #b2b2b2', padding: '6px 8px', fontSize: '8.5px', lineHeight: '1.35', textAlign: 'justify', marginBottom: '8px' }}>
                                 En el momento de realizar un pago a nombre de <b>INVESTMENTS CORTES S.A.S.</b> debe hacerse a través de las siguientes cuentas bancarias oficiales:<br />
-                                • <b>Banco de Occidente:</b> Cuenta corriente No. <b>001138239</b><br />
-                                • <b>Bancolombia:</b> Cuenta corriente No. <b>81267590541</b><br />
-                                • <b>Banco de Bogotá:</b> Cuenta corriente No. <b>045053030</b> y/o cheque con sello (páguese únicamente al primer beneficiario) a nombre de <b>INVESTMENTS CORTES S.A.S.</b> conforme al Artículo 26 de la Ley 1430 de 2010.
+                                • <b>Bancolombia:</b> Cuenta de ahorros No. <b>21100000438</b><br />
+                                • <b>Banco Caja Social:</b> Cuenta Corriente No. <b>21004067507</b><br />
+                                • <b>Davivienda:</b> Cuenta Corriente No. <b>001369996358</b><br />
+                                • <b>Banco de Bogotá:</b> Cuenta Corriente No. <b>073554636</b> y/o cheque con sello (páguese únicamente al primer beneficiario) a nombre de <b>INVESTMENTS CORTES S.A.S.</b> conforme al Artículo 26 de la Ley 1430 de 2010.
                             </div>
 
                             {/* DECLARACIONES Y AUTORIZACION (DICTATED PART 1) */}
@@ -949,7 +976,7 @@ export default function CreditPrintPage() {
                                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '54px', objectFit: 'contain' }} />
                                     <div>
                                         <div style={{ fontSize: '11px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
-                                        <div style={{ fontSize: '9px', color: '#555' }}>NIT: 901.393.217-1</div>
+                                        <div style={{ fontSize: '9px', color: '#555' }}>NIT: 901.393.217-5</div>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
@@ -966,8 +993,8 @@ export default function CreditPrintPage() {
                                 <>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '35px', backgroundColor: '#f9f9f9', padding: '15px', border: '1px solid #ddd' }}>
                                         <div>
-                                            <b>ACREEDOR:</b> INVESTMENTS CORTES S.A.S.<br />
-                                            <b>NIT:</b> 901.393.217-1
+                                             <b>ACREEDOR:</b> INVESTMENTS CORTES S.A.S.<br />
+                                             <b>NIT:</b> 901.393.217-5
                                         </div>
                                         <div>
                                             <b>DEUDOR / SOLICITANTE:</b> {displayInlineVal(pagareDeudor.nombre, '________________________________')}<br />
@@ -1127,7 +1154,7 @@ export default function CreditPrintPage() {
                                     <img src="/logo-investments.png" alt="Investments Cortés" style={{ height: '54px', objectFit: 'contain' }} />
                                     <div>
                                         <div style={{ fontSize: '11px', fontWeight: 'bold' }}>INVESTMENTS CORTES S.A.S.</div>
-                                        <div style={{ fontSize: '9px', color: '#555' }}>NIT: 901.393.217-1</div>
+                                        <div style={{ fontSize: '9px', color: '#555' }}>NIT: 901.393.217-5</div>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
