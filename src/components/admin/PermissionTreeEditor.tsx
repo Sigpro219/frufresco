@@ -216,6 +216,20 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
     setSelectedKeys(new Set(normalized));
   }, [initialPermissions]);
 
+  const isAllAccess = selectedKeys.has('*');
+
+  const handleToggleAllAccess = () => {
+    const next = new Set<string>();
+    if (isAllAccess) {
+      setSelectedKeys(next);
+      onChange([]);
+    } else {
+      next.add('*');
+      setSelectedKeys(next);
+      onChange(['*']);
+    }
+  };
+
   // Recursively fetch all descendant IDs for a node
   const getDescendantIds = (node: TreeNode): string[] => {
     let ids: string[] = [node.id];
@@ -443,8 +457,14 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
 
           {/* Custom Checkbox */}
           <div 
-            onClick={() => handleCheckboxClick(node)}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: checkedStatus ? '#10b981' : indeterminateStatus ? '#f59e0b' : '#94a3b8' }}
+            onClick={() => !isAllAccess && handleCheckboxClick(node)}
+            style={{ 
+              cursor: isAllAccess ? 'not-allowed' : 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              color: checkedStatus ? '#10b981' : indeterminateStatus ? '#f59e0b' : '#94a3b8',
+              opacity: isAllAccess ? 0.6 : 1
+            }}
           >
             {checkedStatus ? (
               <CheckSquare size={19} />
@@ -487,20 +507,85 @@ export default function PermissionTreeEditor({ initialPermissions, onChange }: P
   };
 
   return (
-    <div style={{
-      maxHeight: '480px',
-      overflowY: 'auto',
-      padding: '8px',
-      border: '1px solid #e2e8f0',
-      borderRadius: '12px',
-      backgroundColor: '#f8fafc'
-    }}>
-      {permissionTree.map(node => renderNode(node, 0))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* 👑 Super Admin / All Access Toggle Card */}
+      <div style={{
+        padding: '12px 16px',
+        borderRadius: '12px',
+        backgroundColor: isAllAccess ? 'rgba(139, 92, 246, 0.08)' : 'white',
+        border: `1.5px solid ${isAllAccess ? '#8b5cf6' : '#e2e8f0'}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        transition: 'all 0.2s ease',
+        boxShadow: isAllAccess ? '0 4px 12px rgba(139, 92, 246, 0.08)' : 'none'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '20px' }} role="img" aria-label="crown">👑</span>
+          <div>
+            <div style={{ fontWeight: '800', fontSize: '0.9rem', color: isAllAccess ? '#6d28d9' : '#1e293b' }}>
+              Super Administrador (All Access)
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
+              Otorga acceso total e irrestricto a todos los módulos y portales del sistema.
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle Switch */}
+        <label style={{
+          position: 'relative',
+          display: 'inline-block',
+          width: '46px',
+          height: '24px',
+          cursor: 'pointer'
+        }}>
+          <input 
+            type="checkbox"
+            checked={isAllAccess}
+            onChange={handleToggleAllAccess}
+            style={{ opacity: 0, width: 0, height: 0 }}
+          />
+          <span style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: isAllAccess ? '#8b5cf6' : '#cbd5e1',
+            borderRadius: '24px',
+            transition: '0.3s'
+          }}>
+            <span style={{
+              position: 'absolute',
+              content: '""',
+              height: '18px',
+              width: '18px',
+              left: isAllAccess ? '24px' : '4px',
+              bottom: '3px',
+              backgroundColor: 'white',
+              borderRadius: '50%',
+              transition: '0.3s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+            }} />
+          </span>
+        </label>
+      </div>
+
+      {/* The tree container */}
+      <div style={{
+        maxHeight: '380px',
+        overflowY: 'auto',
+        padding: '8px',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
+        backgroundColor: isAllAccess ? '#f1f5f9' : '#f8fafc',
+        opacity: isAllAccess ? 0.85 : 1,
+        transition: 'all 0.2s ease'
+      }}>
+        {permissionTree.map(node => renderNode(node, 0))}
+      </div>
       
-      {/* Visual Indicator of Global All Access */}
-      {selectedKeys.has('*') && (
+      {/* Warning banner */}
+      {isAllAccess && (
         <div style={{
-          marginTop: '12px',
           padding: '10px 14px',
           borderRadius: '8px',
           backgroundColor: 'rgba(239, 68, 68, 0.08)',
