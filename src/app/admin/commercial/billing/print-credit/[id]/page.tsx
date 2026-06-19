@@ -386,7 +386,7 @@ export default function CreditPrintPage() {
                                     <tr>
                                         <td style={{ width: '25%' }}><b>TIPO DE ESTABLECIMIENTO:</b></td>
                                         <td style={{ width: '25%' }}>{displayCellVal(d.tipo_establecimiento || d.tipo_negocio || '')}</td>
-                                        <td style={{ width: '10%' }}><b>CIUDAD/MUNICIPIO:</b></td>
+                                        <td style={{ width: '10%' }}><b>CIUDAD /<br />MUNICIPIO:</b></td>
                                         <td style={{ width: '15%' }}>{displayCellVal(d.ciudad)}</td>
                                         <td style={{ width: '10%' }}><b>CUPO:</b></td>
                                         <td style={{ width: '15%' }}>{(!isBlankMode && d.cupo_solicitado) ? `$${d.cupo_solicitado.toLocaleString('es-CO')}` : ''}</td>
