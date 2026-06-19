@@ -928,7 +928,7 @@ export default function CreditPrintPage() {
                                 </tbody>
                             </table>
 
-                            <div className="section-header" style={{ marginBottom: '4px', marginTop: '10px' }}>Para uso exclusivo de Frutícola de Colombia</div>
+                            <div className="section-header" style={{ marginBottom: '4px', marginTop: '10px' }}>Para uso exclusivo de INVESTMENTS CORTES S.A.S.</div>
                             <table className="form-table" style={{ marginBottom: '0px' }}>
                                 <tbody>
                                     <tr style={{ height: '32px' }}>
@@ -938,7 +938,7 @@ export default function CreditPrintPage() {
                                             &nbsp;&nbsp;&nbsp;
                                             NO {renderCheckbox(!isBlankMode && !d.credito_aprobado)}
                                         </td>
-                                        <td style={{ width: '20%' }}><b>Cupo:</b></td>
+                                        <td style={{ width: '20%' }}><b>Cupo ($):</b></td>
                                         <td style={{ width: '30%', fontWeight: 'bold', fontSize: '10px', color: THEME.colors.primary }}>
                                             {isBlankMode ? '' : (d.cupo_aprobado ? `$${d.cupo_aprobado.toLocaleString('es-CO')}` : 'N/A')}
                                         </td>
