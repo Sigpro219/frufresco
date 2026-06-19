@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
-import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send } from 'lucide-react';
+import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
 import Link from 'next/link';
 
 const getChannelBadge = (source: string) => {
@@ -44,6 +44,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
   const [editableDeliverySlot, setEditableDeliverySlot] = useState<string>('');
+  const [priceList, setPriceList] = useState<string>('');
+  const [orderDocument, setOrderDocument] = useState<string>('Remisión');
+  const [purchaseOrder, setPurchaseOrder] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
@@ -58,12 +61,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     rowIndex: number;
     text: string;
   } | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [sendingReceipt, setSendingReceipt] = useState(false);
+  const [receiptSent, setReceiptSent] = useState(false);
   
+  useEffect(() => {
+    if (selectedDraft) {
+      const metadata = getDraftMetadata(selectedDraft);
+      setReceiptSent(metadata?.receiptEmailSent || false);
+    }
+  }, [selectedDraft]);
+
   useEffect(() => {
     setRecentlyDeletedItems([]);
     setScrollPercent(0);
     setIsScrolled(false);
     setActiveVariantRow(null);
+    setActiveEquivalenceRow(null);
   }, [selectedDraft?.id]);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -88,6 +102,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [scrollPercent, setScrollPercent] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeVariantRow, setActiveVariantRow] = useState<number | null>(null);
+  const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -263,7 +278,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           ...metaItem,
           address: editableAddress,
           deliverySlot: editableDeliverySlot || null,
-          deliveryDate: deliveryDate
+          deliveryDate: deliveryDate,
+          priceList: priceList,
+          orderDocument: orderDocument,
+          purchaseOrder: purchaseOrder,
+          latitude: draftCoordinates?.lat || metaItem.latitude || null,
+          longitude: draftCoordinates?.lng || metaItem.longitude || null
         };
         const updatedExtractedItems = [
           updatedMetaItem,
@@ -476,10 +496,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   useEffect(() => {
     if (selectedDraft) {
-      setIsEditing(false);
+      setIsEditing(true);
       const meta = getDraftMetadata(selectedDraft);
       setEditableAddress(meta.address || '');
-      triggerGeocoding(meta.address);
+      
+      if (meta.latitude && meta.longitude) {
+        setDraftCoordinates({ lat: meta.latitude, lng: meta.longitude });
+      } else {
+        triggerGeocoding(meta.address);
+      }
       
       // Initialize editable items
       const rawItems = getDraftItems(selectedDraft);
@@ -507,6 +532,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
       setEditableDeliverySlot(metadata.deliverySlot || '');
+      setPriceList(metadata.priceList || '');
+      setOrderDocument(metadata.orderDocument || 'Remisión');
+      setPurchaseOrder(metadata.purchaseOrder || '');
       if (metadata.deliveryDate) {
         setDeliveryDate(metadata.deliveryDate);
       } else {
@@ -518,6 +546,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setGeocoding(false);
       setEditableItems([]);
       setEditableDeliverySlot('');
+      setPriceList('');
+      setOrderDocument('Remisión');
+      setPurchaseOrder('');
       setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
   }, [selectedDraft, products, aliases]);
@@ -540,7 +571,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       deliverySlot: meta?.deliverySlot || null,
       attachmentUrl: meta?.attachmentUrl || null,
       attachmentName: meta?.attachmentName || null,
-      rejectReason: meta?.rejectReason || null
+      rejectReason: meta?.rejectReason || null,
+      latitude: meta?.latitude || null,
+      longitude: meta?.longitude || null,
+      priceList: meta?.priceList || null,
+      orderDocument: meta?.orderDocument || null,
+      purchaseOrder: meta?.purchaseOrder || null
     };
   };
 
@@ -621,8 +657,24 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
 
   useEffect(() => {
+    const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts);
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedDraft, showConfirmModal, rejectModal, obsModal, actionConfirm, deleteConfirm, showShortcuts]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
       if (e.key === 'Escape') {
+        if (showShortcuts) { setShowShortcuts(false); return; }
         if (actionConfirm) { setActionConfirm(null); return; }
         if (deleteConfirm) { setDeleteConfirm(null); return; }
         if (obsModal) { setObsModal(null); return; }
@@ -630,10 +682,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         if (showConfirmModal) { setShowConfirmModal(false); return; }
         if (selectedDraft) { setSelectedDraft(null); return; }
       }
+      
+      if (e.key === '?' && e.shiftKey) {
+        setShowShortcuts(prev => !prev);
+        e.preventDefault();
+      }
+      
+      if (e.key.toLowerCase() === 'f' && (e.ctrlKey || e.metaKey)) {
+        if (!selectedDraft) {
+          document.getElementById('search-input')?.focus();
+          e.preventDefault();
+        }
+      }
+
+      if (e.key.toLowerCase() === 'e' && (e.ctrlKey || e.metaKey)) {
+        if (selectedDraft && !showConfirmModal) {
+          document.getElementById('btn-edit-draft')?.click();
+          e.preventDefault();
+        }
+      }
+
+      if (e.key === 'Backspace' && (e.ctrlKey || e.metaKey)) {
+        if (selectedDraft && !showConfirmModal) {
+          document.getElementById('btn-reject-draft')?.click();
+          e.preventDefault();
+        }
+      }
+      
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        if (selectedDraft && !showConfirmModal) {
+          document.getElementById('btn-approve-draft')?.click();
+          e.preventDefault();
+        }
+      }
+      
+      if (e.key === 'Delete') {
+        if (selectedDraftIds.length > 0 && !actionConfirm) {
+           document.getElementById('btn-bulk-reject-delete')?.click();
+           e.preventDefault();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [actionConfirm, deleteConfirm, obsModal, rejectModal, showConfirmModal, selectedDraft]);
+  }, [actionConfirm, deleteConfirm, obsModal, rejectModal, showConfirmModal, selectedDraft, showShortcuts, selectedDraftIds.length]);
 
   const isInvoiceModified = () => {
     if (!selectedDraft) return false;
@@ -652,6 +744,115 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     return false;
   };
 
+  const handleSendManualReceipt = async () => {
+    if (!selectedDraft) return;
+    setSendingReceipt(true);
+    try {
+      const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
+      const clientName = selectedDraft.client_detected_name || 'Cliente';
+      
+      const itemsHtml = editableItems.map((item: any) => {
+        const prod = products.find(p => p.id === item.matched_product_id);
+        const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+        const unitPrice = prod?.base_price || 0;
+        const lineTotal = unitPrice * qtyNum;
+        const lineTotalDisplay = lineTotal > 0 ? formatMoney(lineTotal) : 'Por confirmar';
+        const productNameDisplay = `${prod?.name || item.originalName || 'Producto'}${item.unit ? ` (${item.unit})` : ''}`;
+        return `
+          <tr style="border-bottom: 1px solid #E5E7EB;">
+              <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
+              <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qtyNum}</td>
+              <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const totalOrderDisplay = totalValue > 0 ? `Total Aprox: ${formatMoney(totalValue)}` : 'Total: A confirmar en despacho';
+
+      const emailHtml = `
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+<div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
+    <center>
+        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
+        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
+        <p style="font-size: 16px; color: #555; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
+    </center>
+    
+    <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+        <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${shortCode}</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</p>
+        
+        <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
+            <thead>
+                <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
+                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
+                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
+                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itemsHtml}
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
+            <p style="font-size: 16px; color: #286a36; margin: 0; font-weight: 800;">
+                <span>${totalOrderDisplay}</span>
+            </p>
+        </div>
+    </div>
+
+    <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
+        Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
+        Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
+    </p>
+    
+    <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
+    
+    <center>
+        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
+    </center>
+</div>
+      `;
+
+      await supabase.from('mail').insert({
+        to_email: selectedDraft.source_email,
+        subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
+        message: { html: emailHtml, text: `Hemos recibido tu pedido con éxito y ya está en preparación.` },
+        status: 'pending'
+      });
+
+      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+      const updatedMetaItem = {
+        ...metaItem,
+        receiptEmailSent: true
+      };
+      const updatedExtractedItems = [
+        updatedMetaItem,
+        ...editableItems
+      ];
+
+      await supabase
+        .from('order_drafts')
+        .update({ extracted_items: updatedExtractedItems })
+        .eq('id', selectedDraft.id);
+
+      setReceiptSent(true);
+      setSelectedDraft((prev: any) => ({
+        ...prev,
+        extracted_items: updatedExtractedItems
+      }));
+      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+
+      showToast('Acuse de recibo enviado con éxito 📧', 'success');
+    } catch (err: any) {
+      console.error('Error sending manual receipt:', err);
+      showToast('Error al enviar acuse de recibo: ' + err.message, 'error');
+    } finally {
+      setSendingReceipt(false);
+    }
+  };
+ 
   const handleApprove = async () => {
     if (!selectedDraft) return;
     setSaving(true);
@@ -684,7 +885,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         ...metaItem,
         address: editableAddress,
         deliverySlot: editableDeliverySlot || null,
-        deliveryDate: deliveryDate
+        deliveryDate: deliveryDate,
+        priceList: priceList,
+        orderDocument: orderDocument,
+        purchaseOrder: purchaseOrder,
+        latitude: draftCoordinates?.lat || metaItem.latitude || null,
+        longitude: draftCoordinates?.lng || metaItem.longitude || null
       };
       const updatedExtractedItems = [
         updatedMetaItem,
@@ -734,17 +940,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             contact_name: selectedDraft.client_detected_name || 'Cliente por Correo',
             contact_phone: metadata?.phone || '',
             phone: metadata?.phone || '',
-            address: metadata?.address || '',
+            address: editableAddress || metadata?.address || '',
             city: 'Bogotá',
             company_name: selectedDraft.client_detected_name || 'Cliente por Correo',
             created_at: new Date().toISOString(),
             email: selectedDraft.source_email || null,
             nit: metadata?.nit || null,
-            is_active: true
+            is_active: true,
+            latitude: draftCoordinates?.lat || metadata?.latitude || null,
+            longitude: draftCoordinates?.lng || metadata?.longitude || null
           });
 
         if (profileError) {
           throw new Error('Error al crear perfil de cliente: ' + profileError.message);
+        }
+      } else {
+        // Update existing profile's address and coordinates
+        const { error: profileUpdateError } = await supabase
+          .from('profiles')
+          .update({
+            address: editableAddress || metadata?.address || '',
+            latitude: draftCoordinates?.lat || metadata?.latitude || null,
+            longitude: draftCoordinates?.lng || metadata?.longitude || null
+          })
+          .eq('id', finalProfileId);
+
+        if (profileUpdateError) {
+          console.error('Error updating profile with new address and coordinates:', profileUpdateError);
         }
       }
 
@@ -790,7 +1012,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           delivery_date: deliveryDate,
           delivery_slot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
           admin_notes: finalAdminNotes,
-          shipping_address: metadata?.address || 'Dirección por definir'
+          shipping_address: editableAddress || metadata?.address || 'Dirección por definir',
+          latitude: draftCoordinates?.lat || metadata?.latitude || null,
+          longitude: draftCoordinates?.lng || metadata?.longitude || null
         })
         .select()
         .single();
@@ -1034,6 +1258,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     }
                   });
                 }}
+                id="btn-bulk-reject-delete"
                 style={{
                   backgroundColor: '#EF4444',
                   color: 'white',
@@ -1125,6 +1350,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }}>
           <Search size={16} color="#6B7280" />
           <input 
+            id="search-input"
             type="text" 
             placeholder="Buscar por ID, empresa, @estado..." 
             value={searchQuery}
@@ -1394,6 +1620,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
         </>
         )}
+
+        {/* Shortcuts Icon */}
+        <div 
+          onClick={() => setShowShortcuts(true)}
+          title="Manual de Atajos de Teclado (Shift + ?)"
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#F3E8FF', 
+            borderRadius: THEME.radius.md,
+            width: '38px',
+            height: '38px',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E9D5FF'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F3E8FF'}
+        >
+          <Keyboard size={20} color="#9333EA" strokeWidth={2.5} />
+        </div>
 
         {/* Info Icon */}
         <div 
@@ -1898,104 +2145,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 <p style={{ margin: '4px 0 0 0', color: '#6B7280', fontSize: '0.85rem' }}>De: {selectedDraft.source_email}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                {isEditing && selectedRowIndices.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleBatchDelete}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      backgroundColor: '#FEE2E2',
-                      color: '#991B1B',
-                      border: '1px solid #FCA5A5',
-                      borderRadius: '8px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                    }}
-                  >
-                    <Trash2 size={16} />
-                    Eliminar Seleccionados ({selectedRowIndices.length})
-                  </button>
-                )}
-                
-                {/* Modificar Pedido button */}
-                {selectedDraft.status === 'pending' && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={handleToggleEdit}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '0.5rem 1rem',
-                      backgroundColor: isEditing ? '#DEF7EC' : 'white',
-                      border: `1.5px solid ${isEditing ? '#31C48D' : THEME.colors.border}`,
-                      borderRadius: '8px',
-                      color: isEditing ? '#03543F' : '#4B5563',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: saving ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                    }}
-                  >
-                    {isEditing ? (
-                      <>
-                        <Check size={16} />
-                        {saving ? 'Guardando...' : 'Finalizar Edición'}
-                      </>
-                    ) : (
-                      <>
-                        <Edit2 size={16} />
-                        Modificar Pedido
-                      </>
-                    )}
-                  </button>
-                 )}
- 
-                 {/* Rechazar Pedido button */}
-                 {selectedDraft.status === 'pending' && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => {
-                      setRejectReason('');
-                      setRejectModal({
-                        isOpen: true,
-                        draftId: selectedDraft.id,
-                        address: getDraftMetadata(selectedDraft).address || 'No detectada',
-                        sourceEmail: selectedDraft.source_email,
-                        totalValue: totalValue
-                      });
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '0.5rem 1.25rem',
-                      backgroundColor: '#FEF2F2',
-                      border: '1.5px solid #FCA5A5',
-                      borderRadius: '8px',
-                      color: '#DC2626',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: saving ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                    }}
-                    onMouseEnter={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEE2E2'; } }}
-                    onMouseLeave={e => { if(!saving) { e.currentTarget.style.backgroundColor = '#FEF2F2'; } }}
-                  >
-                    <Trash2 size={16} />
-                    Rechazar Pedido
-                  </button>
-                 )}
-
                 <button onClick={() => setSelectedDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>
                   <X size={24} />
                 </button>
@@ -2096,157 +2245,148 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </span>
                 </div>
                 
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1E3A8A', textTransform: 'uppercase', marginBottom: '8px' }}>
-                  {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
-                  <span style={{ fontSize: '0.9rem', color: '#6B7280', fontWeight: 600 }}> (NIT: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
-                </div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#4B5563', fontSize: '0.9rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MapPin size={16} style={{ color: THEME.colors.primary }} />
-                    {isEditing ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                        <input
-                          type="text"
-                          value={editableAddress}
-                          onChange={(e) => setEditableAddress(e.target.value)}
-                          onBlur={() => triggerGeocoding(editableAddress)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              triggerGeocoding(editableAddress);
-                            }
-                          }}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            border: `1.5px solid ${THEME.colors.primary}`,
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            color: '#111827',
-                            width: '100%',
-                            outline: 'none',
-                            backgroundColor: '#F0FDF4'
-                          }}
-                          placeholder="Editar dirección de entrega..."
-                        />
-                        {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600, whiteSpace: 'nowrap' }}>🔍 Validando...</span>}
-                      </div>
-                    ) : (editableAddress || getDraftMetadata(selectedDraft).address) ? (
-                      <a
-                        href={draftCoordinates 
-                          ? `https://www.google.com/maps/search/?api=1&query=${draftCoordinates.lat},${draftCoordinates.lng}` 
-                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(editableAddress || getDraftMetadata(selectedDraft).address)}`
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: THEME.colors.primary,
-                          textDecoration: 'underline',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                        title="Ver ubicación en Google Maps"
-                      >
-                        {editableAddress || getDraftMetadata(selectedDraft).address}
-                        <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>↗</span>
-                      </a>
-                    ) : (
-                      <span>Dirección no detectada</span>
-                    )}
+                <div style={{ backgroundColor: 'white', border: `1px solid ${THEME.colors.border}`, borderRadius: '12px', overflow: 'hidden', marginBottom: '24px', marginTop: '16px' }}>
+                  <div style={{ backgroundColor: '#10B981', color: 'white', padding: '10px 16px', fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Información del pedido
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} /> {getDraftMetadata(selectedDraft).phone || 'Teléfono no detectado'}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={16} /> {selectedDraft.source_email}</div>
                   
-                  {/* Delivery Date Selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
-                    <Calendar size={16} style={{ color: THEME.colors.primary }} />
-                    <span style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>Fecha de Entrega:</span>
-                    <input
-                      type="date"
-                      value={deliveryDate}
-                      disabled={!isEditing}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        border: `1px solid ${THEME.colors.border}`,
-                        fontSize: '0.85rem',
-                        color: '#374151',
-                        outline: 'none',
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                    />
-                  </div>
-
-                  {/* Horario de Entrega Selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
-                    <Send size={16} style={{ color: THEME.colors.primary }} />
-                    <span style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem' }}>Horario de Entrega:</span>
-                    {isEditing ? (
-                      <select
-                        value={editableDeliverySlot}
-                        onChange={(e) => setEditableDeliverySlot(e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          border: `1.5px solid ${THEME.colors.primary}`,
-                          fontSize: '0.85rem',
-                          fontWeight: 600,
-                          color: '#111827',
-                          backgroundColor: '#F0FDF4',
-                          outline: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <option value="">-- PENDIENTE --</option>
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                        <option value="Cualquier hora">Cualquier hora</option>
-                      </select>
-                    ) : (
-                      <span style={{ 
-                        fontWeight: 700, 
-                        color: editableDeliverySlot ? '#059669' : '#D97706',
-                        fontSize: '0.85rem',
-                        backgroundColor: editableDeliverySlot ? '#E6F4EA' : '#FFF3CD',
-                        padding: '2px 8px',
-                        borderRadius: '6px'
-                      }}>
-                        {editableDeliverySlot || 'PENDIENTE'}
-                      </span>
-                    )}
-                  </div>
-
-                  {geocoding && <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14}/> Buscando coordenadas...</div>}
-                  {draftCoordinates && (
-                    <div style={{
-                      fontSize: '0.8rem',
-                      color: checkIsNewClient(selectedDraft)
-                        ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626')
-                        : '#059669',
-                      fontWeight: 600,
-                      display: 'flex',
-                      gap: '12px',
-                      marginTop: '4px'
-                    }}>
-                      <span>Lat: {draftCoordinates.lat.toFixed(6)}</span>
-                      <span>Lng: {draftCoordinates.lng.toFixed(6)}</span>
-                      {checkIsNewClient(selectedDraft) && (
-                        <span>
-                          {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)
-                            ? '✅ En Zona de Cobertura'
-                            : '❌ Fuera de Zona de Cobertura'}
-                        </span>
-                      )}
+                  <div style={{ display: 'flex', flexDirection: 'column', fontSize: '0.85rem' }}>
+                    
+                    {/* Cliente */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Cliente</div>
+                      <div style={{ padding: '12px 16px', color: '#111827', fontWeight: 600 }}>
+                        {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
+                        <span style={{ color: '#6B7280', fontWeight: 'normal' }}> (NIT: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                      </div>
                     </div>
-                  )}
+
+                    {/* Sucursal / Dirección */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Sucursal/Dirección</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {isEditing ? (
+                          <>
+                            <input
+                              type="text"
+                              value={editableAddress}
+                              onChange={(e) => setEditableAddress(e.target.value)}
+                              onBlur={() => triggerGeocoding(editableAddress)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); triggerGeocoding(editableAddress); } }}
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', outline: 'none' }}
+                              placeholder="Editar dirección de entrega..."
+                            />
+                            {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600 }}>🔍 Validando...</span>}
+                          </>
+                        ) : (
+                          <span>{editableAddress || getDraftMetadata(selectedDraft).address || 'No detectada'}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Lista de precios */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Lista de precios</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
+                        {isEditing ? (
+                          <input type="text" value={priceList} onChange={(e) => setPriceList(e.target.value)} placeholder="Ej. NUTRESA -CORRAL..." style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%' }} />
+                        ) : (
+                          <span>{priceList || 'No especificada'}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fecha de envío (Entrega) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Fecha de envío</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
+                        <input type="date" value={deliveryDate} disabled={!isEditing} onChange={(e) => setDeliveryDate(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, cursor: isEditing ? 'pointer' : 'default', backgroundColor: isEditing ? 'white' : '#F9FAFB' }} />
+                      </div>
+                    </div>
+
+                    {/* Documento del pedido */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Documento del pedido</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
+                        {isEditing ? (
+                          <select value={orderDocument} onChange={(e) => setOrderDocument(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', minWidth: '200px' }}>
+                            <option value="Remisión">Remisión</option>
+                            <option value="Factura Electrónica">Factura Electrónica</option>
+                            <option value="Cotización">Cotización</option>
+                          </select>
+                        ) : (
+                          <span>{orderDocument}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hora de entrega */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Hora de entrega</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
+                        {isEditing ? (
+                          <select value={editableDeliverySlot} onChange={(e) => setEditableDeliverySlot(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', minWidth: '150px' }}>
+                            <option value="">-- -- : -- --</option>
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                            <option value="Cualquier hora">Cualquier hora</option>
+                          </select>
+                        ) : (
+                          <span>{editableDeliverySlot || '-- -- : -- --'}</span>
+                        )}
+                        {!editableDeliverySlot && <span style={{ marginLeft: '12px', color: '#DC2626', fontSize: '0.75rem' }}>La hora de entrega del pedido es obligatoria</span>}
+                      </div>
+                    </div>
+
+                    {/* Orden de compra */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Orden de compra</div>
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
+                        {isEditing ? (
+                          <input type="text" value={purchaseOrder} onChange={(e) => setPurchaseOrder(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '300px' }} />
+                        ) : (
+                          <span>{purchaseOrder || ''}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Contacto */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Contacto</div>
+                      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px', color: '#374151' }}>
+                        <div><strong>Correo del pedido:</strong> {selectedDraft.source_email}</div>
+                        <div><strong>Teléfono:</strong> {getDraftMetadata(selectedDraft).phone || '0'}</div>
+                        {draftCoordinates && (
+                          <div style={{
+                            color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',
+                            fontWeight: 600, marginTop: '4px'
+                          }}>
+                            {checkIsNewClient(selectedDraft) && (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '✅ En Zona de Cobertura ' : '❌ Fuera de Zona de Cobertura ')}
+                            (Lat: {draftCoordinates.lat.toFixed(6)}, Lng: {draftCoordinates.lng.toFixed(6)})
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Auditoría */}
+                    <div style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
+                      <details style={{ backgroundColor: '#F9FAFB', padding: '0.75rem 1rem', cursor: 'pointer' }}>
+                        <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>
+                          ▶ Ver información de auditoría
+                        </summary>
+                        <div style={{ padding: '1rem 0 0.5rem 0', display: 'flex', flexDirection: 'column', gap: '4px', color: '#1E3A8A', fontSize: '0.85rem' }}>
+                          <div><strong>Persona que agrega el pedido:</strong> Sistema Inteligencia Artificial (IA)</div>
+                          <div><strong>Fecha y hora de creación:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
+                          <div><strong>Última actualización:</strong> {selectedDraft.updated_at ? new Date(selectedDraft.updated_at).toLocaleString('es-CO') : 'Sin actualizaciones manuales'}</div>
+                        </div>
+                      </details>
+                    </div>
+
+                  </div>
                 </div>
               </div>
+
+
 
               {/* Tabla de Productos Estilo Pedido */}
               <div style={{ marginBottom: '2rem' }}>
@@ -2271,8 +2411,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                             />
                           </th>
                         )}
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>PRODUCTO ORIGINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6' }}>CANT. ORIG.</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>PRODUCTO ORIGINAL</th>
+                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '6%' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em', width: '130px' }}>UNIDADES</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>CANTIDAD FINAL</th>
@@ -2290,97 +2430,271 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                               const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
 
                               return (
-                                <tr 
-                                  key={i} 
-                                  className="scroll-row-animate"
-                                  style={{ 
-                                    borderBottom: `1px solid ${THEME.colors.border}`,
-                                    animationDelay: `${i * 0.04}s`
-                                  }}
-                                >
-                                    {isEditing && (
-                                      <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '40px', backgroundColor: '#F9FAFB' }}>
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedRowIndices.includes(i)}
-                                          onChange={(e) => {
-                                            if (e.target.checked) {
-                                              setSelectedRowIndices(prev => [...prev, i]);
-                                            } else {
-                                              setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
-                                            }
-                                          }}
-                                          style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
-                                        />
+                                <React.Fragment key={i}>
+                                  <tr 
+                                    className="scroll-row-animate"
+                                    style={{ 
+                                      borderBottom: `1px solid ${THEME.colors.border}`,
+                                      animationDelay: `${i * 0.04}s`,
+                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      transition: 'background-color 0.2s'
+                                    }}
+                                  >
+                                      {isEditing && (
+                                        <td style={{ 
+                                          padding: '1rem 0.5rem', 
+                                          textAlign: 'center', 
+                                          width: '40px', 
+                                          backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                          transition: 'background-color 0.2s'
+                                        }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRowIndices.includes(i)}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setSelectedRowIndices(prev => [...prev, i]);
+                                              } else {
+                                                setSelectedRowIndices(prev => prev.filter(idx => idx !== i));
+                                              }
+                                            }}
+                                            style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                                          />
+                                        </td>
+                                      )}
+                                      <td style={{ 
+                                        padding: '1rem 0.5rem', 
+                                        width: '15%', 
+                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        transition: 'background-color 0.2s'
+                                      }}>
+                                        <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
+                                          {item.originalName || item.name || item.producto || item.item || ''}
+                                        </div>
                                       </td>
-                                    )}
-                                    <td style={{ padding: '1rem 0.5rem', width: '25%', backgroundColor: '#F9FAFB' }}>
-                                      <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
-                                        {item.originalName || item.name || item.producto || item.item || ''}
+                                      <td style={{ 
+                                        padding: '1rem 0.5rem', 
+                                        textAlign: 'center', 
+                                        width: '6%', 
+                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        transition: 'background-color 0.2s'
+                                      }}>
+                                        <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
+                                          {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
+                                        </div>
+                                      </td>
+                                    <td style={{ 
+                                      padding: '1rem 0.5rem', 
+                                      width: '30%', 
+                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      transition: 'background-color 0.2s'
+                                    }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <input
+                                            ref={el => { productInputRefs.current[i] = el; }}
+                                            list={`products-list-${i}`}
+                                            disabled={!isEditing}
+                                            value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
+                                            placeholder="-- Buscar Producto --"
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              const found = products.find(p => p.name === val);
+                                              const newEdits = [...editableItems];
+                                              if (found) {
+                                                newEdits[i].matched_product_id = found.id;
+                                                newEdits[i].searchQuery = found.name;
+                                                newEdits[i].skuQuery = found.sku || '';
+                                                newEdits[i].unit = found.unit_of_measure || 'Kg';
+                                                newEdits[i].selected_options = {};
+                                              } else {
+                                                newEdits[i].matched_product_id = null;
+                                                newEdits[i].searchQuery = val;
+                                                newEdits[i].skuQuery = '';
+                                                newEdits[i].selected_options = {};
+                                              }
+                                              setEditableItems(newEdits);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+                                                e.preventDefault();
+                                                const matched = products.find(p => p.id === item.matched_product_id);
+                                                if (matched && matched.variants && matched.variants.length > 0) {
+                                                  setActiveVariantRow(prev => prev === i ? null : i);
+                                                  setTimeout(() => {
+                                                    const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                                                    if (firstSelect) firstSelect.focus();
+                                                  }, 50);
+                                                }
+                                              }
+                                            }}
+                                            style={{
+                                              flex: 1,
+                                              padding: '0.5rem',
+                                              borderRadius: '6px',
+                                              border: '1px solid #D1D5DB',
+                                              fontSize: '0.9rem',
+                                              backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
+                                              fontWeight: 600,
+                                              color: '#111827',
+                                              minWidth: '0'
+                                            }}
+                                          />
+                                          
+
+                                        </div>
                                       </div>
+                                      <datalist id={`products-list-${i}`}>
+                                        {products
+                                          .filter(p => {
+                                            const query = (matchedProd ? matchedProd.name : (item.searchQuery || '')).toLowerCase().trim();
+                                            if (!query) return true;
+                                            return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
+                                          })
+                                          .slice(0, 15)
+                                          .map(p => (
+                                            <option key={p.id} value={p.name} />
+                                          ))
+                                        }
+                                      </datalist>
                                     </td>
-                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '10%', backgroundColor: '#F9FAFB' }}>
-                                      <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
-                                        {item.originalQuantity || item.quantity || item.cant || item.cantidad || ''}
-                                      </div>
-                                    </td>
-                                  <td style={{ padding: '1rem 0.5rem', width: '30%', position: 'relative' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <input
-                                          ref={el => { productInputRefs.current[i] = el; }}
-                                          list={`products-list-${i}`}
-                                          disabled={!isEditing}
-                                          value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
-                                          placeholder="-- Buscar Producto --"
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
+                                      {isEditing ? (
+                                        <select
+                                          value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
                                           onChange={(e) => {
-                                            const val = e.target.value;
-                                            const found = products.find(p => p.name === val);
                                             const newEdits = [...editableItems];
-                                            if (found) {
-                                              newEdits[i].matched_product_id = found.id;
-                                              newEdits[i].searchQuery = found.name;
-                                              newEdits[i].skuQuery = found.sku || '';
-                                              newEdits[i].unit = found.unit_of_measure || 'Kg';
-                                              newEdits[i].selected_options = {};
-                                            } else {
-                                              newEdits[i].matched_product_id = null;
-                                              newEdits[i].searchQuery = val;
-                                              newEdits[i].skuQuery = '';
-                                              newEdits[i].selected_options = {};
-                                            }
+                                            newEdits[i].unit = e.target.value;
                                             setEditableItems(newEdits);
                                           }}
-                                          onKeyDown={(e) => {
-                                            if (e.altKey && (e.key === 'v' || e.key === 'V')) {
-                                              e.preventDefault();
-                                              const matched = products.find(p => p.id === item.matched_product_id);
-                                              if (matched && matched.variants && matched.variants.length > 0) {
-                                                setActiveVariantRow(prev => prev === i ? null : i);
-                                                setTimeout(() => {
-                                                  const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                  if (firstSelect) firstSelect.focus();
-                                                }, 50);
-                                              }
-                                            }
-                                          }}
                                           style={{
-                                            flex: 1,
-                                            padding: '0.5rem',
+                                            width: '100%',
+                                            padding: '0.5rem 0.25rem',
                                             borderRadius: '6px',
                                             border: '1px solid #D1D5DB',
                                             fontSize: '0.9rem',
-                                            backgroundColor: item.matched_product_id ? '#ECFDF5' : '#FEF2F2',
+                                            backgroundColor: 'white',
                                             fontWeight: 600,
-                                            color: '#111827',
-                                            minWidth: '0'
+                                            color: '#111827'
                                           }}
-                                        />
-                                        
+                                        >
+                                          {Array.from(new Set(['Kg', 'Unidad', 'Paquete', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 600 }}>
+                                          {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
+                                      <input 
+                                        type="number"
+                                        disabled={!isEditing}
+                                        value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                        onChange={(e) => {
+                                          const newEdits = [...editableItems];
+                                          newEdits[i].quantity = parseFloat(e.target.value) || 0;
+                                          setEditableItems(newEdits);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+                                            e.preventDefault();
+                                            const matched = products.find(p => p.id === item.matched_product_id);
+                                            if (matched && matched.variants && matched.variants.length > 0) {
+                                              setActiveVariantRow(prev => prev === i ? null : i);
+                                              setTimeout(() => {
+                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                                                if (firstSelect) firstSelect.focus();
+                                              }, 50);
+                                            }
+                                            return;
+                                          }
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            // Añadir nueva fila
+                                            const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
+                                            setEditableItems(newEdits);
+                                            // Focus el nuevo input en el siguiente render
+                                            setTimeout(() => {
+                                              const nextInput = productInputRefs.current[i + 1];
+                                              if (nextInput) nextInput.focus();
+                                            }, 50);
+                                          }
+                                        }}
+                                        style={{
+                                          width: '90px',
+                                          padding: '0.5rem 0.25rem',
+                                          textAlign: 'center',
+                                          borderRadius: '6px',
+                                          border: '1px solid #10B981',
+                                          fontWeight: 800,
+                                          fontSize: '1rem'
+                                        }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
+                                      {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
+                                    </td>
+                                    <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
+                                      {matchedProd ? formatMoney(itemTotal) : '-'}
+                                    </td>
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: 'auto' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                        {/* Botón de Equivalencias */}
+                                        {isEditing && (
+                                          <button
+                                            type="button"
+                                            tabIndex={-1}
+                                            onClick={() => {
+                                              setActiveEquivalenceRow(prev => prev === i ? null : i);
+                                              setActiveVariantRow(null);
+                                              setTimeout(() => {
+                                                const equivInput = document.getElementById(`equiv-input-${i}`);
+                                                if (equivInput) equivInput.focus();
+                                              }, 50);
+                                            }}
+                                            style={{
+                                              padding: '0.4rem 0.8rem',
+                                              backgroundColor: activeEquivalenceRow === i
+                                                ? '#4338CA'
+                                                : item.conversion_factor && item.conversion_factor !== 1
+                                                  ? '#EEF2FF'
+                                                  : 'transparent',
+                                              color: activeEquivalenceRow === i
+                                                ? '#FFFFFF'
+                                                : item.conversion_factor && item.conversion_factor !== 1
+                                                  ? '#4338CA'
+                                                  : '#9CA3AF',
+                                              border: activeEquivalenceRow === i
+                                                ? '1px solid #4338CA'
+                                                : item.conversion_factor && item.conversion_factor !== 1
+                                                  ? '1px solid #C7D2FE'
+                                                  : '1px dashed #D1D5DB',
+                                              borderRadius: '20px',
+                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '4px',
+                                              transition: 'all 0.2s',
+                                            }}
+                                            title="Equivalencias / Conversión"
+                                          >
+                                            <span style={{ fontSize: '0.9rem' }}>⚖️</span>
+                                            {item.conversion_factor && item.conversion_factor !== 1 && (
+                                              <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                                                x{item.conversion_factor}
+                                              </span>
+                                            )}
+                                          </button>
+                                        )}
+
                                         {/* Botón de variantes si aplica */}
                                         {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
                                           <button
                                             type="button"
+                                            tabIndex={-1}
                                             onClick={() => {
                                               setActiveVariantRow(prev => prev === i ? null : i);
                                               setTimeout(() => {
@@ -2389,26 +2703,41 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }, 50);
                                             }}
                                             style={{
-                                              padding: '0.45rem 0.75rem',
-                                              backgroundColor: Object.keys(item.selected_options || {}).length > 0 ? '#10B981' : '#F3F4F6',
-                                              color: Object.keys(item.selected_options || {}).length > 0 ? 'white' : '#374151',
-                                              border: '1px solid #D1D5DB',
-                                              borderRadius: '6px',
+                                              padding: '0.4rem 0.8rem',
+                                              backgroundColor: activeVariantRow === i
+                                                ? '#059669'
+                                                : Object.keys(item.selected_options || {}).length > 0 
+                                                  ? '#ECFDF5' 
+                                                  : '#F3F4F6',
+                                              color: activeVariantRow === i
+                                                ? '#FFFFFF'
+                                                : Object.keys(item.selected_options || {}).length > 0 
+                                                  ? '#047857' 
+                                                  : '#374151',
+                                              border: activeVariantRow === i
+                                                ? '1px solid #047857'
+                                                : Object.keys(item.selected_options || {}).length > 0 
+                                                  ? '1px solid #A7F3D0' 
+                                                  : '1px solid #D1D5DB',
+                                              borderRadius: '20px',
                                               fontSize: '0.75rem',
                                               fontWeight: 700,
                                               cursor: 'pointer',
                                               whiteSpace: 'nowrap',
                                               display: 'flex',
                                               alignItems: 'center',
-                                              gap: '3px',
+                                              gap: '4px',
                                               transition: 'all 0.2s',
                                               boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                             }}
                                             title="Ver / Modificar Variantes (Alt + V)"
                                           >
-                                            ⚡ {Object.keys(item.selected_options || {}).length > 0 
-                                              ? Object.values(item.selected_options).join(', ') 
-                                              : 'Variantes'}
+                                            <span style={{ fontSize: '0.9rem' }}>⚡</span>
+                                            {Object.keys(item.selected_options || {}).length > 0 && (
+                                              <span>
+                                                {Object.values(item.selected_options).join(', ')}
+                                              </span>
+                                            )}
                                           </button>
                                         )}
 
@@ -2428,206 +2757,204 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             {Object.values(item.selected_options).join(' | ')}
                                           </span>
                                         )}
+                                      <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => {
+                                          setObsModal({
+                                            isOpen: true,
+                                            rowIndex: i,
+                                            text: item.observations || ''
+                                          });
+                                        }}
+                                        title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
+                                        style={{
+                                          background: 'none',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          color: item.observations ? THEME.colors.primary : '#9CA3AF',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          padding: '6px',
+                                          borderRadius: '6px',
+                                          backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
+                                          transition: 'all 0.2s',
+                                          borderWidth: '1px',
+                                          borderStyle: item.observations ? 'solid' : 'dashed',
+                                          borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
+                                        }}
+                                      >
+                                        <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
+                                      </button>
                                       </div>
-                                      
-                                      {/* Panel Flotante de Selección de Variantes (Popover) */}
-                                      {isEditing && activeVariantRow === i && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                    </td>
+                                  </tr>
+                                  
+                                  {/* Fila Inline de Expansión para Selección de Variantes */}
+                                  {isEditing && activeVariantRow === i && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
+                                    <tr style={{ backgroundColor: '#F0FDF4' }}>
+                                      <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div style={{
-                                          position: 'absolute',
-                                          top: '100%',
-                                          left: 0,
-                                          zIndex: 50,
-                                          backgroundColor: 'white',
-                                          border: '1px solid #D1D5DB',
-                                          borderRadius: '8px',
-                                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                          padding: '0.75rem',
-                                          marginTop: '4px',
-                                          minWidth: '240px',
                                           display: 'flex',
-                                          flexDirection: 'column',
-                                          gap: '8px'
+                                          alignItems: 'center',
+                                          gap: '24px',
+                                          backgroundColor: '#FFFFFF',
+                                          border: '1.5px solid #10B981',
+                                          borderRadius: '10px',
+                                          padding: '0.65rem 1rem',
+                                          boxShadow: '0 4px 10px rgba(16, 185, 129, 0.06)'
                                         }}>
-                                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4B5563', borderBottom: '1px solid #F3F4F6', paddingBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                            <span>⚡ VARIANTES / VARIABLES</span>
-                                            <span style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>(Esc para cerrar)</span>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '140px' }}>
+                                            <span style={{ fontSize: '0.95rem' }}>⚡</span>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#065F46' }}>
+                                              VARIABLES:
+                                            </span>
                                           </div>
-                                          {matchedProd.variants.map((v: any, vIdx: number) => {
-                                            const currentValue = (item.selected_options || {})[v.name] || '';
-                                            return (
-                                              <div key={vIdx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#374151' }}>{v.name}:</label>
-                                                <select
-                                                  id={`variant-select-${i}-${vIdx}`}
-                                                  value={currentValue}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    const newEdits = [...editableItems];
-                                                    if (!newEdits[i].selected_options) {
-                                                      newEdits[i].selected_options = {};
-                                                    }
-                                                    newEdits[i].selected_options[v.name] = val;
-                                                    setEditableItems(newEdits);
-                                                  }}
-                                                  onKeyDown={(e) => {
-                                                    if (e.key === 'Escape') {
-                                                      setActiveVariantRow(null);
-                                                      setTimeout(() => {
-                                                        if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                      }, 50);
-                                                    } else if (e.key === 'Enter') {
-                                                      e.preventDefault();
-                                                      const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                      if (nextSelect) {
-                                                        nextSelect.focus();
-                                                      } else {
+                                          
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
+                                            {matchedProd.variants.map((v: any, vIdx: number) => {
+                                              const currentValue = (item.selected_options || {})[v.name] || '';
+                                              return (
+                                                <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
+                                                    {v.name}:
+                                                  </label>
+                                                  <select
+                                                    id={`variant-select-${i}-${vIdx}`}
+                                                    value={currentValue}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      const newEdits = [...editableItems];
+                                                      if (!newEdits[i].selected_options) {
+                                                        newEdits[i].selected_options = {};
+                                                      }
+                                                      newEdits[i].selected_options[v.name] = val;
+                                                      setEditableItems(newEdits);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === 'Escape') {
                                                         setActiveVariantRow(null);
                                                         setTimeout(() => {
                                                           if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
                                                         }, 50);
+                                                      } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                        if (nextSelect) {
+                                                          nextSelect.focus();
+                                                        } else {
+                                                          setActiveVariantRow(null);
+                                                          setTimeout(() => {
+                                                            if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                          }, 50);
+                                                        }
                                                       }
-                                                    }
-                                                  }}
-                                                  style={{
-                                                    width: '100%',
-                                                    padding: '0.35rem 0.5rem',
-                                                    borderRadius: '6px',
-                                                    border: '1px solid #D1D5DB',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: 600,
-                                                    backgroundColor: currentValue ? '#ECFDF5' : 'white',
-                                                    color: '#111827',
-                                                    outline: 'none',
-                                                    cursor: 'pointer'
-                                                  }}
-                                                >
-                                                  <option value="">-- Seleccionar --</option>
-                                                  {v.options.map((opt: string, optIdx: number) => (
-                                                    <option key={optIdx} value={opt}>{opt}</option>
-                                                  ))}
-                                                </select>
-                                              </div>
-                                            );
-                                          })}
+                                                    }}
+                                                    style={{
+                                                      padding: '0.3rem 1.5rem 0.3rem 0.5rem',
+                                                      borderRadius: '6px',
+                                                      border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
+                                                      fontSize: '0.75rem',
+                                                      fontWeight: 600,
+                                                      backgroundColor: currentValue ? '#ECFDF5' : 'white',
+                                                      color: '#111827',
+                                                      outline: 'none',
+                                                      cursor: 'pointer'
+                                                    }}
+                                                  >
+                                                    <option value="">-- Seleccionar {v.name} --</option>
+                                                    {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
+                                                      <option key={optIdx} value={opt}>{opt}</option>
+                                                    ))}
+                                                  </select>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                          
+                                          <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
+                                            [Alt+V / Enter] para cerrar
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                    <datalist id={`products-list-${i}`}>
-                                      {products
-                                        .filter(p => {
-                                          const query = (matchedProd ? matchedProd.name : (item.searchQuery || '')).toLowerCase().trim();
-                                          if (!query) return true;
-                                          return p.name.toLowerCase().includes(query) || p.sku?.toLowerCase().includes(query);
-                                        })
-                                        .slice(0, 15)
-                                        .map(p => (
-                                          <option key={p.id} value={p.name} />
-                                        ))
-                                      }
-                                    </datalist>
-                                  </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '130px' }}>
-                                    {isEditing ? (
-                                      <select
-                                        value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                        onChange={(e) => {
-                                          const newEdits = [...editableItems];
-                                          newEdits[i].unit = e.target.value;
-                                          setEditableItems(newEdits);
-                                        }}
-                                        style={{
-                                          width: '100%',
-                                          padding: '0.5rem 0.25rem',
-                                          borderRadius: '6px',
-                                          border: '1px solid #D1D5DB',
-                                          fontSize: '0.9rem',
-                                          backgroundColor: 'white',
-                                          fontWeight: 600,
-                                          color: '#111827'
-                                        }}
-                                      >
-                                        {Array.from(new Set(['Kg', 'Unidad', 'Paquete', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
-                                          <option key={opt} value={opt}>{opt}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 600 }}>
-                                        {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '15%' }}>
-                                    <input 
-                                      type="number"
-                                      disabled={!isEditing}
-                                      value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
-                                      onChange={(e) => {
-                                        const newEdits = [...editableItems];
-                                        newEdits[i].quantity = parseFloat(e.target.value) || 0;
-                                        setEditableItems(newEdits);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          // Añadir nueva fila
-                                          const newEdits = [...editableItems, { originalName: '', quantity: 1, matched_product_id: null, searchQuery: '', skuQuery: '', unit: 'Kg', observations: '' }];
-                                          setEditableItems(newEdits);
-                                          // Focus el nuevo input en el siguiente render
-                                          setTimeout(() => {
-                                            const nextInput = productInputRefs.current[i + 1];
-                                            if (nextInput) nextInput.focus();
-                                          }, 50);
-                                        }
-                                      }}
-                                      style={{
-                                        width: '90px',
-                                        padding: '0.5rem 0.25rem',
-                                        textAlign: 'center',
-                                        borderRadius: '6px',
-                                        border: '1px solid #10B981',
-                                        fontWeight: 800,
-                                        fontSize: '1rem'
-                                      }}
-                                    />
-                                  </td>
-                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
-                                    {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
-                                  </td>
-                                  <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
-                                    {matchedProd ? formatMoney(itemTotal) : '-'}
-                                  </td>
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center', width: '80px' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setObsModal({
-                                          isOpen: true,
-                                          rowIndex: i,
-                                          text: item.observations || ''
-                                        });
-                                      }}
-                                      title={item.observations ? `Observaciones: ${item.observations}` : 'Agregar observaciones'}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: item.observations ? THEME.colors.primary : '#9CA3AF',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '6px',
-                                        borderRadius: '6px',
-                                        backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
-                                        transition: 'all 0.2s',
-                                        borderWidth: '1px',
-                                        borderStyle: item.observations ? 'solid' : 'dashed',
-                                        borderColor: item.observations ? THEME.colors.primary : '#D1D5DB'
-                                      }}
-                                    >
-                                      <MessageSquare size={18} fill={item.observations ? THEME.colors.primary : 'none'} />
-                                    </button>
-                                  </td>
-                                </tr>
+                                      </td>
+                                    </tr>
+                                  )}
+
+                                  {/* Fila Inline de Expansión para Equivalencias */}
+                                  {isEditing && activeEquivalenceRow === i && (
+                                    <tr style={{ backgroundColor: '#EEF2FF' }}>
+                                      <td colSpan={isEditing ? 9 : 8} style={{ padding: '0.5rem 1rem 0.75rem 1rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                        <div style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '24px',
+                                          backgroundColor: '#FFFFFF',
+                                          border: '1.5px solid #6366F1',
+                                          borderRadius: '10px',
+                                          padding: '0.65rem 1rem',
+                                          boxShadow: '0 4px 10px rgba(99, 102, 241, 0.06)'
+                                        }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '140px' }}>
+                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338CA' }}>
+                                              EQUIVALENCIA:
+                                            </span>
+                                          </div>
+                                          
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4B5563' }}>
+                                              {item.originalQuantity || item.cant || item.cantidad || 1} {item.unit || 'Unidades'}
+                                            </div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#9CA3AF' }}>x</div>
+                                            <div>
+                                              <input
+                                                id={`equiv-input-${i}`}
+                                                type="number"
+                                                step="0.01"
+                                                min="0.01"
+                                                value={item.conversion_factor || 1}
+                                                onChange={(e) => {
+                                                  const factor = parseFloat(e.target.value) || 1;
+                                                  const newEdits = [...editableItems];
+                                                  newEdits[i].conversion_factor = factor;
+                                                  const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].cant || newEdits[i].cantidad || 1);
+                                                  newEdits[i].quantity = parseFloat((origQty * factor).toFixed(2));
+                                                  setEditableItems(newEdits);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Escape' || e.key === 'Enter') {
+                                                    setActiveEquivalenceRow(null);
+                                                    setTimeout(() => {
+                                                      if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                    }, 50);
+                                                  }
+                                                }}
+                                                style={{
+                                                  width: '80px',
+                                                  padding: '0.3rem 0.5rem',
+                                                  borderRadius: '6px',
+                                                  border: '1.5px solid #6366F1',
+                                                  textAlign: 'center',
+                                                  fontWeight: 'bold',
+                                                  outline: 'none'
+                                                }}
+                                              />
+                                            </div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#9CA3AF' }}>=</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#6366F1' }}>
+                                              {item.quantity} {item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                            </div>
+                                          </div>
+                                          
+                                          <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
+                                            [Enter / Esc] para cerrar
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
 
@@ -2837,8 +3164,76 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               borderBottomLeftRadius: THEME.radius.xl,
               borderBottomRightRadius: THEME.radius.xl
             }}>
-              {/* Left Side: Empty space to push buttons to the right */}
-              <div></div>
+              {/* Botones de acción reubicados al footer */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                {isEditing && selectedRowIndices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBatchDelete}
+                    style={{
+                      background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                    }}
+                  >
+                    <Trash2 size={16} /> Eliminar Seleccionados ({selectedRowIndices.length})
+                  </button>
+                )}
+                
+                {selectedDraft.status === 'pending' && (
+                  <button
+                    id="btn-edit-draft"
+                    type="button"
+                    disabled={saving}
+                    onClick={handleToggleEdit}
+                    style={{
+                      background: 'none', border: 'none', color: isEditing ? '#059669' : '#4B5563', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                    }}
+                  >
+                    {isEditing ? <><Check size={16} /> {saving ? 'Guardando...' : 'Finalizar Edición'}</> : <><Edit2 size={16} /> Modificar Pedido</>}
+                  </button>
+                 )}
+ 
+                 {selectedDraft.status === 'pending' && (
+                  <button
+                    id="btn-reject-draft"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setRejectReason('');
+                      setRejectModal({
+                        isOpen: true, draftId: selectedDraft.id, address: getDraftMetadata(selectedDraft).address || 'No detectada', sourceEmail: selectedDraft.source_email, totalValue: totalValue
+                      });
+                    }}
+                    style={{
+                      background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                    }}
+                  >
+                    <Trash2 size={16} /> Rechazar Pedido
+                  </button>
+                 )}
+
+                 {selectedDraft.status === 'pending' && selectedDraft.source_email && (
+                   <button
+                     id="btn-send-receipt"
+                     type="button"
+                     disabled={sendingReceipt}
+                     onClick={handleSendManualReceipt}
+                     style={{
+                       background: 'none',
+                       border: 'none',
+                       color: receiptSent ? '#059669' : '#2563EB',
+                       fontWeight: 600,
+                       fontSize: '0.85rem',
+                       cursor: sendingReceipt ? 'not-allowed' : 'pointer',
+                       display: 'flex',
+                       alignItems: 'center',
+                       gap: '4px'
+                     }}
+                   >
+                     <Send size={16} />
+                     {sendingReceipt ? 'Enviando...' : receiptSent ? 'Acuse Enviado ✓' : 'Enviar Acuse de Recibo 📧'}
+                   </button>
+                 )}
+              </div>
 
               {/* Right Side: Standard Buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -2861,6 +3256,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </button>
                 {selectedDraft.status === 'pending' && (
                   <button 
+                    id="btn-approve-draft"
                     onClick={handleApprove}
                     disabled={saving || hasUnmatchedItems}
                     style={{
@@ -3571,19 +3967,48 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </select>
               </div>
 
-              <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: '800', color: '#374151', cursor: 'pointer', userSelect: 'none' }}>
+              <div style={{ 
+                gridColumn: 'span 2', 
+                marginTop: '0.5rem', 
+                borderTop: '1px solid #E2E8F0', 
+                paddingTop: '1.25rem' 
+              }}>
+                <div style={{
+                  backgroundColor: sendConfirmationEmail ? '#F0FDF4' : '#F8FAF9',
+                  border: `1.5px solid ${sendConfirmationEmail ? '#86EFAC' : '#E2E8F0'}`,
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onClick={() => {
+                  const newVal = !sendConfirmationEmail;
+                  setSendConfirmationEmail(newVal);
+                  if (!newVal) setIsAuthorizedForChanges(false);
+                }}
+                >
                   <input 
                     type="checkbox" 
                     checked={sendConfirmationEmail} 
                     onChange={(e) => {
-                      setSendConfirmationEmail(e.target.checked);
-                      if (!e.target.checked) setIsAuthorizedForChanges(false);
+                      // Handled by parent div
                     }} 
-                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#10B981' }}
                   />
-                  Enviar correo de confirmación de pedido al cliente
-                </label>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: sendConfirmationEmail ? '#065F46' : '#4B5563', marginBottom: '2px' }}>
+                      Enviar correo de confirmación al cliente
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: sendConfirmationEmail ? '#047857' : '#9CA3AF', fontWeight: '600' }}>
+                      {sendConfirmationEmail 
+                        ? 'Se enviará un correo con el resumen y estado final del pedido.' 
+                        : 'No se notificará al cliente sobre la creación de este pedido.'}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {isInvoiceModified() && sendConfirmationEmail && (
@@ -3700,6 +4125,120 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           >
             <X size={16} />
           </button>
+        </div>
+      )}
+
+      {/* SHORTCUTS MANUAL MODAL */}
+      {showShortcuts && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '500px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden',
+            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FAFAFA' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Keyboard size={24} color="#9333EA" /> Manual de Atajos
+              </h2>
+              <button 
+                onClick={() => setShowShortcuts(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Cerrar ventanas y modales</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Esc</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Abrir este manual</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Shift</kbd>
+                    <span style={{ color: '#9CA3AF' }}>+</span>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>?</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Aprobar y procesar pedido</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: '#9CA3AF' }}>+</span>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Enter</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar/Eliminar selección masiva</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Supr / Del</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Buscar pedido</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: '#9CA3AF' }}>+</span>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>F</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Modificar pedido actual</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: '#9CA3AF' }}>+</span>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>E</kbd>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar pedido actual</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: '#9CA3AF' }}>+</span>
+                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Retroceso (Back)</kbd>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            
+            <div style={{ padding: '1rem 1.5rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'center' }}>
+              <button 
+                onClick={() => setShowShortcuts(false)}
+                style={{
+                  backgroundColor: '#9333EA', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 2rem', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(147, 51, 234, 0.2)'
+                }}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

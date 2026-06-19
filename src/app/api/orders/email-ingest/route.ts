@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import https from 'https';
+import * as XLSX from 'xlsx';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +27,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,6 +76,10 @@ export async function POST(req: Request) {
     const subject = headers.subject || headers.Subject || '';
     const plainText = payload.plain || '';
     const attachments = payload.attachments || [];
+    
+    // DEBUG: Append attachment info to plainText so we can see it in Supabase
+    let debugInfo = '\n\n[DEBUG] Attachments info: ' + JSON.stringify(attachments.map((a: any) => ({name: a.filename, type: a.content_type, size: a.content ? a.content.length : 0})));
+    let currentPlainText = plainText + debugInfo;
 
     // Extract clean email address (e.g. "John Doe <john@example.com>" -> "john@example.com")
     let senderEmail = fromField;
@@ -154,13 +159,35 @@ export async function POST(req: Request) {
     };
 
     // 2. Parse email body or attachment with Gemini
+    let isExcel = false;
+    let excelTextContext = '';
+
     if (attachments.length > 0) {
-      console.log(`[Email Inbound] Processing attachment: ${attachments[0].filename}`);
+      const attFileName = attachments[0].file_name || attachments[0].filename || 'adjunto.xlsx';
+      console.log(`[Email Inbound] Processing attachment: ${attFileName}`);
       // CloudMailin attachment format: content is base64 encoded
       const attachment = attachments[0];
       const base64Data = attachment.content;
       const mimeType = attachment.content_type || 'application/pdf';
-      attachmentName = attachment.filename;
+      attachmentName = attFileName;
+
+      const lowerMime = mimeType.toLowerCase();
+      const lowerName = attachmentName ? attachmentName.toLowerCase() : '';
+      isExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+
+      if (isExcel) {
+        try {
+          const buffer = Buffer.from(base64Data, 'base64');
+          const workbook = XLSX.read(buffer, { type: 'buffer' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const csvRaw = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+          excelTextContext = csvRaw.replace(/,+/g, ',').replace(/^,|,$/gm, '').trim();
+          console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
+        } catch (err) {
+          console.error('[Email Inbound] Error parsing Excel:', err);
+        }
+      }
 
       try {
         // Ensure order-attachments bucket exists
@@ -169,7 +196,7 @@ export async function POST(req: Request) {
         } catch (_) {}
 
         const buffer = Buffer.from(base64Data, 'base64');
-        const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const sanitizedFilename = (attachmentName || 'unnamed').replace(/[^a-zA-Z0-9.-]/g, '_');
         const storagePath = `${draftUuid}_${sanitizedFilename}`;
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
           .from('order-attachments')
@@ -193,10 +220,11 @@ export async function POST(req: Request) {
 
       const prompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
-        ${plainText}
+        ${currentPlainText}
         """
         
         TAREA:
@@ -205,7 +233,8 @@ export async function POST(req: Request) {
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
         3. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto del correo (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacío.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae todos los productos solicitados y su cantidad numérica.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        6. Extrae todos los productos solicitados y su cantidad numérica.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -220,6 +249,7 @@ export async function POST(req: Request) {
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
           "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
@@ -227,29 +257,39 @@ export async function POST(req: Request) {
         }
       `;
 
-      try {
-        let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
-        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-        extractedData = JSON.parse(text);
-        if (extractedData.items && !Array.isArray(extractedData.items)) {
-          if (typeof extractedData.items === 'object') {
-            extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
-          } else {
-            extractedData.items = [];
+      if (!isExcel) {
+        try {
+          let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
+          text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          extractedData = JSON.parse(text);
+          if (extractedData.items && !Array.isArray(extractedData.items)) {
+            if (typeof extractedData.items === 'object') {
+              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+            } else {
+              extractedData.items = [];
+            }
           }
+        } catch (e) {
+          console.error('Failed to parse Gemini output for attachment:', e);
         }
-      } catch (e) {
-        console.error('Failed to parse Gemini output for attachment:', e);
+      } else {
+        console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
+        currentPlainText = currentPlainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
       }
-    } else {
-      console.log('[Email Inbound] Processing plain text email body');
+    }
+    
+    if (attachments.length === 0 || isExcel) {
+      if (!isExcel) {
+        console.log('[Email Inbound] Processing plain text email body');
+      }
       // No attachments, parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
         
         CORREO ELECTRÓNICO:
-        ${plainText}
+        ${currentPlainText}
         
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
@@ -259,7 +299,8 @@ export async function POST(req: Request) {
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
            Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
         4. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacio.
-        5. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -272,6 +313,7 @@ export async function POST(req: Request) {
           "documentType": "Email",
           "address": "Dirección física limpia extraída o vacio",
           "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliveryDate": "YYYY-MM-DD o null",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
@@ -299,7 +341,7 @@ export async function POST(req: Request) {
       // FALLBACK: If Gemini failed to extract items, try regex extraction
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
-        const lines = plainText.split('\n');
+        const lines = currentPlainText.split('\n');
         const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
@@ -316,7 +358,7 @@ export async function POST(req: Request) {
       }
       
       // FALLBACK: If Gemini failed to extract metadata, use regex
-      const lines = plainText.split('\n');
+      const lines = currentPlainText.split('\n');
       let addressStr = '';
       let addressFound = false;
       for (let line of lines) {
@@ -347,7 +389,7 @@ export async function POST(req: Request) {
       const lowerClientName = String(extractedData.clientInDocument || '').toLowerCase().trim();
       if (!lowerClientName || lowerClientName === 'desconocido' || lowerClientName === 'no detectado' || lowerClientName === 'none' || lowerClientName === 'no especificado' || lowerClientName === 'no especificada') {
         let nameCandidate = '';
-        const signatureLines = plainText.split('\n');
+        const signatureLines = currentPlainText.split('\n');
         for (let k = 0; k < signatureLines.length; k++) {
           const line = signatureLines[k].trim();
           if (line.match(/c\.c\.|nit|celular|tel[ée]fono/i)) {
@@ -518,12 +560,13 @@ export async function POST(req: Request) {
         client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
         source_email: senderEmail,
         email_subject: `[${shortCode}] ${subject}`,
-        email_body: plainText,
+        email_body: currentPlainText,
         extracted_items: [
           { 
             isMetadata: true, 
             address: extractedData.address || null,
             deliverySlot: extractedData.deliverySlot || null,
+            deliveryDate: extractedData.deliveryDate || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
             clientType: clientType,
@@ -545,7 +588,8 @@ export async function POST(req: Request) {
     console.log('[Email Inbound] Draft created successfully:', newDraft.id);
 
     // 4. Send confirmation email to the client using Nodemailer
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    // DESACTIVADO: Ahora los correos se envían manualmente después de la revisión del operario
+    if (false && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         // Dynamic import to avoid edge runtime issues if applicable, though this is a Node.js route
         const nodemailer = require('nodemailer');
@@ -769,29 +813,8 @@ export async function POST(req: Request) {
 </div>
         `;
 
-        // EVITAR enviar correos de confirmación al propio correo corporativo/administrador para no saturar la bandeja de entrada
-        const isCorporateRecipient = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
-        if (!isCorporateRecipient) {
-          await transporter.sendMail({
-            from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
-            to: senderEmail,
-            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-            html: emailHtml,
-          });
-          console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
-
-          // Guarda copia en la tabla mail para el historial
-          await supabaseAdmin.from('mail').insert({
-            to_email: senderEmail,
-            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-            message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-            template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
-          });
-        } else {
-          console.log('[Email Inbound] Correo destinatario es corporativo/admin. Saltando envío de confirmación e historial para evitar spam.', senderEmail);
-        }
+        // Respuesta automática deshabilitada. Ahora se envía manualmente desde la interfaz cuando el administrador lo decida.
+        console.log('[Email Inbound] Automatic confirmation email is disabled. Admin will send manual receipt acknowledgment.');
 
       } catch (emailError) {
         console.error('[Email Inbound] Failed to send confirmation email:', emailError);
