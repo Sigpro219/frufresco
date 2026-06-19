@@ -2412,8 +2412,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           </th>
                         )}
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '15%' }}>PRODUCTO ORIGINAL</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '5%' }}>FORMATO</th>
-                        <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '5%' }}>U.M.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#4B5563', fontSize: '0.75rem', letterSpacing: '0.05em', backgroundColor: '#F3F4F6', width: '6%' }}>CANT. ORIG.</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'left', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em' }}>MATCH INVENTARIO</th>
                         <th style={{ padding: '1rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#10B981', fontSize: '0.75rem', letterSpacing: '0.05em', width: '130px' }}>UNIDADES</th>
@@ -2472,28 +2470,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       }}>
                                         <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
                                           {item.originalName || item.name || item.producto || item.item || ''}
-                                        </div>
-                                      </td>
-                                      <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        textAlign: 'center', 
-                                        width: '5%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: 600 }}>
-                                          {item.originalFormatNumber || '-'}
-                                        </div>
-                                      </td>
-                                      <td style={{ 
-                                        padding: '1rem 0.5rem', 
-                                        textAlign: 'center', 
-                                        width: '5%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
-                                        transition: 'background-color 0.2s'
-                                      }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: 600 }}>
-                                          {item.originalFormatUnit || '-'}
                                         </div>
                                       </td>
                                       <td style={{ 
@@ -3669,7 +3645,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </button>
               <button
                 type="button"
-                autoFocus
                 onClick={() => {
                   actionConfirm.onConfirm();
                   setActionConfirm(null);
