@@ -19,43 +19,96 @@ export const permissionTree: TreeNode[] = [
       {
         id: 'admin.dashboard',
         label: 'Centro de Comando / Gobernanza',
+        level: 2,
+        children: [
+          { id: 'admin.dashboard.settings', label: 'Parámetros Globales (Cutoff)', level: 3 },
+          { id: 'admin.dashboard.audit', label: 'Logs de Auditoría de Datos', level: 3 }
+        ]
+      },
+      {
+        id: 'admin.clients',
+        label: 'Clientes (CRM y Aprobación)',
         level: 2
       },
       {
-        id: 'admin.commercial',
-        label: 'Comercial y Operaciones de Clientes',
+        id: 'admin.orders',
+        label: 'Pedidos y Rutas de Despacho',
         level: 2,
         children: [
+          { id: 'admin.orders.history', label: 'Historial y Monitoreo de Órdenes', level: 3 },
+          { id: 'admin.orders.create', label: 'Generación Manual de Pedidos', level: 3 },
+          { id: 'admin.orders.loading', label: 'Carga y Consolidación de Camiones', level: 3 }
+        ]
+      },
+      {
+        id: 'admin.commercial',
+        label: 'Comercial y Facturación',
+        level: 2,
+        children: [
+          { id: 'admin.commercial.quotes', label: 'Cotizaciones y Ofertas (B2B)', level: 3 },
+          { id: 'admin.commercial.agreements', label: 'Acuerdos y Listas de Precios', level: 3 },
+          { id: 'admin.commercial.cost-matrix', label: 'Matriz de Costos y Rentabilidad', level: 3 },
+          { id: 'admin.commercial.campaigns', label: 'Campañas de Mercadeo (Alzas/Bajas)', level: 3 },
           {
-            id: 'admin.commercial.billing.invoicing',
-            label: 'Facturación (Cortes y Resoluciones)',
-            level: 3
-          },
-          {
-            id: 'admin.commercial.billing.portfolio',
-            label: 'Cartera y Cupos (Dossier de Crédito)',
-            level: 3
-          },
-          {
-            id: 'admin.commercial.billing.config',
-            label: 'Configuración de Facturación',
-            level: 3
+            id: 'admin.commercial.billing',
+            label: 'Facturación y Cartera (Finanzas)',
+            level: 3,
+            children: [
+              { id: 'admin.commercial.billing.invoicing', label: 'Facturación (Cortes y Devoluciones)', level: 4 },
+              { id: 'admin.commercial.billing.portfolio', label: 'Cartera y Solicitudes de Crédito', level: 4 },
+              { id: 'admin.commercial.billing.config', label: 'Configuración y Roles de Crédito', level: 4 }
+            ]
           },
           {
             id: 'admin.commercial.inventory',
-            label: 'Control de Inventarios',
-            level: 3
+            label: 'Control de Inventarios (Stocks)',
+            level: 3,
+            children: [
+              { id: 'admin.commercial.inventory.stock', label: 'Stock en Tiempo Real', level: 4 },
+              { id: 'admin.commercial.inventory.movements', label: 'Kardex y Movimientos de Stock', level: 4 },
+              { id: 'admin.commercial.inventory.random_tasks', label: 'Auditorías y Conteos Cíclicos', level: 4 },
+              { id: 'admin.commercial.inventory.novedades', label: 'Bitácora de Incidencias de Piso', level: 4 }
+            ]
           }
         ]
       },
       {
+        id: 'admin.procurement',
+        label: 'Gestión de Compras (Abastecimiento Admin)',
+        level: 2,
+        children: [
+          { id: 'admin.procurement.treasury', label: 'Conciliación Bancaria y Aprobación', level: 3 },
+          { id: 'admin.procurement.cash', label: 'Caja Menor (Compras de Contado y Gastos)', level: 3 },
+          { id: 'admin.procurement.providers', label: 'Maestro de Proveedores (NIT/RUT)', level: 3 },
+          { id: 'admin.procurement.export', label: 'Exportador Contable (WorldOffice)', level: 3 },
+          { id: 'admin.procurement.expenses', label: 'Histórico de Gastos Operativos', level: 3 }
+        ]
+      },
+      {
         id: 'admin.transport',
-        label: 'Logística y Transporte (Admin)',
-        level: 2
+        label: 'Torre de Control de Logística',
+        level: 2,
+        children: [
+          { id: 'admin.transport.map', label: 'Monitoreo en Mapa (Tiempo Real)', level: 3 },
+          { id: 'admin.transport.planner', label: 'Asistente de Planificación de Rutas', level: 3 },
+          { id: 'admin.transport.fleet', label: 'Maestro de Flota de Vehículos', level: 3 },
+          { id: 'admin.transport.maintenance', label: 'Mantenimiento Preventivo/Kilometraje', level: 3 },
+          { id: 'admin.transport.drivers_panel', label: 'Bitácora y Disponibilidad de Choferes', level: 3 },
+          { id: 'admin.transport.kpis', label: 'Indicadores de Rendimiento y Costo', level: 3 }
+        ]
+      },
+      {
+        id: 'admin.products',
+        label: 'Maestro de Productos',
+        level: 2,
+        children: [
+          { id: 'admin.products.catalog', label: 'Precios de Catálogo B2C', level: 3 },
+          { id: 'admin.products.master', label: 'Maestro Técnico de SKU (Atributos/UoM)', level: 3 }
+        ]
       },
       {
         id: 'admin.hr',
-        label: 'Talento Humano y Operarios',
+        label: 'Talento Humano y Colaboradores',
         level: 2
       },
       {
@@ -65,7 +118,7 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.strategy',
-        label: 'Inteligencia y Estrategia (BI)',
+        label: 'Inteligencia de Negocio y Estrategia',
         level: 2
       }
     ]
@@ -91,23 +144,58 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'ops.recogida',
-        label: 'Módulo de Recogida (Ruta Proveedores)',
+        label: 'Módulo de Recogida Zorritos (Abastos)',
         level: 2
       },
       {
         id: 'ops.recepcion',
-        label: 'Módulo de Recibo y Control de Calidad',
-        level: 2
+        label: 'Módulo de Recepción (Bodega Principal)',
+        level: 2,
+        children: [
+          { id: 'ops.recepcion.supervisor', label: 'Supervisión de Cuarentena y Mermas', level: 3 }
+        ]
       },
       {
         id: 'ops.picking',
         label: 'Módulo de Alistamiento (Picking)',
-        level: 2
+        level: 2,
+        children: [
+          { id: 'ops.picking.terminal', label: 'Terminal de Alistamiento (Básculas)', level: 3 },
+          { id: 'ops.picking.dashboard', label: 'Tablero de Eficiencia del Equipo', level: 3 }
+        ]
       },
       {
         id: 'ops.driver',
         label: 'Módulo de Despacho (Conductores)',
         level: 2
+      },
+      {
+        id: 'ops.inventory',
+        label: 'Cierre y Auditoría de Inventario de Piso',
+        level: 2
+      }
+    ]
+  },
+  {
+    id: 'b2b',
+    label: 'Portal Institucional (B2B)',
+    level: 1,
+    children: [
+      {
+        id: 'b2b.register',
+        label: 'Registro y Creación de Cuentas B2B',
+        level: 2
+      },
+      {
+        id: 'b2b.dashboard',
+        label: 'Panel de Cliente B2B',
+        level: 2,
+        children: [
+          { id: 'b2b.dashboard.order', label: 'Creación de Pedido y Catálogo', level: 3 },
+          { id: 'b2b.dashboard.invoices', label: 'Consulta de Facturas y Saldos', level: 3 },
+          { id: 'b2b.dashboard.consumption', label: 'Estadísticas de Consumo Histórico', level: 3 },
+          { id: 'b2b.dashboard.agreements', label: 'Acuerdos Comerciales y Contratos', level: 3 }
+        ]
       }
     ]
   }
@@ -120,7 +208,7 @@ interface PermissionTreeEditorProps {
 
 export default function PermissionTreeEditor({ initialPermissions, onChange }: PermissionTreeEditorProps) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['admin', 'ops']));
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['admin', 'ops', 'b2b']));
 
   useEffect(() => {
     // Clean and normalize incoming permissions
