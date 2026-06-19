@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, Product } from '@/lib/supabase';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { ShieldAlert } from 'lucide-react';
 import CreateProductModal from '@/components/CreateProductModal';
 import EditProductModal from '@/components/EditProductModal';
 import Toast from '@/components/Toast';
@@ -51,8 +53,17 @@ interface ProductConversion {
 }
 
 export default function MasterProductsPage() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.products.master.view');
+    const canEdit = hasPermission('admin.products.master.edit');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [conversions, setConversions] = useState<ProductConversion[]>([]);
@@ -83,6 +94,19 @@ export default function MasterProductsPage() {
     const fetchProducts = useCallback(async () => {
         try {
             setLoading(true);
+            const { data: rolesData, error: rolesError } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .eq('key', 'system_roles')
+                .maybeSingle();
+
+            if (!rolesError && rolesData?.value) {
+                try {
+                    setRoles(JSON.parse(rolesData.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles:', e);
+                }
+            }
             let allProducts: Product[] = [];
             let from = 0;
             const limit = 1000;
@@ -315,6 +339,10 @@ export default function MasterProductsPage() {
     };
 
     const sanitizeMasterData = async () => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         if (!confirm('¿Deseas generar automáticamente SKUs y Descripciones para todos los productos que no los tengan?')) return;
         
         try {
@@ -355,6 +383,10 @@ export default function MasterProductsPage() {
     };
     
     const syncWebVisibility = async () => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         const toHide = products.filter(p => (!p.image_url || p.image_url.trim() === '') && p.show_on_web).length;
         const toShow = products.filter(p => p.image_url && p.image_url.trim() !== '' && !p.show_on_web && p.is_active).length;
         
@@ -396,6 +428,10 @@ export default function MasterProductsPage() {
 
 
     const updateProductField = async (id: string, field: keyof Product, value: string | number | boolean | unknown[] | null) => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
 
         const currentProduct = products.find(p => p.id === id);
         if (currentProduct && currentProduct[field] === value) return;
@@ -433,6 +469,10 @@ export default function MasterProductsPage() {
     };
 
     const addConversion = async (productId: string, fromUnit: string, toUnit: string, factor: number) => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         const { data, error } = await supabase
             .from('product_conversions')
             .insert({ product_id: productId, from_unit: fromUnit, to_unit: toUnit, conversion_factor: factor })
@@ -448,6 +488,10 @@ export default function MasterProductsPage() {
     };
 
     const deleteConversion = async (id: string) => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         const { error } = await supabase.from('product_conversions').delete().eq('id', id);
         if (error) {
             showToast('Error al eliminar: ' + error.message, 'error');
@@ -465,6 +509,10 @@ export default function MasterProductsPage() {
 
 
     const handleMainImageUpload = async (productId: string, file: File) => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         setSavingId(productId);
         try {
             const fileExt = file.name.split('.').pop();
@@ -507,6 +555,10 @@ export default function MasterProductsPage() {
     };
 
     const processFile = async () => {
+        if (!canEdit) {
+            showToast('No tienes permisos para modificar el catálogo maestro.', 'error');
+            return;
+        }
         if (!selectedFile) return;
         
         const reader = new FileReader();
@@ -856,23 +908,89 @@ export default function MasterProductsPage() {
         };
     }, [products]);
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <RefreshCw size={32} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando catálogo maestro...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar este módulo. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <Toast />
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '2rem' }}>
+                {!canEdit && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para modificar el catálogo maestro.</span>
+                    </div>
+                )}
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <ArrowLeft size={14} strokeWidth={1.5} /> Volver al Dashboard
                             </Link>
-                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Catálogo Maestro de SKUs</h1>
+                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Maestro SKU (Datos Técnicos)</h1>
                             <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos y definiciones técnicas.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={sanitizeMasterData}
+                                disabled={!canEdit}
                                 style={{
                                     padding: '0.5rem 1rem',
                                     borderRadius: THEME.radius.md,
@@ -880,21 +998,23 @@ export default function MasterProductsPage() {
                                     color: '#B45309',
                                     border: '1px solid #FDE68A',
                                     fontWeight: '600',
-                                    cursor: 'pointer',
+                                    cursor: canEdit ? 'pointer' : 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
                                     fontSize: '0.8rem',
+                                    opacity: canEdit ? 1 : 0.6,
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEF3C7'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFBEB'}
+                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FEF3C7'; }}
+                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#FFFBEB'; }}
                                 title="Generar SKUs y descripciones faltantes"
                             >
                                 <Wand2 size={14} strokeWidth={1.5} /> Sanetizar
                             </button>
                             <button
                                 onClick={syncWebVisibility}
+                                disabled={!canEdit}
                                 style={{
                                     padding: '0.5rem 1rem',
                                     borderRadius: THEME.radius.md,
@@ -902,38 +1022,41 @@ export default function MasterProductsPage() {
                                     color: THEME.colors.primary,
                                     border: `1px solid ${THEME.colors.border}`,
                                     fontWeight: '600',
-                                    cursor: 'pointer',
+                                    cursor: canEdit ? 'pointer' : 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
                                     fontSize: '0.8rem',
+                                    opacity: canEdit ? 1 : 0.6,
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DFE7DF'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = '#DFE7DF'; }}
+                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
                                 title="Sincronizar visibilidad web con disponibilidad de imágenes"
                             >
                                 <Globe size={14} strokeWidth={1.5} /> Sincronizar Web
                             </button>
 
                             <button
-                                onClick={() => setIsCreateModalOpen(true)}
+                                onClick={() => canEdit && setIsCreateModalOpen(true)}
+                                disabled={!canEdit}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '6px',
                                     padding: '0.5rem 1rem',
-                                    backgroundColor: THEME.colors.primary,
+                                    backgroundColor: canEdit ? THEME.colors.primary : THEME.colors.textSecondary,
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: THEME.radius.md,
                                     fontWeight: '700',
                                     fontSize: '0.8rem',
-                                    cursor: 'pointer',
+                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                    opacity: canEdit ? 1 : 0.6,
                                     transition: 'background-color 0.2s'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover; }}
+                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primary; }}
                             >
                                 <Plus size={16} strokeWidth={1.5} /> Nuevo SKU
                             </button>
@@ -958,7 +1081,8 @@ export default function MasterProductsPage() {
                                 <FileDown size={16} strokeWidth={1.5} />
                             </button>
                             <button
-                                onClick={() => setIsBulkModalOpen(true)}
+                                onClick={() => canEdit && setIsBulkModalOpen(true)}
+                                disabled={!canEdit}
                                 style={{
                                     padding: '0.5rem 0.75rem',
                                     borderRadius: THEME.radius.md,
@@ -966,13 +1090,14 @@ export default function MasterProductsPage() {
                                     color: THEME.colors.textMain,
                                     border: `1px solid ${THEME.colors.border}`,
                                     fontWeight: '600',
-                                    cursor: 'pointer',
+                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                    opacity: canEdit ? 1 : 0.6,
                                     display: 'flex',
                                     alignItems: 'center',
                                     transition: 'all 0.2s'
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.borderColor = THEME.colors.borderActive}
-                                onMouseLeave={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                                onMouseEnter={e => { if (canEdit) e.currentTarget.style.borderColor = THEME.colors.borderActive; }}
+                                onMouseLeave={e => { if (canEdit) e.currentTarget.style.borderColor = THEME.colors.border; }}
                                 title="Carga Masiva (Excel)"
                             >
                                 <FileUp size={16} strokeWidth={1.5} />
@@ -1272,19 +1397,20 @@ export default function MasterProductsPage() {
                                                 alignItems: 'center', 
                                                 justifyContent: 'center', 
                                                 border: `1px solid ${THEME.colors.border}`,
-                                                cursor: 'pointer',
+                                                cursor: canEdit ? 'pointer' : 'not-allowed',
                                                 position: 'relative',
                                                 transition: 'all 0.2s',
                                                 opacity: savingId === p.id ? 0.5 : 1
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.borderColor = THEME.colors.primary}
-                                            onMouseLeave={(e) => e.currentTarget.style.borderColor = THEME.colors.border}
-                                            title="Cambiar foto del maestro"
+                                            onMouseEnter={(e) => { if (canEdit) e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                            onMouseLeave={(e) => { if (canEdit) e.currentTarget.style.borderColor = THEME.colors.border; }}
+                                            title={canEdit ? "Cambiar foto del maestro" : "Modo Vista"}
                                         >
                                             <input 
                                                 type="file" 
                                                 accept="image/*" 
                                                 style={{ display: 'none' }} 
+                                                disabled={!canEdit}
                                                 onChange={(e) => {
                                                     if (e.target.files?.[0]) {
                                                         handleMainImageUpload(p.id, e.target.files[0]);
@@ -1576,15 +1702,15 @@ export default function MasterProductsPage() {
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                         <div 
-                                            onClick={() => updateProductField(p.id, 'show_on_web', !p.show_on_web)}
-                                            title={p.show_on_web ? 'Visible en tienda (Click para ocultar)' : 'Oculto en tienda (Click para mostrar)'}
+                                            onClick={() => canEdit && updateProductField(p.id, 'show_on_web', !p.show_on_web)}
+                                            title={!canEdit ? "Modo Vista" : (p.show_on_web ? 'Visible en tienda (Click para ocultar)' : 'Oculto en tienda (Click para mostrar)')}
                                             style={{ 
                                                 display: 'flex',
                                                 justifyContent: 'center',
                                                 alignItems: 'center',
                                                 opacity: p.show_on_web ? 1 : 0.3,
                                                 color: p.show_on_web ? THEME.colors.primary : THEME.colors.textSecondary,
-                                                cursor: 'pointer',
+                                                cursor: canEdit ? 'pointer' : 'not-allowed',
                                                 transition: 'all 0.2s'
                                             }}
                                         >
@@ -1593,7 +1719,7 @@ export default function MasterProductsPage() {
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <div 
-                                            onClick={() => updateProductField(p.id, 'is_active', !p.is_active)}
+                                            onClick={() => canEdit && updateProductField(p.id, 'is_active', !p.is_active)}
                                             style={{ 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
@@ -1604,10 +1730,10 @@ export default function MasterProductsPage() {
                                                 padding: '4px 8px',
                                                 borderRadius: '20px',
                                                 width: '100%',
-                                                cursor: 'pointer',
+                                                cursor: canEdit ? 'pointer' : 'not-allowed',
                                                 transition: 'all 0.2s'
                                             }}
-                                            title="Click para cambiar estado"
+                                            title={canEdit ? "Click para cambiar estado" : "Modo Vista"}
                                         >
                                             <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: p.is_active ? '#10B981' : '#EF4444' }}></div>
                                             <span style={{ fontSize: '0.65rem', fontWeight: '700', color: p.is_active ? '#065F46' : '#991B1B' }}>
@@ -1699,6 +1825,7 @@ export default function MasterProductsPage() {
                     allProducts={products}
                     onClose={() => setSelectedEditProduct(null)} 
                     onSave={() => fetchProducts()}
+                    readOnly={!canEdit}
                 />
             )}
 
@@ -1716,6 +1843,25 @@ export default function MasterProductsPage() {
                             <button onClick={() => setConversionProduct(null)} style={{ border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer', color: THEME.colors.textSecondary }}>✕</button>
                         </header>
 
+                        {!canEdit && (
+                            <div style={{
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                                border: '1px solid rgba(245, 158, 11, 0.2)',
+                                color: '#D97706',
+                                fontSize: '0.75rem',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginBottom: '1rem'
+                            }}>
+                                <ShieldAlert size={14} />
+                                <span>Modo Vista: No tienes permisos para modificar unidades.</span>
+                            </div>
+                        )}
+
                         <div style={{ marginBottom: '1rem' }}>
                             {/* SECCIÓN DE UNIDAD BASE (LA RAÍZ) */}
                             <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: THEME.radius.md, marginBottom: '1.25rem', border: `1px solid ${THEME.colors.border}` }}>
@@ -1723,8 +1869,9 @@ export default function MasterProductsPage() {
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <select
                                         value={conversionProduct.unit_of_measure}
+                                        disabled={!canEdit}
                                         onChange={(e) => updateProductField(conversionProduct.id, 'unit_of_measure', e.target.value)}
-                                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, cursor: 'pointer' }}
+                                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, fontSize: '0.9rem', fontWeight: '600', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, cursor: canEdit ? 'pointer' : 'not-allowed' }}
                                     >
                                         {dynamicUnits.map(u => (
                                             <option key={u} value={u}>{u}</option>
@@ -1762,14 +1909,18 @@ export default function MasterProductsPage() {
                                                             <ArrowUpDown size={12} strokeWidth={1.5} />
                                                         </span>
                                                     </div>
-                                                    <button 
-                                                        onClick={() => deleteConversion(c.id)} 
-                                                        style={{ color: '#EF4444', background: '#FEF2F2', border: `1px solid #FECACA`, padding: '2px 6px', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', fontSize: '0.7rem', transition: 'all 0.15s' }}
-                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                                                    >
-                                                        Eliminar
-                                                    </button>
+                                                    {canEdit ? (
+                                                        <button 
+                                                            onClick={() => deleteConversion(c.id)} 
+                                                            style={{ color: '#EF4444', background: '#FEF2F2', border: `1px solid #FECACA`, padding: '2px 6px', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', fontSize: '0.7rem', transition: 'all 0.15s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                        >
+                                                            Eliminar
+                                                        </button>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>Modo Vista</span>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1777,7 +1928,7 @@ export default function MasterProductsPage() {
                                 )}
                             </div>
 
-                            <div style={{ borderTop: `1px dashed ${THEME.colors.border}`, paddingTop: '1rem' }}>
+                            <div style={{ borderTop: `1px dashed ${THEME.colors.border}`, paddingTop: '1rem', ...(!canEdit ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}>
                                 <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: THEME.colors.textMain, textAlign: 'center', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                     <Plus size={12} strokeWidth={1.5} /> DEFINIR NUEVA RELACIÓN
                                 </h4>

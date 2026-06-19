@@ -4,16 +4,17 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError, diagnoseDatabaseError } from '@/lib/errorUtils';
-import { Wand2, Sparkles, Loader2 } from 'lucide-react';
+import { Wand2, Sparkles, Loader2, ShieldAlert } from 'lucide-react';
 
 interface EditProductModalProps {
     product: Product;
     allProducts: Product[];
     onClose: () => void;
     onSave: () => void;
+    readOnly?: boolean;
 }
 
-export default function EditProductModal({ product, allProducts, onClose, onSave }: EditProductModalProps) {
+export default function EditProductModal({ product, allProducts, onClose, onSave, readOnly = false }: EditProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [formData, setFormData] = useState<Product>({ 
@@ -258,6 +259,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         setLoading(true);
 
         try {
@@ -410,8 +412,27 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '2rem', cursor: 'pointer', color: '#6B7280' }}>✕</button>
                 </header>
 
+                {readOnly && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para modificar este SKU.</span>
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '3rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '3rem', ...(readOnly ? { pointerEvents: 'none', opacity: 0.85 } : {}) }}>
                         
                         {/* COLUMNA IZQUIERDA: CONFIGURACIÓN BÁSICA */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -1268,22 +1289,26 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     </div> {/* Fin Grid */}
 
                     <footer style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
-                        <button type="button" onClick={onClose} style={{ padding: '0.8rem 2rem', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontWeight: '600' }}>Cancelar</button>
-                        <button
-                            type="submit"
-                            disabled={loading || uploading}
-                            style={{
-                                padding: '0.8rem 3rem',
-                                backgroundColor: '#111827',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '10px',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {loading || uploading ? 'Guardando...' : 'Guardar Cambios'}
+                        <button type="button" onClick={onClose} style={{ padding: '0.8rem 2rem', background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontWeight: '600' }}>
+                            {readOnly ? 'Cerrar' : 'Cancelar'}
                         </button>
+                        {!readOnly && (
+                            <button
+                                type="submit"
+                                disabled={loading || uploading}
+                                style={{
+                                    padding: '0.8rem 3rem',
+                                    backgroundColor: '#111827',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {loading || uploading ? 'Guardando...' : 'Guardar Cambios'}
+                            </button>
+                        )}
                     </footer>
                 </form>
             </div>

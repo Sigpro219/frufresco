@@ -41,11 +41,22 @@ import {
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { ShieldAlert } from 'lucide-react';
 
 export default function ProvidersPage() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
     const [mounted, setMounted] = useState(false);
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.procurement.providers.view');
+    const canEdit = hasPermission('admin.procurement.providers.edit');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [showArchived, setShowArchived] = useState(false);
@@ -93,11 +104,20 @@ export default function ProvidersPage() {
     const fetchProviders = useCallback(async () => {
         try {
             setLoading(true);
-            const [totalRes, creditRes, activeRes] = await Promise.all([
+            const [totalRes, creditRes, activeRes, rolesRes] = await Promise.all([
                 supabase.from('providers').select('*', { count: 'exact', head: true }).eq('is_archived', false),
                 supabase.from('providers').select('*', { count: 'exact', head: true }).eq('type', 'credito').eq('is_archived', false),
-                supabase.from('providers').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('is_archived', false)
+                supabase.from('providers').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('is_archived', false),
+                supabase.from('app_settings').select('key, value').eq('key', 'system_roles').maybeSingle()
             ]);
+
+            if (!rolesRes.error && rolesRes.data?.value) {
+                try {
+                    setRoles(JSON.parse(rolesRes.data.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles:', e);
+                }
+            }
 
             setStats({
                 total: totalRes.count || 0,
@@ -140,6 +160,10 @@ export default function ProvidersPage() {
     }, []);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'rut_url' | 'additional_docs_url') => {
+        if (!canEdit) {
+            alert('No tienes permisos de edición en este módulo.');
+            return;
+        }
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -150,25 +174,25 @@ export default function ProvidersPage() {
             const cleanName = (newProvider.tax_id || 'new').replace(/[^a-zA-Z0-9]/g, '');
             const fileName = `${cleanName}_${field}_${Date.now()}.${fileExt}`;
             const filePath = `${fileName}`; // Root of the bucket
-
+ 
             console.log('Uploading to path:', filePath);
-
+ 
             const { data, error: uploadError } = await supabase.storage
                 .from('providers')
                 .upload(filePath, file, {
                     cacheControl: '3600',
                     upsert: true
                 });
-
+ 
             if (uploadError) {
                 console.error('Full Upload Error:', uploadError);
                 throw uploadError;
             }
-
+ 
             const { data: { publicUrl } } = supabase.storage
                 .from('providers')
                 .getPublicUrl(filePath);
-
+ 
             console.log('Public URL generated:', publicUrl);
             setNewProvider(prev => ({ ...prev, [field]: publicUrl }));
         } catch (err: any) {
@@ -178,9 +202,13 @@ export default function ProvidersPage() {
             setUploading(null);
         }
     };
-
+ 
     const handleSaveProvider = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canEdit) {
+            alert('No tienes permisos de edición en este módulo.');
+            return;
+        }
         try {
             const providerData = {
                 ...newProvider,
@@ -231,6 +259,10 @@ export default function ProvidersPage() {
 
     const toggleArchiveStatus = async (e: React.MouseEvent, id: string, currentStatus: boolean) => {
         e.stopPropagation();
+        if (!canEdit) {
+            alert('No tienes permisos de edición en este módulo.');
+            return;
+        }
         const action = currentStatus ? 'restaurar' : 'archivar';
         if (!confirm(`¿Seguro que deseas ${action} este proveedor?`)) return;
         try {
@@ -309,16 +341,82 @@ export default function ProvidersPage() {
 
     if (!mounted) return null;
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F2F5' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: '#64748B', fontSize: '0.85rem', fontWeight: '600' }}>Cargando información...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F2F5' }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: 'white',
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar este módulo. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F0F2F5', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
+                {!canEdit && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1rem',
+                        marginTop: '0.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para crear o editar la ficha de proveedores.</span>
+                    </div>
+                )}
                 
                 {/* Header */}
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <h1 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0, letterSpacing: '-0.03em' }}>
-                            {showArchived ? 'Archivo de' : 'Directorio de'} <span style={{ color: '#0891B2' }}>Proveedores</span>
+                            Maestro de <span style={{ color: '#0891B2' }}>Proveedores</span>{showArchived && ' (Archivo)'}
                         </h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
                              <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>COMPRAS 360</span>
@@ -534,8 +632,9 @@ export default function ProvidersPage() {
                                 });
                                 setShowCreateModal(true);
                             }}
+                            disabled={!canEdit}
                             style={{ 
-                                backgroundColor: THEME.colors.primary, 
+                                backgroundColor: canEdit ? THEME.colors.primary : THEME.colors.textSecondary, 
                                 color: 'white', 
                                 padding: '0.5rem 1rem', 
                                 borderRadius: THEME.radius.sm, 
@@ -545,11 +644,16 @@ export default function ProvidersPage() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                cursor: 'pointer',
+                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                opacity: canEdit ? 1 : 0.6,
                                 transition: 'background-color 0.2s'
                             }}
-                            onMouseOver={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                            onMouseOut={e => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                            onMouseOver={e => {
+                                if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                            }}
+                            onMouseOut={e => {
+                                if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                            }}
                         >
                             <Plus size={14} strokeWidth={1.5} /> Nuevo Proveedor
                         </button>
@@ -652,7 +756,19 @@ export default function ProvidersPage() {
                                         </td>
                                         <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                                                <button onClick={(e) => toggleArchiveStatus(e, p.id, p.is_archived)} style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.4rem', color: p.is_archived ? '#10B981' : '#EF4444', cursor: 'pointer' }}>
+                                                <button 
+                                                    onClick={(e) => toggleArchiveStatus(e, p.id, p.is_archived)} 
+                                                    disabled={!canEdit}
+                                                    style={{ 
+                                                        backgroundColor: '#F8FAFC', 
+                                                        border: '1px solid #E2E8F0', 
+                                                        borderRadius: '8px', 
+                                                        padding: '0.4rem', 
+                                                        color: p.is_archived ? '#10B981' : '#EF4444', 
+                                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                        opacity: canEdit ? 1 : 0.5
+                                                    }}
+                                                >
                                                     {p.is_archived ? <RotateCcw size={14} /> : <Archive size={14} />}
                                                 </button>
                                             </div>
@@ -738,13 +854,15 @@ export default function ProvidersPage() {
                                                     e.stopPropagation();
                                                     toggleArchiveStatus(e, p.id, p.is_archived);
                                                 }} 
+                                                disabled={!canEdit}
                                                 style={{ 
                                                     backgroundColor: '#F8FAFC', 
                                                     border: '1px solid #E2E8F0', 
                                                     borderRadius: '6px', 
                                                     padding: '0.25rem', 
                                                     color: p.is_archived ? '#10B981' : '#EF4444',
-                                                    cursor: 'pointer',
+                                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                    opacity: canEdit ? 1 : 0.5,
                                                     display: 'flex',
                                                     alignItems: 'center'
                                                 }}
@@ -1058,43 +1176,45 @@ export default function ProvidersPage() {
                                         <div style={{ backgroundColor: selectedProvider.type === 'credito' ? '#ECFDF5' : '#F0F9FF', color: selectedProvider.type === 'credito' ? '#059669' : '#0284C7', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '900' }}>
                                             {selectedProvider.type === 'credito' ? '💳 CRÉDITO' : '💵 CONTADO'}
                                         </div>
-                                        <button 
-                                            onClick={() => {
-                                                setEditingId(selectedProvider.id);
-                                                setNewProvider({
-                                                    name: selectedProvider.name || '',
-                                                    tax_id: selectedProvider.tax_id || '',
-                                                    document_type: selectedProvider.document_type || 'NIT',
-                                                    category: selectedProvider.category || 'GENERAL',
-                                                    type: selectedProvider.type || 'contado',
-                                                    product: selectedProvider.product || '',
-                                                    contact_name: selectedProvider.contact_name || '',
-                                                    phone: selectedProvider.phone || selectedProvider.contact_phone || '',
-                                                    email: selectedProvider.email || '',
-                                                    payment_terms_days: selectedProvider.payment_terms_days || 0,
-                                                    address: selectedProvider.address || '',
-                                                    bank_name: selectedProvider.bank_name || '',
-                                                    bank_account_number: selectedProvider.bank_account_number || '',
-                                                    bank_account_type: selectedProvider.bank_account_type || 'Ahorros',
-                                                    billing_type: selectedProvider.billing_type || 'soporte',
-                                                    payment_condition: selectedProvider.payment_condition || '',
-                                                    observations: selectedProvider.observations || selectedProvider.notes || '',
-                                                    rut_url: selectedProvider.rut_url || '',
-                                                    additional_docs_url: selectedProvider.additional_docs_url || '',
-                                                    warehouse_location: selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined ? selectedProvider.warehouse_location.toString() : '',
-                                                    puesto: selectedProvider.puesto || '',
-                                                    is_active: selectedProvider.is_active ?? true,
-                                                    is_archived: selectedProvider.is_archived ?? false
-                                                });
-                                                setSelectedProvider(null);
-                                                setShowCreateModal(true);
-                                            }}
-                                            style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', backgroundColor: 'white', color: THEME.colors.primary, border: '1.5px solid #E2E8F0', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.primary; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
-                                        >
-                                            <Edit2 size={14} /> Editar
-                                        </button>
+                                        {canEdit && (
+                                            <button 
+                                                onClick={() => {
+                                                    setEditingId(selectedProvider.id);
+                                                    setNewProvider({
+                                                        name: selectedProvider.name || '',
+                                                        tax_id: selectedProvider.tax_id || '',
+                                                        document_type: selectedProvider.document_type || 'NIT',
+                                                        category: selectedProvider.category || 'GENERAL',
+                                                        type: selectedProvider.type || 'contado',
+                                                        product: selectedProvider.product || '',
+                                                        contact_name: selectedProvider.contact_name || '',
+                                                        phone: selectedProvider.phone || selectedProvider.contact_phone || '',
+                                                        email: selectedProvider.email || '',
+                                                        payment_terms_days: selectedProvider.payment_terms_days || 0,
+                                                        address: selectedProvider.address || '',
+                                                        bank_name: selectedProvider.bank_name || '',
+                                                        bank_account_number: selectedProvider.bank_account_number || '',
+                                                        bank_account_type: selectedProvider.bank_account_type || 'Ahorros',
+                                                        billing_type: selectedProvider.billing_type || 'soporte',
+                                                        payment_condition: selectedProvider.payment_condition || '',
+                                                        observations: selectedProvider.observations || selectedProvider.notes || '',
+                                                        rut_url: selectedProvider.rut_url || '',
+                                                        additional_docs_url: selectedProvider.additional_docs_url || '',
+                                                        warehouse_location: selectedProvider.warehouse_location !== null && selectedProvider.warehouse_location !== undefined ? selectedProvider.warehouse_location.toString() : '',
+                                                        puesto: selectedProvider.puesto || '',
+                                                        is_active: selectedProvider.is_active ?? true,
+                                                        is_archived: selectedProvider.is_archived ?? false
+                                                    });
+                                                    setSelectedProvider(null);
+                                                    setShowCreateModal(true);
+                                                }}
+                                                style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', backgroundColor: 'white', color: THEME.colors.primary, border: '1.5px solid #E2E8F0', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = THEME.colors.primary; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
+                                            >
+                                                <Edit2 size={14} /> Editar
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

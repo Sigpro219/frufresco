@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, Product } from '@/lib/supabase';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { ShieldAlert, Loader2 } from 'lucide-react';
 import VariantModal from '@/components/VariantModal';
 import CreateProductModal from '@/components/CreateProductModal';
 import { CATEGORY_MAP } from '@/lib/constants';
@@ -30,8 +32,17 @@ import {
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 
 export default function AdminProductsPage() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.products.catalog.view');
+    const canEdit = hasPermission('admin.products.catalog.edit');
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +61,19 @@ export default function AdminProductsPage() {
     const fetchProducts = useCallback(async () => {
         try {
             setLoading(true);
+            const { data: rolesData, error: rolesError } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .eq('key', 'system_roles')
+                .maybeSingle();
+
+            if (!rolesError && rolesData?.value) {
+                try {
+                    setRoles(JSON.parse(rolesData.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles:', e);
+                }
+            }
             let allProducts: Product[] = [];
             let from = 0;
             const limit = 1000;
@@ -110,6 +134,10 @@ export default function AdminProductsPage() {
     };
 
     const toggleAutosync = async () => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const newValue = !autosyncEnabled;
         setAutosyncEnabled(newValue);
         
@@ -129,6 +157,10 @@ export default function AdminProductsPage() {
     };
 
     const updateProductField = async (id: string, field: keyof Product, value: string | number | boolean | any[] | null) => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         // No guardar si el valor es el mismo para ahorrar peticiones
         const currentProduct = products.find(p => p.id === id);
         if (currentProduct && currentProduct[field] === value) return;
@@ -156,6 +188,10 @@ export default function AdminProductsPage() {
 
 
     const handleImageUpload = async (id: string, file: File) => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setSavingId(id);
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
@@ -180,6 +216,10 @@ export default function AdminProductsPage() {
     };
 
     const handleSaveVariants = async (optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return false;
+        }
         if (!selectedProduct || !optionsConfig || !variants) return false;
 
         try {
@@ -231,6 +271,10 @@ export default function AdminProductsPage() {
     };
 
     const handleVariantImageUpload = async (file: File) => {
+        if (!canEdit) {
+            alert('No tienes permisos de edición en este módulo.');
+            return null;
+        }
         try {
             const fileExt = file.name.split('.').pop();
             const cleanFileName = `variant-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
@@ -266,6 +310,10 @@ export default function AdminProductsPage() {
 
     // --- SYNC B2C PRICES LOGIC (API Call) ---
     const syncB2CWebPrices = async () => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         if (!confirm('¿Sincronizar precios en tienda? Se calculará (Costo + Margen B2C + IVA) redondeando al siguiente múltiplo de $50.')) return;
 
         setIsSyncingPrices(true);
@@ -294,6 +342,10 @@ export default function AdminProductsPage() {
     };
 
     const handleBulkToggle = async (active: boolean) => {
+        if (!canEdit) {
+            showToast('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const { error } = await supabase
             .from('products')
             .update({ is_active: active })
@@ -430,6 +482,53 @@ export default function AdminProductsPage() {
 
 
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando catálogo...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar este módulo. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     // Renderizado principal
     return (
         <div style={{ backgroundColor: THEME.colors.background, minHeight: '100vh', fontFamily: 'var(--font-outfit), sans-serif' }}>
@@ -462,6 +561,24 @@ export default function AdminProductsPage() {
             `}</style>
             <Toast />
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem 2rem' }}>
+                {!canEdit && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para modificar el catálogo comercial.</span>
+                    </div>
+                )}
                 <header style={{ marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -470,7 +587,7 @@ export default function AdminProductsPage() {
                             </Link>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '0.4rem' }}>
                                 <ShoppingBag size={26} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Catálogo Comercial B2C</h1>
+                                <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Catálogo Web (Precios B2C)</h1>
                             </div>
                             <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', margin: '0.2rem 0 0 0' }}>Gestión de precios públicos, visibilidad y branding de productos.</p>
                         </div>
@@ -510,30 +627,31 @@ export default function AdminProductsPage() {
 
                             <button
                                 onClick={syncB2CWebPrices}
-                                disabled={isSyncingPrices}
+                                disabled={isSyncingPrices || !canEdit}
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '8px',
                                     color: 'white',
-                                    backgroundColor: isSyncingPrices ? THEME.colors.textSecondary : THEME.colors.primary,
+                                    backgroundColor: (isSyncingPrices || !canEdit) ? THEME.colors.textSecondary : THEME.colors.primary,
                                     padding: '0.5rem 1.1rem',
                                     borderRadius: THEME.radius.md,
                                     border: 'none',
                                     fontWeight: '600',
                                     fontSize: '0.8rem',
-                                    cursor: isSyncingPrices ? 'not-allowed' : 'pointer',
+                                    cursor: (isSyncingPrices || !canEdit) ? 'not-allowed' : 'pointer',
+                                    opacity: canEdit ? 1 : 0.6,
                                     boxShadow: THEME.shadow.sm,
                                     transition: 'all 0.2s ease',
                                 }}
                                 onMouseEnter={(e) => {
-                                    if (!isSyncingPrices) {
+                                    if (!isSyncingPrices && canEdit) {
                                         e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
                                         e.currentTarget.style.transform = 'translateY(-1px)';
                                     }
                                 }}
                                 onMouseLeave={(e) => {
-                                    if (!isSyncingPrices) {
+                                    if (!isSyncingPrices && canEdit) {
                                         e.currentTarget.style.backgroundColor = THEME.colors.primary;
                                         e.currentTarget.style.transform = 'none';
                                     }
@@ -541,46 +659,47 @@ export default function AdminProductsPage() {
                             >
                                 <Globe size={14} strokeWidth={1.5} />
                                 {isSyncingPrices ? 'Publicando...' : 'Publicar Precios en Tienda'}
-                            </button>
+                             </button>
 
-                            {/* SEPARADOR SUTIL */}
-                            <div style={{ height: '20px', width: '1px', backgroundColor: THEME.colors.border, marginLeft: '4px' }}></div>
+                             {/* SEPARADOR SUTIL */}
+                             <div style={{ height: '20px', width: '1px', backgroundColor: THEME.colors.border, marginLeft: '4px' }}></div>
 
-                            {/* SELECTOR AUTO-SYNC PEGADO A LA DERECHA */}
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                paddingLeft: '4px'
-                            }}>
-                                <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Auto
-                                </span>
-                                <div 
-                                    onClick={toggleAutosync}
-                                    style={{
-                                        width: '36px',
-                                        height: '18px',
-                                        backgroundColor: autosyncEnabled ? THEME.colors.primary : THEME.colors.borderActive,
-                                        borderRadius: '20px',
-                                        position: 'relative',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '12px',
-                                        height: '12px',
-                                        backgroundColor: 'white',
-                                        borderRadius: '50%',
-                                        position: 'absolute',
-                                        top: '3px',
-                                        left: autosyncEnabled ? '21px' : '3px',
-                                        transition: 'all 0.2s ease',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
-                                    }} />
-                                </div>
-                            </div>
+                             {/* SELECTOR AUTO-SYNC PEGADO A LA DERECHA */}
+                             <div style={{
+                                 display: 'flex',
+                                 alignItems: 'center',
+                                 gap: '8px',
+                                 paddingLeft: '4px'
+                             }}>
+                                 <span style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                     Auto
+                                 </span>
+                                 <div 
+                                     onClick={toggleAutosync}
+                                     style={{
+                                         width: '36px',
+                                         height: '18px',
+                                         backgroundColor: autosyncEnabled ? THEME.colors.primary : THEME.colors.borderActive,
+                                         borderRadius: '20px',
+                                         position: 'relative',
+                                         cursor: canEdit ? 'pointer' : 'not-allowed',
+                                         opacity: canEdit ? 1 : 0.6,
+                                         transition: 'all 0.2s ease',
+                                     }}
+                                 >
+                                     <div style={{
+                                         width: '12px',
+                                         height: '12px',
+                                         backgroundColor: 'white',
+                                         borderRadius: '50%',
+                                         position: 'absolute',
+                                         top: '3px',
+                                         left: autosyncEnabled ? '21px' : '3px',
+                                         transition: 'all 0.2s ease',
+                                         boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                                     }} />
+                                 </div>
+                             </div>
                         </div>
                     </div>
                 </header>
@@ -1191,13 +1310,15 @@ export default function AdminProductsPage() {
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <button
                                                 onClick={() => toggleActive(product.id, product.is_active)}
+                                                disabled={!canEdit}
                                                 style={{
                                                     padding: '0.4rem 0.8rem',
                                                     borderRadius: THEME.radius.md,
                                                     border: `1px solid ${product.is_active ? '#E2E8F0' : '#A7F3D0'}`,
                                                     backgroundColor: product.is_active ? '#F8FAFC' : '#ECFDF5',
                                                     color: product.is_active ? THEME.colors.textSecondary : THEME.colors.primary,
-                                                    cursor: 'pointer',
+                                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                    opacity: canEdit ? 1 : 0.6,
                                                     fontSize: '0.8rem',
                                                     fontWeight: '500',
                                                     transition: 'all 0.15s ease'

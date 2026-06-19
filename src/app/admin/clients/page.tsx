@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import ClientsModule from '@/components/ClientsModule';
 import Toast from '@/components/Toast';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
@@ -30,7 +31,8 @@ import {
     HelpCircle,
     ArrowUpRight,
     Trophy,
-    Loader2
+    Loader2,
+    ShieldAlert
 } from 'lucide-react';
 
 declare global {
@@ -102,6 +104,8 @@ interface Order {
 }
 
 export default function AdminClientsPage() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState('dashboard');
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
@@ -119,6 +123,13 @@ export default function AdminClientsPage() {
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.clients.view');
+    const canEdit = hasPermission('admin.clients.edit');
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -126,6 +137,21 @@ export default function AdminClientsPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
+            // 0. Fetch system_roles from app_settings
+            const { data: rolesData, error: rolesError } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .eq('key', 'system_roles')
+                .maybeSingle();
+
+            if (!rolesError && rolesData?.value) {
+                try {
+                    setRoles(JSON.parse(rolesData.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles:', e);
+                }
+            }
+
             // 1. Clientes B2B (Profiles) - Traemos TODO para filtrar luego o mostrar padres
             const { data: b2bData } = await supabase
                 .from('profiles')
@@ -168,8 +194,11 @@ export default function AdminClientsPage() {
             setLoading(false);
         }
     };
-
     const handleUpdateLeadStatus = async (id: string, newStatus: string) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const { error } = await supabase
             .from('leads')
             .update({ status: newStatus })
@@ -184,6 +213,10 @@ export default function AdminClientsPage() {
     };
 
     const handleUpdatePricingModel = async (clientId: string, modelId: string) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const client = clientsB2B.find(c => c.id === clientId);
         
         // DOBLE CONFIRMACIÓN (Crítica para integridad de datos)
@@ -222,6 +255,10 @@ export default function AdminClientsPage() {
     };
 
     const handleUpdateLeadContact = async (id: string, contactMade: boolean = true) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const lead = leads.find(l => l.id === id);
         if (!lead) return;
 
@@ -248,6 +285,10 @@ export default function AdminClientsPage() {
     };
 
     const handleScheduleLeadTask = async (id: string, date: string) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         const { error } = await supabase
             .from('leads')
             .update({ next_contact_date: date })
@@ -267,25 +308,40 @@ export default function AdminClientsPage() {
     };
 
     const handleEditClient = (client: Profile) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setEditTarget(client);
         setIsFormModalOpen(true);
     };
 
     const handleEditLead = (lead: Lead) => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setEditTargetLead(lead);
         setIsLeadModalOpen(true);
     };
 
     const handleCreateLead = () => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setEditTargetLead(null);
         setIsLeadModalOpen(true);
     };
 
     const handleCreateClient = (role: 'b2b_client' | 'b2c_client' = 'b2b_client') => {
+        if (!canEdit) {
+            window.showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setEditTarget({ role }); // Send role even if new
         setIsFormModalOpen(true);
     };
-
     const tabs = [
         { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={15} strokeWidth={1.5} /> },
         { id: 'b2b', label: 'Institucionales', icon: <Building2 size={15} strokeWidth={1.5} /> },
@@ -335,6 +391,53 @@ export default function AdminClientsPage() {
         });
     };
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando información...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar este módulo. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <Toast />
@@ -374,7 +477,7 @@ export default function AdminClientsPage() {
                              <span style={{ backgroundColor: THEME.colors.textMain, color: 'white', padding: '2px 8px', borderRadius: THEME.radius.sm, fontSize: '0.6rem', fontWeight: '700', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
                              <span style={{ color: THEME.colors.textSecondary, fontSize: '0.7rem', fontWeight: '600' }}>/ GESTIÓN PRINCIPAL</span>
                         </div>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.03em', fontFamily: THEME.typography.fontFamilyMain }}>Centro de <span style={{ color: THEME.colors.primary }}>Clientes</span></h1>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: '700', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.03em', fontFamily: THEME.typography.fontFamilyMain }}>Clientes <span style={{ color: THEME.colors.primary }}>(CRM y Aprobación)</span></h1>
                     </div>
                 </header>
 
@@ -471,22 +574,28 @@ export default function AdminClientsPage() {
                                         if (activeTab === 'leads') handleCreateLead();
                                         else handleCreateClient(activeTab === 'b2c' ? 'b2c_client' : 'b2b_client');
                                     }}
+                                    disabled={!canEdit}
                                     style={{ 
-                                        backgroundColor: THEME.colors.primary, 
+                                        backgroundColor: canEdit ? THEME.colors.primary : THEME.colors.textSecondary, 
                                         color: 'white', 
                                         padding: '0.5rem 1rem', 
                                         borderRadius: THEME.radius.md, 
                                         border: 'none', 
                                         fontWeight: '600', 
                                         fontSize: '0.75rem',
-                                        cursor: 'pointer',
+                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                        opacity: canEdit ? 1 : 0.6,
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '6px',
                                         transition: 'background-color 0.2s'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                                    onMouseEnter={(e) => {
+                                        if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                    }}
                                 >
                                     <Plus size={14} strokeWidth={1.5} /> Crear {activeTab === 'leads' ? 'Prospecto' : 'Cliente'}
                                 </button>
@@ -617,6 +726,7 @@ export default function AdminClientsPage() {
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
                                 onUpdatePricingModel={handleUpdatePricingModel}
+                                canEdit={canEdit}
                             />
                         )}
 
@@ -628,6 +738,7 @@ export default function AdminClientsPage() {
                                 viewMode={viewMode}
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
+                                canEdit={canEdit}
                             />
                         )}
 
@@ -641,6 +752,7 @@ export default function AdminClientsPage() {
                                 availableParents={clientsB2B.filter(c => c.is_corporate_parent)}
                                 onEdit={handleEditClient}
                                 onViewDetails={handleViewDetails}
+                                canEdit={canEdit}
                             />
                         )}
 
@@ -654,6 +766,7 @@ export default function AdminClientsPage() {
                                 onViewDetails={(lead) => handleViewDetails(lead as unknown as Profile)}
                                 onUpdateStatus={handleUpdateLeadStatus}
                                 onRegisterContact={handleUpdateLeadContact}
+                                canEdit={canEdit}
                             />
                         )}
                     </>
@@ -876,7 +989,7 @@ function CriticalLeadRow({ lead, onWaitlist }: { lead: Lead, onWaitlist: () => v
     );
 }
 
-function ClientCard({ type, data, pricingModels, availableParents, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask }: { 
+function ClientCard({ type, data, pricingModels, availableParents, onUpdatePricingModel, onUpdateStatus, onViewDetails, onEdit, onRegisterContact, onScheduleTask, canEdit = true }: { 
     type: 'b2b' | 'b2c' | 'lead', 
     data: Profile | Lead, 
     pricingModels?: PricingModel[],
@@ -886,7 +999,8 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
     onViewDetails?: () => void,
     onEdit?: () => void,
     onRegisterContact?: () => void,
-    onScheduleTask?: (date: string) => void
+    onScheduleTask?: (date: string) => void,
+    canEdit?: boolean
 }) {
     const isB2B = type === 'b2b';
     const isB2C = type === 'b2c';
@@ -1025,6 +1139,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                         <select 
                             value={profileData.pricing_model_id || ''} 
                             onChange={(e) => onUpdatePricingModel && onUpdatePricingModel(profileData.id, e.target.value)}
+                            disabled={!canEdit}
                             style={{ 
                                 width: '100%', 
                                 padding: '0.4rem 0.6rem', 
@@ -1033,7 +1148,9 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                                 fontSize: '0.8rem', 
                                 fontWeight: '600',
                                 backgroundColor: profileData.pricing_model_id ? THEME.colors.primaryLight : 'white',
-                                color: profileData.pricing_model_id ? THEME.colors.primary : THEME.colors.textMain
+                                color: profileData.pricing_model_id ? THEME.colors.primary : THEME.colors.textMain,
+                                opacity: canEdit ? 1 : 0.7,
+                                cursor: canEdit ? 'default' : 'not-allowed'
                             }}
                         >
                             <option value="">-- Sin Modelo Asignado --</option>
@@ -1131,6 +1248,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                             <select
                                 value={leadData.status}
                                 onChange={(e) => onUpdateStatus && onUpdateStatus(leadData.id, e.target.value)}
+                                disabled={!canEdit}
                                 style={{ 
                                     width: '100%', 
                                     padding: '0.5rem', 
@@ -1139,7 +1257,9 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                                     fontWeight: '600',
                                     fontSize: '0.8rem',
                                     backgroundColor: 'white',
-                                    color: THEME.colors.textMain
+                                    color: THEME.colors.textMain,
+                                    opacity: canEdit ? 1 : 0.7,
+                                    cursor: canEdit ? 'default' : 'not-allowed'
                                 }}
                             >
                                 <option value="new">Nuevo Contacto</option>
@@ -1235,9 +1355,11 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                         <span>Expediente</span>
                     </button>
                 )}
+
                 {(isB2B || isB2C || isLead) && (
                     <button 
                         onClick={onEdit}
+                        disabled={!canEdit}
                         style={{ 
                             flex: 1, 
                             padding: '0.5rem', 
@@ -1245,21 +1367,26 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                             border: `1px solid ${THEME.colors.borderActive}`, 
                             background: 'transparent', 
                             fontWeight: '600', 
-                            cursor: 'pointer', 
+                            cursor: canEdit ? 'pointer' : 'not-allowed', 
                             fontSize: '0.75rem', 
                             color: THEME.colors.textSecondary,
+                            opacity: canEdit ? 1 : 0.5,
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: '4px'
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = THEME.colors.primary;
-                            e.currentTarget.style.color = THEME.colors.primary;
+                            if (canEdit) {
+                                e.currentTarget.style.borderColor = THEME.colors.primary;
+                                e.currentTarget.style.color = THEME.colors.primary;
+                            }
                         }} 
                         onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = THEME.colors.borderActive;
-                            e.currentTarget.style.color = THEME.colors.textSecondary;
+                            if (canEdit) {
+                                e.currentTarget.style.borderColor = THEME.colors.borderActive;
+                                e.currentTarget.style.color = THEME.colors.textSecondary;
+                            }
                         }}
                     >
                         <Settings size={14} strokeWidth={1.5} />
@@ -1269,30 +1396,37 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                 {isLead && onRegisterContact && (
                     <button 
                         onClick={onRegisterContact}
+                        disabled={!canEdit}
                         style={{ 
                             flex: 1.5, 
                             padding: '0.5rem', 
                             borderRadius: THEME.radius.sm, 
                             border: 'none', 
-                            background: THEME.colors.primary, 
+                            background: canEdit ? THEME.colors.primary : THEME.colors.textSecondary, 
                             color: 'white', 
                             fontWeight: '600', 
-                            cursor: 'pointer', 
+                            cursor: canEdit ? 'pointer' : 'not-allowed', 
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'center', 
                             gap: '4px', 
                             fontSize: '0.75rem', 
-                            boxShadow: '0 4px 10px rgba(13, 122, 87, 0.15)',
+                            opacity: canEdit ? 1 : 0.5,
+                            boxShadow: canEdit ? '0 4px 10px rgba(13, 122, 87, 0.15)' : 'none',
                             transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                        onMouseEnter={(e) => {
+                            if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primaryHover;
+                        }}
+                        onMouseLeave={(e) => {
+                            if (canEdit) e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                        }}
                     >
                         <Check size={14} strokeWidth={1.5} />
                         <span>Reportar</span>
                     </button>
                 )}
+
                 <button 
                     onClick={handleWhatsApp}
                     title="Enviar WhatsApp"
@@ -1343,8 +1477,7 @@ function EmptyState({ text }: { text: string }) {
         </div>
     );
 }
-
-function ListView({ data, type, viewMode, pricingModels, availableParents, onEdit, onViewDetails, onUpdatePricingModel, onUpdateStatus, onRegisterContact }: any) {
+function ListView({ data, type, viewMode, pricingModels, availableParents, onEdit, onViewDetails, onUpdatePricingModel, onUpdateStatus, onRegisterContact, canEdit = true }: any) {
     if (data.length === 0) return <EmptyState text={`No se encontraron ${type === 'lead' ? 'prospectos' : 'clientes'} en este momento.`} />;
 
     if (viewMode === 'table') {
@@ -1428,8 +1561,10 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                                 <FileText size={12} strokeWidth={1.5} />
                                                 <span>Ver</span>
                                             </button>
+
                                             <button 
                                                 onClick={() => onEdit(item)} 
+                                                disabled={!canEdit}
                                                 style={{ 
                                                     padding: '4px 8px', 
                                                     borderRadius: THEME.radius.sm, 
@@ -1438,7 +1573,8 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                                     color: THEME.colors.textSecondary,
                                                     fontSize: '0.75rem',
                                                     fontWeight: '600',
-                                                    cursor: 'pointer',
+                                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                    opacity: canEdit ? 1 : 0.5,
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '4px'
@@ -1451,15 +1587,17 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                             {isLeads && onRegisterContact && (
                                                 <button 
                                                     onClick={() => onRegisterContact(item.id)} 
+                                                    disabled={!canEdit}
                                                     style={{ 
                                                         padding: '4px 8px', 
                                                         borderRadius: THEME.radius.sm, 
                                                         border: 'none', 
-                                                        background: THEME.colors.primary, 
+                                                        background: canEdit ? THEME.colors.primary : THEME.colors.textSecondary, 
                                                         color: 'white', 
                                                         fontSize: '0.75rem',
                                                         fontWeight: '600',
-                                                        cursor: 'pointer',
+                                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                                        opacity: canEdit ? 1 : 0.5,
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '4px'
@@ -1469,8 +1607,7 @@ function ListView({ data, type, viewMode, pricingModels, availableParents, onEdi
                                                     <Check size={12} strokeWidth={1.5} />
                                                     <span>Reportar</span>
                                                 </button>
-                                            )}
-                                        </div>
+                                            )}</div>
                                     </td>
                                 </tr>
                             );

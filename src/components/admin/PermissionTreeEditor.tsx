@@ -21,11 +21,51 @@ export const permissionTree: TreeNode[] = [
         label: 'Centro de Comando / Gobernanza',
         level: 2,
         children: [
-          { id: 'admin.products.catalog', label: 'Catálogo Web (Precios B2C)', level: 3 },
-          { id: 'admin.products.master', label: 'Maestro SKU (Datos Técnicos)', level: 3 },
-          { id: 'admin.clients', label: 'Clientes (CRM y Aprobación)', level: 3 },
-          { id: 'admin.procurement.providers', label: 'Maestro de Proveedores', level: 3 },
-          { id: 'admin.dashboard.settings', label: 'Parámetros Globales (Cutoff)', level: 3 },
+          {
+            id: 'admin.products.catalog',
+            label: 'Catálogo Web (Precios B2C)',
+            level: 3,
+            children: [
+              { id: 'admin.products.catalog.view', label: 'Visualizar Catálogo', level: 4 },
+              { id: 'admin.products.catalog.edit', label: 'Modificar Precios y Catálogo', level: 4 }
+            ]
+          },
+          {
+            id: 'admin.products.master',
+            label: 'Maestro SKU (Datos Técnicos)',
+            level: 3,
+            children: [
+              { id: 'admin.products.master.view', label: 'Visualizar SKU y Ficha Técnica', level: 4 },
+              { id: 'admin.products.master.edit', label: 'Crear y Editar SKU', level: 4 }
+            ]
+          },
+          {
+            id: 'admin.clients',
+            label: 'Clientes (CRM y Aprobación)',
+            level: 3,
+            children: [
+              { id: 'admin.clients.view', label: 'Visualizar Clientes y CRM', level: 4 },
+              { id: 'admin.clients.edit', label: 'Crear, Editar y Aprobar Clientes', level: 4 }
+            ]
+          },
+          {
+            id: 'admin.procurement.providers',
+            label: 'Maestro de Proveedores',
+            level: 3,
+            children: [
+              { id: 'admin.procurement.providers.view', label: 'Visualizar Proveedores', level: 4 },
+              { id: 'admin.procurement.providers.edit', label: 'Crear y Modificar Ficha de Proveedor', level: 4 }
+            ]
+          },
+          {
+            id: 'admin.dashboard.settings',
+            label: 'Parámetros Globales (Cutoff)',
+            level: 3,
+            children: [
+              { id: 'admin.dashboard.settings.view', label: 'Visualizar Configuración de Corte', level: 4 },
+              { id: 'admin.dashboard.settings.edit', label: 'Modificar Reglas de Cutoff', level: 4 }
+            ]
+          },
           { id: 'admin.dashboard.audit', label: 'Logs de Auditoría de Datos', level: 3 }
         ]
       },

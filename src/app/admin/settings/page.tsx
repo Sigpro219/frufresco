@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase, verifyConnectivity } from '@/lib/supabase';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { diagnoseStorageError } from '@/lib/errorUtils';
@@ -21,7 +22,8 @@ import {
     Lightbulb, 
     ArrowLeft,
     Building2,
-    Save
+    Save,
+    ShieldAlert
 } from 'lucide-react';
 
 function ImageUpload({ 
@@ -180,6 +182,9 @@ function ImageUpload({
 }
 
 export default function AdminSettingsPage() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [persisted, setPersisted] = useState(false);
@@ -189,6 +194,20 @@ export default function AdminSettingsPage() {
         ok: true, checked: false, checking: false
     });
     const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.dashboard.settings.view');
+    const canEdit = hasPermission('admin.dashboard.settings.edit');
+
+    // Expand all sections if user is view-only
+    useEffect(() => {
+        if (!loading && !canEdit) {
+            setOpenSections(['operation', 'variants', 'design', 'b2b', 'contact', 'corporate']);
+        }
+    }, [loading, canEdit]);
 
     const checkHealth = async () => {
         setConnStatus(prev => ({ ...prev, checking: true }));
@@ -211,16 +230,42 @@ export default function AdminSettingsPage() {
     };
 
     const toggleSection = (id: string) => {
+        if (!canEdit) return; // Prevent collapse/expand manual adjustments when view-only
         setOpenSections(prev => 
             prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
         );
     };
 
     const fetchSettings = async () => {
-        const { data, error } = await supabase
-            .from('app_settings')
-            .select('*')
-            .order('key');
+        setLoading(true);
+        let rolesData = null;
+        let rolesError = null;
+        let settingsData = null;
+        let settingsError = null;
+
+        try {
+            const [rolesRes, settingsRes] = await Promise.all([
+                supabase.from('app_settings').select('key, value').eq('key', 'system_roles').maybeSingle(),
+                supabase.from('app_settings').select('*').order('key')
+            ]);
+            rolesData = rolesRes.data;
+            rolesError = rolesRes.error;
+            settingsData = settingsRes.data;
+            settingsError = settingsRes.error;
+        } catch (e) {
+            console.error('Error fetching settings/roles:', e);
+        }
+
+        if (!rolesError && rolesData?.value) {
+            try {
+                setRoles(JSON.parse(rolesData.value));
+            } catch (e) {
+                console.error('Error parsing system_roles:', e);
+            }
+        }
+
+        const data = settingsData;
+        const error = settingsError;
 
         const defaultSettings = [
             { key: 'delivery_fee', value: '5000', description: 'Costo de envío estándar' },
@@ -289,6 +334,7 @@ export default function AdminSettingsPage() {
             }
             setSettings(merged);
         }
+        setLoading(false);
     };
 
     useEffect(() => {
@@ -296,6 +342,10 @@ export default function AdminSettingsPage() {
     }, []);
 
     const handleUpdateSetting = async (key: string, newValue: string) => {
+        if (!canEdit) {
+            (window as any).showToast?.('No tienes permisos de edición en este módulo.', 'error');
+            return;
+        }
         setSaving(true);
         const { error } = await supabase
             .from('app_settings')
@@ -351,11 +401,76 @@ export default function AdminSettingsPage() {
         setSaving(false);
     };
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando información...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar este módulo. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <Toast />
             {showAttributesModal && <ManageAttributesModal onClose={() => setShowAttributesModal(false)} />}
             <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+                {!canEdit && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: THEME.radius.md,
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para modificar los parámetros globales.</span>
+                    </div>
+                )}
                 <Link href="/admin/dashboard" style={{
                     display: 'inline-flex', 
                     alignItems: 'center', 
@@ -375,7 +490,7 @@ export default function AdminSettingsPage() {
                 </Link>
 
                 <header style={{ marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Gobernanza del Sistema</h1>
+                    <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Parámetros Globales (Cutoff)</h1>
                     <p style={{ color: THEME.colors.textSecondary, marginTop: '0.25rem', fontSize: '0.9rem' }}>Control Maestro de parámetros globales.</p>
                 </header>
 
@@ -470,6 +585,7 @@ export default function AdminSettingsPage() {
                     </button>
                 </div>
 
+                <div style={{ pointerEvents: canEdit ? 'auto' : 'none', opacity: canEdit ? 1 : 0.85 }}>
                 {/* --- SECCIÓN 1: OPERACIÓN --- */}
                 <div style={{ marginBottom: '1rem' }}>
                     <button 
@@ -1130,6 +1246,7 @@ export default function AdminSettingsPage() {
                     <p style={{ fontSize: '0.8rem', color: THEME.colors.textMain, margin: 0, textAlign: 'left', lineHeight: '1.4' }}>
                         <strong>Tip operativo:</strong> Los ajustes operativos del día a día se gestionan aquí. Para cambios estructurales contacta al Chief Engineer.
                     </p>
+                </div>
                 </div>
 
                 <style dangerouslySetInnerHTML={{ __html: `
