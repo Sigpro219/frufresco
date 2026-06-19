@@ -189,16 +189,16 @@ export default function CreditPrintPage() {
                     <td rowSpan={4} style={{ textAlign: 'center', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #333', verticalAlign: 'middle', padding: '4px' }}>
                         {title}
                     </td>
-                    <td style={{ width: '135px', fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>CÓDIGO:</td>
+                    <td style={{ width: '135px', fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>CÓDIGO: FC-001</td>
                 </tr>
                 <tr>
-                    <td style={{ fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>VERSIÓN:</td>
+                    <td style={{ fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>VERSIÓN: 001</td>
                 </tr>
                 <tr>
                     <td style={{ fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>PÁGINA: {pageNumber} de {totalPages}</td>
                 </tr>
                 <tr>
-                    <td style={{ fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>FECHA:</td>
+                    <td style={{ fontWeight: 'bold', fontSize: '9px', padding: '4px 8px', border: '1px solid #333', verticalAlign: 'middle' }}>FECHA: 19/06/2026</td>
                 </tr>
             </tbody>
         </table>
