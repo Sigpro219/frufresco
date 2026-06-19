@@ -75,8 +75,8 @@ export const permissionTree: TreeNode[] = [
         level: 2,
         children: [
           { id: 'admin.orders.history', label: '1.2.1 Historial y Monitoreo de Órdenes', level: 3 },
-          { id: 'admin.orders.create', label: '1.2.2 Generación Manual de Pedidos', level: 3 },
-          { id: 'admin.orders.loading', label: '1.2.3 Carga y Consolidación de Camiones', level: 3 }
+          { id: 'admin.orders.create', label: '1.2.2 Nuevo Pedido Manual', level: 3 },
+          { id: 'admin.orders.loading', label: '1.2.3 Cargue de Pedidos', level: 3 }
         ]
       },
       {
