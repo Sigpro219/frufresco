@@ -162,6 +162,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     fetchProducts();
     fetchAliases();
     fetchGeofence();
+
+    const channel = supabase.channel('realtime-drafts')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_drafts' },
+        (payload) => {
+          console.log('[Email Inbound] Realtime update received:', payload);
+          fetchDrafts(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
