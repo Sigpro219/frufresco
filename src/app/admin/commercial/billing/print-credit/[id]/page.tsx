@@ -876,13 +876,14 @@ export default function CreditPrintPage() {
                                             {renderCheckbox(false)} Extractos bancarios últimos 3 meses<br />
                                             {renderCheckbox(false)} Última declaración de renta<br />
                                             {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
+                                            {renderCheckbox(false)} Estados Financieros de los últimos dos periodos<br />
                                             {renderCheckbox(false)} Pagaré y Carta de instrucciones firmados
                                         </td>
                                         <td style={{ padding: '4px 6px', lineHeight: '1.3' }}>
                                             {renderCheckbox(false)} Copia de cédula del Representante Legal<br />
                                             {renderCheckbox(false)} RUT actualizado de la empresa<br />
                                             {renderCheckbox(false)} Cámara de Comercio menor a 30 días<br />
-                                            {renderCheckbox(false)} Estados Financieros del último período<br />
+                                            {renderCheckbox(false)} Estados Financieros de los últimos dos periodos<br />
                                             {renderCheckbox(false)} 2 Referencias comerciales recientes<br />
                                             {renderCheckbox(false)} 1 Referencia bancaria<br />
                                             {renderCheckbox(false)} Pagaré y Carta de instrucciones firmados
