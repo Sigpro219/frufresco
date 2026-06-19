@@ -53,7 +53,7 @@ const COMMON_TASKS = [
     { name: 'Lubricación de Chasis y Transmisión', interval: 5000, type: 'km' },
 ];
 
-export default function MaintenanceManagement() {
+export default function MaintenanceManagement({ readOnly = false }: { readOnly?: boolean }) {
     const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
     const [vehicles, setVehicles] = useState<{id: string, plate: string, current_odometer: number, avg_daily_km: number, driver_id?: string}[]>([]);
     const [drivers, setDrivers] = useState<{id: string, contact_name: string}[]>([]);
@@ -189,6 +189,7 @@ export default function MaintenanceManagement() {
 
     const handleCloseTask = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         if (!completingTask) return;
 
         setIsSaving(true);
@@ -281,6 +282,7 @@ export default function MaintenanceManagement() {
 
     const handleAddTask = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         const vehicle = vehicles.find(v => v.id === newTask.vehicle_id);
         if (!vehicle) return;
 
@@ -436,18 +438,20 @@ export default function MaintenanceManagement() {
                         >
                             {showHistory ? '📅' : '📜'}
                         </button>
-                        <button 
-                            onClick={() => setShowAdd(!showAdd)}
-                            title="Programar Mantenimiento"
-                            style={{ 
-                                padding: '0.6rem 1rem', borderRadius: '12px', border: 'none',
-                                backgroundColor: showAdd ? '#EF4444' : '#0891B2',
-                                color: 'white', fontWeight: '900', fontSize: '0.75rem', cursor: 'pointer',
-                                boxShadow: '0 4px 6px -1px rgba(8, 145, 178, 0.2)'
-                            }}
-                        >
-                            {showAdd ? 'CANCELAR' : '+ TAREA'}
-                        </button>
+                        {!readOnly && (
+                            <button 
+                                onClick={() => setShowAdd(!showAdd)}
+                                title="Programar Mantenimiento"
+                                style={{ 
+                                    padding: '0.6rem 1rem', borderRadius: '12px', border: 'none',
+                                    backgroundColor: showAdd ? '#EF4444' : '#0891B2',
+                                    color: 'white', fontWeight: '900', fontSize: '0.75rem', cursor: 'pointer',
+                                    boxShadow: '0 4px 6px -1px rgba(8, 145, 178, 0.2)'
+                                }}
+                            >
+                                {showAdd ? 'CANCELAR' : '+ TAREA'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -510,7 +514,7 @@ export default function MaintenanceManagement() {
                                 <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>PRÓXIMO OBJETIVO</th>
                                 <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTIMADO</th>
                                 <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTADO</th>
-                                <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>
+                                {!readOnly && <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -544,14 +548,16 @@ export default function MaintenanceManagement() {
                                                 {status.toUpperCase()}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1.2rem', textAlign: 'center' }}>
-                                            <button 
-                                                onClick={() => { setCompletingTask(t); setCompletionOdometer(t.vehicle?.current_odometer || 0); setNextDueKmOverride(t.interval_km || 0); setSelectedDriverId(t.vehicle?.driver_id || ''); setCompletionNotes(''); setShowCloseModal(true); }}
-                                                style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
-                                            >
-                                                CERRAR
-                                            </button>
-                                        </td>
+                                        {!readOnly && (
+                                            <td style={{ padding: '1.2rem', textAlign: 'center' }}>
+                                                <button 
+                                                    onClick={() => { setCompletingTask(t); setCompletionOdometer(t.vehicle?.current_odometer || 0); setNextDueKmOverride(t.interval_km || 0); setSelectedDriverId(t.vehicle?.driver_id || ''); setCompletionNotes(''); setShowCloseModal(true); }}
+                                                    style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
+                                                >
+                                                    CERRAR
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}

@@ -127,12 +127,8 @@ export const permissionTree: TreeNode[] = [
         label: 'Torre de Control de Logística',
         level: 2,
         children: [
-          { id: 'admin.transport.map', label: 'Monitoreo en Mapa (Tiempo Real)', level: 3 },
-          { id: 'admin.transport.planner', label: 'Asistente de Planificación de Rutas', level: 3 },
-          { id: 'admin.transport.fleet', label: 'Maestro de Flota de Vehículos', level: 3 },
-          { id: 'admin.transport.maintenance', label: 'Mantenimiento Preventivo/Kilometraje', level: 3 },
-          { id: 'admin.transport.drivers_panel', label: 'Bitácora y Disponibilidad de Choferes', level: 3 },
-          { id: 'admin.transport.kpis', label: 'Indicadores de Rendimiento y Costo', level: 3 }
+          { id: 'admin.transport.view', label: 'Visualizar Torre de Control (Lectura)', level: 3 },
+          { id: 'admin.transport.edit', label: 'Operar y Modificar Logística (Escritura)', level: 3 }
         ]
       },
       {

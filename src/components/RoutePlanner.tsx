@@ -54,7 +54,7 @@ interface Vehicle {
     max_crates_capacity: number;
 }
 
-export default function RoutePlanner() {
+export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean }) {
     const [orders, setOrders] = useState<Order[]>([]);
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
@@ -310,6 +310,7 @@ export default function RoutePlanner() {
     }, [assignments, isOptimized, theoreticalMetrics, aiReportText, loading]);
 
     const handleAutoOptimize = async () => {
+        if (readOnly) return;
         try {
             setOptimizing(true);
             
@@ -397,6 +398,7 @@ export default function RoutePlanner() {
     };
 
     const handleConfirmRoutes = async () => {
+        if (readOnly) return;
         try {
             setLoading(true);
             // Construir un mapeo de vehículo -> hora de salida
@@ -465,11 +467,13 @@ export default function RoutePlanner() {
     };
 
     const updateParameter = async (id: string, value: any) => {
+        if (readOnly) return;
         setParams(prev => ({ ...prev, [id]: value }));
         await supabase.from('logistic_parameters').upsert({ id, value: value.toString() });
     };
 
     const toggleAssignment = (orderId: string, vehicleId: string) => {
+        if (readOnly) return;
         setIsOptimized(false); // If manual change happens, reset optimized flag
         const currentOrders = assignments[vehicleId] || [];
         if (currentOrders.includes(orderId)) {
@@ -486,6 +490,10 @@ export default function RoutePlanner() {
 
     // Drag and Drop Handlers
     const handleDragStart = (e: React.DragEvent, orderId: string, sourceVehicleId?: string, sourceIndex?: number) => {
+        if (readOnly) {
+            e.preventDefault();
+            return;
+        }
         e.dataTransfer.setData('text/plain', orderId);
         if (sourceVehicleId) {
             e.dataTransfer.setData('sourceVehicleId', sourceVehicleId);
@@ -498,6 +506,7 @@ export default function RoutePlanner() {
 
     const handleDropOnVehicle = (e: React.DragEvent, targetVehicleId: string, targetIndex?: number) => {
         e.preventDefault();
+        if (readOnly) return;
         const orderId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('orderId');
         if (!orderId) return;
 
@@ -524,6 +533,7 @@ export default function RoutePlanner() {
 
     const handleSidebarDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         const orderId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('orderId');
         if (orderId) {
             setAssignments(prev => {
@@ -539,6 +549,10 @@ export default function RoutePlanner() {
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
+        if (readOnly) {
+            e.dataTransfer.dropEffect = 'none';
+            return;
+        }
         e.dataTransfer.dropEffect = 'move';
     };
 
@@ -793,13 +807,13 @@ export default function RoutePlanner() {
                                     return (
                                     <tr 
                                         key={order.id} 
-                                        draggable
+                                        draggable={!readOnly}
                                         onDragStart={(e) => handleDragStart(e, order.id)}
                                         style={{ 
                                             backgroundColor: isAssigned ? '#F0FDFA' : 'white',
                                             borderBottom: '1px solid #F3F4F6',
                                             transition: 'all 0.2s',
-                                            cursor: 'grab',
+                                            cursor: readOnly ? 'default' : 'grab',
                                             opacity: isAssigned ? 0.6 : 1
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#CCFBF1' : '#F9FAFB'}
@@ -893,10 +907,11 @@ export default function RoutePlanner() {
                             {Object.values(assignments).reduce((acc, curr) => acc + curr.length, 0)} ASIGNADOS
                         </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <button 
-                            onClick={() => setShowSettings(true)}
-                            title="Ajustar Parámetros"
+                    {!readOnly && (
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <button 
+                                onClick={() => setShowSettings(true)}
+                                title="Ajustar Parámetros"
                             style={{ 
                                 backgroundColor: '#F3F4F6', 
                                 border: '1px solid #E5E7EB', 
@@ -1009,7 +1024,8 @@ export default function RoutePlanner() {
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2 size={12} strokeWidth={1.5} /> Limpiar</span>
                             </button>
                         )}
-                    </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Settings Drawer */}
@@ -1481,7 +1497,7 @@ export default function RoutePlanner() {
                                         return (
                                             <div 
                                                 key={oid} 
-                                                draggable
+                                                draggable={!readOnly}
                                                 onDragStart={(e) => handleDragStart(e, oid, vehicle.id, stopIndex)}
                                                 onDragOver={handleDragOver}
                                                 onDrop={(e) => {
@@ -1499,7 +1515,7 @@ export default function RoutePlanner() {
                                                     gap: '0.6rem',
                                                     border: isLifoConflict ? '1px solid #FCD34D' : '1px solid #E5E7EB',
                                                     color: '#374151',
-                                                    cursor: 'grab',
+                                                    cursor: readOnly ? 'default' : 'grab',
                                                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                                                 }}
                                             >

@@ -49,7 +49,7 @@ interface Vehicle {
     } | null;
 }
 
-export default function FleetManagement() {
+export default function FleetManagement({ readOnly = false }: { readOnly?: boolean }) {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [showAdd, setShowAdd] = useState(false);
     const isMounted = useRef(true);
@@ -191,6 +191,7 @@ export default function FleetManagement() {
     }, [loadData]);
 
     const updateOdometer = async (id: string, newValue: number) => {
+        if (readOnly) return;
         try {
             const { error } = await supabase
                 .from('fleet_vehicles')
@@ -206,6 +207,7 @@ export default function FleetManagement() {
     };
 
     const assignDriver = async (vehicleId: string, driverId: string) => {
+        if (readOnly) return;
         try {
             const { error } = await supabase
                 .from('fleet_vehicles')
@@ -221,6 +223,7 @@ export default function FleetManagement() {
     };
 
     const updateStatus = async (vehicleId: string, newStatus: string) => {
+        if (readOnly) return;
         try {
             const { error } = await supabase
                 .from('fleet_vehicles')
@@ -237,6 +240,7 @@ export default function FleetManagement() {
 
     const handleAddVehicle = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         try {
             const { error } = await supabase
                 .from('fleet_vehicles')
@@ -253,6 +257,7 @@ export default function FleetManagement() {
     };
 
     const openEditVehicle = (v: Vehicle) => {
+        if (readOnly) return;
         setEditingVehicle(v);
         setEditForm({
             plate: v.plate,
@@ -267,6 +272,7 @@ export default function FleetManagement() {
 
     const handleUpdateVehicle = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (readOnly) return;
         if (!editingVehicle || !editForm) return;
         try {
             const { error } = await supabase
@@ -380,16 +386,18 @@ export default function FleetManagement() {
                     >
                         {loading ? '🔄 Cargando...' : '🔃 Sincronizar'}
                     </button>
-                    <button 
-                        onClick={() => setShowAdd(!showAdd)}
-                        style={{ 
-                            padding: '0.6rem 1.2rem', borderRadius: '12px', 
-                            backgroundColor: '#0891B2', color: 'white', border: 'none', 
-                            fontWeight: '700', cursor: 'pointer' 
-                        }}
-                    >
-                        {showAdd ? 'Cancelar' : '+ Registrar Vehículo'}
-                    </button>
+                    {!readOnly && (
+                        <button 
+                            onClick={() => setShowAdd(!showAdd)}
+                            style={{ 
+                                padding: '0.6rem 1.2rem', borderRadius: '12px', 
+                                backgroundColor: '#0891B2', color: 'white', border: 'none', 
+                                fontWeight: '700', cursor: 'pointer' 
+                            }}
+                        >
+                            {showAdd ? 'Cancelar' : '+ Registrar Vehículo'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -490,26 +498,28 @@ export default function FleetManagement() {
                                         <td style={{ padding: '1rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <span style={{ fontWeight: '900', color: '#111827', fontSize: '1rem' }}>{v.plate}</span>
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); openEditVehicle(v); }}
-                                                    title="Editar vehículo"
-                                                    style={{
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.75rem',
-                                                        padding: '0.1rem 0.2rem',
-                                                        borderRadius: '6px',
-                                                        lineHeight: 1,
-                                                        color: '#94A3B8',
-                                                        transition: 'color 0.2s',
-                                                        flexShrink: 0
-                                                    }}
-                                                    onMouseOver={e => (e.currentTarget.style.color = '#0891B2')}
-                                                    onMouseOut={e => (e.currentTarget.style.color = '#94A3B8')}
-                                                >
-                                                    ✏️
-                                                </button>
+                                                {!readOnly && (
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); openEditVehicle(v); }}
+                                                        title="Editar vehículo"
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.75rem',
+                                                            padding: '0.1rem 0.2rem',
+                                                            borderRadius: '6px',
+                                                            lineHeight: 1,
+                                                            color: '#94A3B8',
+                                                            transition: 'color 0.2s',
+                                                            flexShrink: 0
+                                                        }}
+                                                        onMouseOver={e => (e.currentTarget.style.color = '#0891B2')}
+                                                        onMouseOut={e => (e.currentTarget.style.color = '#94A3B8')}
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                )}
                                             </div>
                                             <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700' }}>
                                                 {v.brand} {v.model}
@@ -682,7 +692,7 @@ export default function FleetManagement() {
                             <div style={{ display: 'flex', gap: '0.8rem', marginTop: '1rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#F8FAFC', padding: '0.4rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                                     <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B' }}>ODO:</span>
-                                    {editingKm?.id === selectedVehicle.id ? (
+                                    {editingKm?.id === selectedVehicle.id && !readOnly ? (
                                         <input 
                                             type="number" 
                                             autoFocus
@@ -693,8 +703,8 @@ export default function FleetManagement() {
                                             style={{ width: '80px', padding: '0.2rem', borderRadius: '4px', border: '1px solid #0891B2' }}
                                         />
                                     ) : (
-                                        <span onClick={() => setEditingKm({id: selectedVehicle.id, value: selectedVehicle.current_odometer})} style={{ cursor: 'pointer', fontWeight: '900', color: '#1E293B', fontSize: '0.85rem' }}>
-                                            {selectedVehicle.current_odometer.toLocaleString()} km 📝
+                                        <span onClick={() => !readOnly && setEditingKm({id: selectedVehicle.id, value: selectedVehicle.current_odometer})} style={{ cursor: readOnly ? 'default' : 'pointer', fontWeight: '900', color: '#1E293B', fontSize: '0.85rem' }}>
+                                            {selectedVehicle.current_odometer.toLocaleString()} km {!readOnly && '📝'}
                                         </span>
                                     )}
                                 </div>
@@ -702,7 +712,8 @@ export default function FleetManagement() {
                                 <select 
                                     value={selectedVehicle.driver_id || ''}
                                     onChange={(e) => assignDriver(selectedVehicle.id, e.target.value)}
-                                    style={{ padding: '0.4rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '0.8rem', fontWeight: '700', backgroundColor: '#F8FAFC' }}
+                                    disabled={readOnly}
+                                    style={{ padding: '0.4rem 1rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '0.8rem', fontWeight: '700', backgroundColor: '#F8FAFC', cursor: readOnly ? 'not-allowed' : 'default' }}
                                 >
                                     <option value="">-- Sin Piloto --</option>
                                     {drivers.map(d => (
@@ -713,10 +724,12 @@ export default function FleetManagement() {
                                 <select 
                                     value={selectedVehicle.status}
                                     onChange={(e) => updateStatus(selectedVehicle.id, e.target.value)}
+                                    disabled={readOnly}
                                     style={{ 
                                         padding: '0.4rem 1rem', borderRadius: '12px', border: 'none', fontSize: '0.75rem', fontWeight: '900',
                                         backgroundColor: selectedVehicle.status === 'available' ? '#DCFCE7' : selectedVehicle.status === 'on_route' ? '#DBEAFE' : '#FEF9C3',
                                         color: selectedVehicle.status === 'available' ? '#166534' : selectedVehicle.status === 'on_route' ? '#1E40AF' : '#854D0E',
+                                        cursor: readOnly ? 'not-allowed' : 'default'
                                     }}
                                 >
                                     <option value="available">DISPONIBLE</option>

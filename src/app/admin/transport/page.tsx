@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import FleetManagement from '@/components/FleetManagement';
 import MaintenanceManagement from '@/components/MaintenanceManagement';
 import RoutePlanner from '@/components/RoutePlanner';
@@ -23,7 +24,9 @@ import {
     PackageOpen, 
     MapPin, 
     Activity,
-    FileText
+    FileText,
+    Loader2,
+    ShieldAlert
 } from 'lucide-react';
 import ControlTowerKPIs from '@/components/ControlTowerKPIs';
 
@@ -55,10 +58,20 @@ interface ActiveRoute {
 const MAP_ID = 'bf725916f72f2fd';
 
 export default function TransportControlTower() {
+    const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'map' | 'planner' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis'>('map');
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
     const [loading, setLoading] = useState(true);
     const isMounted = useRef(true);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.transport.view');
+    const canEdit = hasPermission('admin.transport.edit');
+
     const [stats, setStats] = useState({
         totalActive: 0,
         completedToday: 0,
@@ -80,6 +93,22 @@ export default function TransportControlTower() {
     const fetchTransportData = useCallback(async (signal?: AbortSignal) => {
         try {
             setLoading(true);
+
+            // Fetch system_roles from app_settings
+            const { data: rolesData, error: rolesError } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .eq('key', 'system_roles')
+                .maybeSingle()
+                .abortSignal(signal as AbortSignal);
+
+            if (!rolesError && rolesData?.value && isMounted.current) {
+                try {
+                    setRoles(JSON.parse(rolesData.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles:', e);
+                }
+            }
             
             const { data: routes, error: rErr } = await supabase
                 .from('routes')
@@ -193,10 +222,76 @@ export default function TransportControlTower() {
         };
     }, [fetchTransportData]);
 
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: '#0EA5E9' }} />
+                    <span style={{ color: '#64748B', fontSize: '0.85rem', fontWeight: '600' }}>Cargando Torre de Control...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: 'white',
+                    borderRadius: '16px',
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                    maxWidth: '480px',
+                    border: '1px solid #E2E8F0',
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem',
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0F172A', marginBottom: '0.75rem' }}>
+                        Acceso Denegado
+                    </h1>
+                    <p style={{ color: '#64748B', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                        No tienes los permisos necesarios para visualizar la Torre de Control de Logística. Por favor, solicita acceso a un administrador si consideras que esto es un error.
+                    </p>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '100%', margin: '0 auto', padding: '1rem 2rem' }}>
+                {!canEdit && (
+                    <div style={{
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                        color: '#D97706',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '1rem',
+                        marginTop: '0.5rem'
+                    }}>
+                        <ShieldAlert size={16} />
+                        <span>Modo Vista: No tienes permisos para modificar la operación de transporte.</span>
+                    </div>
+                )}
                 
                 {/* Slim Premium Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.8rem', padding: '0 0.5rem' }}>
@@ -388,15 +483,15 @@ export default function TransportControlTower() {
                             </div>
                         </div>
                     ) : activeTab === 'planner' ? (
-                        <RoutePlanner />
+                        <RoutePlanner readOnly={!canEdit} />
                     ) : activeTab === 'fleet' ? (
-                        <FleetManagement />
+                        <FleetManagement readOnly={!canEdit} />
                     ) : activeTab === 'drivers_panel' ? (
-                        <ConductorPanel />
+                        <ConductorPanel readOnly={!canEdit} />
                     ) : activeTab === 'kpis' ? (
                         <ControlTowerKPIs />
                     ) : (
-                        <MaintenanceManagement />
+                        <MaintenanceManagement readOnly={!canEdit} />
                     )}
                 </div>
             </div>

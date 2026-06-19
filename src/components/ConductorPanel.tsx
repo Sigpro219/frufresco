@@ -40,7 +40,7 @@ interface DriverKPIs {
     novedades: any[];
 }
 
-export default function ConductorPanel() {
+export default function ConductorPanel({ readOnly = false }: { readOnly?: boolean }) {
     const [conductores, setConductores] = useState<Conductor[]>([]);
     const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
@@ -230,6 +230,7 @@ export default function ConductorPanel() {
     };
 
     const handleAssign = async (conductorId: string, vehicleId: string) => {
+        if (readOnly) return;
         try {
             setLoading(true);
             await supabase
@@ -370,7 +371,7 @@ export default function ConductorPanel() {
                             <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESPECIALIDAD</th>
                             <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>VEHÍCULO</th>
                             <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem' }}>ESTADO</th>
-                            <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>
+                            {!readOnly && <th style={{ padding: '1.2rem', color: '#64748B', fontWeight: '900', fontSize: '0.7rem', textAlign: 'center' }}>GESTIÓN</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -425,31 +426,33 @@ export default function ConductorPanel() {
                                         {c.is_active ? 'ACTIVO' : 'INACTIVO'}
                                     </span>
                                 </td>
-                                <td style={{ padding: '1.2rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                        {assigningId === c.id ? (
-                                            <select 
-                                                autoFocus
-                                                onChange={(e) => handleAssign(c.id, e.target.value)}
-                                                onBlur={() => setAssigningId(null)}
-                                                style={{ padding: '0.4rem', borderRadius: '8px', border: '2px solid #0891B2', fontWeight: '900', fontSize: '0.8rem' }}
-                                            >
-                                                <option value="">Seleccionar...</option>
-                                                <option value="none">❌ Desvincular</option>
-                                                {availableVehicles.map(v => (
-                                                    <option key={v.id} value={v.id}>{v.plate}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <button 
-                                                onClick={() => setAssigningId(c.id)}
-                                                style={{ padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
-                                            >
-                                                {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? '🔄 CAMBIAR' : '➕ ASIGNAR'}
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
+                                {!readOnly && (
+                                    <td style={{ padding: '1.2rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                            {assigningId === c.id ? (
+                                                <select 
+                                                    autoFocus
+                                                    onChange={(e) => handleAssign(c.id, e.target.value)}
+                                                    onBlur={() => setAssigningId(null)}
+                                                    style={{ padding: '0.4rem', borderRadius: '8px', border: '2px solid #0891B2', fontWeight: '900', fontSize: '0.8rem' }}
+                                                >
+                                                    <option value="">Seleccionar...</option>
+                                                    <option value="none">❌ Desvincular</option>
+                                                    {availableVehicles.map(v => (
+                                                        <option key={v.id} value={v.id}>{v.plate}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => setAssigningId(c.id)}
+                                                    style={{ padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', backgroundColor: '#111827', color: 'white', fontWeight: '800', fontSize: '0.7rem', cursor: 'pointer' }}
+                                                >
+                                                    {c.fleet_vehicles && c.fleet_vehicles.length > 0 ? '🔄 CAMBIAR' : '➕ ASIGNAR'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                     </tbody>
