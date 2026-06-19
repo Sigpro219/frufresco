@@ -93,7 +93,8 @@ export async function POST(req: Request) {
     const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
     const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
 
-    // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
+
+    // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages, vercel alerts)
     const isAutoReply = 
       headers['auto-submitted'] || 
       headers['Auto-Submitted'] || 
@@ -106,14 +107,16 @@ export async function POST(req: Request) {
       subject.toLowerCase().includes('failure notice') ||
       senderEmail.includes('mailer-daemon') ||
       senderEmail.includes('noreply') ||
-      senderEmail.includes('no-reply');
+      senderEmail.includes('no-reply') ||
+      senderEmail.includes('vercel.com') ||
+      senderEmail.includes('vercel') ||
+      subject.toLowerCase().includes('vercel');
 
     if (isAutoReply) {
-      console.log(`[Email Inbound] Ignorando correo automático para evitar bucles de respuesta. Emisor: ${senderEmail}, Asunto: ${subject}`);
-      return NextResponse.json({ success: true, message: 'Ignored automatic email/loop prevention.' });
+      console.log(`[Email Inbound] Ignorando correo automático o de Vercel para evitar spam. Emisor: ${senderEmail}, Asunto: ${subject}`);
+      return NextResponse.json({ success: true, message: 'Ignored automatic/Vercel email.' });
     }
 
-    // Determine if the email was sent to our corporate email address (which is normal for orders)
     let recipientEmail = toField;
     const matchTo = toField.match(/<([^>]+)>/);
     if (matchTo) {
@@ -181,7 +184,8 @@ export async function POST(req: Request) {
           const workbook = XLSX.read(buffer, { type: 'buffer' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          excelTextContext = XLSX.utils.sheet_to_csv(worksheet);
+          const csvRaw = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+          excelTextContext = csvRaw.replace(/,+/g, ',').replace(/^,|,$/gm, '').trim();
           console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
@@ -233,7 +237,11 @@ export async function POST(req: Request) {
         3. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto del correo (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacío.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
-        6. Extrae todos los productos solicitados y su cantidad numérica.
+        6. Extrae todos los productos solicitados.
+           - Pon el nombre limpio del producto en "originalName".
+           - Si el producto incluye una presentación, formato o peso (ej. "1000 G", "500 gr", "1 Kg"), SEPARA el número en "originalFormatNumber" (ej. 1000) y la unidad de medida en "originalFormatUnit" (ej. "G", "Kg"). Si no tiene, pon null.
+           - La cantidad pedida (las unidades a despachar) ponla en "quantity" numérico.
+           - Si hay notas o detalles para ese producto, ponlo en "observations".
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -251,7 +259,13 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10 }
+            { 
+              "originalName": "Nombre del Producto", 
+              "originalFormatNumber": 1000, 
+              "originalFormatUnit": "G", 
+              "quantity": 10,
+              "observations": "maduros"
+            }
           ]
         }
       `;
@@ -292,7 +306,11 @@ export async function POST(req: Request) {
         
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
-        2. Extrae todos los productos solicitados con sus cantidades.
+        2. Extrae todos los productos solicitados.
+           - Pon el nombre limpio del producto en "originalName".
+           - Si el producto incluye una presentación, formato o peso (ej. "1000 G", "500 gr", "1 Kg"), SEPARA el número en "originalFormatNumber" (ej. 1000) y la unidad de medida en "originalFormatUnit" (ej. "G", "Kg"). Si no tiene, pon null.
+           - La cantidad pedida (las unidades a despachar) ponla en "quantity" numérico.
+           - Si hay notas o observaciones (ej. columna D del Excel), ponlas en "observations".
         3. Extrae la dirección de entrega de forma limpia.
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
@@ -317,7 +335,13 @@ export async function POST(req: Request) {
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Tomate Chonto", "quantity": 15 }
+            { 
+              "originalName": "Tomate Chonto", 
+              "originalFormatNumber": 1000, 
+              "originalFormatUnit": "G", 
+              "quantity": 15,
+              "observations": "pintón" 
+            }
           ]
         }
       `;

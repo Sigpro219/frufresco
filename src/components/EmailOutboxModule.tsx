@@ -83,10 +83,24 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
       setBulkDeleteConfirm(false);
     }
   };
- 
+
   useEffect(() => {
     fetchEmails();
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedEmail(null);
+      }
+    };
+    if (selectedEmail) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedEmail]);
 
   const fetchEmails = async () => {
     setLoading(true);
