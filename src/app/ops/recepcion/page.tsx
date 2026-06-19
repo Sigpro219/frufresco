@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/authContext';
 import Image from 'next/image';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
@@ -91,6 +92,35 @@ export default function ReceptionPage() {
     const [expandedVouchers, setExpandedVouchers] = useState<Record<string, boolean>>({});
     const [rejectionFile, setRejectionFile] = useState<File | null>(null);
     const [rejectionPreview, setRejectionPreview] = useState<string | null>(null);
+
+    const { profile } = useAuth();
+
+    const customPermsNormalized = (profile?.custom_permissions || []).map((p: string) => p.toLowerCase());
+    const hasCategoryRestrictions = customPermsNormalized.some(p => p.startsWith('ops.recepcion.category:'));
+
+    const isCategoryAllowed = (catName: string) => {
+        if (!hasCategoryRestrictions) return true;
+        const requiredPerm = `ops.recepcion.category:${catName}`.toLowerCase();
+        return customPermsNormalized.includes(requiredPerm) ||
+            customPermsNormalized.includes('*') ||
+            customPermsNormalized.includes('ops.recepcion') ||
+            customPermsNormalized.includes('ops.recepcion.*');
+    };
+
+    useEffect(() => {
+        const allowed = [];
+        const categories = ["ABARROTES & LÁCTEOS", "FRUTAS", "HORTALIZAS", "PAPAS, PLÁTANO, TOMATE", "VERDURAS"];
+        const allowedCats = categories.filter(c => isCategoryAllowed(c));
+        if (allowedCats.length === categories.length) {
+            allowed.push('Todas');
+        }
+        allowed.push(...allowedCats);
+        allowed.push('Rechazados');
+
+        if (allowed.length > 0 && !allowed.includes(activeCategory)) {
+            setActiveCategory(allowed[0]);
+        }
+    }, [profile, activeCategory]);
 
     const getCategoryBadgeStyle = (category: string) => {
         switch (category) {
@@ -524,6 +554,20 @@ export default function ReceptionPage() {
         return "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS"; // Default fallback
     };
 
+    const permittedIncomingItems = incomingItems.filter(item => {
+        const catGroup = getInventoryGroup(item);
+        const categoryMap = [
+            { name: "ABARROTES & LÁCTEOS", dbValue: "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" },
+            { name: "FRUTAS", dbValue: "INVENTARIO DE FRUTAS Y OTROS" },
+            { name: "HORTALIZAS", dbValue: "INVENTARIO DE HORTALIZAS" },
+            { name: "PAPAS, PLÁTANO, TOMATE", dbValue: "INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" },
+            { name: "VERDURAS", dbValue: "INVENTARIO DE VERDURAS" }
+        ];
+        const matchingCat = categoryMap.find(c => c.dbValue === catGroup);
+        if (!matchingCat) return false;
+        return isCategoryAllowed(matchingCat.name);
+    });
+
     // Category mappings for stats and filters
     const categoryStats = [
         { name: "ABARROTES & LÁCTEOS", dbValue: "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" },
@@ -532,7 +576,7 @@ export default function ReceptionPage() {
         { name: "PAPAS, PLÁTANO, TOMATE", dbValue: "INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" },
         { name: "VERDURAS", dbValue: "INVENTARIO DE VERDURAS" }
     ].map(cat => {
-        const catItems = incomingItems.filter(i => getInventoryGroup(i) === cat.dbValue);
+        const catItems = permittedIncomingItems.filter(i => getInventoryGroup(i) === cat.dbValue);
         const completed = catItems.filter(i => ['received_ok', 'received_review', 'received_partial'].includes(i.status)).length;
         const percentage = catItems.length > 0 ? Math.round((completed / catItems.length) * 100) : 0;
         return {
@@ -543,7 +587,7 @@ export default function ReceptionPage() {
         };
     });
 
-    const visibleItems = incomingItems.filter(item => {
+    const visibleItems = permittedIncomingItems.filter(item => {
         // Special Filter: Rejecteds (Global)
         if (activeCategory === 'Rechazados') return item.status === 'received_rejected';
 
@@ -566,19 +610,19 @@ export default function ReceptionPage() {
     });
 
     // PENDIENTES: Lo que viene en camino (completo) o se está recibiendo ahora
-    const pendingCount = incomingItems.filter(p => ['picked_up', 'receiving'].includes(p.status)).length;
+    const pendingCount = permittedIncomingItems.filter(p => ['picked_up', 'receiving'].includes(p.status)).length;
     
     // PARCIALES: Lo que llegó incompleto del mercado O lo que recibió incompleto la bodega
-    const partialCount = incomingItems.filter(p => ['partial_pickup', 'received_partial'].includes(p.status)).length;
+    const partialCount = permittedIncomingItems.filter(p => ['partial_pickup', 'received_partial'].includes(p.status)).length;
 
     // ÉXITO: Recibido conforme
-    const successCount = incomingItems.filter(p => ['received_ok', 'received_review'].includes(p.status)).length;
+    const successCount = permittedIncomingItems.filter(p => ['received_ok', 'received_review'].includes(p.status)).length;
     
     // RECHAZO: No recibido en bodega
-    const rejectedCount = incomingItems.filter(p => p.status === 'received_rejected').length;
+    const rejectedCount = permittedIncomingItems.filter(p => p.status === 'received_rejected').length;
 
     const completedCount = successCount + partialCount; // Definimos progreso como lo que ya entró (aunque sea parcial)
-    const totalCount = incomingItems.length;
+    const totalCount = permittedIncomingItems.length;
     
     // El progreso real hacia la meta de bodega (sin contar rechazados como "avance exitoso")
     const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -867,7 +911,14 @@ export default function ReceptionPage() {
                             animation: "fadeSlideDown 0.18s ease-out",
                         }}
                     >
-                        {["Todas", ...categoryStats.map(s => s.name), "Rechazados"].map((cat) => {
+                        {["Todas", ...categoryStats.map(s => s.name), "Rechazados"].filter(cat => {
+                            if (cat === "Todas") {
+                                const categories = ["ABARROTES & LÁCTEOS", "FRUTAS", "HORTALIZAS", "PAPAS, PLÁTANO, TOMATE", "VERDURAS"];
+                                return categories.every(c => isCategoryAllowed(c));
+                            }
+                            if (cat === "Rechazados") return true;
+                            return isCategoryAllowed(cat);
+                        }).map((cat) => {
                             const stat = categoryStats.find(s => s.name === cat);
                             const isActive = activeCategory === cat;
                             const pct = cat === "Todas" ? progress : (stat?.percentage ?? null);

@@ -156,7 +156,12 @@ export const permissionTree: TreeNode[] = [
         label: 'Módulo de Recepción (Bodega Principal)',
         level: 2,
         children: [
-          { id: 'ops.recepcion.supervisor', label: 'Supervisión de Cuarentena y Mermas', level: 3 }
+          { id: 'ops.recepcion.supervisor', label: 'Supervisión de Cuarentena y Mermas', level: 3 },
+          { id: 'ops.recepcion.category:ABARROTES & LÁCTEOS', label: 'Mesa: Abarrotes & Lácteos', level: 4 },
+          { id: 'ops.recepcion.category:FRUTAS', label: 'Mesa: Frutas', level: 4 },
+          { id: 'ops.recepcion.category:HORTALIZAS', label: 'Mesa: Hortalizas', level: 4 },
+          { id: 'ops.recepcion.category:PAPAS, PLÁTANO, TOMATE', label: 'Mesa: Papas, Plátano, Tomate', level: 4 },
+          { id: 'ops.recepcion.category:VERDURAS', label: 'Mesa: Verduras', level: 4 }
         ]
       },
       {
