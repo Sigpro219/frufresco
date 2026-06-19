@@ -21,14 +21,13 @@ export const permissionTree: TreeNode[] = [
         label: 'Centro de Comando / Gobernanza',
         level: 2,
         children: [
+          { id: 'admin.products.catalog', label: 'Catálogo Web (Precios B2C)', level: 3 },
+          { id: 'admin.products.master', label: 'Maestro SKU (Datos Técnicos)', level: 3 },
+          { id: 'admin.clients', label: 'Clientes (CRM y Aprobación)', level: 3 },
+          { id: 'admin.procurement.providers', label: 'Maestro de Proveedores', level: 3 },
           { id: 'admin.dashboard.settings', label: 'Parámetros Globales (Cutoff)', level: 3 },
           { id: 'admin.dashboard.audit', label: 'Logs de Auditoría de Datos', level: 3 }
         ]
-      },
-      {
-        id: 'admin.clients',
-        label: 'Clientes (CRM y Aprobación)',
-        level: 2
       },
       {
         id: 'admin.orders',
@@ -79,7 +78,6 @@ export const permissionTree: TreeNode[] = [
         children: [
           { id: 'admin.procurement.treasury', label: 'Conciliación Bancaria y Aprobación', level: 3 },
           { id: 'admin.procurement.cash', label: 'Caja Menor (Compras de Contado y Gastos)', level: 3 },
-          { id: 'admin.procurement.providers', label: 'Maestro de Proveedores (NIT/RUT)', level: 3 },
           { id: 'admin.procurement.export', label: 'Exportador Contable (WorldOffice)', level: 3 },
           { id: 'admin.procurement.expenses', label: 'Histórico de Gastos Operativos', level: 3 }
         ]
@@ -95,15 +93,6 @@ export const permissionTree: TreeNode[] = [
           { id: 'admin.transport.maintenance', label: 'Mantenimiento Preventivo/Kilometraje', level: 3 },
           { id: 'admin.transport.drivers_panel', label: 'Bitácora y Disponibilidad de Choferes', level: 3 },
           { id: 'admin.transport.kpis', label: 'Indicadores de Rendimiento y Costo', level: 3 }
-        ]
-      },
-      {
-        id: 'admin.products',
-        label: 'Maestro de Productos',
-        level: 2,
-        children: [
-          { id: 'admin.products.catalog', label: 'Precios de Catálogo B2C', level: 3 },
-          { id: 'admin.products.master', label: 'Maestro Técnico de SKU (Atributos/UoM)', level: 3 }
         ]
       },
       {
