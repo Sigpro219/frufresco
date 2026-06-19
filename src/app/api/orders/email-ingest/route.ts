@@ -214,6 +214,7 @@ export async function POST(req: Request) {
 
       const prompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
@@ -226,7 +227,8 @@ export async function POST(req: Request) {
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
         3. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto del correo (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacío.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae todos los productos solicitados y su cantidad numérica.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        6. Extrae todos los productos solicitados y su cantidad numérica.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -241,6 +243,7 @@ export async function POST(req: Request) {
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
           "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
             { "originalName": "Nombre del Producto", "quantity": 10 }
@@ -276,6 +279,7 @@ export async function POST(req: Request) {
       // No attachments, parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
         
         CORREO ELECTRÓNICO:
@@ -289,7 +293,8 @@ export async function POST(req: Request) {
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
            Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
         4. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacio.
-        5. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -302,6 +307,7 @@ export async function POST(req: Request) {
           "documentType": "Email",
           "address": "Dirección física limpia extraída o vacio",
           "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliveryDate": "YYYY-MM-DD o null",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
@@ -554,6 +560,7 @@ export async function POST(req: Request) {
             isMetadata: true, 
             address: extractedData.address || null,
             deliverySlot: extractedData.deliverySlot || null,
+            deliveryDate: extractedData.deliveryDate || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
             clientType: clientType,
