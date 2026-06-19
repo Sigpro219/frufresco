@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/authContext';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { 
   Calendar, 
@@ -56,9 +57,41 @@ interface Purchase {
 }
 
 export default function RecogidaPage() {
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [selectedSection, setSelectedSection] = useState<string>('Ver Todo');
+
+    const customPermsNormalized = (profile?.custom_permissions || []).map((p: string) => p.toLowerCase());
+    const hasCategoryRestrictions = customPermsNormalized.some(p => p.startsWith('ops.recogida.category:'));
+
+    const isFrutasAllowed = !hasCategoryRestrictions ||
+        customPermsNormalized.includes('ops.recogida.category:frutas') ||
+        customPermsNormalized.includes('*') ||
+        customPermsNormalized.includes('ops.recogida') ||
+        customPermsNormalized.includes('ops.recogida.*');
+
+    const isOtrosAllowed = !hasCategoryRestrictions ||
+        customPermsNormalized.includes('ops.recogida.category:otros') ||
+        customPermsNormalized.includes('*') ||
+        customPermsNormalized.includes('ops.recogida') ||
+        customPermsNormalized.includes('ops.recogida.*');
+
+    useEffect(() => {
+        const allowed = [];
+        if (isFrutasAllowed && isOtrosAllowed) {
+            allowed.push('Ver Todo');
+        }
+        if (isFrutasAllowed) {
+            allowed.push('Frutas');
+        }
+        if (isOtrosAllowed) {
+            allowed.push('Otros');
+        }
+        if (allowed.length > 0 && !allowed.includes(selectedSection)) {
+            setSelectedSection(allowed[0]);
+        }
+    }, [isFrutasAllowed, isOtrosAllowed, selectedSection]);
     const [showFilterGrid, setShowFilterGrid] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
     const [groupMode, setGroupMode] = useState<'provider' | 'bodega'>('provider');
@@ -429,8 +462,8 @@ export default function RecogidaPage() {
     };
 
     // Stats calculation based on full dataset
-    const fruitPurchases = purchases.filter(p => p.product?.category === 'FR');
-    const otherPurchases = purchases.filter(p => p.product?.category !== 'FR');
+    const fruitPurchases = purchases.filter(p => p.product?.category === 'FR' && isFrutasAllowed);
+    const otherPurchases = purchases.filter(p => p.product?.category !== 'FR' && isOtrosAllowed);
 
     const getCategoryPercentage = (items: Purchase[]) => {
         if (items.length === 0) return 0;
@@ -444,11 +477,15 @@ export default function RecogidaPage() {
     ];
 
     const filteredPurchases = purchases.filter((p: Purchase) => {
+        const isFruit = p.product?.category === 'FR';
+        if (isFruit && !isFrutasAllowed) return false;
+        if (!isFruit && !isOtrosAllowed) return false;
+
         if (selectedSection === 'Frutas') {
-            return p.product?.category === 'FR';
+            return isFruit;
         }
         if (selectedSection === 'Otros') {
-            return p.product?.category !== 'FR';
+            return !isFruit;
         }
         return true; // 'Ver Todo'
     });
@@ -882,7 +919,7 @@ purchases: groups[key]
                     <div
                         style={{
                             display: "grid",
-                            gridTemplateColumns: "1fr 1fr 1fr",
+                            gridTemplateColumns: `repeat(${(isFrutasAllowed && isOtrosAllowed) ? 3 : 1}, 1fr)`,
                             gap: "0.4rem",
                             marginTop: "0.5rem",
                             animation: "fadeSlideDown 0.18s ease-out",
@@ -894,7 +931,12 @@ purchases: groups[key]
                                 to   { opacity: 1; transform: translateY(0); }
                             }
                         `}} />
-                        {["Ver Todo", "Frutas", "Otros"].map((cat) => {
+                        {["Ver Todo", "Frutas", "Otros"].filter(cat => {
+                            if (cat === "Ver Todo") return isFrutasAllowed && isOtrosAllowed;
+                            if (cat === "Frutas") return isFrutasAllowed;
+                            if (cat === "Otros") return isOtrosAllowed;
+                            return false;
+                        }).map((cat) => {
                             const stat = stats.find(s => s.name === cat);
                             const isActive = selectedSection === cat;
                             const pct = stat?.percentage ?? null;

@@ -145,7 +145,11 @@ export const permissionTree: TreeNode[] = [
       {
         id: 'ops.recogida',
         label: 'Módulo de Recogida Zorritos (Abastos)',
-        level: 2
+        level: 2,
+        children: [
+          { id: 'ops.recogida.category:FRUTAS', label: 'Sección: Frutas', level: 4 },
+          { id: 'ops.recogida.category:OTROS', label: 'Sección: Otros', level: 4 }
+        ]
       },
       {
         id: 'ops.recepcion',
