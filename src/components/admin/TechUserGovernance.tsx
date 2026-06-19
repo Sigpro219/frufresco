@@ -35,6 +35,7 @@ interface ActiveTechUser {
     profile_role: string;
     qr_token: string;
     created_at: string;
+    custom_permissions?: string[];
 }
 
 export default function TechUserGovernance() {
@@ -264,24 +265,9 @@ export default function TechUserGovernance() {
         }
     };
 
-    const handleOpenPermissionsModal = async (user: ActiveTechUser) => {
+    const handleOpenPermissionsModal = (user: ActiveTechUser) => {
         setEditingPermissionsUser(user);
-        setActionLoading(user.profile_id);
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('custom_permissions')
-                .eq('id', user.profile_id)
-                .single();
-            if (error) throw error;
-            setTempPermissions(data?.custom_permissions || []);
-        } catch (err: any) {
-            console.error('Error fetching custom permissions:', err);
-            alert('No se pudieron cargar los permisos del usuario.');
-            setEditingPermissionsUser(null);
-        } finally {
-            setActionLoading(null);
-        }
+        setTempPermissions(user.custom_permissions || []);
     };
 
     const handleSavePermissions = async () => {

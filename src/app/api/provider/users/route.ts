@@ -20,7 +20,7 @@ export async function GET() {
         // 2. Fetch all profiles
         const { data: profiles, error: pError } = await adminSupabase
             .from('profiles')
-            .select('id, collaborator_id, email, role, is_active, created_at');
+            .select('id, collaborator_id, email, role, is_active, custom_permissions, created_at');
 
         if (pError) {
             console.error('Error fetching profiles:', pError.message);
@@ -67,7 +67,8 @@ export async function GET() {
                     is_active: hasProfile.is_active,
                     profile_role: hasProfile.role,
                     qr_token: col.qr_token,
-                    created_at: hasProfile.created_at
+                    created_at: hasProfile.created_at,
+                    custom_permissions: hasProfile.custom_permissions || []
                 });
             }
         });
