@@ -17,6 +17,9 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; emailId: string | null }>({ isOpen: false, emailId: null });
   const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const handleDeleteEmail = async () => {
     if (!deleteConfirm.emailId) return;
@@ -49,6 +52,38 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('mail')
+        .delete()
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      const updatedList = emails.filter(email => !selectedIds.includes(email.id));
+      setEmails(updatedList);
+      setSelectedIds([]);
+      if (onOutboxChange) {
+        onOutboxChange(updatedList.length);
+      }
+
+      if (typeof window !== 'undefined' && (window as any).showToast) {
+        (window as any).showToast(`${selectedIds.length} correos eliminados de la bandeja de salida`, 'success');
+      }
+    } catch (err: any) {
+      console.error('Error bulk deleting emails:', err);
+      if (typeof window !== 'undefined' && (window as any).showToast) {
+        (window as any).showToast('Error al eliminar los correos: ' + (err.message || err), 'error');
+      }
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteConfirm(false);
+    }
+  };
+ 
   useEffect(() => {
     fetchEmails();
   }, []);
@@ -190,6 +225,33 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
               </button>
             )}
           </div>
+
+          {selectedIds.length > 0 && (
+            <button
+              onClick={() => setBulkDeleteConfirm(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '0.5rem 1.2rem',
+                backgroundColor: '#FEF2F2',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                color: '#EF4444',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                height: '38px',
+                boxSizing: 'border-box'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+            >
+              <Trash2 size={14} />
+              Eliminar seleccionados ({selectedIds.length})
+            </button>
+          )}
         </div>
 
         <button
@@ -242,6 +304,20 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8FAFB', borderBottom: `2px solid ${THEME.colors.border}` }}>
+                <th style={{ padding: '1rem', width: '40px', textAlign: 'center' }}>
+                  <input 
+                    type="checkbox"
+                    checked={filteredEmails.length > 0 && selectedIds.length === filteredEmails.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(filteredEmails.map(email => email.id));
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                  />
+                </th>
                 <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '20%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>FECHA / HORA</th>
                 <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '25%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>DESTINATARIO</th>
                 <th style={{ padding: '1rem', fontWeight: 800, color: '#4B5563', width: '35%', fontSize: '0.75rem', letterSpacing: '0.05em' }}>ASUNTO</th>
@@ -257,6 +333,20 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
 
                 return (
                   <tr key={email.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedIds.includes(email.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(prev => [...prev, email.id]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== email.id));
+                          }
+                        }}
+                        style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                      />
+                    </td>
                     <td style={{ padding: '1rem', fontWeight: 600, color: '#374151' }}>
                       {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
@@ -483,6 +573,79 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
                 onMouseLeave={e => !deleting && (e.currentTarget.style.backgroundColor = '#EF4444')}
               >
                 {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '2rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '450px',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            textAlign: 'left',
+            padding: '1.5rem'
+          }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#111827', fontWeight: 800 }}>
+              ¿Eliminar correos seleccionados?
+            </h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              Esta acción eliminará de forma permanente los <strong>{selectedIds.length}</strong> correos seleccionados de la bandeja de salida. No se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                disabled={bulkDeleting}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: 'white',
+                  border: `1.5px solid ${THEME.colors.border}`,
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  color: '#4B5563',
+                  cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = '#F9FAFB')}
+                onMouseLeave={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = 'white')}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: bulkDeleting ? '#FDA4AF' : '#EF4444',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  color: 'white',
+                  cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = '#DC2626')}
+                onMouseLeave={e => !bulkDeleting && (e.currentTarget.style.backgroundColor = '#EF4444')}
+              >
+                {bulkDeleting ? 'Eliminando...' : 'Sí, eliminar seleccionados'}
               </button>
             </div>
           </div>

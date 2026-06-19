@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import https from 'https';
+import * as XLSX from 'xlsx';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +27,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -154,6 +155,9 @@ export async function POST(req: Request) {
     };
 
     // 2. Parse email body or attachment with Gemini
+    let isExcel = false;
+    let excelTextContext = '';
+
     if (attachments.length > 0) {
       console.log(`[Email Inbound] Processing attachment: ${attachments[0].filename}`);
       // CloudMailin attachment format: content is base64 encoded
@@ -161,6 +165,23 @@ export async function POST(req: Request) {
       const base64Data = attachment.content;
       const mimeType = attachment.content_type || 'application/pdf';
       attachmentName = attachment.filename;
+
+      const lowerMime = mimeType.toLowerCase();
+      const lowerName = attachmentName ? attachmentName.toLowerCase() : '';
+      isExcel = lowerMime.includes('spreadsheet') || lowerMime.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+
+      if (isExcel) {
+        try {
+          const buffer = Buffer.from(base64Data, 'base64');
+          const workbook = XLSX.read(buffer, { type: 'buffer' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          excelTextContext = XLSX.utils.sheet_to_csv(worksheet);
+          console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
+        } catch (err) {
+          console.error('[Email Inbound] Error parsing Excel:', err);
+        }
+      }
 
       try {
         // Ensure order-attachments bucket exists
@@ -227,22 +248,31 @@ export async function POST(req: Request) {
         }
       `;
 
-      try {
-        let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
-        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-        extractedData = JSON.parse(text);
-        if (extractedData.items && !Array.isArray(extractedData.items)) {
-          if (typeof extractedData.items === 'object') {
-            extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
-          } else {
-            extractedData.items = [];
+      if (!isExcel) {
+        try {
+          let text = await fetchGemini(apiKey, prompt, base64Data, mimeType);
+          text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          extractedData = JSON.parse(text);
+          if (extractedData.items && !Array.isArray(extractedData.items)) {
+            if (typeof extractedData.items === 'object') {
+              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+            } else {
+              extractedData.items = [];
+            }
           }
+        } catch (e) {
+          console.error('Failed to parse Gemini output for attachment:', e);
         }
-      } catch (e) {
-        console.error('Failed to parse Gemini output for attachment:', e);
+      } else {
+        console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
+        plainText = plainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
       }
-    } else {
-      console.log('[Email Inbound] Processing plain text email body');
+    }
+    
+    if (attachments.length === 0 || isExcel) {
+      if (!isExcel) {
+        console.log('[Email Inbound] Processing plain text email body');
+      }
       // No attachments, parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
@@ -545,7 +575,8 @@ export async function POST(req: Request) {
     console.log('[Email Inbound] Draft created successfully:', newDraft.id);
 
     // 4. Send confirmation email to the client using Nodemailer
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    // DESACTIVADO: Ahora los correos se envían manualmente después de la revisión del operario
+    if (false && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         // Dynamic import to avoid edge runtime issues if applicable, though this is a Node.js route
         const nodemailer = require('nodemailer');
@@ -769,29 +800,8 @@ export async function POST(req: Request) {
 </div>
         `;
 
-        // EVITAR enviar correos de confirmación al propio correo corporativo/administrador para no saturar la bandeja de entrada
-        const isCorporateRecipient = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
-        if (!isCorporateRecipient) {
-          await transporter.sendMail({
-            from: `"Investments Cortés (Pedidos)" <${process.env.SMTP_USER}>`,
-            to: senderEmail,
-            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-            html: emailHtml,
-          });
-          console.log('[Email Inbound] Confirmation email sent to:', senderEmail);
-
-          // Guarda copia en la tabla mail para el historial
-          await supabaseAdmin.from('mail').insert({
-            to_email: senderEmail,
-            subject: `¡Hemos recibido tu pedido! (#${draftIdStr})`,
-            message: { html: emailHtml, text: 'Tu pedido ha sido recibido con éxito.' },
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-            template: { name: 'inbound_draft_received', data: { draft_id: draftIdStr, total: totalOrderAmount } }
-          });
-        } else {
-          console.log('[Email Inbound] Correo destinatario es corporativo/admin. Saltando envío de confirmación e historial para evitar spam.', senderEmail);
-        }
+        // Respuesta automática deshabilitada. Ahora se envía manualmente desde la interfaz cuando el administrador lo decida.
+        console.log('[Email Inbound] Automatic confirmation email is disabled. Admin will send manual receipt acknowledgment.');
 
       } catch (emailError) {
         console.error('[Email Inbound] Failed to send confirmation email:', emailError);
