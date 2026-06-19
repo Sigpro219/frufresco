@@ -164,8 +164,8 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 {hasPermission('ops.compras') && <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />}
                 {hasPermission('ops.recogida') && <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />}
                 {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />}
-                {hasPermission('ops.picking') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
-                {hasPermission('ops.picking') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
+                {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
+                {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
                 {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />}
                 <NavItem href="/ops" icon={Home} label="INICIO" highlight />
             </nav>

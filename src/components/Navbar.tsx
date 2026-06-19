@@ -163,7 +163,17 @@ export default function Navbar() {
     }, [operationsOpen]);
 
     const hasPermission = (moduleKey: string) => {
-        return checkUserPermission(profile, moduleKey, roles);
+        // Map legacy short keys checked in Navbar to tree-editor full keys
+        let key = moduleKey;
+        if (moduleKey === 'dashboard') key = 'admin.dashboard';
+        else if (moduleKey === 'commercial') key = 'admin.commercial';
+        else if (moduleKey === 'transport') key = 'admin.transport';
+        else if (moduleKey === 'hr') key = 'admin.hr';
+        else if (moduleKey === 'inventory') key = 'admin.commercial.inventory';
+        else if (moduleKey === 'maintenance') key = 'admin.transport.maintenance';
+        else if (moduleKey === 'command_center') key = 'admin.dashboard';
+
+        return checkUserPermission(profile, key, roles);
     };
 
     const shouldShowOperations = () => {
