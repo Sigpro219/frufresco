@@ -53,7 +53,7 @@ export default function ProcurementHub() {
                 <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ fontSize: '1.8rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.025em' }}>
-                            Módulo de Compras 360
+                            Compras
                         </h1>
                         <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>
                             Control financiero integral, abastecimiento y gestión de tesorería.

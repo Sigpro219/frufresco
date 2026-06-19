@@ -172,7 +172,7 @@ export default function AdminDashboard() {
                 <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>
-                            Centro de Comando
+                            Panel Admin
                         </h1>
                         <p style={{ color: THEME.colors.textSecondary, fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: '500' }}>
                             Resumen operativo de <span style={{ color: THEME.colors.primary, fontWeight: '600' }}>FruFresco</span> en tiempo real.

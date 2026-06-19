@@ -689,7 +689,7 @@ export default function InventoryAdminPage() {
             <div style={styles.container}>
                 <div style={styles.header}>
                     <div style={styles.titleArea}>
-                        <h1 style={styles.title}>Control Maestro de Inventarios</h1>
+                        <h1 style={styles.title}>Control de Inventarios</h1>
                         <p style={styles.subtitle}>Consolidación multi-estado, trazabilidad total y auditoría inteligente.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>

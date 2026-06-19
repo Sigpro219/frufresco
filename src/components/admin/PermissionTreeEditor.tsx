@@ -18,7 +18,7 @@ export const permissionTree: TreeNode[] = [
     children: [
       {
         id: 'admin.dashboard',
-        label: '1.1 Centro de Comando / Gobernanza',
+        label: '1.1 Panel Admin',
         level: 2,
         children: [
           {
@@ -71,7 +71,7 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.orders',
-        label: '1.2 Pedidos y Rutas de Despacho',
+        label: '1.2 Pedidos',
         level: 2,
         children: [
           { id: 'admin.orders.history', label: '1.2.1 Historial y Monitoreo de Órdenes', level: 3 },
@@ -81,7 +81,7 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.commercial',
-        label: '1.3 Comercial y Facturación',
+        label: '1.3 Comercial',
         level: 2,
         children: [
           { id: 'admin.commercial.quotes', label: '1.3.1 Cotizaciones y Ofertas (B2B)', level: 3 },
@@ -113,7 +113,7 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.procurement',
-        label: '1.4 Gestión de Compras (Abastecimiento Admin)',
+        label: '1.4 Compras',
         level: 2,
         children: [
           { id: 'admin.procurement.treasury', label: '1.4.1 Conciliación Bancaria y Aprobación', level: 3 },
@@ -124,7 +124,7 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.transport',
-        label: '1.5 Torre de Control de Logística',
+        label: '1.5 Transporte',
         level: 2,
         children: [
           { id: 'admin.transport.view', label: '1.5.1 Visualizar Torre de Control (Lectura)', level: 3 },
@@ -133,12 +133,12 @@ export const permissionTree: TreeNode[] = [
       },
       {
         id: 'admin.hr',
-        label: '1.6 Talento Humano y Colaboradores',
+        label: '1.6 Talento Humano',
         level: 2
       },
       {
         id: 'admin.customer-service',
-        label: '1.7 Atención al Cliente (PQRs)',
+        label: '1.7 Atención al Cliente',
         level: 2
       },
       {

@@ -276,7 +276,7 @@ export default function CommercialDashboard() {
                 <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                     <div>
                         <h1 style={{ fontSize: '2.25rem', fontWeight: '600', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-                            Gestión Comercial
+                            Comercial
                         </h1>
                         <p style={{ fontSize: '1.1rem', color: THEME.colors.textSecondary, marginTop: '0.2rem' }}>
                             Monitorización de precios y eficiencia de ventas.

@@ -301,7 +301,7 @@ export default function TransportControlTower() {
                             <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>LOGISTICS & SUPPLY CHAIN / TOWER</span>
                         </div>
                         <h1 style={{ fontSize: '1.85rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-                            Torre de <span style={{ color: '#0EA5E9' }}>Control</span>
+                            Transporte
                         </h1>
                     </div>
 

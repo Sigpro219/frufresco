@@ -297,7 +297,7 @@ export default function HRManagement() {
                 }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.025em', margin: 0 }}>
-                            Gestión de <span style={{ color: THEME.colors.primary }}>Talento Humano</span>
+                            Talento Humano
                         </h1>
                         <p style={{ color: THEME.colors.textSecondary, fontSize: '1.1rem', marginTop: '0.5rem', fontWeight: '500' }}>
                             Administra colaboradores, roles y especialidad operativa.
