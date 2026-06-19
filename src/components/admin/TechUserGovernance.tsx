@@ -71,6 +71,18 @@ export default function TechUserGovernance() {
         fetchGovernanceData();
     }, []);
 
+    useEffect(() => {
+        const isModalOpen = !!(approvingCol || showCredentialsModal || viewingUser || resettingUser);
+        if (isModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [approvingCol, showCredentialsModal, viewingUser, resettingUser]);
+
     const fetchGovernanceData = async () => {
         try {
             setLoading(true);
