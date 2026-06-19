@@ -400,7 +400,7 @@ export default function CommandCenter() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', padding: '2rem' }}>
-            <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#111827', margin: 0 }}>DELTA <span style={{ color: '#D4AF37' }}>Command Center</span></h1>

@@ -60,6 +60,10 @@ export default function TechUserGovernance() {
     // View QR / Details Dialog
     const [viewingUser, setViewingUser] = useState<ActiveTechUser | null>(null);
 
+    // Reset Password State
+    const [resettingUser, setResettingUser] = useState<ActiveTechUser | null>(null);
+    const [inputResetPassword, setInputResetPassword] = useState('');
+
     // Copy Alert State
     const [copied, setCopied] = useState(false);
 
@@ -135,6 +139,47 @@ export default function TechUserGovernance() {
         }
     };
 
+    const handleConfirmResetPassword = async () => {
+        if (!resettingUser) return;
+
+        try {
+            setActionLoading(resettingUser.profile_id);
+            setError(null);
+            const res = await fetch('/api/provider/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'reset-password',
+                    collaboratorId: resettingUser.collaborator_id,
+                    profileId: resettingUser.profile_id,
+                    password: inputResetPassword || undefined
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al restablecer contraseña');
+
+            setCreatedCredentials({
+                name: resettingUser.contact_name,
+                email: data.email,
+                password: data.password,
+                messageText: data.messageText,
+                phone: resettingUser.phone,
+                qrToken: resettingUser.qr_token || resettingUser.collaborator_id
+            });
+
+            setResettingUser(null);
+            setShowCredentialsModal(true);
+            setSuccessMessage(`Contraseña restablecida con éxito para ${resettingUser.contact_name}`);
+            setTimeout(() => setSuccessMessage(null), 5000);
+            await fetchGovernanceData();
+        } catch (err: any) {
+            alert(`Error al restablecer contraseña: ${err.message}`);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     const handleToggleStatus = async (user: ActiveTechUser) => {
         const actionText = user.is_active ? 'suspender' : 'reactivar';
         if (!confirm(`¿Estás seguro de que deseas ${actionText} el acceso digital para ${user.contact_name}?`)) return;
@@ -167,6 +212,13 @@ export default function TechUserGovernance() {
 
     const handleDeleteUser = async (user: ActiveTechUser) => {
         if (!confirm(`⚠️ ALERTA CRÍTICA: ¿Estás seguro de que deseas REVOCAR Y ELIMINAR permanentemente la cuenta de ${user.contact_name}? Esta acción eliminará su login de Supabase Auth.`)) return;
+
+        const confirmWord = 'ELIMINAR';
+        const input = prompt(`Para confirmar la eliminación definitiva de la cuenta de ${user.contact_name}, escribe la palabra "${confirmWord}" en mayúsculas:`);
+        if (input !== confirmWord) {
+            alert('Confirmación incorrecta. Acción cancelada.');
+            return;
+        }
 
         try {
             setActionLoading(user.profile_id);
@@ -435,6 +487,29 @@ export default function TechUserGovernance() {
                                                             title="Ver Código QR y Compartir Acceso"
                                                         >
                                                             <QrCode size={14} /> Compartir
+                                                        </button>
+
+                                                        <button 
+                                                            onClick={() => {
+                                                                setResettingUser(user);
+                                                                setInputResetPassword('');
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.5rem 0.8rem', 
+                                                                borderRadius: '8px', 
+                                                                border: `1px solid ${THEME.colors.border}`, 
+                                                                backgroundColor: 'white', 
+                                                                color: THEME.colors.textSecondary,
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.3rem',
+                                                                fontSize: '0.75rem'
+                                                            }}
+                                                            title="Restablecer Contraseña"
+                                                        >
+                                                            <Key size={14} style={{ color: '#F59E0B' }} /> Restablecer
                                                         </button>
 
                                                         <button 
@@ -755,6 +830,50 @@ export default function TechUserGovernance() {
                         >
                             Cerrar
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 4: RESTABLECER CONTRASEÑA */}
+            {resettingUser && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '460px', boxShadow: THEME.shadow.lg }}>
+                        <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: THEME.colors.textMain }}>Restablecer Contraseña</h3>
+                        <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', lineHeight: '1.4' }}>
+                            Establece una nueva contraseña para <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{resettingUser.contact_name}</span> ({resettingUser.email}).
+                            Si la dejas en blanco, el sistema generará una contraseña segura automáticamente.
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.4rem', textTransform: 'uppercase' }}>Nueva Contraseña (Opcional)</label>
+                                <input 
+                                    type="text" 
+                                    value={inputResetPassword} 
+                                    onChange={e => setInputResetPassword(e.target.value)}
+                                    placeholder="Dejar en blanco para autogenerar"
+                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', boxSizing: 'border-box', outline: 'none' }}
+                                />
+                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block', marginTop: '0.3rem' }}>
+                                    Debe tener al menos 6 caracteres.
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.8rem', marginTop: '1rem' }}>
+                                <button 
+                                    onClick={() => setResettingUser(null)}
+                                    style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textSecondary, fontWeight: '800', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={handleConfirmResetPassword}
+                                    style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: 'none', backgroundColor: THEME.colors.primary, color: 'white', fontWeight: '800', cursor: 'pointer' }}
+                                >
+                                    Restablecer Ahora
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

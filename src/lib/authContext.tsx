@@ -17,6 +17,7 @@ interface Profile {
     needs_crates?: boolean;
     document_type?: string;
     remission_with_prices?: boolean;
+    needs_password_change?: boolean;
 }
 
 interface AuthContextType {

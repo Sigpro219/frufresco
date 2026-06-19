@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../lib/authContext';
+import { supabase } from '../../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Lock, LayoutDashboard, Clock, Rocket, LogOut, Mail, Key } from 'lucide-react';
@@ -13,6 +14,12 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const { signIn, profile, user, signOut } = useAuth();
     const router = useRouter();
+
+    // Forced password change states
+    const [showForceChangePassword, setShowForceChangePassword] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [changeSuccess, setChangeSuccess] = useState(false);
 
     // Capturar error de desactivación
     useEffect(() => {
@@ -27,6 +34,12 @@ export default function LoginPage() {
     // Redirección inteligente
     useEffect(() => {
         if (profile) {
+            if (profile.needs_password_change) {
+                console.log('🔒 El usuario requiere cambio de contraseña obligatorio antes de ingresar');
+                setShowForceChangePassword(true);
+                return;
+            }
+
             console.log('🚪 Redirigiendo usuario con rol:', profile.role);
             const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
             
@@ -39,6 +52,51 @@ export default function LoginPage() {
             }
         }
     }, [profile, router]);
+
+    const handleForceChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        if (newPassword.length < 6) {
+            setError('⚠️ La contraseña debe tener al menos 6 caracteres.');
+            setLoading(false);
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setError('⚠️ Las contraseñas ingresadas no coinciden.');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            // 1. Update password in Supabase Auth
+            const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
+            if (authError) throw authError;
+
+            // 2. Update profiles table needs_password_change to false
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ needs_password_change: false })
+                .eq('id', user?.id);
+
+            if (profileError) throw profileError;
+
+            console.log('✅ Cambio de contraseña exitoso!');
+            setChangeSuccess(true);
+            
+            // Reload page to trigger clean reload & redirect
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+
+        } catch (err: any) {
+            console.error('❌ Error al cambiar contraseña:', err);
+            setError(err.message || 'Error inesperado al cambiar la contraseña');
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -130,234 +188,395 @@ export default function LoginPage() {
                         maxWidth: '440px',
                         color: 'white'
                     }}>
-                        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-                            <div style={{
-                                width: '50px',
-                                height: '50px',
-                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                borderRadius: '15px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin: '0 auto 1rem',
-                                border: '1px solid rgba(255, 255, 255, 0.2)'
-                            }}>
-                                <Lock size={24} color="var(--secondary)" strokeWidth={2.5} />
-                            </div>
-                            <h1 style={{ 
-                                fontFamily: 'var(--font-outfit), sans-serif',
-                                fontSize: '2rem', 
-                                fontWeight: '900', 
-                                color: 'white', 
-                                marginTop: '0',
-                                letterSpacing: '-0.06em'
-                            }}>
-                                Logistics Pro<span style={{ color: 'var(--secondary)' }}>.</span>
-                            </h1>
-                            <p style={{ 
-                                color: 'rgba(255, 255, 255, 0.6)', 
-                                marginTop: '0.2rem',
-                                fontSize: '0.9rem',
-                                fontWeight: '500'
-                            }}>
-                                Portal de ingreso al sistema Logistics Pro
-                            </p>
-                        </div>
-
-                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {error && (
-                                <div style={{ 
-                                    padding: '1rem', 
-                                    backgroundColor: 'rgba(220, 38, 38, 0.1)', 
-                                    color: '#f87171', 
-                                    borderRadius: '16px', 
-                                    fontSize: '0.9rem',
-                                    border: '1px solid rgba(220, 38, 38, 0.2)',
-                                    fontWeight: '500'
-                                }}>
-                                    <strong>Error:</strong> {error}
-                                </div>
-                            )}
-
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Correo Electrónico
-                                </label>
-                                <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
-                                        <Mail size={18} />
+                        {showForceChangePassword ? (
+                            <>
+                                <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+                                    <div style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                        borderRadius: '15px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 1rem',
+                                        border: '1px solid rgba(251, 191, 36, 0.2)'
+                                    }}>
+                                        <Lock size={24} color="#fbbf24" strokeWidth={2.5} />
                                     </div>
-                                    <input
-                                        required
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder="socio@frubana.com"
-                                        style={{ 
-                                            width: '100%', 
-                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
-                                            borderRadius: '14px', 
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            backgroundColor: 'rgba(255,255,255,0.05)',
-                                            color: 'white',
-                                            fontSize: '1rem',
-                                            outline: 'none',
-                                            transition: 'all 0.2s'
-                                        }}
-                                        className="login-input"
-                                    />
+                                    <h1 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '1.7rem', 
+                                        fontWeight: '900', 
+                                        color: 'white', 
+                                        marginTop: '0',
+                                        letterSpacing: '-0.06em'
+                                    }}>
+                                        Nueva Contraseña<span style={{ color: '#fbbf24' }}>.</span>
+                                    </h1>
+                                    <p style={{ 
+                                        color: 'rgba(255, 255, 255, 0.6)', 
+                                        marginTop: '0.2rem',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '500',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        Por seguridad, debes establecer una contraseña personal antes de ingresar por primera vez.
+                                    </p>
                                 </div>
-                            </div>
 
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Contraseña
-                                </label>
-                                <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
-                                        <Key size={18} />
+                                <form onSubmit={handleForceChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {error && (
+                                        <div style={{ 
+                                            padding: '1rem', 
+                                            backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+                                            color: '#f87171', 
+                                            borderRadius: '16px', 
+                                            fontSize: '0.9rem',
+                                            border: '1px solid rgba(220, 38, 38, 0.2)',
+                                            fontWeight: '500'
+                                        }}>
+                                            <strong>Error:</strong> {error}
+                                        </div>
+                                    )}
+
+                                    {changeSuccess ? (
+                                        <div style={{ 
+                                            padding: '1.2rem', 
+                                            backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                                            color: '#34d399', 
+                                            borderRadius: '16px', 
+                                            fontSize: '0.95rem',
+                                            border: '1px solid rgba(16, 185, 129, 0.2)',
+                                            fontWeight: '600',
+                                            textAlign: 'center'
+                                        }}>
+                                            ¡Contraseña cambiada con éxito!<br/>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: '400', opacity: 0.8 }}>Redirigiendo al sistema...</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Nueva Contraseña
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                        <Key size={18} />
+                                                    </div>
+                                                    <input
+                                                        required
+                                                        type="password"
+                                                        value={newPassword}
+                                                        onChange={(e) => setNewPassword(e.target.value)}
+                                                        placeholder="Mínimo 6 caracteres"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1px solid rgba(255,255,255,0.1)',
+                                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                                            color: 'white',
+                                                            fontSize: '1rem',
+                                                            outline: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    Confirmar Contraseña
+                                                </label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                        <Key size={18} />
+                                                    </div>
+                                                    <input
+                                                        required
+                                                        type="password"
+                                                        value={confirmPassword}
+                                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                                        placeholder="Repite tu contraseña"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                            borderRadius: '14px', 
+                                                            border: '1px solid rgba(255,255,255,0.1)',
+                                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                                            color: 'white',
+                                                            fontSize: '1rem',
+                                                            outline: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        className="login-input"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={loading}
+                                                className="btn-premium"
+                                                style={{ 
+                                                    marginTop: '0.5rem', 
+                                                    width: '100%', 
+                                                    fontSize: '1rem',
+                                                    padding: '0.8rem',
+                                                    borderRadius: 'var(--radius-full)',
+                                                    fontWeight: '900',
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    backgroundColor: loading ? 'rgba(255,255,255,0.1)' : '#fbbf24',
+                                                    color: '#0a1a0f',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '10px',
+                                                    boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
+                                                }}
+                                            >
+                                                {loading ? 'Actualizando...' : 'Confirmar y Guardar'}
+                                            </button>
+                                        </>
+                                    )}
+                                </form>
+                            </>
+                        ) : (
+                            <>
+                                <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+                                    <div style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                        borderRadius: '15px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 1rem',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)'
+                                    }}>
+                                        <Lock size={24} color="var(--secondary)" strokeWidth={2.5} />
                                     </div>
-                                    <input
-                                        required
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        style={{ 
-                                            width: '100%', 
-                                            padding: '0.7rem 1rem 0.7rem 2.8rem', 
-                                            borderRadius: '14px', 
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            backgroundColor: 'rgba(255,255,255,0.05)',
-                                            color: 'white',
-                                            fontSize: '1rem',
-                                            outline: 'none',
-                                            transition: 'all 0.2s'
-                                        }}
-                                        className="login-input"
-                                    />
+                                    <h1 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '2rem', 
+                                        fontWeight: '900', 
+                                        color: 'white', 
+                                        marginTop: '0',
+                                        letterSpacing: '-0.06em'
+                                    }}>
+                                        Logistics Pro<span style={{ color: 'var(--secondary)' }}>.</span>
+                                    </h1>
+                                    <p style={{ 
+                                        color: 'rgba(255, 255, 255, 0.6)', 
+                                        marginTop: '0.2rem',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500'
+                                    }}>
+                                        Portal de ingreso al sistema Logistics Pro
+                                    </p>
                                 </div>
-                            </div>
 
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="btn-premium"
-                                style={{ 
-                                    marginTop: '0.5rem', 
-                                    width: '100%', 
-                                    fontSize: '1rem',
-                                    padding: '0.8rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    fontWeight: '900',
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    backgroundColor: loading ? 'rgba(255,255,255,0.1)' : 'var(--primary)',
-                                    color: 'white',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '10px',
-                                    boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
-                                }}
-                            >
-                                {loading ? 'Autenticando...' : (
-                                    <>
-                                        {user ? 'Validado' : 'Ingresar'} <Rocket size={20} />
-                                    </>
-                                )}
-                            </button>
-                        </form>
+                                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {error && (
+                                        <div style={{ 
+                                            padding: '1rem', 
+                                            backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+                                            color: '#f87171', 
+                                            borderRadius: '16px', 
+                                            fontSize: '0.9rem',
+                                            border: '1px solid rgba(220, 38, 38, 0.2)',
+                                            fontWeight: '500'
+                                        }}>
+                                            <strong>Error:</strong> {error}
+                                        </div>
+                                    )}
 
-                        {user && !profile && (
-                            <div style={{ 
-                                marginTop: '1.5rem', 
-                                padding: '1.5rem', 
-                                backgroundColor: 'rgba(251, 191, 36, 0.1)', 
-                                color: '#fbbf24', 
-                                borderRadius: '24px', 
-                                textAlign: 'center', 
-                                border: '1px solid rgba(251, 191, 36, 0.2)',
-                                backdropFilter: 'blur(10px)'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                                    <Clock className="animate-pulse" size={32} />
-                                </div>
-                                <p style={{ 
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    margin: '0 0 0.5rem', 
-                                    fontWeight: '800', 
-                                    fontSize: '1.1rem' 
-                                }}>
-                                    Validando tu perfil...
-                                </p>
-                                <p style={{ fontSize: '0.85rem', marginBottom: '1.5rem', opacity: 0.8, fontWeight: '500' }}>
-                                    Estamos recuperando tus credenciales de acceso institucional.
-                                </p>
-                                
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Correo Electrónico
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                <Mail size={18} />
+                                            </div>
+                                            <input
+                                                required
+                                                type="email"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                placeholder="socio@frubana.com"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                    borderRadius: '14px', 
+                                                    border: '1px solid rgba(255,255,255,0.1)',
+                                                    backgroundColor: 'rgba(255,255,255,0.05)',
+                                                    color: 'white',
+                                                    fontSize: '1rem',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                className="login-input"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Contraseña
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }}>
+                                                <Key size={18} />
+                                            </div>
+                                            <input
+                                                required
+                                                type="password"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                placeholder="••••••••"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.7rem 1rem 0.7rem 2.8rem', 
+                                                    borderRadius: '14px', 
+                                                    border: '1px solid rgba(255,255,255,0.1)',
+                                                    backgroundColor: 'rgba(255,255,255,0.05)',
+                                                    color: 'white',
+                                                    fontSize: '1rem',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                className="login-input"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <button
-                                        onClick={() => router.push('/admin/dashboard')}
+                                        type="submit"
+                                        disabled={loading}
                                         className="btn-premium"
                                         style={{ 
+                                            marginTop: '0.5rem', 
                                             width: '100%', 
-                                            padding: '0.8rem', 
-                                            backgroundColor: 'var(--primary)', 
-                                            color: 'white', 
-                                            border: 'none', 
-                                            borderRadius: 'var(--radius-full)', 
-                                            fontWeight: '800', 
+                                            fontSize: '1rem',
+                                            padding: '0.8rem',
+                                            borderRadius: 'var(--radius-full)',
+                                            fontWeight: '900',
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            backgroundColor: loading ? 'rgba(255,255,255,0.1)' : 'var(--primary)',
+                                            color: 'white',
+                                            border: 'none',
                                             cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '8px',
-                                            fontSize: '0.9rem'
+                                            gap: '10px',
+                                            boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
                                         }}
                                     >
-                                        Ir al Dashboard <Rocket size={18} />
+                                        {loading ? 'Autenticando...' : (
+                                            <>
+                                                {user ? 'Validado' : 'Ingresar'} <Rocket size={20} />
+                                            </>
+                                        )}
                                     </button>
-                                    
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem' }}>
-                                        <button
-                                            onClick={() => window.location.reload()}
-                                            style={{ background: 'transparent', border: 'none', textDecoration: 'underline', color: '#fbbf24', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
-                                        >
-                                            Refrescar
-                                        </button>
-                                        
-                                        <button
-                                            onClick={() => signOut()}
-                                            style={{ 
-                                                background: 'transparent', 
-                                                border: 'none', 
-                                                color: '#fbbf24', 
-                                                fontSize: '0.8rem', 
-                                                cursor: 'pointer', 
-                                                opacity: 0.8,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                fontWeight: '600'
-                                            }}
-                                        >
-                                            <LogOut size={14} /> Cerrar Sesión
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                                </form>
 
-                        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', fontWeight: '500' }}>
-                                ¿No tienes cuenta para tu negocio? 
-                                <br />
-                                <Link href="/b2b/register" style={{ color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '0.5rem' }}>
-                                    Solicita acceso aquí <LayoutDashboard size={16} />
-                                </Link>
-                            </p>
-                        </div>
+                                {user && !profile && (
+                                    <div style={{ 
+                                        marginTop: '1.5rem', 
+                                        padding: '1.5rem', 
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)', 
+                                        color: '#fbbf24', 
+                                        borderRadius: '24px', 
+                                        textAlign: 'center', 
+                                        border: '1px solid rgba(251, 191, 36, 0.2)',
+                                        backdropFilter: 'blur(10px)'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                                            <Clock className="animate-pulse" size={32} />
+                                        </div>
+                                        <p style={{ 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            margin: '0 0 0.5rem', 
+                                            fontWeight: '800', 
+                                            fontSize: '1.1rem' 
+                                        }}>
+                                            Validando tu perfil...
+                                        </p>
+                                        <p style={{ fontSize: '0.85rem', marginBottom: '1.5rem', opacity: 0.8, fontWeight: '500' }}>
+                                            Estamos recuperando tus credenciales de acceso institucional.
+                                        </p>
+                                        
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <button
+                                                onClick={() => router.push('/admin/dashboard')}
+                                                className="btn-premium"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '0.8rem', 
+                                                    backgroundColor: 'var(--primary)', 
+                                                    color: 'white', 
+                                                    border: 'none', 
+                                                    borderRadius: 'var(--radius-full)', 
+                                                    fontWeight: '800', 
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '8px',
+                                                    fontSize: '0.9rem'
+                                                }}
+                                            >
+                                                Ir al Dashboard <Rocket size={18} />
+                                            </button>
+                                            
+                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginTop: '0.5rem' }}>
+                                                <button
+                                                    onClick={() => window.location.reload()}
+                                                    style={{ background: 'transparent', border: 'none', textDecoration: 'underline', color: '#fbbf24', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
+                                                >
+                                                    Refrescar
+                                                </button>
+                                                
+                                                <button
+                                                    onClick={() => signOut()}
+                                                    style={{ 
+                                                        background: 'transparent', 
+                                                        border: 'none', 
+                                                        color: '#fbbf24', 
+                                                        fontSize: '0.8rem', 
+                                                        cursor: 'pointer', 
+                                                        opacity: 0.8,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        fontWeight: '600'
+                                                    }}
+                                                >
+                                                    <LogOut size={14} /> Cerrar Sesión
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', fontWeight: '500' }}>
+                                        ¿No tienes cuenta para tu negocio? 
+                                        <br />
+                                        <Link href="/b2b/register" style={{ color: 'var(--secondary)', fontWeight: '800', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '0.5rem' }}>
+                                            Solicita acceso aquí <LayoutDashboard size={16} />
+                                        </Link>
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
