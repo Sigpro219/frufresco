@@ -18,6 +18,7 @@ interface Profile {
     document_type?: string;
     remission_with_prices?: boolean;
     needs_password_change?: boolean;
+    custom_permissions?: string[];
 }
 
 interface AuthContextType {
@@ -183,4 +184,41 @@ export function useAuth() {
         throw new Error('useAuth must be used within an AuthProvider');
     }
     return context;
+}
+
+export function checkUserPermission(
+    profile: Profile | null, 
+    requiredPerm: string, 
+    rolesConfig?: { value: string; permissions?: string[] }[]
+): boolean {
+    if (!profile) return false;
+    
+    // Super admins always have full access
+    if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
+
+    // 1. Check custom profile-level permissions
+    const userPerms = profile.custom_permissions || [];
+    if (userPerms.includes('*') || userPerms.includes(requiredPerm)) return true;
+    for (const p of userPerms) {
+        if (p.endsWith('*') && requiredPerm.startsWith(p.slice(0, -1))) return true;
+        if (requiredPerm.startsWith(p + '.') || requiredPerm.startsWith(p + ':')) return true;
+        // Child-to-parent check: if user has a child permission (e.g. 'com.billing'), they can see parent menu ('com')
+        if (p.startsWith(requiredPerm + '.') || p.startsWith(requiredPerm + ':')) return true;
+    }
+
+    // 2. Check role-level base permissions if roles config is provided
+    if (rolesConfig && rolesConfig.length > 0) {
+        const userRole = rolesConfig.find(r => r.value === profile.role);
+        if (userRole) {
+            const rolePerms = userRole.permissions || [];
+            if (rolePerms.includes(requiredPerm)) return true;
+            for (const p of rolePerms) {
+                if (p.endsWith('*') && requiredPerm.startsWith(p.slice(0, -1))) return true;
+                if (requiredPerm.startsWith(p + '.') || requiredPerm.startsWith(p + ':')) return true;
+                if (p.startsWith(requiredPerm + '.') || p.startsWith(requiredPerm + ':')) return true;
+            }
+        }
+    }
+
+    return false;
 }

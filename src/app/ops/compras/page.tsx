@@ -193,9 +193,25 @@ export default function ProcurementPage() {
     const controller = new AbortController();
     const signal = controller.signal;
 
-    if (profile?.specialty) {
-      setFilterCategory(profile.specialty);
+    const customPerms = profile?.custom_permissions || [];
+    const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.compras.category:'));
+    let initialCategory = profile?.specialty || "";
+    
+    if (hasCategoryRestrictions) {
+      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
+        customPerms.includes(`ops.compras.category:${cat}`) || 
+        customPerms.includes(`ops.compras.category:${cat.toUpperCase()}`) || 
+        customPerms.includes(`ops.compras.category:${cat.toLowerCase()}`) ||
+        customPerms.includes('*') || 
+        customPerms.includes('ops.compras') || 
+        customPerms.includes('ops.compras.*')
+      );
+      if (allowed.length > 0 && (!initialCategory || !allowed.includes(initialCategory))) {
+        initialCategory = allowed[0];
+      }
     }
+
+    setFilterCategory(initialCategory);
 
     const initLoad = async () => {
       setLoading(true);
@@ -237,13 +253,14 @@ export default function ProcurementPage() {
           setSelectedDate(dateToUse);
 
           await Promise.all([
-            fetchTasks(signal, profile?.specialty || "", dateToUse),
+            fetchTasks(signal, initialCategory, dateToUse),
             fetchProviders(signal),
             fetchConversions(signal)
           ]);
         }
       }
     };
+
 
     initLoad();
 
@@ -1044,7 +1061,41 @@ export default function ProcurementPage() {
     "TUBERCULOS - PAPA",
     "VERDURAS"
   ];
-  const categoryStats = dynamicCategories.map((cat) => {
+  
+  const customPerms = profile?.custom_permissions || [];
+  const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.compras.category:'));
+  const allowedCategories = dynamicCategories.filter(cat => {
+    if (!hasCategoryRestrictions) return true;
+    return customPerms.includes(`ops.compras.category:${cat}`) || 
+           customPerms.includes(`ops.compras.category:${cat.toUpperCase()}`) || 
+           customPerms.includes(`ops.compras.category:${cat.toLowerCase()}`) ||
+           customPerms.includes('*') || 
+           customPerms.includes('ops.compras') || 
+           customPerms.includes('ops.compras.*');
+  });
+
+  // Enforce category restrictions on profile changes
+  useEffect(() => {
+    if (!profile) return;
+    const customPerms = profile.custom_permissions || [];
+    const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.compras.category:'));
+    if (hasCategoryRestrictions) {
+      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
+        customPerms.includes(`ops.compras.category:${cat}`) || 
+        customPerms.includes(`ops.compras.category:${cat.toUpperCase()}`) || 
+        customPerms.includes(`ops.compras.category:${cat.toLowerCase()}`) ||
+        customPerms.includes('*') || 
+        customPerms.includes('ops.compras') || 
+        customPerms.includes('ops.compras.*')
+      );
+      if (allowed.length > 0 && (!filterCategory || filterCategory === "Ver Todo" || !allowed.includes(filterCategory))) {
+        setFilterCategory(allowed[0]);
+        fetchTasks(undefined, allowed[0], selectedDate);
+      }
+    }
+  }, [profile, filterCategory, selectedDate]);
+
+  const categoryStats = allowedCategories.map((cat) => {
     const catTasks = tasks.filter((t) => t.category === cat);
     const completed = catTasks.filter((t) => t.status === "completed").length;
     const percentage =
@@ -1549,31 +1600,33 @@ export default function ProcurementPage() {
           </div>
 
           {/* Botón toggle del grid */}
-          <button
-            onClick={() => setShowFilterGrid(v => !v)}
-            title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "12px",
-              border: `1px solid ${showFilterGrid ? "var(--ops-primary)" : "var(--ops-border)"}`,
-              backgroundColor: showFilterGrid ? "rgba(16,185,129,0.15)" : "var(--ops-surface)",
-              color: showFilterGrid ? "var(--ops-primary)" : "var(--ops-text-muted)",
-              fontSize: "1rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-              transition: "all 0.2s ease",
-            }}
-          >
-            {showFilterGrid ? "✕" : "⊞"}
-          </button>
+          {allowedCategories.length > 1 && (
+            <button
+              onClick={() => setShowFilterGrid(v => !v)}
+              title={showFilterGrid ? "Ocultar filtros" : "Cambiar categoría"}
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "12px",
+                border: `1px solid ${showFilterGrid ? "var(--ops-primary)" : "var(--ops-border)"}`,
+                backgroundColor: showFilterGrid ? "rgba(16,185,129,0.15)" : "var(--ops-surface)",
+                color: showFilterGrid ? "var(--ops-primary)" : "var(--ops-text-muted)",
+                fontSize: "1rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                flexShrink: 0,
+                transition: "all 0.2s ease",
+              }}
+            >
+              {showFilterGrid ? "✕" : "⊞"}
+            </button>
+          )}
         </div>
 
         {/* Grid 2×4 — se muestra/oculta */}
-        {showFilterGrid && (
+        {showFilterGrid && allowedCategories.length > 1 && (
           <div
             style={{
               display: "grid",
@@ -1589,7 +1642,7 @@ export default function ProcurementPage() {
                 to   { opacity: 1; transform: translateY(0); }
               }
             `}} />
-            {["Ver Todo", ...categoryStats.map(s => s.name)].map((cat) => {
+            {(hasCategoryRestrictions ? categoryStats.map(s => s.name) : ["Ver Todo", ...categoryStats.map(s => s.name)]).map((cat) => {
               const stat = categoryStats.find(s => s.name === cat);
               const isActive = filterCategory === cat || (cat === "Ver Todo" && (filterCategory === "" || filterCategory === "Ver Todo"));
               const pct = stat?.percentage ?? null;
@@ -1601,6 +1654,7 @@ export default function ProcurementPage() {
                     fetchTasks(undefined, cat, selectedDate);
                     setShowFilterGrid(false);
                   }}
+
                   style={{
                     padding: "0.55rem 0.75rem",
                     borderRadius: "10px",

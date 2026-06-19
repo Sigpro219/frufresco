@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { ShoppingBag, TrendingUp, AlertCircle, CheckCircle2, Receipt, Calendar, FileText, ChevronRight, Download, CreditCard, RefreshCw, Search, Plus, Trash2, Edit2, User, Users, Printer } from 'lucide-react';
@@ -64,6 +65,59 @@ export default function BillingDashboard() {
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [paymentMethod, setPaymentMethod] = useState('Transferencia');
     const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+
+    const { profile, loading: authLoading } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
+    const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+    const [hasInvoicingAccess, setHasInvoicingAccess] = useState(false);
+    const [hasPortfolioAccess, setHasPortfolioAccess] = useState(false);
+    const [hasConfigAccess, setHasConfigAccess] = useState(false);
+
+    // Fetch system_roles to resolve hierarchical permissions
+    useEffect(() => {
+        const loadRolesAndCheckPerms = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('app_settings')
+                    .select('key, value')
+                    .eq('key', 'system_roles')
+                    .single();
+                if (!error && data?.value) {
+                    const parsedRoles = JSON.parse(data.value);
+                    setRoles(parsedRoles);
+                    
+                    if (profile) {
+                        const canInvoice = checkUserPermission(profile, 'commercial.billing.invoicing', parsedRoles);
+                        const canPortfolio = checkUserPermission(profile, 'commercial.billing.portfolio', parsedRoles);
+                        const canConfig = checkUserPermission(profile, 'commercial.billing.config', parsedRoles);
+                        
+                        setHasInvoicingAccess(canInvoice);
+                        setHasPortfolioAccess(canPortfolio);
+                        setHasConfigAccess(canConfig);
+                        
+                        // Select default active tab
+                        if (canInvoice) {
+                            setActiveTab('invoicing');
+                        } else if (canPortfolio) {
+                            setActiveTab('portfolio');
+                        } else if (canConfig) {
+                            setActiveTab('configuration');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading roles/permissions in Billing page:', e);
+            } finally {
+                setPermissionsLoaded(true);
+            }
+        };
+
+        if (profile) {
+            loadRolesAndCheckPerms();
+        } else if (!authLoading) {
+            setPermissionsLoaded(true);
+        }
+    }, [profile, authLoading]);
 
     const [portfolioSubTab, setPortfolioSubTab] = useState<'invoices' | 'dossiers'>('invoices');
     const [b2bClients, setB2bClients] = useState<any[]>([]);
@@ -698,6 +752,40 @@ export default function BillingDashboard() {
 
     const aging = calculateAging();
 
+    if (authLoading || !permissionsLoaded) {
+        return (
+            <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, padding: '4rem 2rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <RefreshCw size={30} className="animate-spin" style={{ color: THEME.colors.primary, animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontWeight: '700', color: THEME.colors.textSecondary }}>Cargando permisos de facturación y cartera...</span>
+                </div>
+                <style dangerouslySetInnerHTML={{ __html: `
+                    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}} />
+            </div>
+        );
+    }
+
+    if (!hasInvoicingAccess && !hasPortfolioAccess && !hasConfigAccess) {
+        return (
+            <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ backgroundColor: 'white', padding: '3rem', borderRadius: '24px', maxWidth: '500px', width: '100%', textAlign: 'center', border: '1px solid #E5E7EB', boxShadow: THEME.shadow.md }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#111827', marginBottom: '1rem' }}>Acceso Restringido</h2>
+                    <p style={{ color: '#6B7280', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '2rem' }}>
+                        No tienes permisos suficientes para ingresar a este módulo. Solicita acceso al administrador a través del Command Center.
+                    </p>
+                    <button 
+                        onClick={() => window.history.back()}
+                        style={{ padding: '10px 20px', backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+                    >
+                        Volver
+                    </button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, padding: '2rem 1.5rem', fontFamily: THEME.typography.fontFamilyMain }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -732,24 +820,30 @@ export default function BillingDashboard() {
 
                 {/* Submodule Main Tabs */}
                 <div style={{ display: 'flex', gap: '1rem', borderBottom: `1px solid ${THEME.colors.border}`, marginBottom: '1.5rem' }}>
-                    <button
-                        onClick={() => setActiveTab('invoicing')}
-                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'invoicing' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'invoicing' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
-                    >
-                        📝 Submódulo Facturación
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('portfolio')}
-                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'portfolio' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'portfolio' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
-                    >
-                        💰 Submódulo Cartera
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('configuration')}
-                        style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'configuration' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'configuration' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
-                    >
-                        ⚙️ Configuración
-                    </button>
+                    {hasInvoicingAccess && (
+                        <button
+                            onClick={() => setActiveTab('invoicing')}
+                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'invoicing' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'invoicing' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                        >
+                            📝 Submódulo Facturación
+                        </button>
+                    )}
+                    {hasPortfolioAccess && (
+                        <button
+                            onClick={() => setActiveTab('portfolio')}
+                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'portfolio' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'portfolio' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                        >
+                            💰 Submódulo Cartera
+                        </button>
+                    )}
+                    {hasConfigAccess && (
+                        <button
+                            onClick={() => setActiveTab('configuration')}
+                            style={{ padding: '0.8rem 1rem', border: 'none', background: 'none', fontWeight: '750', fontSize: '0.95rem', cursor: 'pointer', borderBottom: activeTab === 'configuration' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent', color: activeTab === 'configuration' ? THEME.colors.primary : THEME.colors.textSecondary, transition: 'all 0.15s' }}
+                        >
+                            ⚙️ Configuración
+                        </button>
+                    )}
                 </div>
 
                 {/* INVOICING SUBMODULE */}

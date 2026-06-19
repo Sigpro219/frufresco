@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../lib/cartContext';
-import { useAuth } from '../lib/authContext';
+import { useAuth, checkUserPermission } from '../lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { logError } from '@/lib/errorUtils';
 import { Home, Settings, Package, ShoppingCart, User, LogOut, ChevronDown, Building2, ClipboardList, Truck, DollarSign, ShoppingBag, Briefcase, Users, Archive, Brain, Factory, Menu, X as XIcon, MessageSquare } from 'lucide-react';
@@ -163,10 +163,7 @@ export default function Navbar() {
     }, [operationsOpen]);
 
     const hasPermission = (moduleKey: string) => {
-        if (!roles.length || !profile?.role) return profile?.role === 'admin';
-        const userRole = roles.find(r => r.value === profile.role);
-        if (!userRole) return profile?.role === 'admin';
-        return userRole.permissions?.includes(moduleKey) || profile?.role === 'admin';
+        return checkUserPermission(profile, moduleKey, roles);
     };
 
     const shouldShowOperations = () => {

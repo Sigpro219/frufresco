@@ -1,0 +1,433 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, ChevronDown, ShieldAlert, CheckSquare, Square, MinusSquare } from 'lucide-react';
+
+export interface TreeNode {
+  id: string;
+  label: string;
+  level: 1 | 2 | 3 | 4;
+  children?: TreeNode[];
+}
+
+export const permissionTree: TreeNode[] = [
+  {
+    id: 'admin',
+    label: 'Portal Administrador (Global)',
+    level: 1,
+    children: [
+      {
+        id: 'admin.dashboard',
+        label: 'Centro de Comando / Gobernanza',
+        level: 2
+      },
+      {
+        id: 'admin.commercial',
+        label: 'Comercial y Operaciones de Clientes',
+        level: 2,
+        children: [
+          {
+            id: 'admin.commercial.billing.invoicing',
+            label: 'Facturación (Cortes y Resoluciones)',
+            level: 3
+          },
+          {
+            id: 'admin.commercial.billing.portfolio',
+            label: 'Cartera y Cupos (Dossier de Crédito)',
+            level: 3
+          },
+          {
+            id: 'admin.commercial.billing.config',
+            label: 'Configuración de Facturación',
+            level: 3
+          },
+          {
+            id: 'admin.commercial.inventory',
+            label: 'Control de Inventarios',
+            level: 3
+          }
+        ]
+      },
+      {
+        id: 'admin.transport',
+        label: 'Logística y Transporte (Admin)',
+        level: 2
+      },
+      {
+        id: 'admin.hr',
+        label: 'Talento Humano y Operarios',
+        level: 2
+      },
+      {
+        id: 'admin.customer-service',
+        label: 'Atención al Cliente (PQRs)',
+        level: 2
+      },
+      {
+        id: 'admin.strategy',
+        label: 'Inteligencia y Estrategia (BI)',
+        level: 2
+      }
+    ]
+  },
+  {
+    id: 'ops',
+    label: 'Portal Operacional (FruFresco OPS)',
+    level: 1,
+    children: [
+      {
+        id: 'ops.compras',
+        label: 'Módulo de Compras (Abastecimiento)',
+        level: 2,
+        children: [
+          { id: 'ops.compras.category:DESPENSA', label: 'Categoría: Despensa', level: 4 },
+          { id: 'ops.compras.category:FRUTA SELECCIONADA', label: 'Categoría: Fruta Seleccionada', level: 4 },
+          { id: 'ops.compras.category:HORTALIZA SELECCIONADA', label: 'Categoría: Hortaliza Seleccionada', level: 4 },
+          { id: 'ops.compras.category:PLATANOS', label: 'Categoría: Plátanos', level: 4 },
+          { id: 'ops.compras.category:TOMATE', label: 'Categoría: Tomate', level: 4 },
+          { id: 'ops.compras.category:TUBERCULOS - PAPA', label: 'Categoría: Tubérculos / Papa', level: 4 },
+          { id: 'ops.compras.category:VERDURAS', label: 'Categoría: Verduras', level: 4 }
+        ]
+      },
+      {
+        id: 'ops.recogida',
+        label: 'Módulo de Recogida (Ruta Proveedores)',
+        level: 2
+      },
+      {
+        id: 'ops.recepcion',
+        label: 'Módulo de Recibo y Control de Calidad',
+        level: 2
+      },
+      {
+        id: 'ops.picking',
+        label: 'Módulo de Alistamiento (Picking)',
+        level: 2
+      },
+      {
+        id: 'ops.driver',
+        label: 'Módulo de Despacho (Conductores)',
+        level: 2
+      }
+    ]
+  }
+];
+
+interface PermissionTreeEditorProps {
+  initialPermissions: string[];
+  onChange: (permissions: string[]) => void;
+}
+
+export default function PermissionTreeEditor({ initialPermissions, onChange }: PermissionTreeEditorProps) {
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(['admin', 'ops']));
+
+  useEffect(() => {
+    // Clean and normalize incoming permissions
+    const normalized = (initialPermissions || []).map(p => p.trim()).filter(Boolean);
+    setSelectedKeys(new Set(normalized));
+  }, [initialPermissions]);
+
+  // Recursively fetch all descendant IDs for a node
+  const getDescendantIds = (node: TreeNode): string[] => {
+    let ids: string[] = [node.id];
+    if (node.children) {
+      node.children.forEach(child => {
+        ids = ids.concat(getDescendantIds(child));
+      });
+    }
+    return ids;
+  };
+
+  // Find all ancestor IDs for a node (upward traversal path)
+  const findAncestors = (tree: TreeNode[], targetId: string, path: string[] = []): string[] | null => {
+    for (const node of tree) {
+      if (node.id === targetId) {
+        return path;
+      }
+      if (node.children) {
+        const found = findAncestors(node.children, targetId, [...path, node.id]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Helper to check if a node is fully selected
+  const isChecked = (node: TreeNode): boolean => {
+    if (selectedKeys.has(node.id) || selectedKeys.has('*')) return true;
+    if (node.children && node.children.length > 0) {
+      return node.children.every(child => isChecked(child));
+    }
+    return false;
+  };
+
+  // Helper to check if a node is indeterminately selected
+  const isIndeterminate = (node: TreeNode): boolean => {
+    if (selectedKeys.has(node.id) || selectedKeys.has('*')) return false;
+    if (node.children && node.children.length > 0) {
+      const someChecked = node.children.some(child => isChecked(child) || isIndeterminate(child));
+      const allChecked = node.children.every(child => isChecked(child));
+      return someChecked && !allChecked;
+    }
+    return false;
+  };
+
+  const toggleExpand = (nodeId: string) => {
+    const next = new Set(expandedKeys);
+    if (next.has(nodeId)) {
+      next.delete(nodeId);
+    } else {
+      next.add(nodeId);
+    }
+    setExpandedKeys(next);
+  };
+
+  const handleCheckboxClick = (node: TreeNode) => {
+    const nextSelected = new Set(selectedKeys);
+    const nodeChecked = isChecked(node);
+    const descendants = getDescendantIds(node);
+
+    if (nodeChecked) {
+      // Uncheck this node and all descendants
+      descendants.forEach(id => nextSelected.delete(id));
+      
+      // Also uncheck all ancestors in the select set
+      const ancestors = findAncestors(permissionTree, node.id);
+      if (ancestors) {
+        ancestors.forEach(id => nextSelected.delete(id));
+      }
+    } else {
+      // Check this node and all descendants
+      descendants.forEach(id => nextSelected.add(id));
+
+      // Check parent nodes if all their children are now checked
+      const ancestors = findAncestors(permissionTree, node.id);
+      if (ancestors) {
+        // Traverse backwards from immediate parent to root
+        for (let i = ancestors.length - 1; i >= 0; i--) {
+          const parentId = ancestors[i];
+          const parentNode = findNodeById(permissionTree, parentId);
+          if (parentNode && parentNode.children) {
+            // Check if all children of this parent will be checked
+            const allChildrenChecked = parentNode.children.every(child => {
+              if (child.id === node.id) return true; // It's being checked now
+              if (descendants.includes(child.id)) return true; // Descendant of target
+              
+              // Verify if the child is already checked in the next selected set
+              const tempSet = new Set(nextSelected);
+              descendants.forEach(id => tempSet.add(id));
+              
+              // Helper to check in tempSet
+              const checkTemp = (n: TreeNode): boolean => {
+                if (tempSet.has(n.id)) return true;
+                if (n.children && n.children.length > 0) {
+                  return n.children.every(childNode => checkTemp(childNode));
+                }
+                return false;
+              };
+              return checkTemp(child);
+            });
+
+            if (allChildrenChecked) {
+              nextSelected.add(parentId);
+            }
+          }
+        }
+      }
+    }
+
+    setSelectedKeys(nextSelected);
+    onChange(Array.from(nextSelected));
+  };
+
+  const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const getLevelBadge = (level: number) => {
+    switch (level) {
+      case 1:
+        return (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            padding: '2px 8px',
+            borderRadius: '100px',
+            backgroundColor: 'rgba(139, 92, 246, 0.12)',
+            color: '#8b5cf6',
+            border: '1px solid rgba(139, 92, 246, 0.2)'
+          }}>
+            NIVEL 1: PORTAL
+          </span>
+        );
+      case 2:
+        return (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            padding: '2px 8px',
+            borderRadius: '100px',
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            color: '#10b981',
+            border: '1px solid rgba(16, 185, 129, 0.2)'
+          }}>
+            NIVEL 2: MÓDULO
+          </span>
+        );
+      case 3:
+        return (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            padding: '2px 8px',
+            borderRadius: '100px',
+            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+            color: '#3b82f6',
+            border: '1px solid rgba(59, 130, 246, 0.2)'
+          }}>
+            NIVEL 3: SUBMÓDULO
+          </span>
+        );
+      case 4:
+        return (
+          <span style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            padding: '2px 8px',
+            borderRadius: '100px',
+            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+            color: '#f59e0b',
+            border: '1px solid rgba(245, 158, 11, 0.2)'
+          }}>
+            NIVEL 4: FILTRO DATO
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renderNode = (node: TreeNode, depth: number = 0) => {
+    const isExpanded = expandedKeys.has(node.id);
+    const hasChildren = node.children && node.children.length > 0;
+    const checkedStatus = isChecked(node);
+    const indeterminateStatus = isIndeterminate(node);
+
+    return (
+      <div key={node.id} style={{ marginLeft: `${depth * 1.5}rem`, marginBottom: '0.4rem' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          backgroundColor: checkedStatus ? 'rgba(16, 185, 129, 0.03)' : 'transparent',
+          border: checkedStatus ? '1px solid rgba(16, 185, 129, 0.08)' : '1px solid transparent',
+          transition: 'all 0.2s ease',
+        }}>
+          {/* Collapse/Expand Toggle */}
+          <div 
+            onClick={() => hasChildren && toggleExpand(node.id)}
+            style={{ 
+              cursor: hasChildren ? 'pointer' : 'default', 
+              width: '20px', 
+              height: '20px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              color: '#64748b'
+            }}
+          >
+            {hasChildren ? (
+              isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            ) : (
+              <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#cbd5e1' }} />
+            )}
+          </div>
+
+          {/* Custom Checkbox */}
+          <div 
+            onClick={() => handleCheckboxClick(node)}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: checkedStatus ? '#10b981' : indeterminateStatus ? '#f59e0b' : '#94a3b8' }}
+          >
+            {checkedStatus ? (
+              <CheckSquare size={19} />
+            ) : indeterminateStatus ? (
+              <MinusSquare size={19} />
+            ) : (
+              <Square size={19} />
+            )}
+          </div>
+
+          {/* Node label and badge */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', flex: 1 }}>
+            <span style={{ 
+              fontWeight: node.level === 1 ? '700' : node.level === 2 ? '600' : '500', 
+              fontSize: node.level === 1 ? '0.95rem' : '0.875rem',
+              color: checkedStatus ? '#0f172a' : '#334155'
+            }}>
+              {node.label}
+            </span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
+              ({node.id})
+            </span>
+            {getLevelBadge(node.level)}
+          </div>
+        </div>
+
+        {/* Children Render */}
+        {hasChildren && isExpanded && (
+          <div style={{
+            marginTop: '0.2rem',
+            borderLeft: '1px dashed #e2e8f0',
+            marginLeft: '9px',
+            paddingLeft: '10px'
+          }}>
+            {node.children!.map(child => renderNode(child, 0))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      maxHeight: '480px',
+      overflowY: 'auto',
+      padding: '8px',
+      border: '1px solid #e2e8f0',
+      borderRadius: '12px',
+      backgroundColor: '#f8fafc'
+    }}>
+      {permissionTree.map(node => renderNode(node, 0))}
+      
+      {/* Visual Indicator of Global All Access */}
+      {selectedKeys.has('*') && (
+        <div style={{
+          marginTop: '12px',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          color: '#b91c1c',
+          fontSize: '0.8rem',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <ShieldAlert size={16} />
+          <span>Atención: El usuario posee la llave comodín global (*) y tiene acceso irrestricto a todo el sistema.</span>
+        </div>
+      )}
+    </div>
+  );
+}

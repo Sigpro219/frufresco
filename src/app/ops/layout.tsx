@@ -3,6 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { 
   ShoppingBag, 
   ShoppingCart, 
@@ -16,9 +17,11 @@ import {
 } from 'lucide-react';
 
 export default function OpsLayout({ children }: { children: ReactNode }) {
+    const { profile } = useAuth();
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appShortName, setAppShortName] = useState('FRUFRESCO');
+    const [roles, setRoles] = useState<any[]>([]);
 
     useEffect(() => {
         let isMounted = true;
@@ -26,7 +29,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             const { data, error } = await supabase
                 .from('app_settings')
                 .select('key, value')
-                .in('key', ['app_logosymbol_url', 'app_short_name']);
+                .in('key', ['app_logosymbol_url', 'app_short_name', 'system_roles']);
             
             if (isMounted && !error && data) {
                 const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
@@ -34,11 +37,24 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
 
                 const shortName = data.find(s => s.key === 'app_short_name')?.value;
                 if (shortName) setAppShortName(shortName.toUpperCase());
+
+                const rolesObj = data.find(s => s.key === 'system_roles')?.value;
+                if (rolesObj) {
+                    try {
+                        setRoles(JSON.parse(rolesObj));
+                    } catch (e) {
+                        console.error('Error parsing system_roles in OpsLayout:', e);
+                    }
+                }
             }
         };
         fetchLogosymbol();
         return () => { isMounted = false; };
     }, []);
+
+    const hasPermission = (moduleKey: string) => {
+        return checkUserPermission(profile, moduleKey, roles);
+    };
 
     return (
         <div className="ops-theme-wrapper" style={{
@@ -145,12 +161,12 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 zIndex: 100,
                 boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
             }}>
-                <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />
-                <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />
-                <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />
-                <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />
-                <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />
-                <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />
+                {hasPermission('ops.compras') && <NavItem href="/ops/compras" icon={ShoppingBag} label="COMPRAS" />}
+                {hasPermission('ops.recogida') && <NavItem href="/ops/recogida" icon={ShoppingCart} label="RECOGIDA" />}
+                {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECIBO" />}
+                {hasPermission('ops.picking') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
+                {hasPermission('ops.picking') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
+                {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="DESPACHO" />}
                 <NavItem href="/ops" icon={Home} label="INICIO" highlight />
             </nav>
             <style jsx global>{`

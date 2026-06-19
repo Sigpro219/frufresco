@@ -419,6 +419,23 @@ export async function POST(request: Request) {
             }
 
             return NextResponse.json({ success: true }, { status: 200 });
+        } else if (action === 'update-permissions') {
+            const { profileId, permissions } = body;
+            if (!profileId) {
+                return NextResponse.json({ error: 'Falta el profileId' }, { status: 400 });
+            }
+
+            const { error: pError } = await adminSupabase
+                .from('profiles')
+                .update({ custom_permissions: permissions || [] })
+                .eq('id', profileId);
+
+            if (pError) {
+                console.error('Error updating custom permissions:', pError.message);
+                return NextResponse.json({ error: pError.message }, { status: 500 });
+            }
+
+            return NextResponse.json({ success: true, permissions }, { status: 200 });
         }
 
         return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });

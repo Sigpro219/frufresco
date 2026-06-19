@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME } from '@/lib/adminTheme';
+import { supabase } from '@/lib/supabase';
+import PermissionTreeEditor from './PermissionTreeEditor';
 
 interface PendingRequest {
     id: string;
@@ -64,6 +66,11 @@ export default function TechUserGovernance() {
     const [resettingUser, setResettingUser] = useState<ActiveTechUser | null>(null);
     const [inputResetPassword, setInputResetPassword] = useState('');
 
+    // Custom Permissions State
+    const [editingPermissionsUser, setEditingPermissionsUser] = useState<ActiveTechUser | null>(null);
+    const [tempPermissions, setTempPermissions] = useState<string[]>([]);
+    const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+
     // Copy Alert State
     const [copied, setCopied] = useState(false);
 
@@ -72,7 +79,7 @@ export default function TechUserGovernance() {
     }, []);
 
     useEffect(() => {
-        const isModalOpen = !!(approvingCol || showCredentialsModal || viewingUser || resettingUser);
+        const isModalOpen = !!(approvingCol || showCredentialsModal || viewingUser || resettingUser || editingPermissionsUser);
         if (isModalOpen) {
             document.body.style.overflow = 'hidden';
         } else {
@@ -81,7 +88,7 @@ export default function TechUserGovernance() {
         return () => {
             document.body.style.overflow = '';
         };
-    }, [approvingCol, showCredentialsModal, viewingUser, resettingUser]);
+    }, [approvingCol, showCredentialsModal, viewingUser, resettingUser, editingPermissionsUser]);
 
     const fetchGovernanceData = async () => {
         try {
@@ -254,6 +261,53 @@ export default function TechUserGovernance() {
             alert(`Error al revocar cuenta: ${err.message}`);
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const handleOpenPermissionsModal = async (user: ActiveTechUser) => {
+        setEditingPermissionsUser(user);
+        setActionLoading(user.profile_id);
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('custom_permissions')
+                .eq('id', user.profile_id)
+                .single();
+            if (error) throw error;
+            setTempPermissions(data?.custom_permissions || []);
+        } catch (err: any) {
+            console.error('Error fetching custom permissions:', err);
+            alert('No se pudieron cargar los permisos del usuario.');
+            setEditingPermissionsUser(null);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleSavePermissions = async () => {
+        if (!editingPermissionsUser) return;
+        setIsSavingPermissions(true);
+        try {
+            const res = await fetch('/api/provider/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update-permissions',
+                    profileId: editingPermissionsUser.profile_id,
+                    permissions: tempPermissions
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al actualizar permisos');
+            
+            setSuccessMessage(`Permisos actualizados con éxito para ${editingPermissionsUser.contact_name}`);
+            setTimeout(() => setSuccessMessage(null), 5000);
+            setEditingPermissionsUser(null);
+            await fetchGovernanceData();
+        } catch (err: any) {
+            alert(`Error al guardar permisos: ${err.message}`);
+        } finally {
+            setIsSavingPermissions(false);
         }
     };
 
@@ -481,6 +535,27 @@ export default function TechUserGovernance() {
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'right' }}>
                                                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                                        <button 
+                                                            onClick={() => handleOpenPermissionsModal(user)}
+                                                            disabled={actionLoading === user.profile_id}
+                                                            style={{ 
+                                                                padding: '0.5rem 0.8rem', 
+                                                                borderRadius: '8px', 
+                                                                border: `1px solid ${THEME.colors.border}`, 
+                                                                backgroundColor: 'white', 
+                                                                color: THEME.colors.textSecondary,
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.3rem',
+                                                                fontSize: '0.75rem'
+                                                            }}
+                                                            title="Gestionar Permisos Personalizados (Árbol)"
+                                                        >
+                                                            <ShieldCheck size={14} style={{ color: THEME.colors.primary }} /> Permisos
+                                                        </button>
+
                                                         <button 
                                                             onClick={() => setViewingUser(user)}
                                                             style={{ 
@@ -885,6 +960,76 @@ export default function TechUserGovernance() {
                                     Restablecer Ahora
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 5: GESTIÓN DE PERMISOS PERSONALIZADOS */}
+            {editingPermissionsUser && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
+                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '640px', boxShadow: THEME.shadow.lg }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                            <ShieldCheck size={28} style={{ color: THEME.colors.primary }} />
+                            <div>
+                                <h3 style={{ margin: 0, fontWeight: '800', color: THEME.colors.textMain }}>Árbol de Permisos Personalizados</h3>
+                                <p style={{ margin: '0.1rem 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem' }}>
+                                    Configura los accesos granulares para <span style={{ fontWeight: '700' }}>{editingPermissionsUser.contact_name}</span>.
+                                </p>
+                            </div>
+                        </div>
+
+                        <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', lineHeight: '1.4' }}>
+                            El operario cuenta con el rol base <strong style={{ color: THEME.colors.primary, textTransform: 'uppercase' }}>{editingPermissionsUser.role}</strong>. 
+                            Los permisos seleccionados aquí actuarán como reglas adicionales/anulaciones específicas del perfil. Las casillas semi-marcadas <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>[-]</span> indican que solo se ha concedido acceso a ciertas sub-rutas.
+                        </p>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <PermissionTreeEditor 
+                                initialPermissions={tempPermissions} 
+                                onChange={setTempPermissions} 
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                            <button 
+                                onClick={() => setEditingPermissionsUser(null)}
+                                style={{ 
+                                    padding: '0.65rem 1.2rem', 
+                                    borderRadius: '12px', 
+                                    border: `1px solid ${THEME.colors.border}`, 
+                                    backgroundColor: 'white', 
+                                    color: THEME.colors.textSecondary, 
+                                    fontWeight: '700', 
+                                    cursor: 'pointer' 
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSavePermissions}
+                                disabled={isSavingPermissions}
+                                style={{ 
+                                    padding: '0.65rem 1.2rem', 
+                                    borderRadius: '12px', 
+                                    border: 'none', 
+                                    backgroundColor: THEME.colors.primary, 
+                                    color: 'white', 
+                                    fontWeight: '800', 
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem'
+                                }}
+                            >
+                                {isSavingPermissions ? (
+                                    <>
+                                        <RefreshCw size={15} className="animate-spin" /> Guardando...
+                                    </>
+                                ) : (
+                                    'Guardar Permisos'
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>
