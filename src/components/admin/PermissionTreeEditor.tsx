@@ -13,241 +13,241 @@ export interface TreeNode {
 export const permissionTree: TreeNode[] = [
   {
     id: 'admin',
-    label: 'Portal Administrador (Global)',
+    label: '1. Portal Administrador (Global)',
     level: 1,
     children: [
       {
         id: 'admin.dashboard',
-        label: 'Centro de Comando / Gobernanza',
+        label: '1.1 Centro de Comando / Gobernanza',
         level: 2,
         children: [
           {
             id: 'admin.products.catalog',
-            label: 'Catálogo Web (Precios B2C)',
+            label: '1.1.1 Catálogo Web (Precios B2C)',
             level: 3,
             children: [
-              { id: 'admin.products.catalog.view', label: 'Visualizar Catálogo', level: 4 },
-              { id: 'admin.products.catalog.edit', label: 'Modificar Precios y Catálogo', level: 4 }
+              { id: 'admin.products.catalog.view', label: '1.1.1.1 Visualizar Catálogo', level: 4 },
+              { id: 'admin.products.catalog.edit', label: '1.1.1.2 Modificar Precios y Catálogo', level: 4 }
             ]
           },
           {
             id: 'admin.products.master',
-            label: 'Maestro SKU (Datos Técnicos)',
+            label: '1.1.2 Maestro SKU (Datos Técnicos)',
             level: 3,
             children: [
-              { id: 'admin.products.master.view', label: 'Visualizar SKU y Ficha Técnica', level: 4 },
-              { id: 'admin.products.master.edit', label: 'Crear y Editar SKU', level: 4 }
+              { id: 'admin.products.master.view', label: '1.1.2.1 Visualizar SKU y Ficha Técnica', level: 4 },
+              { id: 'admin.products.master.edit', label: '1.1.2.2 Crear y Editar SKU', level: 4 }
             ]
           },
           {
             id: 'admin.clients',
-            label: 'Clientes (CRM y Aprobación)',
+            label: '1.1.3 Clientes (CRM y Aprobación)',
             level: 3,
             children: [
-              { id: 'admin.clients.view', label: 'Visualizar Clientes y CRM', level: 4 },
-              { id: 'admin.clients.edit', label: 'Crear, Editar y Aprobar Clientes', level: 4 }
+              { id: 'admin.clients.view', label: '1.1.3.1 Visualizar Clientes y CRM', level: 4 },
+              { id: 'admin.clients.edit', label: '1.1.3.2 Crear, Editar y Aprobar Clientes', level: 4 }
             ]
           },
           {
             id: 'admin.procurement.providers',
-            label: 'Maestro de Proveedores',
+            label: '1.1.4 Maestro de Proveedores',
             level: 3,
             children: [
-              { id: 'admin.procurement.providers.view', label: 'Visualizar Proveedores', level: 4 },
-              { id: 'admin.procurement.providers.edit', label: 'Crear y Modificar Ficha de Proveedor', level: 4 }
+              { id: 'admin.procurement.providers.view', label: '1.1.4.1 Visualizar Proveedores', level: 4 },
+              { id: 'admin.procurement.providers.edit', label: '1.1.4.2 Crear y Modificar Ficha de Proveedor', level: 4 }
             ]
           },
           {
             id: 'admin.dashboard.settings',
-            label: 'Parámetros Globales (Cutoff)',
+            label: '1.1.5 Parámetros Globales (Cutoff)',
             level: 3,
             children: [
-              { id: 'admin.dashboard.settings.view', label: 'Visualizar Configuración de Corte', level: 4 },
-              { id: 'admin.dashboard.settings.edit', label: 'Modificar Reglas de Cutoff', level: 4 }
+              { id: 'admin.dashboard.settings.view', label: '1.1.5.1 Visualizar Configuración de Corte', level: 4 },
+              { id: 'admin.dashboard.settings.edit', label: '1.1.5.2 Modificar Reglas de Cutoff', level: 4 }
             ]
           },
-          { id: 'admin.dashboard.audit', label: 'Logs de Auditoría de Datos', level: 3 }
+          { id: 'admin.dashboard.audit', label: '1.1.6 Logs de Auditoría de Datos', level: 3 }
         ]
       },
       {
         id: 'admin.orders',
-        label: 'Pedidos y Rutas de Despacho',
+        label: '1.2 Pedidos y Rutas de Despacho',
         level: 2,
         children: [
-          { id: 'admin.orders.history', label: 'Historial y Monitoreo de Órdenes', level: 3 },
-          { id: 'admin.orders.create', label: 'Generación Manual de Pedidos', level: 3 },
-          { id: 'admin.orders.loading', label: 'Carga y Consolidación de Camiones', level: 3 }
+          { id: 'admin.orders.history', label: '1.2.1 Historial y Monitoreo de Órdenes', level: 3 },
+          { id: 'admin.orders.create', label: '1.2.2 Generación Manual de Pedidos', level: 3 },
+          { id: 'admin.orders.loading', label: '1.2.3 Carga y Consolidación de Camiones', level: 3 }
         ]
       },
       {
         id: 'admin.commercial',
-        label: 'Comercial y Facturación',
+        label: '1.3 Comercial y Facturación',
         level: 2,
         children: [
-          { id: 'admin.commercial.quotes', label: 'Cotizaciones y Ofertas (B2B)', level: 3 },
-          { id: 'admin.commercial.agreements', label: 'Acuerdos y Listas de Precios', level: 3 },
-          { id: 'admin.commercial.cost-matrix', label: 'Matriz de Costos y Rentabilidad', level: 3 },
-          { id: 'admin.commercial.campaigns', label: 'Campañas de Mercadeo (Alzas/Bajas)', level: 3 },
+          { id: 'admin.commercial.quotes', label: '1.3.1 Cotizaciones y Ofertas (B2B)', level: 3 },
+          { id: 'admin.commercial.agreements', label: '1.3.2 Acuerdos y Listas de Precios', level: 3 },
+          { id: 'admin.commercial.cost-matrix', label: '1.3.3 Matriz de Costos y Rentabilidad', level: 3 },
+          { id: 'admin.commercial.campaigns', label: '1.3.4 Campañas de Mercadeo (Alzas/Bajas)', level: 3 },
           {
             id: 'admin.commercial.billing',
-            label: 'Facturación y Cartera (Finanzas)',
+            label: '1.3.5 Facturación y Cartera (Finanzas)',
             level: 3,
             children: [
-              { id: 'admin.commercial.billing.invoicing', label: 'Facturación (Cortes y Devoluciones)', level: 4 },
-              { id: 'admin.commercial.billing.portfolio', label: 'Cartera y Solicitudes de Crédito', level: 4 },
-              { id: 'admin.commercial.billing.config', label: 'Configuración y Roles de Crédito', level: 4 }
+              { id: 'admin.commercial.billing.invoicing', label: '1.3.5.1 Facturación (Cortes y Devoluciones)', level: 4 },
+              { id: 'admin.commercial.billing.portfolio', label: '1.3.5.2 Cartera y Solicitudes de Crédito', level: 4 },
+              { id: 'admin.commercial.billing.config', label: '1.3.5.3 Configuración y Roles de Crédito', level: 4 }
             ]
           },
           {
             id: 'admin.commercial.inventory',
-            label: 'Control de Inventarios (Stocks)',
+            label: '1.3.6 Control de Inventarios (Stocks)',
             level: 3,
             children: [
-              { id: 'admin.commercial.inventory.stock', label: 'Stock en Tiempo Real', level: 4 },
-              { id: 'admin.commercial.inventory.movements', label: 'Kardex y Movimientos de Stock', level: 4 },
-              { id: 'admin.commercial.inventory.random_tasks', label: 'Auditorías y Conteos Cíclicos', level: 4 },
-              { id: 'admin.commercial.inventory.novedades', label: 'Bitácora de Incidencias de Piso', level: 4 }
+              { id: 'admin.commercial.inventory.stock', label: '1.3.6.1 Stock en Tiempo Real', level: 4 },
+              { id: 'admin.commercial.inventory.movements', label: '1.3.6.2 Kardex y Movimientos de Stock', level: 4 },
+              { id: 'admin.commercial.inventory.random_tasks', label: '1.3.6.3 Auditorías y Conteos Cíclicos', level: 4 },
+              { id: 'admin.commercial.inventory.novedades', label: '1.3.6.4 Bitácora de Incidencias de Piso', level: 4 }
             ]
           }
         ]
       },
       {
         id: 'admin.procurement',
-        label: 'Gestión de Compras (Abastecimiento Admin)',
+        label: '1.4 Gestión de Compras (Abastecimiento Admin)',
         level: 2,
         children: [
-          { id: 'admin.procurement.treasury', label: 'Conciliación Bancaria y Aprobación', level: 3 },
-          { id: 'admin.procurement.cash', label: 'Caja Menor (Compras de Contado y Gastos)', level: 3 },
-          { id: 'admin.procurement.export', label: 'Exportador Contable (WorldOffice)', level: 3 },
-          { id: 'admin.procurement.expenses', label: 'Histórico de Gastos Operativos', level: 3 }
+          { id: 'admin.procurement.treasury', label: '1.4.1 Conciliación Bancaria y Aprobación', level: 3 },
+          { id: 'admin.procurement.cash', label: '1.4.2 Caja Menor (Compras de Contado y Gastos)', level: 3 },
+          { id: 'admin.procurement.export', label: '1.4.3 Exportador Contable (WorldOffice)', level: 3 },
+          { id: 'admin.procurement.expenses', label: '1.4.4 Histórico de Gastos Operativos', level: 3 }
         ]
       },
       {
         id: 'admin.transport',
-        label: 'Torre de Control de Logística',
+        label: '1.5 Torre de Control de Logística',
         level: 2,
         children: [
-          { id: 'admin.transport.view', label: 'Visualizar Torre de Control (Lectura)', level: 3 },
-          { id: 'admin.transport.edit', label: 'Operar y Modificar Logística (Escritura)', level: 3 }
+          { id: 'admin.transport.view', label: '1.5.1 Visualizar Torre de Control (Lectura)', level: 3 },
+          { id: 'admin.transport.edit', label: '1.5.2 Operar y Modificar Logística (Escritura)', level: 3 }
         ]
       },
       {
         id: 'admin.hr',
-        label: 'Talento Humano y Colaboradores',
+        label: '1.6 Talento Humano y Colaboradores',
         level: 2
       },
       {
         id: 'admin.customer-service',
-        label: 'Atención al Cliente (PQRs)',
+        label: '1.7 Atención al Cliente (PQRs)',
         level: 2
       },
       {
         id: 'admin.strategy',
-        label: 'Inteligencia de Negocio y Estrategia',
+        label: '1.8 Inteligencia & Estrategia',
         level: 2
       }
     ]
   },
   {
     id: 'ops',
-    label: 'Portal Operacional (FruFresco OPS)',
+    label: '2. Portal Operacional (FruFresco OPS)',
     level: 1,
     children: [
       {
         id: 'ops.compras',
-        label: 'Módulo de Compras (Abastecimiento)',
+        label: '2.1 Compras (Abastecimiento)',
         level: 2,
         children: [
-          { id: 'ops.compras.category:DESPENSA', label: 'Categoría: Despensa', level: 4 },
-          { id: 'ops.compras.category:FRUTA SELECCIONADA', label: 'Categoría: Fruta Seleccionada', level: 4 },
-          { id: 'ops.compras.category:HORTALIZA SELECCIONADA', label: 'Categoría: Hortaliza Seleccionada', level: 4 },
-          { id: 'ops.compras.category:PLATANOS', label: 'Categoría: Plátanos', level: 4 },
-          { id: 'ops.compras.category:TOMATE', label: 'Categoría: Tomate', level: 4 },
-          { id: 'ops.compras.category:TUBERCULOS - PAPA', label: 'Categoría: Tubérculos / Papa', level: 4 },
-          { id: 'ops.compras.category:VERDURAS', label: 'Categoría: Verduras', level: 4 }
+          { id: 'ops.compras.category:DESPENSA', label: '2.1.1 Categoría: Despensa', level: 4 },
+          { id: 'ops.compras.category:FRUTA SELECCIONADA', label: '2.1.2 Categoría: Fruta Seleccionada', level: 4 },
+          { id: 'ops.compras.category:HORTALIZA SELECCIONADA', label: '2.1.3 Categoría: Hortaliza Seleccionada', level: 4 },
+          { id: 'ops.compras.category:PLATANOS', label: '2.1.4 Categoría: Plátanos', level: 4 },
+          { id: 'ops.compras.category:TOMATE', label: '2.1.5 Categoría: Tomate', level: 4 },
+          { id: 'ops.compras.category:TUBERCULOS - PAPA', label: '2.1.6 Categoría: Tubérculos / Papa', level: 4 },
+          { id: 'ops.compras.category:VERDURAS', label: '2.1.7 Categoría: Verduras', level: 4 }
         ]
       },
       {
         id: 'ops.recogida',
-        label: 'Módulo de Recogida Zorritos (Abastos)',
+        label: '2.2 Recogida Zorritos (Abastos)',
         level: 2,
         children: [
-          { id: 'ops.recogida.category:FRUTAS', label: 'Sección: Frutas', level: 4 },
-          { id: 'ops.recogida.category:OTROS', label: 'Sección: Otros', level: 4 }
+          { id: 'ops.recogida.category:FRUTAS', label: '2.2.1 Sección: Frutas', level: 4 },
+          { id: 'ops.recogida.category:OTROS', label: '2.2.2 Sección: Otros', level: 4 }
         ]
       },
       {
         id: 'ops.recepcion',
-        label: 'Módulo de Recepción (Bodega Principal)',
+        label: '2.3 Recepción (Bodega Principal)',
         level: 2,
         children: [
-          { id: 'ops.recepcion.category:ABARROTES & LÁCTEOS', label: 'Mesa: Abarrotes & Lácteos', level: 4 },
-          { id: 'ops.recepcion.category:FRUTAS', label: 'Mesa: Frutas', level: 4 },
-          { id: 'ops.recepcion.category:HORTALIZAS', label: 'Mesa: Hortalizas', level: 4 },
-          { id: 'ops.recepcion.category:PAPAS, PLÁTANO, TOMATE', label: 'Mesa: Papas, Plátano, Tomate', level: 4 },
-          { id: 'ops.recepcion.category:VERDURAS', label: 'Mesa: Verduras', level: 4 }
+          { id: 'ops.recepcion.category:ABARROTES & LÁCTEOS', label: '2.3.1 Mesa: Abarrotes & Lácteos', level: 4 },
+          { id: 'ops.recepcion.category:FRUTAS', label: '2.3.2 Mesa: Frutas', level: 4 },
+          { id: 'ops.recepcion.category:HORTALIZAS', label: '2.3.3 Mesa: Hortalizas', level: 4 },
+          { id: 'ops.recepcion.category:PAPAS, PLÁTANO, TOMATE', label: '2.3.4 Mesa: Papas, Plátano, Tomate', level: 4 },
+          { id: 'ops.recepcion.category:VERDURAS', label: '2.3.5 Mesa: Verduras', level: 4 }
         ]
       },
       {
         id: 'ops.recepcion.supervisor',
-        label: 'Supervisión de Cuarentena y Mermas',
+        label: '2.4 Supervisión de Cuarentena y Mermas',
         level: 2
       },
       {
         id: 'ops.picking',
-        label: 'Módulo de Alistamiento (Picking)',
+        label: '2.5 Alistamiento (Picking)',
         level: 2,
         children: [
-          { id: 'ops.picking.terminal', label: 'Terminal de Alistamiento (Básculas)', level: 3 },
-          { id: 'ops.picking.dashboard', label: 'Tablero de Eficiencia del Equipo', level: 3 },
-          { id: 'ops.picking.category:AGUACATES', label: 'Mesa: Aguacates', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO ABARROTES', label: 'Mesa: Abarrotes', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO BATAVIA', label: 'Mesa: Batavia', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PAPAS', label: 'Mesa: Seco Papas', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PLATANOS', label: 'Mesa: Seco Plátanos', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO EN SECO TOMATE', label: 'Mesa: Seco Tomate', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO FRUTOS SECOS', label: 'Mesa: Frutos Secos', level: 4 },
-          { id: 'ops.picking.category:ALISTAMIENTO PROCESADOS', label: 'Mesa: Procesados', level: 4 },
-          { id: 'ops.picking.category:EQUIPO A VEGETALES', label: 'Mesa: Equipo A Vegetales', level: 4 },
-          { id: 'ops.picking.category:EQUIPO B FRUTAS Y OTROS', label: 'Mesa: Equipo B Frutas', level: 4 },
-          { id: 'ops.picking.category:FRESAS Y MORA', label: 'Mesa: Fresas y Mora', level: 4 },
-          { id: 'ops.picking.category:FRUTA BAJA DEMANDA', label: 'Mesa: Fruta Baja Demanda', level: 4 },
-          { id: 'ops.picking.category:HIERBAS Y HORTALIZAS', label: 'Mesa: Hierbas y Hortalizas', level: 4 },
-          { id: 'ops.picking.category:LACTEOS Y REFRIGERADOS', label: 'Mesa: Lácteos y Refrigerados', level: 4 },
-          { id: 'ops.picking.category:LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO', label: 'Mesa: Lavado / Cebolla / Pepino', level: 4 }
+          { id: 'ops.picking.terminal', label: '2.5.1 Terminal de Alistamiento (Básculas)', level: 3 },
+          { id: 'ops.picking.dashboard', label: '2.5.2 Tablero de Eficiencia del Equipo', level: 3 },
+          { id: 'ops.picking.category:AGUACATES', label: '2.5.3 Mesa: Aguacates', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO ABARROTES', label: '2.5.4 Mesa: Abarrotes', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO BATAVIA', label: '2.5.5 Mesa: Batavia', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PAPAS', label: '2.5.6 Mesa: Seco Papas', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PLATANOS', label: '2.5.7 Mesa: Seco Plátanos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO TOMATE', label: '2.5.8 Mesa: Seco Tomate', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO FRUTOS SECOS', label: '2.5.9 Mesa: Frutos Secos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO PROCESADOS', label: '2.5.10 Mesa: Procesados', level: 4 },
+          { id: 'ops.picking.category:EQUIPO A VEGETALES', label: '2.5.11 Mesa: Equipo A Vegetales', level: 4 },
+          { id: 'ops.picking.category:EQUIPO B FRUTAS Y OTROS', label: '2.5.12 Mesa: Equipo B Frutas', level: 4 },
+          { id: 'ops.picking.category:FRESAS Y MORA', label: '2.5.13 Mesa: Fresas y Mora', level: 4 },
+          { id: 'ops.picking.category:FRUTA BAJA DEMANDA', label: '2.5.14 Mesa: Fruta Baja Demanda', level: 4 },
+          { id: 'ops.picking.category:HIERBAS Y HORTALIZAS', label: '2.5.15 Mesa: Hierbas y Hortalizas', level: 4 },
+          { id: 'ops.picking.category:LACTEOS Y REFRIGERADOS', label: '2.5.16 Mesa: Lácteos y Refrigerados', level: 4 },
+          { id: 'ops.picking.category:LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO', label: '2.5.17 Mesa: Lavado / Cebolla / Pepino', level: 4 }
         ]
       },
       {
         id: 'ops.driver',
-        label: 'Módulo de Despacho (Conductores)',
+        label: '2.6 Despacho (Conductores)',
         level: 2
       },
       {
         id: 'ops.inventory',
-        label: 'Cierre y Auditoría de Inventario de Piso',
+        label: '2.7 Cierre y Auditoría de Inventario de Piso',
         level: 2
       }
     ]
   },
   {
     id: 'b2b',
-    label: 'Portal Institucional (B2B)',
+    label: '3. Portal Institucional (B2B)',
     level: 1,
     children: [
       {
         id: 'b2b.register',
-        label: 'Registro y Creación de Cuentas B2B',
+        label: '3.1 Registro y Creación de Cuentas B2B',
         level: 2
       },
       {
         id: 'b2b.dashboard',
-        label: 'Panel de Cliente B2B',
+        label: '3.2 Panel de Cliente B2B',
         level: 2,
         children: [
-          { id: 'b2b.dashboard.order', label: 'Creación de Pedido y Catálogo', level: 3 },
-          { id: 'b2b.dashboard.invoices', label: 'Consulta de Facturas y Saldos', level: 3 },
-          { id: 'b2b.dashboard.consumption', label: 'Estadísticas de Consumo Histórico', level: 3 },
-          { id: 'b2b.dashboard.agreements', label: 'Acuerdos Comerciales y Contratos', level: 3 }
+          { id: 'b2b.dashboard.order', label: '3.2.1 Creación de Pedido y Catálogo', level: 3 },
+          { id: 'b2b.dashboard.invoices', label: '3.2.2 Consulta de Facturas y Saldos', level: 3 },
+          { id: 'b2b.dashboard.consumption', label: '3.2.3 Estadísticas de Consumo Histórico', level: 3 },
+          { id: 'b2b.dashboard.agreements', label: '3.2.4 Acuerdos Comerciales y Contratos', level: 3 }
         ]
       }
     ]
