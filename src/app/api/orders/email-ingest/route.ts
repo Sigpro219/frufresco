@@ -27,7 +27,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -181,8 +181,9 @@ export async function POST(req: Request) {
           const workbook = XLSX.read(buffer, { type: 'buffer' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          const csvRaw = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
-          excelTextContext = csvRaw.replace(/,+/g, ',').replace(/^,|,$/gm, '').trim();
+          const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
+          excelTextContext = JSON.stringify(validRows);
           console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
@@ -235,6 +236,11 @@ export async function POST(req: Request) {
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
+           - Presta MUCHA ATENCIÓN a las columnas si el texto es un arreglo JSON o CSV. 
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
+           - Ignora la primera columna (suelen ser códigos PLU o referencias internas).
+           - Asegúrate de extraer la CANTIDAD PEDIDA correcta que aparece junto al nombre del producto, no extraigas el PLU como cantidad.
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -294,6 +300,9 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
+           - NO confundas el código PLU (primera columna) con la cantidad. 
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 

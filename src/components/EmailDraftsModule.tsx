@@ -576,7 +576,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       longitude: meta?.longitude || null,
       priceList: meta?.priceList || null,
       orderDocument: meta?.orderDocument || null,
-      purchaseOrder: meta?.purchaseOrder || null
+      purchaseOrder: meta?.purchaseOrder || null,
+      receiptEmailSent: meta?.receiptEmailSent || false
     };
   };
 
@@ -746,6 +747,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleSendManualReceipt = async () => {
     if (!selectedDraft) return;
+    const confirmSend = window.confirm(
+      `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`
+    );
+    if (!confirmSend) return;
+    
     setSendingReceipt(true);
     try {
       const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
@@ -2356,6 +2362,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px', color: '#374151' }}>
                         <div><strong>Correo del pedido:</strong> {selectedDraft.source_email}</div>
                         <div><strong>Teléfono:</strong> {getDraftMetadata(selectedDraft).phone || '0'}</div>
+                        <div><strong>Hora de recepción:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
                         {draftCoordinates && (
                           <div style={{
                             color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',
@@ -2733,10 +2740,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             title="Ver / Modificar Variantes (Alt + V)"
                                           >
                                             <span style={{ fontSize: '0.9rem' }}>⚡</span>
-                                            {Object.keys(item.selected_options || {}).length > 0 && (
+                                            {Object.keys(item.selected_options || {}).length > 0 ? (
                                               <span>
                                                 {Object.values(item.selected_options).join(', ')}
                                               </span>
+                                            ) : (
+                                              <span style={{ fontSize: '0.75rem' }}>Elegir variables</span>
                                             )}
                                           </button>
                                         )}
@@ -2848,6 +2857,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                           setTimeout(() => {
                                                             if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
                                                           }, 50);
+                                                        }
+                                                      } else if (e.key === 'ArrowRight' && !e.altKey) {
+                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                        if (nextSelect) {
+                                                          e.preventDefault();
+                                                          nextSelect.focus();
+                                                        }
+                                                      } else if (e.key === 'ArrowLeft' && !e.altKey) {
+                                                        const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
+                                                        if (prevSelect) {
+                                                          e.preventDefault();
+                                                          prevSelect.focus();
                                                         }
                                                       }
                                                     }}
