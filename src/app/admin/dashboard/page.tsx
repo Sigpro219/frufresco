@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/lib/authContext';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
@@ -24,6 +24,30 @@ import {
 
 export default function AdminDashboard() {
     const { profile } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchRoles = async () => {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .eq('key', 'system_roles')
+                .maybeSingle();
+            if (!error && data?.value) {
+                try {
+                    setRoles(JSON.parse(data.value));
+                } catch (e) {
+                    console.error('Error parsing system_roles in admin dashboard:', e);
+                }
+            }
+        };
+        fetchRoles();
+    }, []);
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
     const [stats, setStats] = useState({
         todaySales: 0,
         pendingOrders: 0,
@@ -317,11 +341,21 @@ export default function AdminDashboard() {
 
                     {/* COLUMNA 2: GESTIÓN DE MAESTROS */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <AdminCard title="Catálogo Web" href="/admin/products" icon={<ShoppingBag size={22} strokeWidth={1.5} />} desc="Precios B2C" />
-                        <AdminCard title="Maestro SKU" href="/admin/master/products" icon={<Layers size={22} strokeWidth={1.5} />} desc="Definición Técnica" />
-                        <AdminCard title="Clientes" href="/admin/clients" icon={<Users size={22} strokeWidth={1.5} />} desc="CRM Base" />
-                        <AdminCard title="Proveedores" href="/admin/procurement/providers" icon={<Store size={22} strokeWidth={1.5} />} desc="Maestro Compras" />
-                        <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" style={{ gridColumn: profile?.role === 'sys_admin' ? 'auto' : 'span 2' }} />
+                        {hasPermission('admin.products.catalog') && (
+                            <AdminCard title="Catálogo Web" href="/admin/products" icon={<ShoppingBag size={22} strokeWidth={1.5} />} desc="Precios B2C" />
+                        )}
+                        {hasPermission('admin.products.master') && (
+                            <AdminCard title="Maestro SKU" href="/admin/master/products" icon={<Layers size={22} strokeWidth={1.5} />} desc="Definición Técnica" />
+                        )}
+                        {hasPermission('admin.clients') && (
+                            <AdminCard title="Clientes" href="/admin/clients" icon={<Users size={22} strokeWidth={1.5} />} desc="CRM Base" />
+                        )}
+                        {hasPermission('admin.procurement.providers') && (
+                            <AdminCard title="Proveedores" href="/admin/procurement/providers" icon={<Store size={22} strokeWidth={1.5} />} desc="Maestro Compras" />
+                        )}
+                        {hasPermission('admin.dashboard.settings') && (
+                            <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" style={{ gridColumn: profile?.role === 'sys_admin' ? 'auto' : 'span 2' }} />
+                        )}
                         
                         {profile?.role === 'sys_admin' && (
                             <Link href="/admin/command-center" style={{ gridColumn: 'span 2', textDecoration: 'none' }}>
