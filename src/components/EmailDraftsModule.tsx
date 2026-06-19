@@ -2362,6 +2362,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px', color: '#374151' }}>
                         <div><strong>Correo del pedido:</strong> {selectedDraft.source_email}</div>
                         <div><strong>Teléfono:</strong> {getDraftMetadata(selectedDraft).phone || '0'}</div>
+                        <div><strong>Hora de recepción:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
                         {draftCoordinates && (
                           <div style={{
                             color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',

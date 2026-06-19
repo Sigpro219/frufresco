@@ -240,6 +240,7 @@ export async function POST(req: Request) {
            - Por lo general, la segunda columna es el NOMBRE DEL PRODUCTO, la tercera columna es la CANTIDAD PEDIDA, y la cuarta son OBSERVACIONES.
            - Ignora la primera columna (suelen ser códigos PLU o referencias internas).
            - Asegúrate de extraer la CANTIDAD PEDIDA correcta que aparece junto al nombre del producto, no extraigas el PLU como cantidad.
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -301,6 +302,7 @@ export async function POST(req: Request) {
         2. Extrae todos los productos solicitados con sus cantidades.
            - Si el texto es una tabla, CSV o JSON, la segunda columna suele ser el NOMBRE DEL PRODUCTO y la tercera columna es la CANTIDAD PEDIDA. 
            - NO confundas el código PLU (primera columna) con la cantidad. 
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
