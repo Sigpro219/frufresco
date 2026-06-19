@@ -181,7 +181,8 @@ export async function POST(req: Request) {
           const workbook = XLSX.read(buffer, { type: 'buffer' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          excelTextContext = XLSX.utils.sheet_to_csv(worksheet);
+          const csvRaw = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+          excelTextContext = csvRaw.replace(/,+/g, ',').replace(/^,|,$/gm, '').trim();
           console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
