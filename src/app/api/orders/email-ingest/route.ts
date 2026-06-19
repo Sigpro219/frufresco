@@ -27,7 +27,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -237,7 +237,7 @@ export async function POST(req: Request) {
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
            - Presta MUCHA ATENCIÓN a las columnas si el texto es un arreglo JSON o CSV. 
-           - Por lo general, la segunda columna es el NOMBRE DEL PRODUCTO, la tercera columna es la CANTIDAD PEDIDA, y la cuarta son OBSERVACIONES.
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - Ignora la primera columna (suelen ser códigos PLU o referencias internas).
            - Asegúrate de extraer la CANTIDAD PEDIDA correcta que aparece junto al nombre del producto, no extraigas el PLU como cantidad.
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
@@ -300,7 +300,7 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
         2. Extrae todos los productos solicitados con sus cantidades.
-           - Si el texto es una tabla, CSV o JSON, la segunda columna suele ser el NOMBRE DEL PRODUCTO y la tercera columna es la CANTIDAD PEDIDA. 
+           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - NO confundas el código PLU (primera columna) con la cantidad. 
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
