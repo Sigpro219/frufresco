@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { useAuth } from '@/lib/authContext';
 import { 
     Calendar, 
     GraduationCap, 
@@ -51,6 +52,7 @@ interface PickingTask {
 }
 
 export default function PickingExecutionPage() {
+    const { profile } = useAuth();
     const [showCompleted, setShowCompleted] = useState(false);
     const [viewMode, setViewMode] = useState<'client' | 'product'>('client');
     const [searchTerm, setSearchTerm] = useState('');
@@ -208,9 +210,25 @@ export default function PickingExecutionPage() {
 
                     const items = (order.order_items as unknown as any[]) || [];
                     
+                    const customPerms = profile?.custom_permissions || [];
+                    const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.picking.category:'));
+
                     const itemsInCategory = items
                         .filter(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
+                            if (!product?.buying_team) return false;
+
+                            const isCatAllowed = !hasCategoryRestrictions || 
+                                customPerms.includes(`ops.picking.category:${product.buying_team}`) || 
+                                customPerms.includes(`ops.picking.category:${product.buying_team.toUpperCase()}`) || 
+                                customPerms.includes(`ops.picking.category:${product.buying_team.toLowerCase()}`) ||
+                                customPerms.includes('*') || 
+                                customPerms.includes('ops.picking') || 
+                                customPerms.includes('ops.picking.*') ||
+                                customPerms.includes('ops.picking.terminal');
+
+                            if (!isCatAllowed) return false;
+
                             return selectedCategory === 'TODAS' || product?.buying_team === selectedCategory;
                         })
                         .map(item => {
@@ -278,7 +296,7 @@ export default function PickingExecutionPage() {
             if (isAbortError(err)) return;
             console.error('Error in fetchTasks:', err);
         }
-    }, [selectedCategory]);
+    }, [selectedCategory, profile]);
 
     const fetchInitialData = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
@@ -777,40 +795,55 @@ export default function PickingExecutionPage() {
                                     animation: "slideDown 0.18s ease-out",
                                 }}
                             >
-                                {['TODAS', ...categories].map((cat) => {
-                                    const isActive = selectedCategory === cat;
-                                    return (
-                                        <button
-                                            key={cat}
-                                            onClick={() => {
-                                                setSelectedCategory(cat);
-                                                setShowFilterGrid(false);
-                                            }}
-                                            style={{
-                                                padding: "0.55rem 0.75rem",
-                                                borderRadius: "10px",
-                                                border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
-                                                backgroundColor: isActive
-                                                    ? "rgba(13, 122, 87, 0.12)"
-                                                    : "#121D2D",
-                                                color: isActive ? "white" : "#94A3B8",
-                                                fontSize: "0.7rem",
-                                                fontWeight: "700",
-                                                textAlign: "left",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                gap: "2px",
-                                                transition: "all 0.15s ease",
-                                            }}
-                                        >
-                                            <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                {cat === 'TODAS' && <Sparkles size={12} style={{ color: '#FACC15' }} />}
-                                                {cat === 'TODAS' ? 'MOSTRAR TODAS' : cat}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
+                                {(() => {
+                                    const customPerms = profile?.custom_permissions || [];
+                                    const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.picking.category:'));
+                                    const allowedCategories = categories.filter(cat => {
+                                        if (!hasCategoryRestrictions) return true;
+                                        return customPerms.includes(`ops.picking.category:${cat}`) || 
+                                               customPerms.includes(`ops.picking.category:${cat.toUpperCase()}`) || 
+                                               customPerms.includes(`ops.picking.category:${cat.toLowerCase()}`) ||
+                                               customPerms.includes('*') || 
+                                               customPerms.includes('ops.picking') || 
+                                               customPerms.includes('ops.picking.*') ||
+                                               customPerms.includes('ops.picking.terminal');
+                                    });
+
+                                    return ['TODAS', ...allowedCategories].map((cat) => {
+                                        const isActive = selectedCategory === cat;
+                                        return (
+                                            <button
+                                                key={cat}
+                                                onClick={() => {
+                                                    setSelectedCategory(cat);
+                                                    setShowFilterGrid(false);
+                                                }}
+                                                style={{
+                                                    padding: "0.55rem 0.75rem",
+                                                    borderRadius: "10px",
+                                                    border: `1px solid ${isActive ? "#0D7A57" : "rgba(255, 255, 255, 0.08)"}`,
+                                                    backgroundColor: isActive
+                                                        ? "rgba(13, 122, 87, 0.12)"
+                                                        : "#121D2D",
+                                                    color: isActive ? "white" : "#94A3B8",
+                                                    fontSize: "0.7rem",
+                                                    fontWeight: "700",
+                                                    textAlign: "left",
+                                                    cursor: "pointer",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "2px",
+                                                    transition: "all 0.15s ease",
+                                                }}
+                                            >
+                                                <span style={{ textTransform: "uppercase", letterSpacing: "0.03em", lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    {cat === 'TODAS' && <Sparkles size={12} style={{ color: '#FACC15' }} />}
+                                                    {cat === 'TODAS' ? 'MOSTRAR TODAS' : cat}
+                                                </span>
+                                            </button>
+                                        );
+                                    });
+                                })()}
                             </div>
                         )}
                     </div>

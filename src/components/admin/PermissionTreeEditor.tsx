@@ -161,7 +161,22 @@ export const permissionTree: TreeNode[] = [
         level: 2,
         children: [
           { id: 'ops.picking.terminal', label: 'Terminal de Alistamiento (Básculas)', level: 3 },
-          { id: 'ops.picking.dashboard', label: 'Tablero de Eficiencia del Equipo', level: 3 }
+          { id: 'ops.picking.dashboard', label: 'Tablero de Eficiencia del Equipo', level: 3 },
+          { id: 'ops.picking.category:AGUACATES', label: 'Mesa: Aguacates', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO ABARROTES', label: 'Mesa: Abarrotes', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO BATAVIA', label: 'Mesa: Batavia', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PAPAS', label: 'Mesa: Seco Papas', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO PLATANOS', label: 'Mesa: Seco Plátanos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO EN SECO TOMATE', label: 'Mesa: Seco Tomate', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO FRUTOS SECOS', label: 'Mesa: Frutos Secos', level: 4 },
+          { id: 'ops.picking.category:ALISTAMIENTO PROCESADOS', label: 'Mesa: Procesados', level: 4 },
+          { id: 'ops.picking.category:EQUIPO A VEGETALES', label: 'Mesa: Equipo A Vegetales', level: 4 },
+          { id: 'ops.picking.category:EQUIPO B FRUTAS Y OTROS', label: 'Mesa: Equipo B Frutas', level: 4 },
+          { id: 'ops.picking.category:FRESAS Y MORA', label: 'Mesa: Fresas y Mora', level: 4 },
+          { id: 'ops.picking.category:FRUTA BAJA DEMANDA', label: 'Mesa: Fruta Baja Demanda', level: 4 },
+          { id: 'ops.picking.category:HIERBAS Y HORTALIZAS', label: 'Mesa: Hierbas y Hortalizas', level: 4 },
+          { id: 'ops.picking.category:LACTEOS Y REFRIGERADOS', label: 'Mesa: Lácteos y Refrigerados', level: 4 },
+          { id: 'ops.picking.category:LAVADO, BATAVIA, ARRACACHA, CEBOLLA LARGA Y PEPINO', label: 'Mesa: Lavado / Cebolla / Pepino', level: 4 }
         ]
       },
       {
