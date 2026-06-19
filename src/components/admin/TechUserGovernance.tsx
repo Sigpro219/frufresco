@@ -91,6 +91,22 @@ export default function TechUserGovernance() {
         };
     }, [approvingCol, showCredentialsModal, viewingUser, resettingUser, editingPermissionsUser]);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setApprovingCol(null);
+                setShowCredentialsModal(false);
+                setViewingUser(null);
+                setResettingUser(null);
+                setEditingPermissionsUser(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
+
     const fetchGovernanceData = async () => {
         try {
             setLoading(true);
@@ -646,8 +662,14 @@ export default function TechUserGovernance() {
 
             {/* MODAL 1: APROBAR Y CONFIGURAR EMAIL */}
             {approvingCol && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '460px', boxShadow: THEME.shadow.lg }}>
+                <div 
+                    onClick={() => setApprovingCol(null)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '460px', boxShadow: THEME.shadow.lg }}
+                    >
                         <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: THEME.colors.textMain }}>Aprobar Acceso Digital</h3>
                         <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', lineHeight: '1.4' }}>
                             Configura el correo oficial de login para <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{approvingCol.contact_name}</span>. 
@@ -701,8 +723,14 @@ export default function TechUserGovernance() {
 
             {/* MODAL 2: CREDENCIALES CREADAS & ONBOARDING WHATSAPP */}
             {showCredentialsModal && createdCredentials && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
-                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '480px', boxShadow: THEME.shadow.lg }}>
+                <div 
+                    onClick={() => setShowCredentialsModal(false)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '480px', boxShadow: THEME.shadow.lg }}
+                    >
                         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                             <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#D1FAE5', color: '#059669', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
                                 <Check size={28} />
@@ -800,8 +828,14 @@ export default function TechUserGovernance() {
 
             {/* MODAL 3: VER DETALLES Y QR DE USUARIO ACTIVO */}
             {viewingUser && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
-                    <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '420px', boxShadow: THEME.shadow.lg }}>
+                <div 
+                    onClick={() => setViewingUser(null)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '420px', boxShadow: THEME.shadow.lg }}
+                    >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                             <h3 style={{ margin: 0, fontWeight: '800', color: THEME.colors.textMain }}>Detalles de Acceso</h3>
                             <button 
@@ -909,8 +943,14 @@ export default function TechUserGovernance() {
 
             {/* MODAL 4: RESTABLECER CONTRASEÑA */}
             {resettingUser && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '460px', boxShadow: THEME.shadow.lg }}>
+                <div 
+                    onClick={() => setResettingUser(null)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '460px', boxShadow: THEME.shadow.lg }}
+                    >
                         <h3 style={{ margin: '0 0 1rem 0', fontWeight: '800', color: THEME.colors.textMain }}>Restablecer Contraseña</h3>
                         <p style={{ margin: '0 0 1.5rem 0', color: THEME.colors.textSecondary, fontSize: '0.85rem', lineHeight: '1.4' }}>
                             Establece una nueva contraseña para <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{resettingUser.contact_name}</span> ({resettingUser.email}).
@@ -953,8 +993,14 @@ export default function TechUserGovernance() {
 
             {/* MODAL 5: GESTIÓN DE PERMISOS PERSONALIZADOS */}
             {editingPermissionsUser && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}>
-                    <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '640px', boxShadow: THEME.shadow.lg }}>
+                <div 
+                    onClick={() => setEditingPermissionsUser(null)}
+                    style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 1000, overflowY: 'auto', padding: '2rem 1rem' }}
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '640px', boxShadow: THEME.shadow.lg }}
+                    >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
                             <ShieldCheck size={28} style={{ color: THEME.colors.primary }} />
                             <div>
