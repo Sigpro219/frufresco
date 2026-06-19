@@ -76,6 +76,10 @@ export async function POST(req: Request) {
     const subject = headers.subject || headers.Subject || '';
     const plainText = payload.plain || '';
     const attachments = payload.attachments || [];
+    
+    // DEBUG: Append attachment info to plainText so we can see it in Supabase
+    let debugInfo = '\n\n[DEBUG] Attachments info: ' + JSON.stringify(attachments.map((a: any) => ({name: a.filename, type: a.content_type, size: a.content ? a.content.length : 0})));
+    let currentPlainText = plainText + debugInfo;
 
     // Extract clean email address (e.g. "John Doe <john@example.com>" -> "john@example.com")
     let senderEmail = fromField;
@@ -159,12 +163,13 @@ export async function POST(req: Request) {
     let excelTextContext = '';
 
     if (attachments.length > 0) {
-      console.log(`[Email Inbound] Processing attachment: ${attachments[0].filename}`);
+      const attFileName = attachments[0].file_name || attachments[0].filename || 'adjunto.xlsx';
+      console.log(`[Email Inbound] Processing attachment: ${attFileName}`);
       // CloudMailin attachment format: content is base64 encoded
       const attachment = attachments[0];
       const base64Data = attachment.content;
       const mimeType = attachment.content_type || 'application/pdf';
-      attachmentName = attachment.filename;
+      attachmentName = attFileName;
 
       const lowerMime = mimeType.toLowerCase();
       const lowerName = attachmentName ? attachmentName.toLowerCase() : '';
@@ -190,7 +195,7 @@ export async function POST(req: Request) {
         } catch (_) {}
 
         const buffer = Buffer.from(base64Data, 'base64');
-        const sanitizedFilename = attachment.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const sanitizedFilename = (attachmentName || 'unnamed').replace(/[^a-zA-Z0-9.-]/g, '_');
         const storagePath = `${draftUuid}_${sanitizedFilename}`;
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
           .from('order-attachments')
@@ -218,7 +223,7 @@ export async function POST(req: Request) {
         
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
-        ${plainText}
+        ${currentPlainText}
         """
         
         TAREA:
@@ -268,7 +273,7 @@ export async function POST(req: Request) {
         }
       } else {
         console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
-        plainText = plainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
+        currentPlainText = currentPlainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
       }
     }
     
@@ -283,7 +288,7 @@ export async function POST(req: Request) {
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
         
         CORREO ELECTRÓNICO:
-        ${plainText}
+        ${currentPlainText}
         
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
@@ -335,7 +340,7 @@ export async function POST(req: Request) {
       // FALLBACK: If Gemini failed to extract items, try regex extraction
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
-        const lines = plainText.split('\n');
+        const lines = currentPlainText.split('\n');
         const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
@@ -352,7 +357,7 @@ export async function POST(req: Request) {
       }
       
       // FALLBACK: If Gemini failed to extract metadata, use regex
-      const lines = plainText.split('\n');
+      const lines = currentPlainText.split('\n');
       let addressStr = '';
       let addressFound = false;
       for (let line of lines) {
@@ -383,7 +388,7 @@ export async function POST(req: Request) {
       const lowerClientName = String(extractedData.clientInDocument || '').toLowerCase().trim();
       if (!lowerClientName || lowerClientName === 'desconocido' || lowerClientName === 'no detectado' || lowerClientName === 'none' || lowerClientName === 'no especificado' || lowerClientName === 'no especificada') {
         let nameCandidate = '';
-        const signatureLines = plainText.split('\n');
+        const signatureLines = currentPlainText.split('\n');
         for (let k = 0; k < signatureLines.length; k++) {
           const line = signatureLines[k].trim();
           if (line.match(/c\.c\.|nit|celular|tel[ée]fono/i)) {
@@ -554,7 +559,7 @@ export async function POST(req: Request) {
         client_detected_name: (extractedData.clientInDocument || profile?.company_name || 'Desconocido').replace(/\*/g, '').trim(),
         source_email: senderEmail,
         email_subject: `[${shortCode}] ${subject}`,
-        email_body: plainText,
+        email_body: currentPlainText,
         extracted_items: [
           { 
             isMetadata: true, 
