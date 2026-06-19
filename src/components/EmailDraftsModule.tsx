@@ -821,12 +821,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 </div>
       `;
 
-      await supabase.from('mail').insert({
+      const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
         to_email: selectedDraft.source_email,
         subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
         message: { html: emailHtml, text: `Hemos recibido tu pedido con éxito y ya está en preparación.` },
         status: 'pending'
-      });
+      }).select().single();
+
+      if (!mailError && insertedMail) {
+        // Trigger the mail processor immediately
+        fetch('/api/mail/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ record: insertedMail })
+        }).catch(e => console.error('Failed to trigger mail processor', e));
+      }
 
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
       const updatedMetaItem = {
@@ -2653,7 +2662,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         {isEditing && (
                                           <button
                                             type="button"
-                                            tabIndex={-1}
                                             onClick={() => {
                                               setActiveEquivalenceRow(prev => prev === i ? null : i);
                                               setActiveVariantRow(null);
@@ -2663,7 +2671,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }, 50);
                                             }}
                                             style={{
-                                              padding: '0.4rem 0.8rem',
+                                              padding: '0.2rem 0.4rem',
                                               backgroundColor: activeEquivalenceRow === i
                                                 ? '#4338CA'
                                                 : item.conversion_factor && item.conversion_factor !== 1
@@ -2701,7 +2709,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         {isEditing && matchedProd && matchedProd.variants && matchedProd.variants.length > 0 && (
                                           <button
                                             type="button"
-                                            tabIndex={-1}
                                             onClick={() => {
                                               setActiveVariantRow(prev => prev === i ? null : i);
                                               setTimeout(() => {
@@ -2710,7 +2717,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }, 50);
                                             }}
                                             style={{
-                                              padding: '0.4rem 0.8rem',
+                                              padding: '0.2rem 0.4rem',
                                               backgroundColor: activeVariantRow === i
                                                 ? '#059669'
                                                 : Object.keys(item.selected_options || {}).length > 0 
@@ -2768,7 +2775,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         )}
                                       <button
                                         type="button"
-                                        tabIndex={-1}
                                         onClick={() => {
                                           setObsModal({
                                             isOpen: true,
@@ -2785,7 +2791,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           justifyContent: 'center',
-                                          padding: '6px',
+                                          padding: '4px',
                                           borderRadius: '6px',
                                           backgroundColor: item.observations ? '#ECFDF5' : 'transparent',
                                           transition: 'all 0.2s',
