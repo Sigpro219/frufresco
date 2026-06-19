@@ -2740,10 +2740,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             title="Ver / Modificar Variantes (Alt + V)"
                                           >
                                             <span style={{ fontSize: '0.9rem' }}>⚡</span>
-                                            {Object.keys(item.selected_options || {}).length > 0 && (
+                                            {Object.keys(item.selected_options || {}).length > 0 ? (
                                               <span>
                                                 {Object.values(item.selected_options).join(', ')}
                                               </span>
+                                            ) : (
+                                              <span style={{ fontSize: '0.75rem' }}>Elegir variables</span>
                                             )}
                                           </button>
                                         )}
@@ -2855,6 +2857,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                           setTimeout(() => {
                                                             if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
                                                           }, 50);
+                                                        }
+                                                      } else if (e.key === 'ArrowRight' && !e.altKey) {
+                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                        if (nextSelect) {
+                                                          e.preventDefault();
+                                                          nextSelect.focus();
+                                                        }
+                                                      } else if (e.key === 'ArrowLeft' && !e.altKey) {
+                                                        const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
+                                                        if (prevSelect) {
+                                                          e.preventDefault();
+                                                          prevSelect.focus();
                                                         }
                                                       }
                                                     }}
