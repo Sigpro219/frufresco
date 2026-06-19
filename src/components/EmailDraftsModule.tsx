@@ -576,7 +576,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       longitude: meta?.longitude || null,
       priceList: meta?.priceList || null,
       orderDocument: meta?.orderDocument || null,
-      purchaseOrder: meta?.purchaseOrder || null
+      purchaseOrder: meta?.purchaseOrder || null,
+      receiptEmailSent: meta?.receiptEmailSent || false
     };
   };
 
@@ -746,6 +747,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleSendManualReceipt = async () => {
     if (!selectedDraft) return;
+    const confirmSend = window.confirm(
+      `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`
+    );
+    if (!confirmSend) return;
+    
     setSendingReceipt(true);
     try {
       const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
