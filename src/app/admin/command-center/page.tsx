@@ -997,15 +997,14 @@ export default function CommandCenter() {
                     )}
 
                     {activeTab === 'audit' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {/* Banner Informativo sobre Políticas de Retención */}
-                            <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #10B98133', borderRadius: '16px', padding: '1.2rem', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+                            <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #10B98133', borderRadius: '12px', padding: '0.6rem 1rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '1.1rem' }}>🛡️</span>
                                 <div>
-                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#065F46', fontSize: '0.85rem' }}>CONSOLA DE AUDITORÍA MASTER (ACCESO TÉCNICO COMPLETO IRRESTRICTO)</h4>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#047857', fontWeight: '600' }}>
-                                        Nivel de acceso `sys_admin` activo. Tienes visibilidad completa de todo el historial de transacciones 
-                                        y movimientos registrados desde la creación de la base de datos sin límite de tiempo.
+                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#065F46', fontSize: '0.72rem' }}>CONSOLA DE AUDITORÍA MASTER (ACCESO TÉCNICO COMPLETO IRRESTRICTO)</h4>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: '#047857', fontWeight: '600' }}>
+                                        Nivel de acceso `sys_admin` activo. Tienes visibilidad completa de todo el historial de transacciones y movimientos registrados desde la creación de la base de datos sin límite de tiempo.
                                     </p>
                                 </div>
                             </div>
