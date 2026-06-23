@@ -783,11 +783,20 @@ export default function B2BDashboard() {
                                     </div>
                                 </div>
 
-                                {/* Search Bar Inside Card */}
-                                <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
-                                    <div style={{ position: 'relative' }}>
+                                {/* Search Bar & Category Dropdown Container */}
+                                <div style={{ 
+                                    padding: '1rem', 
+                                    borderBottom: '1px solid var(--border)', 
+                                    display: 'flex',
+                                    gap: '1rem',
+                                    flexWrap: 'wrap',
+                                    alignItems: 'center',
+                                    backgroundColor: '#fff'
+                                }}>
+                                    {/* Search Input (Takes main space) */}
+                                    <div style={{ flex: '2 1 300px', position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
-                                            <Search size={20} strokeWidth={2.5} />
+                                            <Search size={18} strokeWidth={2.5} />
                                         </div>
                                         <input
                                             type="text"
@@ -796,10 +805,10 @@ export default function B2BDashboard() {
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.85rem 3rem 0.85rem 2.8rem',
+                                                padding: '0.7rem 2.5rem 0.7rem 2.4rem',
                                                 borderRadius: 'var(--radius-md)',
                                                 border: '1px solid var(--border)',
-                                                fontSize: '1rem',
+                                                fontSize: '0.9rem',
                                                 fontWeight: '500',
                                                 outline: 'none',
                                                 transition: 'all 0.2s',
@@ -827,14 +836,14 @@ export default function B2BDashboard() {
                                                     background: '#f3f4f6',
                                                     border: 'none',
                                                     borderRadius: '50%',
-                                                    width: '24px',
-                                                    height: '24px',
+                                                    width: '20px',
+                                                    height: '20px',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     color: '#6b7280',
                                                     cursor: 'pointer',
-                                                    fontSize: '0.8rem',
+                                                    fontSize: '0.75rem',
                                                     fontWeight: 'bold',
                                                     zIndex: 5
                                                 }}
@@ -843,96 +852,96 @@ export default function B2BDashboard() {
                                                 ✕
                                             </button>
                                         )}
+
+                                        {/* Search Results Dropdown */}
+                                        {(searchResults.length > 0 || isSearching) && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '100%',
+                                                left: 0,
+                                                right: 0,
+                                                backgroundColor: 'white',
+                                                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                                                borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                                                zIndex: 100,
+                                                marginTop: '2px',
+                                                maxHeight: '300px',
+                                                overflowY: 'auto',
+                                                border: '1px solid var(--border)'
+                                            }}>
+                                                {isSearching ? (
+                                                    <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
+                                                ) : (
+                                                    searchResults.map(p => (
+                                                        <div
+                                                            key={p.id}
+                                                            onClick={() => addFromSearch(p)}
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '1rem',
+                                                                padding: '0.75rem 1rem',
+                                                                cursor: 'pointer',
+                                                                borderBottom: '1px solid #f0f0f0'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f9fafb'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; }}
+                                                        >
+                                                            <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
+                                                            <div style={{ flex: 1 }}>
+                                                                <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
+                                                                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
+                                                            </div>
+                                                            <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Search Results Dropdown */}
-                                    {(searchResults.length > 0 || isSearching) && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: '100%',
-                                            left: 0,
-                                            right: 0,
-                                            backgroundColor: 'white',
-                                            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                                            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
-                                            zIndex: 100,
-                                            marginTop: '2px',
-                                            maxHeight: '300px',
-                                            overflowY: 'auto',
-                                            border: '1px solid var(--border)'
-                                        }}>
-                                            {isSearching ? (
-                                                <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
-                                            ) : (
-                                                searchResults.map(p => (
-                                                    <div
-                                                        key={p.id}
-                                                        onClick={() => addFromSearch(p)}
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '1rem',
-                                                            padding: '0.75rem 1rem',
-                                                            cursor: 'pointer',
-                                                            borderBottom: '1px solid #f0f0f0'
-                                                        }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                                    >
-                                                        <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
-                                                        <div style={{ flex: 1 }}>
-                                                            <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
-                                                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
-                                                        </div>
-                                                        <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Category Selector */}
-                                <div style={{ 
-                                    display: 'flex', 
-                                    gap: '0.75rem', 
-                                    overflowX: 'auto', 
-                                    padding: '0.5rem 1rem 1rem', 
-                                    borderBottom: '1px solid var(--border)' 
-                                }}>
-                                    <button
-                                        onClick={() => setSelectedCategory(null)}
-                                        className="category-pill"
-                                        style={{
-                                            padding: '0.55rem 1.25rem',
-                                            borderRadius: 'var(--radius-full)',
-                                            border: selectedCategory === null ? 'none' : '1px solid var(--border)',
-                                            backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
-                                            color: selectedCategory === null ? 'white' : 'var(--text-main)',
-                                            fontSize: '0.85rem',
-                                            fontWeight: '800',
-                                            cursor: 'pointer',
-                                            whiteSpace: 'nowrap'
-                                        }}
-                                    >{t.b2b.dashboard.allCategories}</button>
-                                    {categories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={() => setSelectedCategory(cat)}
-                                            className="category-pill"
+                                    {/* Category Combobox Selector */}
+                                    <div style={{ flex: '1 1 180px', position: 'relative' }}>
+                                        <select
+                                            value={selectedCategory || ''}
+                                            onChange={(e) => setSelectedCategory(e.target.value || null)}
                                             style={{
-                                                padding: '0.55rem 1.25rem',
-                                                borderRadius: 'var(--radius-full)',
-                                                border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
-                                                backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
-                                                color: selectedCategory === cat ? 'white' : 'var(--text-main)',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '800',
+                                                width: '100%',
+                                                padding: '0.7rem 2.2rem 0.7rem 1rem',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: '1px solid var(--border)',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '600',
+                                                color: 'var(--text-main)',
+                                                outline: 'none',
+                                                transition: 'all 0.2s',
+                                                backgroundColor: '#F9FAFB',
                                                 cursor: 'pointer',
-                                                whiteSpace: 'nowrap'
+                                                appearance: 'none',
+                                                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230D7A57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'right 8px center',
+                                                backgroundSize: '16px'
                                             }}
-                                        >{t.categories[cat as keyof typeof t.categories] || cat}</button>
-                                    ))}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = 'var(--primary)';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = 'var(--border)';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            <option value="">{t.b2b.dashboard.allCategories}</option>
+                                            {categories.map(cat => (
+                                                <option key={cat} value={cat}>
+                                                    {t.categories[cat as keyof typeof t.categories] || cat}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
