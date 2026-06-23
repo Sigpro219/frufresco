@@ -47,7 +47,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [priceList, setPriceList] = useState<string>('');
   const [orderDocument, setOrderDocument] = useState<string>('Remisión');
   const [purchaseOrder, setPurchaseOrder] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedChannel, setSelectedChannel] = useState('all');
@@ -1770,163 +1770,146 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           )}
         </div>
 
-        {/* Status Dropdown */}
-        <div 
-          onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-          style={{ 
-            position: 'relative',
-            display: 'flex', 
-            alignItems: 'center', 
-            backgroundColor: '#F9FAFB', 
-            border: 'none', 
-            borderRadius: THEME.radius.md,
-            padding: '0.6rem 1rem',
-            gap: '12px',
-            cursor: 'pointer'
-          }}
-        >
-          <span style={{ 
-            fontWeight: 800, 
-            fontSize: '0.85rem', 
-            color: selectedStatus === 'pending' ? '#B45309' : selectedStatus === 'rejected' ? '#DC2626' : selectedStatus === 'approved' ? '#059669' : '#111827',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            {selectedStatus === 'pending' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>}
-            {selectedStatus === 'rejected' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>}
-            {selectedStatus === 'approved' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }}></span>}
-            {selectedStatus === 'all' ? `Todos (${countAll})` : selectedStatus === 'pending' ? `Pendientes (${countPending})` : selectedStatus === 'rejected' ? `Rechazados (${countRejected})` : `Gestionados (${countApproved})`}
-          </span>
-          <ChevronDown size={16} color="#6B7280" />
-          
-          {isStatusDropdownOpen && (
-            <div style={{
-              position: 'absolute',
-              top: '45px',
-              right: 0,
-              backgroundColor: 'white',
-              border: `1px solid ${THEME.colors.border}`,
-              borderRadius: THEME.radius.md,
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-              zIndex: 100,
-              minWidth: '200px',
-              overflow: 'hidden'
-            }}>
-              {/* Todos */}
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStatus('all');
-                  setIsStatusDropdownOpen(false);
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: selectedStatus === 'all' ? THEME.colors.primary : '#4B5563',
-                  backgroundColor: selectedStatus === 'all' ? '#ECFDF5' : 'transparent',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'all' ? '#ECFDF5' : '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'all' ? '#ECFDF5' : 'transparent'}
-              >
-                <span>Todos los correos</span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6B7280' }}>{countAll}</span>
-              </div>
-              
-              {/* Pendientes */}
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStatus('pending');
-                  setIsStatusDropdownOpen(false);
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: selectedStatus === 'pending' ? '#B45309' : '#4B5563',
-                  backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : 'transparent',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'pending' ? '#FFFBEB' : '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'pending' ? '#FFFBEB' : 'transparent'}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>
-                  Pendientes
-                </span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#B45309' }}>{countPending}</span>
-              </div>
+        {/* Status Tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Tab: Pendientes */}
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('pending')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.5rem 1rem',
+              backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : 'white',
+              border: selectedStatus === 'pending' ? '2px solid #D97706' : '1px solid #E5E7EB',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.8rem',
+              color: selectedStatus === 'pending' ? '#B45309' : '#4B5563',
+              cursor: 'pointer',
+              boxShadow: selectedStatus === 'pending' ? '0 2px 4px rgba(217, 119, 6, 0.15)' : 'none',
+              transition: 'all 0.15s',
+              height: '38px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D97706' }}></span>
+            Pendientes
+            <span style={{
+              marginLeft: '4px',
+              fontSize: '0.75rem',
+              backgroundColor: selectedStatus === 'pending' ? '#FBBF24' : '#F3F4F6',
+              color: selectedStatus === 'pending' ? '#78350F' : '#6B7280',
+              padding: '2px 6px',
+              borderRadius: '9999px',
+              fontWeight: 800
+            }}>{countPending}</span>
+          </button>
 
-              {/* Rechazados */}
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStatus('rejected');
-                  setIsStatusDropdownOpen(false);
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: selectedStatus === 'rejected' ? '#DC2626' : '#4B5563',
-                  backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : 'transparent',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'rejected' ? '#FEF2F2' : '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'rejected' ? '#FEF2F2' : 'transparent'}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>
-                  Rechazados
-                </span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#DC2626' }}>{countRejected}</span>
-              </div>
+          {/* Tab: Gestionados */}
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('approved')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.5rem 1rem',
+              backgroundColor: selectedStatus === 'approved' ? '#ECFDF5' : 'white',
+              border: selectedStatus === 'approved' ? '2px solid #059669' : '1px solid #E5E7EB',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.8rem',
+              color: selectedStatus === 'approved' ? '#047857' : '#4B5563',
+              cursor: 'pointer',
+              boxShadow: selectedStatus === 'approved' ? '0 2px 4px rgba(5, 150, 105, 0.15)' : 'none',
+              transition: 'all 0.15s',
+              height: '38px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
+            Gestionados
+            <span style={{
+              marginLeft: '4px',
+              fontSize: '0.75rem',
+              backgroundColor: selectedStatus === 'approved' ? '#A7F3D0' : '#F3F4F6',
+              color: selectedStatus === 'approved' ? '#064E3B' : '#6B7280',
+              padding: '2px 6px',
+              borderRadius: '9999px',
+              fontWeight: 800
+            }}>{countApproved}</span>
+          </button>
 
-              {/* Gestionados */}
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedStatus('approved');
-                  setIsStatusDropdownOpen(false);
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: selectedStatus === 'approved' ? '#059669' : '#4B5563',
-                  backgroundColor: selectedStatus === 'approved' ? '#E6F4EA' : 'transparent',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = selectedStatus === 'approved' ? '#E6F4EA' : '#F9FAFB'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = selectedStatus === 'approved' ? '#E6F4EA' : 'transparent'}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#059669' }}></span>
-                  Gestionados
-                </span>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#059669' }}>{countApproved}</span>
-              </div>
-            </div>
-          )}
+          {/* Tab: Rechazados */}
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('rejected')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.5rem 1rem',
+              backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : 'white',
+              border: selectedStatus === 'rejected' ? '2px solid #DC2626' : '1px solid #E5E7EB',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.8rem',
+              color: selectedStatus === 'rejected' ? '#B91C1C' : '#4B5563',
+              cursor: 'pointer',
+              boxShadow: selectedStatus === 'rejected' ? '0 2px 4px rgba(220, 38, 38, 0.15)' : 'none',
+              transition: 'all 0.15s',
+              height: '38px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444' }}></span>
+            Rechazados
+            <span style={{
+              marginLeft: '4px',
+              fontSize: '0.75rem',
+              backgroundColor: selectedStatus === 'rejected' ? '#FCA5A5' : '#F3F4F6',
+              color: selectedStatus === 'rejected' ? '#7F1D1D' : '#6B7280',
+              padding: '2px 6px',
+              borderRadius: '9999px',
+              fontWeight: 800
+            }}>{countRejected}</span>
+          </button>
+
+          {/* Tab: Todos */}
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('all')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.5rem 1rem',
+              backgroundColor: selectedStatus === 'all' ? '#F3F4F6' : 'white',
+              border: selectedStatus === 'all' ? '2px solid #4B5563' : '1px solid #E5E7EB',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.8rem',
+              color: selectedStatus === 'all' ? '#1F2937' : '#4B5563',
+              cursor: 'pointer',
+              boxShadow: selectedStatus === 'all' ? '0 2px 4px rgba(75, 85, 99, 0.15)' : 'none',
+              transition: 'all 0.15s',
+              height: '38px',
+              boxSizing: 'border-box'
+            }}
+          >
+            Todos
+            <span style={{
+              marginLeft: '4px',
+              fontSize: '0.75rem',
+              backgroundColor: selectedStatus === 'all' ? '#D1D5DB' : '#F3F4F6',
+              color: selectedStatus === 'all' ? '#1F2937' : '#6B7280',
+              padding: '2px 6px',
+              borderRadius: '9999px',
+              fontWeight: 800
+            }}>{countAll}</span>
+          </button>
         </div>
         </>
         )}
@@ -2097,7 +2080,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', width: '40px' }} onClick={(e) => e.stopPropagation()}>
+                  <td style={{ padding: '0.8rem 1rem', textAlign: 'center', width: '40px', borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669' }} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedDraftIds.includes(draft.id)}
@@ -2231,6 +2214,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   backgroundColor: 'white', 
                   borderRadius: THEME.radius.lg, 
                   border: `1px solid ${THEME.colors.border}`, 
+                  borderLeft: draft.status === 'pending' ? '4px solid #D97706' : draft.status === 'rejected' ? '4px solid #EF4444' : '4px solid #059669',
                   padding: '1.25rem', 
                   cursor: 'pointer',
                   transition: 'all 0.15s',
@@ -2240,11 +2224,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   textAlign: 'left'
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = THEME.colors.primary;
+                  e.currentTarget.style.borderTopColor = THEME.colors.primary;
+                  e.currentTarget.style.borderRightColor = THEME.colors.primary;
+                  e.currentTarget.style.borderBottomColor = THEME.colors.primary;
                   e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = THEME.colors.border;
+                  e.currentTarget.style.borderTopColor = THEME.colors.border;
+                  e.currentTarget.style.borderRightColor = THEME.colors.border;
+                  e.currentTarget.style.borderBottomColor = THEME.colors.border;
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
