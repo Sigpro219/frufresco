@@ -33,8 +33,8 @@ export async function POST(req: Request) {
       
       TAREA:
       1. Identifica el nombre del CLIENTE mencionado en el documento.
-         - NOMBRE DEL CLIENTE: Busca el nombre comercial de la empresa, marca o contacto. NUNCA uses nombres de ciudades o países (como "Bogotá-Colombia", "Bogotá") como nombre del cliente; busca el nombre real de la empresa o contacto de firma.
-         - GUÍA DE FIRMA/PIE DE PÁGINA: Si el documento es un correo o tiene pie de página, guíate por esa sección para ubicar el nombre de la empresa, la dirección y el número de teléfono.
+         - NOMBRE DEL CLIENTE PRINCIPAL: Identifica la compañía matriz, institución o razón social que emite el documento (frecuentemente en el encabezado, logo o parte superior, ej. "Colsubsidio"). NUNCA uses nombres de sucursales, centros de costos (ej. "CC33 Centro de Producción...") o dependencias internas como el nombre principal del cliente. Prioriza siempre el nombre de la entidad corporativa principal. NUNCA uses nombres de ciudades o países.
+         - GUÍA DE FIRMA/PIE DE PÁGINA: Si el documento es un correo o tiene pie de página, guíate por esa sección para ubicar el nombre de la empresa matriz, la dirección y el número de teléfono.
       2. Extrae todos los productos solicitados junto con su cantidad numérica.
       3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada.
       4. Identifica si hay un TELÉFONO de contacto.

@@ -1166,6 +1166,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const handleApprove = async () => {
     if (!selectedDraft) return;
     
+    // 1. Validación de Dirección
     const isAddressMissingVal = !editableAddress || 
       editableAddress.trim() === '' || 
       editableAddress.toLowerCase().includes('no detectad') || 
@@ -1175,6 +1176,32 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       showToast('Por favor, ingresa una dirección de entrega válida antes de continuar.', 'error');
       return;
     }
+
+    // 2. Validación de Productos Emparejados
+    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    if (hasUnmatchedProducts) {
+      showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
+      return;
+    }
+
+    // 3. Validación de Fecha y Franja de Entrega
+    const metadataForValidations = getDraftMetadata(selectedDraft);
+    const currentDeliverySlot = editableDeliverySlot || metadataForValidations?.deliverySlot;
+    if (!deliveryDate || !currentDeliverySlot) {
+      showToast('Error: Debes seleccionar una fecha y franja de entrega válida.', 'error');
+      return;
+    }
+
+    // 4. Validación de Cliente Nuevo (NIT y Teléfono)
+    if (!selectedDraft.profile_id) {
+      const phoneVal = metadataForValidations?.phone;
+      const nitVal = metadataForValidations?.nit;
+      if (!phoneVal || !nitVal) {
+        showToast('Error: Para registrar un cliente nuevo, debes proporcionar un Teléfono y un NIT válidos.', 'error');
+        return;
+      }
+    }
+
 
     setSaving(true);
     

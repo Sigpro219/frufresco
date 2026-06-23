@@ -312,14 +312,73 @@ export async function POST(req: Request) {
         }
       } else {
         console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
-        currentPlainText = currentPlainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
+        // We use the same detailed prompt style but adapt it for Excel context
+        const excelPrompt = `
+        Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+        
+        CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
+        """
+        ${currentPlainText}
+        """
+
+        CONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:
+        ${excelTextContext}
+        
+        TAREA:
+        1. Analiza el contenido de texto del archivo Excel adjunto para extraer la lista de productos solicitados.
+        2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del correo y del Excel.
+           - NOMBRE DEL CLIENTE: Identifica la compañía matriz o razón social principal. NUNCA uses nombres de sucursales o ciudades.
+        3. Identifica la franja u horario de entrega. El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
+        4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia.
+        6. Extrae todos los productos solicitados y su cantidad numérica.
+             - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
+             - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
+             - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
+             - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
+             - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
+             - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+        7. Extrae las observaciones o especificaciones en el campo "observations".
+        
+        REGLAS CRÍTICAS:
+        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
+        - Las cantidades deben ser estrictamente numéricas.
+        
+        FORMATO DE RESPUESTA ESPERADO:
+        {
+          "clientInDocument": "Nombre o Empresa Detectada",
+          "documentType": "Email con Excel adjunto",
+          "address": "Dirección física limpia extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
+          "deliverySlot": "AM / PM / Cualquier hora / null",
+          "deliveryDate": "YYYY-MM-DD o null",
+          "clientType": "b2b_client o b2c_client",
+          "items": [
+            { "originalName": "Nombre del Producto", "quantity": 10, "observations": "Cualquier nota u observación específica del producto o null" }
+          ]
+        }
+        `;
+        try {
+          let text = await fetchGemini(apiKey, excelPrompt);
+          text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          extractedData = JSON.parse(text);
+          if (extractedData.items && !Array.isArray(extractedData.items)) {
+            if (typeof extractedData.items === 'object') {
+              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+            } else {
+              extractedData.items = [];
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse Gemini output for Excel content:', e);
+        }
       }
     }
     
-    if (attachments.length === 0 || isExcel) {
-      if (!isExcel) {
-        console.log('[Email Inbound] Processing plain text email body');
-      }
+    if (attachments.length === 0) {
+      console.log('[Email Inbound] Processing plain text email body');
       // No attachments, parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
@@ -513,10 +572,36 @@ export async function POST(req: Request) {
       }
     }
 
-    // Only if we haven't found any profiles by NIT AND there was NO NIT in the email,
-    // we fall back to searching by sender email address.
-    if (candidateProfiles.length === 0 && !cleanExtractedNit) {
-      console.log(`[Email Ingest] No NIT provided. Searching client by sender email: ${senderEmail}`);
+    // Try searching by phone number (clean digits match) if no profile was matched by NIT
+    let cleanExtractedPhone = '';
+    if (extractedData.phone) {
+      cleanExtractedPhone = String(extractedData.phone).replace(/\D/g, '');
+    }
+
+    if (candidateProfiles.length === 0 && cleanExtractedPhone && cleanExtractedPhone.length >= 7) {
+      console.log(`[Email Ingest] Searching client by phone: ${cleanExtractedPhone}`);
+      const { data: profilesByPhone, error: phoneError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit');
+
+      if (phoneError) {
+        console.error('[Email Ingest] Error listing profiles for phone matching:', phoneError);
+      } else if (profilesByPhone) {
+        // Match if the db phone contains the extracted phone or vice-versa
+        const matched = profilesByPhone.filter(p => {
+          const dbPhoneClean = String(p.phone || '').replace(/\D/g, '');
+          return dbPhoneClean && (dbPhoneClean.includes(cleanExtractedPhone) || cleanExtractedPhone.includes(dbPhoneClean));
+        });
+        if (matched.length > 0) {
+          console.log(`[Email Ingest] Found ${matched.length} profiles matching phone number.`);
+          candidateProfiles = matched;
+        }
+      }
+    }
+
+    // Only if we haven't found any profiles by NIT or Phone, search by sender email address
+    if (candidateProfiles.length === 0) {
+      console.log(`[Email Ingest] Searching client by sender email: ${senderEmail}`);
       const { data: profilesByEmail, error: emailError } = await supabaseAdmin
         .from('profiles')
         .select('id, company_name, contact_name, role, is_active, address, phone, nit')
@@ -526,6 +611,42 @@ export async function POST(req: Request) {
         console.error('[Email Ingest] Error querying profiles by email:', emailError);
       } else if (profilesByEmail && profilesByEmail.length > 0) {
         candidateProfiles = profilesByEmail;
+      }
+    }
+
+    // If still no profile found, try a global fuzzy name match search against the whole database
+    let detectedNameForFuzzy = extractedData.clientInDocument || '';
+    if (typeof detectedNameForFuzzy !== 'string') {
+      detectedNameForFuzzy = String(detectedNameForFuzzy);
+    }
+    detectedNameForFuzzy = detectedNameForFuzzy.trim();
+
+    if (candidateProfiles.length === 0 && detectedNameForFuzzy && detectedNameForFuzzy.length > 3) {
+      console.log(`[Email Ingest] Attempting global fuzzy name match for: "${detectedNameForFuzzy}"`);
+      const { data: allProfiles, error: allProfilesError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit');
+      
+      if (!allProfilesError && allProfiles) {
+        const namesMatch = (detName: string, profName: string): boolean => {
+          if (!detName || !profName) return false;
+          const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          
+          const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+          const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+          
+          return words1.some(w => words2.includes(w));
+        };
+
+        const matched = allProfiles.filter(p => 
+          namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
+        );
+
+        if (matched.length > 0) {
+          console.log(`[Email Ingest] Found ${matched.length} profiles via global fuzzy name search.`);
+          candidateProfiles = matched;
+        }
       }
     }
 
@@ -556,15 +677,24 @@ export async function POST(req: Request) {
           }
         }
       } else {
+        // Multiple profiles found (e.g. sharing testing email higuera200@gmail.com)
+        // We MUST find the one that matches the client name extracted from the email/document
         const exactOrSimilarMatch = candidateProfiles.find(p => 
           namesMatch(detectedName, p.contact_name || '') || namesMatch(detectedName, p.company_name || '')
         );
         if (exactOrSimilarMatch) {
           profile = exactOrSimilarMatch;
+          console.log(`[Email Ingest] Matched specific profile by name: "${profile.company_name}"`);
         } else {
+          // If no names match, fall back to a B2B client candidate
           const b2bCandidate = candidateProfiles.find(p => p.role === 'b2b_client');
           if (b2bCandidate) {
             profile = b2bCandidate;
+            console.log(`[Email Ingest] No name matched detected "${detectedName}". Falling back to B2B candidate: "${profile.company_name}"`);
+          } else {
+            // Fallback to the first one
+            profile = candidateProfiles[0];
+            console.log(`[Email Ingest] No B2B candidate. Falling back to first candidate: "${profile.company_name}"`);
           }
         }
       }
