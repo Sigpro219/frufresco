@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import { Mail, Search, RefreshCw, Eye, X, Send, Calendar, Trash2 } from 'lucide-react';
@@ -108,6 +108,70 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
       setLoading(false);
     }
   };
+
+  const stateRef = useRef({
+    selectedEmail,
+    deleteConfirm,
+    bulkDeleteConfirm,
+    selectedIds
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      selectedEmail,
+      deleteConfirm,
+      bulkDeleteConfirm,
+      selectedIds
+    };
+  }, [selectedEmail, deleteConfirm, bulkDeleteConfirm, selectedIds]);
+
+  const actionsRef = useRef({ handleDeleteEmail, handleBulkDelete });
+  useEffect(() => {
+    actionsRef.current = { handleDeleteEmail, handleBulkDelete };
+  }, [handleDeleteEmail, handleBulkDelete]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+
+      const {
+        selectedEmail,
+        deleteConfirm,
+        bulkDeleteConfirm
+      } = stateRef.current;
+
+      const isBypassKey = e.key === 'Escape' ||
+        (e.key === 'Enter' && (!!selectedEmail || deleteConfirm.isOpen || bulkDeleteConfirm));
+
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
+
+      if (e.key === 'Escape') {
+        if (bulkDeleteConfirm) { setBulkDeleteConfirm(false); return; }
+        if (deleteConfirm.isOpen) { setDeleteConfirm({ isOpen: false, emailId: null }); return; }
+        if (selectedEmail) { setSelectedEmail(null); return; }
+      }
+
+      if (e.key === 'Enter') {
+        if (bulkDeleteConfirm) {
+          e.preventDefault();
+          actionsRef.current.handleBulkDelete();
+          return;
+        }
+        if (deleteConfirm.isOpen) {
+          e.preventDefault();
+          actionsRef.current.handleDeleteEmail();
+          return;
+        }
+        if (selectedEmail) {
+          e.preventDefault();
+          setSelectedEmail(null);
+          return;
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const filteredEmails = emails.filter(email => {
     // 1. Search Query
