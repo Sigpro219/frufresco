@@ -25,7 +25,8 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
             { text: prompt }
           ]
         }
-      ]
+      ],
+      generationConfig: { responseMimeType: "application/json" }
     });
 
     const options = {
@@ -69,8 +70,21 @@ export const fetchCache = 'force-no-store';
 
 export async function POST(req: Request) {
   const supabaseAdmin = getSupabaseAdmin();
+  
+  // 1. Webhook Security
+  const { searchParams } = new URL(req.url);
+  const secret = searchParams.get('secret');
+  if (process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
+    console.error('[Email Inbound] Unauthorized access attempt.');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let rawPayloadStr = '';
   try {
-    const payload = await req.json();
+    rawPayloadStr = await req.text();
+    const payload = JSON.parse(rawPayloadStr);
+
+    supabaseAdmin.from('raw_emails').insert([{ payload, status: 'pending' }]).then(()=>{}, ()=>{});
 
     // CloudMailin structures payload containing headers, envelope, plain, html, attachments
     const headers = payload.headers || {};
@@ -184,12 +198,15 @@ export async function POST(req: Request) {
         try {
           const buffer = Buffer.from(base64Data, 'base64');
           const workbook = XLSX.read(buffer, { type: 'buffer' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
-          excelTextContext = JSON.stringify(validRows);
-          console.log(`[Email Inbound] Extracted text from Excel attachment: ${attachmentName}`);
+          let allRows: any[] = [];
+          for (const sheetName of workbook.SheetNames) {
+            const worksheet = workbook.Sheets[sheetName];
+            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
+            if (validRows.length > 0) allRows = allRows.concat([[`--- HOJA: ${sheetName} ---`]], validRows);
+          }
+          excelTextContext = JSON.stringify(allRows);
+          console.log(`[Email Inbound] Extracted text from all sheets of Excel attachment: ${attachmentName}`);
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
         }
@@ -543,6 +560,14 @@ export async function POST(req: Request) {
       }
     }
 
+    const addrVal = extractedData.address;
+    const addressDetected = !!(addrVal && 
+      addrVal.toLowerCase() !== 'no detectado' && 
+      addrVal.toLowerCase() !== 'no detectada' && 
+      addrVal.toLowerCase() !== 'null' && 
+      addrVal.toLowerCase() !== 'vacio' && 
+      addrVal.trim() !== '');
+
     if (profile) {
       if (!extractedData.address && profile.address) {
         extractedData.address = profile.address;
@@ -634,6 +659,7 @@ export async function POST(req: Request) {
           { 
             isMetadata: true, 
             address: extractedData.address || null,
+            addressDetected: addressDetected,
             deliverySlot: finalDeliverySlot,
             deliveryDate: extractedData.deliveryDate || null,
             phone: extractedData.phone || null,
@@ -655,6 +681,7 @@ export async function POST(req: Request) {
     }
 
     console.log('[Email Inbound] Draft created successfully:', newDraft.id);
+    supabaseAdmin.from('raw_emails').update({ status: 'success' }).eq('payload->>envelope->>from', fromField).then(()=>{}, ()=>{});
 
     // 4. Send confirmation email to the client using Nodemailer
     // DESACTIVADO: Ahora los correos se envían manualmente después de la revisión del operario
@@ -896,6 +923,7 @@ export async function POST(req: Request) {
 
   } catch (err: any) {
     console.error('[Email Inbound] Ingest error:', err);
+    supabaseAdmin.from('raw_emails').update({ status: 'error', error_message: err?.message || 'Error' }).eq('status', 'pending').then(()=>{}, ()=>{});
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
