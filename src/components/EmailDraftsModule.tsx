@@ -115,7 +115,23 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     totalValue: number;
   } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
+
+
+
+  const getRowBgColor = (idx: number) => {
+    if (focusedRowIndex === idx) return '#EFF6FF'; // Soft blue for currently focused/edited row
+    if (activeEquivalenceRow === idx) return '#EEF2FF'; // Soft indigo for equivalence row
+    if (activeVariantRow === idx) return '#F0FDF4'; // Soft green for variant row
+    return null;
+  };
+
+  const getCellBgColor = (idx: number, isLightGrayCol = false) => {
+    const rowBg = getRowBgColor(idx);
+    if (rowBg) return rowBg;
+    return isLightGrayCol ? '#F9FAFB' : 'transparent';
+  };
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 5000);
@@ -672,6 +688,46 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
   const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
 
+  const stateRef = useRef({
+    isEditing,
+    focusedRowIndex,
+    products,
+    editableItems,
+    selectedDraft,
+    showConfirmModal,
+    activeEquivalenceRow,
+    activeVariantRow,
+    actionConfirm,
+    deleteConfirm,
+    obsModal,
+    rejectModal,
+    showShortcuts,
+    selectedDraftIds
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      isEditing,
+      focusedRowIndex,
+      products,
+      editableItems,
+      selectedDraft,
+      showConfirmModal,
+      activeEquivalenceRow,
+      activeVariantRow,
+      actionConfirm,
+      deleteConfirm,
+      obsModal,
+      rejectModal,
+      showShortcuts,
+      selectedDraftIds
+    };
+  }, [
+    isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal,
+    activeEquivalenceRow, activeVariantRow, actionConfirm, deleteConfirm, obsModal,
+    rejectModal, showShortcuts, selectedDraftIds
+  ]);
+
   useEffect(() => {
     const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts);
     if (isAnyModalOpen) {
@@ -687,7 +743,133 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      const {
+        isEditing,
+        focusedRowIndex,
+        products,
+        editableItems,
+        selectedDraft,
+        showConfirmModal,
+        actionConfirm,
+        deleteConfirm,
+        obsModal,
+        rejectModal,
+        showShortcuts,
+        selectedDraftIds
+      } = stateRef.current;
+
+      const isAltShortcut = e.altKey && (
+        e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
+        e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
+      );
+
+      const isBypassKey = isAltShortcut || e.ctrlKey || e.metaKey || e.key === 'Escape' ||
+        (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal));
+
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
+
+      // Handle Enter key for confirmation modals
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (target.tagName === 'TEXTAREA') return;
+
+        if (actionConfirm && actionConfirm.isOpen) {
+          e.preventDefault();
+          actionConfirm.onConfirm();
+          setActionConfirm(null);
+          return;
+        }
+        if (deleteConfirm && deleteConfirm.isOpen) {
+          e.preventDefault();
+          if (deleteConfirm.step === 1) {
+            setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null);
+          } else {
+            const runConfirm = async () => {
+              await deleteConfirm.onConfirmNotify();
+              setDeleteConfirm(null);
+            };
+            runConfirm();
+          }
+          return;
+        }
+        if (rejectModal && rejectModal.isOpen) {
+          e.preventDefault();
+          const confirmBtn = document.getElementById('btn-confirm-reject') as HTMLButtonElement | null;
+          if (confirmBtn && !confirmBtn.disabled) {
+            confirmBtn.click();
+          }
+          return;
+        }
+        if (showConfirmModal && selectedDraft) {
+          e.preventDefault();
+          const confirmBtn = document.getElementById('btn-confirm-order-final') as HTMLButtonElement | null;
+          if (confirmBtn && !confirmBtn.disabled) {
+            confirmBtn.click();
+          }
+          return;
+        }
+        if (obsModal && obsModal.isOpen) {
+          e.preventDefault();
+          const newEdits = [...editableItems];
+          newEdits[obsModal.rowIndex].observations = obsModal.text;
+          setEditableItems(newEdits);
+          setObsModal(null);
+          return;
+        }
+      }
+
+      // Handle Alt+E shortcut globally
+      if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+        if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
+          e.preventDefault();
+          const i = focusedRowIndex;
+          setActiveEquivalenceRow(prev => {
+            const next = prev === i ? null : i;
+            setTimeout(() => {
+              if (next === i) {
+                const equivInput = document.getElementById(`equiv-input-${i}`);
+                if (equivInput) {
+                  equivInput.focus();
+                  setFocusedRowIndex(i);
+                }
+              } else {
+                if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+              }
+            }, 50);
+            return next;
+          });
+          setActiveVariantRow(null);
+          return;
+        }
+      }
+
+      // Handle Alt+V shortcut globally
+      if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+        if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
+          e.preventDefault();
+          const i = focusedRowIndex;
+          const matched = products.find(p => p.id === editableItems[i]?.matched_product_id);
+          if (matched && matched.variants && matched.variants.length > 0) {
+            setActiveVariantRow(prev => {
+              const next = prev === i ? null : i;
+              setTimeout(() => {
+                if (next === i) {
+                  const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                  if (firstSelect) {
+                    firstSelect.focus();
+                    setFocusedRowIndex(i);
+                  }
+                } else {
+                  if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                }
+              }, 50);
+              return next;
+            });
+            setActiveEquivalenceRow(null);
+          }
+          return;
+        }
+      }
 
       if (e.key === 'Escape') {
         if (showShortcuts) { setShowShortcuts(false); return; }
@@ -741,7 +923,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [actionConfirm, deleteConfirm, obsModal, rejectModal, showConfirmModal, selectedDraft, showShortcuts, selectedDraftIds.length]);
+  }, []);
 
   const isInvoiceModified = () => {
     if (!selectedDraft) return false;
@@ -762,12 +944,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleSendManualReceipt = async () => {
     if (!selectedDraft) return;
-    const confirmSend = window.confirm(
-      `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`
-    );
-    if (!confirmSend) return;
-    
-    setSendingReceipt(true);
+
+    setActionConfirm({
+      isOpen: true,
+      title: 'Enviar Acuse de Recibo',
+      message: `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`,
+      confirmText: 'Enviar Acuse',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        setSendingReceipt(true);
     try {
       const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
       const clientName = selectedDraft.client_detected_name || 'Cliente';
@@ -881,6 +1066,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } finally {
       setSendingReceipt(false);
     }
+      }
+    });
   };
  
   const handleApprove = async () => {
@@ -2467,7 +2654,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     style={{ 
                                       borderBottom: `1px solid ${THEME.colors.border}`,
                                       animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      backgroundColor: getRowBgColor(i) || 'transparent',
                                       transition: 'background-color 0.2s'
                                     }}
                                   >
@@ -2476,7 +2663,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           padding: '1rem 0.5rem', 
                                           textAlign: 'center', 
                                           width: '40px', 
-                                          backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                          backgroundColor: getCellBgColor(i, true),
                                           transition: 'background-color 0.2s'
                                         }}>
                                           <input
@@ -2496,7 +2683,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       <td style={{ 
                                         padding: '1rem 0.5rem', 
                                         width: '15%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
                                         <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
@@ -2507,7 +2694,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         padding: '1rem 0.5rem', 
                                         textAlign: 'center', 
                                         width: '6%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
                                         <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
@@ -2517,7 +2704,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <td style={{ 
                                       padding: '1rem 0.5rem', 
                                       width: '30%', 
-                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      backgroundColor: getCellBgColor(i, false),
                                       transition: 'background-color 0.2s'
                                     }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2528,6 +2715,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             disabled={!isEditing}
                                             value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
                                             placeholder="-- Buscar Producto --"
+                                            onFocus={() => setFocusedRowIndex(i)}
+                                            onBlur={() => setFocusedRowIndex(null)}
                                             onChange={(e) => {
                                               const val = e.target.value;
                                               const found = products.find(p => p.name === val);
@@ -2546,19 +2735,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }
                                               setEditableItems(newEdits);
                                             }}
-                                            onKeyDown={(e) => {
-                                              if (e.altKey && (e.key === 'v' || e.key === 'V')) {
-                                                e.preventDefault();
-                                                const matched = products.find(p => p.id === item.matched_product_id);
-                                                if (matched && matched.variants && matched.variants.length > 0) {
-                                                  setActiveVariantRow(prev => prev === i ? null : i);
-                                                  setTimeout(() => {
-                                                    const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                    if (firstSelect) firstSelect.focus();
-                                                  }, 50);
-                                                }
-                                              }
-                                            }}
+
                                             style={{
                                               flex: 1,
                                               padding: '0.5rem',
@@ -2593,6 +2770,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       {isEditing ? (
                                         <select
                                           value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                          onFocus={() => setFocusedRowIndex(i)}
+                                          onBlur={() => setFocusedRowIndex(null)}
                                           onChange={(e) => {
                                             const newEdits = [...editableItems];
                                             newEdits[i].unit = e.target.value;
@@ -2624,24 +2803,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         type="number"
                                         disabled={!isEditing}
                                         value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                        onFocus={() => setFocusedRowIndex(i)}
+                                        onBlur={() => setFocusedRowIndex(null)}
                                         onChange={(e) => {
                                           const newEdits = [...editableItems];
                                           newEdits[i].quantity = parseFloat(e.target.value) || 0;
                                           setEditableItems(newEdits);
                                         }}
                                         onKeyDown={(e) => {
-                                          if (e.altKey && (e.key === 'v' || e.key === 'V')) {
-                                            e.preventDefault();
-                                            const matched = products.find(p => p.id === item.matched_product_id);
-                                            if (matched && matched.variants && matched.variants.length > 0) {
-                                              setActiveVariantRow(prev => prev === i ? null : i);
-                                              setTimeout(() => {
-                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                if (firstSelect) firstSelect.focus();
-                                              }, 50);
-                                            }
-                                            return;
-                                          }
                                           if (e.key === 'Enter') {
                                             e.preventDefault();
                                             // Añadir nueva fila
@@ -2686,34 +2855,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }, 50);
                                             }}
                                             style={{
-                                              padding: '0.2rem 0.4rem',
+                                              padding: '0.25rem 0.5rem',
                                               backgroundColor: activeEquivalenceRow === i
                                                 ? '#4338CA'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '#EEF2FF'
-                                                  : 'transparent',
+                                                  : '#F3F4F6',
                                               color: activeEquivalenceRow === i
                                                 ? '#FFFFFF'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '#4338CA'
-                                                  : '#9CA3AF',
+                                                  : '#4B5563',
                                               border: activeEquivalenceRow === i
                                                 ? '1px solid #4338CA'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '1px solid #C7D2FE'
-                                                  : '1px dashed #D1D5DB',
-                                              borderRadius: '20px',
+                                                  : '1px solid #D1D5DB',
+                                              borderRadius: '6px',
                                               cursor: 'pointer',
-                                              display: 'flex',
+                                              display: 'inline-flex',
                                               alignItems: 'center',
                                               gap: '4px',
                                               transition: 'all 0.2s',
+                                              outline: 'none',
+                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                             }}
-                                            title="Equivalencias / Conversión"
+                                            onFocus={(e) => {
+                                              e.currentTarget.style.borderColor = '#6366F1';
+                                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.2)';
+                                            }}
+                                            onBlur={(e) => {
+                                              e.currentTarget.style.borderColor = activeEquivalenceRow === i ? '#4338CA' : item.conversion_factor && item.conversion_factor !== 1 ? '#C7D2FE' : '#D1D5DB';
+                                              e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                                            }}
+                                            title="Equivalencias (Alt+E)"
                                           >
-                                            <span style={{ fontSize: '0.9rem' }}>⚖️</span>
+                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
+                                            <kbd style={{ 
+                                              fontSize: '0.65rem', 
+                                              fontWeight: 'bold',
+                                              padding: '1px 3px', 
+                                              backgroundColor: activeEquivalenceRow === i ? 'rgba(255,255,255,0.2)' : '#E0E7FF', 
+                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA',
+                                              borderRadius: '3px',
+                                              border: activeEquivalenceRow === i ? '1px solid rgba(255,255,255,0.4)' : '1px solid #C7D2FE'
+                                            }}>Alt+E</kbd>
                                             {item.conversion_factor && item.conversion_factor !== 1 && (
-                                              <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                                              <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
                                                 x{item.conversion_factor}
                                               </span>
                                             )}
@@ -2842,77 +3030,102 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             </span>
                                           </div>
                                           
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
-                                            {matchedProd.variants.map((v: any, vIdx: number) => {
-                                              const currentValue = (item.selected_options || {})[v.name] || '';
-                                              return (
-                                                <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
-                                                    {v.name}:
-                                                  </label>
-                                                  <select
-                                                    id={`variant-select-${i}-${vIdx}`}
-                                                    value={currentValue}
-                                                    onChange={(e) => {
-                                                      const val = e.target.value;
-                                                      const newEdits = [...editableItems];
-                                                      if (!newEdits[i].selected_options) {
-                                                        newEdits[i].selected_options = {};
-                                                      }
-                                                      newEdits[i].selected_options[v.name] = val;
-                                                      setEditableItems(newEdits);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === 'Escape') {
-                                                        setActiveVariantRow(null);
-                                                        setTimeout(() => {
-                                                          if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                        }, 50);
-                                                      } else if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                        if (nextSelect) {
-                                                          nextSelect.focus();
-                                                        } else {
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                            {(() => {
+                                              const variantOptionNames = new Set<string>();
+                                              let isOldFormat = false;
+                                              matchedProd.variants.forEach((v: any) => {
+                                                if (v.name && Array.isArray(v.options)) {
+                                                  isOldFormat = true;
+                                                } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+                                                  Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+                                                }
+                                              });
+
+                                              let variantOptionsList = matchedProd.variants;
+                                              if (!isOldFormat) {
+                                                variantOptionsList = Array.from(variantOptionNames).map(name => {
+                                                  const values = new Set<string>();
+                                                  matchedProd.variants.forEach((v: any) => {
+                                                    if (v.options && v.options[name]) values.add(v.options[name]);
+                                                  });
+                                                  return { name, options: Array.from(values) };
+                                                });
+                                              }
+
+                                              return variantOptionsList.map((v: any, vIdx: number) => {
+                                                const currentValue = (item.selected_options || {})[v.name] || '';
+                                                return (
+                                                  <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
+                                                      {v.name}:
+                                                    </label>
+                                                    <select
+                                                      id={`variant-select-${i}-${vIdx}`}
+                                                      value={currentValue}
+                                                      onFocus={() => setFocusedRowIndex(i)}
+                                                      onBlur={() => setFocusedRowIndex(null)}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const newEdits = [...editableItems];
+                                                        if (!newEdits[i].selected_options) {
+                                                          newEdits[i].selected_options = {};
+                                                        }
+                                                        newEdits[i].selected_options[v.name] = val;
+                                                        setEditableItems(newEdits);
+                                                      }}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Escape') {
                                                           setActiveVariantRow(null);
                                                           setTimeout(() => {
                                                             if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
                                                           }, 50);
-                                                        }
-                                                      } else if (e.key === 'ArrowRight' && !e.altKey) {
-                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                        if (nextSelect) {
+                                                        } else if (e.key === 'Enter') {
                                                           e.preventDefault();
-                                                          nextSelect.focus();
+                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                          if (nextSelect) {
+                                                            nextSelect.focus();
+                                                          } else {
+                                                            setActiveVariantRow(null);
+                                                            setTimeout(() => {
+                                                              if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                            }, 50);
+                                                          }
+                                                        } else if (e.key === 'ArrowRight' && !e.altKey) {
+                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                          if (nextSelect) {
+                                                            e.preventDefault();
+                                                            nextSelect.focus();
+                                                          }
+                                                        } else if (e.key === 'ArrowLeft' && !e.altKey) {
+                                                          const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
+                                                          if (prevSelect) {
+                                                            e.preventDefault();
+                                                            prevSelect.focus();
+                                                          }
                                                         }
-                                                      } else if (e.key === 'ArrowLeft' && !e.altKey) {
-                                                        const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
-                                                        if (prevSelect) {
-                                                          e.preventDefault();
-                                                          prevSelect.focus();
-                                                        }
-                                                      }
-                                                    }}
-                                                    style={{
-                                                      padding: '0.3rem 1.5rem 0.3rem 0.5rem',
-                                                      borderRadius: '6px',
-                                                      border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
-                                                      fontSize: '0.75rem',
-                                                      fontWeight: 600,
-                                                      backgroundColor: currentValue ? '#ECFDF5' : 'white',
-                                                      color: '#111827',
-                                                      outline: 'none',
-                                                      cursor: 'pointer'
-                                                    }}
-                                                  >
-                                                    <option value="">-- Seleccionar {v.name} --</option>
-                                                    {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
-                                                      <option key={optIdx} value={opt}>{opt}</option>
-                                                    ))}
-                                                  </select>
-                                                </div>
-                                              );
-                                            })}
+                                                      }}
+                                                      style={{
+                                                        padding: '0.3rem 1.5rem 0.3rem 0.5rem',
+                                                        borderRadius: '6px',
+                                                        border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
+                                                        backgroundColor: currentValue ? '#ECFDF5' : 'white',
+                                                        color: '#111827',
+                                                        outline: 'none',
+                                                        cursor: 'pointer'
+                                                      }}
+                                                    >
+                                                      <option value="">-- Seleccionar {v.name} --</option>
+                                                      {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
+                                                        <option key={optIdx} value={opt}>{opt}</option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                );
+                                              });
+                                            })()}
                                           </div>
                                           
                                           <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
@@ -2956,6 +3169,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 step="0.01"
                                                 min="0.01"
                                                 value={item.conversion_factor || 1}
+                                                onFocus={() => setFocusedRowIndex(i)}
+                                                onBlur={() => setFocusedRowIndex(null)}
                                                 onChange={(e) => {
                                                   const factor = parseFloat(e.target.value) || 1;
                                                   const newEdits = [...editableItems];
@@ -3128,65 +3343,82 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <details style={{ backgroundColor: '#F3F4F6', borderRadius: '8px', padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #E5E7EB' }}>
                 <summary style={{ fontWeight: 700, color: '#4B5563', fontSize: '0.85rem', outline: 'none' }}>Ver texto original / adjunto del correo enviado por el cliente</summary>
                 <div style={{ padding: '1rem 0 0.5rem 0', fontSize: '0.85rem', color: '#6B7280', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {getDraftMetadata(selectedDraft).attachmentUrl && (
-                    <div style={{
-                      backgroundColor: 'white',
-                      border: '1.5px solid #E2E8F0',
-                      borderRadius: '12px',
-                      padding: '1rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                      cursor: 'default'
-                    }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          backgroundColor: '#FEE2E2',
-                          color: '#EF4444',
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 'bold',
-                          fontSize: '0.8rem'
-                        }}>
-                          PDF
-                        </div>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {getDraftMetadata(selectedDraft).attachmentName || 'documento_adjunto.pdf'}
+                  {(() => {
+                    const metadata = getDraftMetadata(selectedDraft);
+                    if (!metadata.attachmentUrl) return null;
+                    const attachmentName = metadata.attachmentName || 'documento_adjunto.pdf';
+                    const lowercaseName = attachmentName.toLowerCase();
+                    const isExcel = lowercaseName.endsWith('.xlsx') || lowercaseName.endsWith('.xls') || lowercaseName.endsWith('.csv');
+                    const isImage = lowercaseName.endsWith('.png') || lowercaseName.endsWith('.jpg') || lowercaseName.endsWith('.jpeg') || lowercaseName.endsWith('.webp') || lowercaseName.endsWith('.gif');
+                    
+                    const badgeText = isExcel ? 'EXCEL' : isImage ? 'IMG' : 'PDF';
+                    const badgeBg = isExcel ? '#DCFCE7' : isImage ? '#F3E8FF' : '#FEE2E2';
+                    const badgeColor = isExcel ? '#15803D' : isImage ? '#6B21A8' : '#EF4444';
+                    
+                    const buttonText = isExcel ? 'Ver Excel Original' : isImage ? 'Ver Imagen Original' : 'Ver PDF Original';
+                    const buttonBg = isExcel ? '#10B981' : isImage ? '#8B5CF6' : '#EF4444';
+                    const buttonHoverBg = isExcel ? '#059669' : isImage ? '#7C3AED' : '#DC2626';
+
+                    return (
+                      <div style={{
+                        backgroundColor: 'white',
+                        border: '1.5px solid #E2E8F0',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                        cursor: 'default'
+                      }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{
+                            backgroundColor: badgeBg,
+                            color: badgeColor,
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '0.8rem'
+                          }}>
+                            {badgeText}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>Documento original de solicitud</div>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1E293B', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {attachmentName}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>Documento original de solicitud</div>
+                          </div>
                         </div>
+                        <a 
+                          href={metadata.attachmentUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: '0.5rem 1rem',
+                            backgroundColor: buttonBg,
+                            color: 'white',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'background-color 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = buttonHoverBg}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = buttonBg}
+                        >
+                          {isExcel ? <Grid size={14} /> : <FileText size={14} />} {buttonText}
+                        </a>
                       </div>
-                      <a 
-                        href={getDraftMetadata(selectedDraft).attachmentUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: '0.5rem 1rem',
-                          backgroundColor: '#EF4444',
-                          color: 'white',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          textDecoration: 'none',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'background-color 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DC2626'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EF4444'}
-                      >
-                        <FileText size={14} /> Ver PDF Original
-                      </a>
-                    </div>
-                  )}
+                    );
+                  })()}
                   <div style={{ whiteSpace: 'pre-wrap', cursor: 'text', borderTop: getDraftMetadata(selectedDraft).attachmentUrl ? '1px solid #E5E7EB' : 'none', paddingTop: getDraftMetadata(selectedDraft).attachmentUrl ? '12px' : '0' }}>
                     {selectedDraft.email_body || '(Sin cuerpo)'}
                   </div>
@@ -3820,6 +4052,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 Cancelar
               </button>
               <button
+                id="btn-confirm-reject"
                 type="button"
                 disabled={
                   !rejectReason || 
@@ -4094,6 +4327,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 Cancelar
               </button>
               <button
+                id="btn-confirm-order-final"
                 onClick={handleConfirmOrderDirectly}
                 disabled={confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)}
                 style={{

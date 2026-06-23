@@ -246,6 +246,7 @@ export async function POST(req: Request) {
            - Ignora la primera columna (suelen ser códigos PLU o referencias internas).
            - Asegúrate de extraer la CANTIDAD PEDIDA correcta que aparece junto al nombre del producto, no extraigas el PLU como cantidad.
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+        7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -263,7 +264,7 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10 }
+            { "originalName": "Nombre del Producto", "quantity": 10, "observations": "Cualquier nota u observación específica del producto o null" }
           ]
         }
       `;
@@ -315,6 +316,7 @@ export async function POST(req: Request) {
         4. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacio.
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
+        7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -332,7 +334,7 @@ export async function POST(req: Request) {
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Tomate Chonto", "quantity": 15 }
+            { "originalName": "Tomate Chonto", "quantity": 15, "observations": "Cualquier nota u observación específica del producto o null" }
           ]
         }
       `;

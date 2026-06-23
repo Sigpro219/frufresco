@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as XLSX from 'xlsx';
 
 export async function POST(req: Request) {
   try {
@@ -18,13 +19,17 @@ export async function POST(req: Request) {
     // Inicializar Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Convertir archivo a Base64 para Gemini
+    // Obtener ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
+    
+    const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                    file.type === 'application/vnd.ms-excel' || 
+                    file.name.toLowerCase().endsWith('.xlsx') || 
+                    file.name.toLowerCase().endsWith('.xls');
 
-    const prompt = `
+    let prompt = `
       Eres un asistente experto en logística para FruFresco. 
-      Analiza esta orden de compra adjunta (puede ser PDF, Imagen o Excel).
+      Analiza esta orden de compra adjunta.
       
       TAREA:
       1. Identifica el nombre del CLIENTE mencionado en el documento.
@@ -47,10 +52,34 @@ export async function POST(req: Request) {
         "nitInDocument": "NIT/Cédula Extraída o null",
         "documentType": "PDF / Excel / Imagen",
         "items": [
-          { "originalName": "Nombre del Producto en el documento", "quantity": 10 }
+          { "originalName": "Nombre del Producto en el documento", "quantity": 10, "unit": "Kg / Unidad / null", "observations": "Cualquier nota u observación específica del producto o null" }
         ]
       }
     `;
+
+    let requestContents: any[] = [];
+
+    if (isExcel) {
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      let csvContent = "";
+      workbook.SheetNames.forEach(sheetName => {
+        csvContent += `\n--- Hoja: ${sheetName} ---\n`;
+        csvContent += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+      });
+      prompt += `\n\nCONTENIDO DEL DOCUMENTO EXCEL EN FORMATO CSV:\n${csvContent}`;
+      requestContents = [{ text: prompt }];
+    } else {
+      const base64Data = Buffer.from(arrayBuffer).toString('base64');
+      requestContents = [
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
+        },
+        { text: prompt }
+      ];
+    }
 
     // Modelos alternativos en caso de indisponibilidad por alta demanda
     const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-pro"];
@@ -62,15 +91,7 @@ export async function POST(req: Request) {
         console.log(`[AI Extract] Intentando procesar orden con modelo: ${modelName}`);
         const model = genAI.getGenerativeModel({ model: modelName });
         
-        result = await model.generateContent([
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: file.type
-            }
-          },
-          { text: prompt }
-        ]);
+        result = await model.generateContent(requestContents);
         
         if (result) {
           console.log(`[AI Extract] Procesado exitosamente con modelo: ${modelName}`);
