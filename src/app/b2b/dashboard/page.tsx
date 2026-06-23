@@ -1549,21 +1549,48 @@ export default function B2BDashboard() {
                                             const maxKg = Math.max(...consumptionHistory.map(d => d.kg), 10);
                                             const maxCop = Math.max(...consumptionHistory.map(d => d.cop), 10000);
 
-                                            const pointsKg = consumptionHistory.map((d, index) => {
+                                            const points = consumptionHistory.map((d, index) => {
                                                 const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
-                                                const y = paddingTop + chartHeight - (d.kg / maxKg) * chartHeight;
-                                                return `${x},${y}`;
-                                            }).join(' ');
+                                                const yKg = paddingTop + chartHeight - (d.kg / maxKg) * chartHeight;
+                                                const yCop = paddingTop + chartHeight - (d.cop / maxCop) * chartHeight;
+                                                return { x, yKg, yCop, kg: d.kg, cop: d.cop, date: d.date };
+                                            });
 
-                                            const pointsCop = consumptionHistory.map((d, index) => {
-                                                const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
-                                                const y = paddingTop + chartHeight - (d.cop / maxCop) * chartHeight;
-                                                return `${x},${y}`;
-                                            }).join(' ');
+                                            const pointsKgStr = points.map(p => `${p.x},${p.yKg}`).join(' ');
+                                            const pointsCopStr = points.map(p => `${p.x},${p.yCop}`).join(' ');
+
+                                            const areaKgPath = points.length > 0
+                                                ? `M ${points[0].x} ${paddingTop + chartHeight} ` +
+                                                  points.map(p => `L ${p.x} ${p.yKg}`).join(' ') +
+                                                  ` L ${points[points.length - 1].x} ${paddingTop + chartHeight} Z`
+                                                : '';
+
+                                            const areaCopPath = points.length > 0
+                                                ? `M ${points[0].x} ${paddingTop + chartHeight} ` +
+                                                  points.map(p => `L ${p.x} ${p.yCop}`).join(' ') +
+                                                  ` L ${points[points.length - 1].x} ${paddingTop + chartHeight} Z`
+                                                : '';
+
+                                            const formatCOP = (val: number) => {
+                                                const formatted = Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, locale === 'en' ? "," : ".");
+                                                return '$' + formatted;
+                                            };
 
                                             return (
                                                 <div style={{ width: '100%', overflowX: 'auto' }}>
                                                     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '600px', display: 'block' }}>
+                                                        {/* Definitions for gradients */}
+                                                        <defs>
+                                                            <linearGradient id="gradKg" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.15" />
+                                                                <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" />
+                                                            </linearGradient>
+                                                            <linearGradient id="gradCop" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.15" />
+                                                                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
+                                                            </linearGradient>
+                                                        </defs>
+
                                                         {/* Grid & Axis Lines */}
                                                         {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
                                                             const y = paddingTop + chartHeight * ratio;
@@ -1583,20 +1610,28 @@ export default function B2BDashboard() {
                                                                     </text>
                                                                     {/* Right axis (COP) */}
                                                                     <text x={width - paddingRight + 10} y={y + 4} textAnchor="start" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: 'bold' }}>
-                                                                        ${Math.round(maxCop - (maxCop * ratio)).toLocaleString(locale === 'en' ? 'en' : 'es')}
+                                                                        {formatCOP(maxCop - (maxCop * ratio))}
                                                                     </text>
                                                                 </g>
                                                             );
                                                         })}
 
+                                                        {/* Area Paths (Gradients) */}
+                                                        {points.length > 1 && (
+                                                            <>
+                                                                <path d={areaKgPath} fill="url(#gradKg)" />
+                                                                <path d={areaCopPath} fill="url(#gradCop)" />
+                                                            </>
+                                                        )}
+
                                                         {/* Polyline paths */}
-                                                        {consumptionHistory.length > 1 && (
+                                                        {points.length > 1 && (
                                                             <>
                                                                 <polyline
                                                                     fill="none"
                                                                     stroke="var(--primary)"
                                                                     strokeWidth={3.5}
-                                                                    points={pointsKg}
+                                                                    points={pointsKgStr}
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
                                                                 />
@@ -1604,27 +1639,32 @@ export default function B2BDashboard() {
                                                                     fill="none"
                                                                     stroke="#3B82F6"
                                                                     strokeWidth={3.5}
-                                                                    points={pointsCop}
+                                                                    points={pointsCopStr}
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
                                                                 />
                                                             </>
                                                         )}
 
-                                                        {/* Graph Dots and X Axis labels */}
-                                                        {consumptionHistory.map((d, index) => {
-                                                            const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
-                                                            const yKg = paddingTop + chartHeight - (d.kg / maxKg) * chartHeight;
-                                                            const yCop = paddingTop + chartHeight - (d.cop / maxCop) * chartHeight;
+                                                        {/* Graph Dots, Data labels, and X Axis labels */}
+                                                        {points.map((p, index) => {
                                                             return (
                                                                 <g key={index}>
                                                                     {/* Dots */}
-                                                                    <circle cx={x} cy={yKg} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5} />
-                                                                    <circle cx={x} cy={yCop} r={4.5} fill="#3B82F6" stroke="white" strokeWidth={1.5} />
+                                                                    <circle cx={p.x} cy={p.yKg} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5} />
+                                                                    <circle cx={p.x} cy={p.yCop} r={4.5} fill="#3B82F6" stroke="white" strokeWidth={1.5} />
                                                                     
-                                                                    {/* Label */}
-                                                                    <text x={x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
-                                                                        {d.date}
+                                                                    {/* Floating values above dots */}
+                                                                    <text x={p.x} y={p.yKg - 10} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--primary)', fontWeight: '800' }}>
+                                                                        {Math.round(p.kg)} Kg
+                                                                    </text>
+                                                                    <text x={p.x} y={p.yCop - 10} textAnchor="middle" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: '800' }}>
+                                                                        {formatCOP(p.cop)}
+                                                                    </text>
+
+                                                                    {/* X Axis Label */}
+                                                                    <text x={p.x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                                                        {p.date}
                                                                     </text>
                                                                 </g>
                                                             );
