@@ -44,6 +44,10 @@ export default function B2BDashboard() {
     const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
     const [consumptionData, setConsumptionData] = useState<any[]>([]);
     const [isLoadingConsumption, setIsLoadingConsumption] = useState(false);
+    const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
+    const [consumptionKpis, setConsumptionKpis] = useState<{ totalCop: number, totalKg: number, avgPrice: number }>({ totalCop: 0, totalKg: 0, avgPrice: 0 });
+    const [consumptionTimeRange, setConsumptionTimeRange] = useState<'30days' | '3months'>('30days');
+    const [quickAddQuantities, setQuickAddQuantities] = useState<Record<string, number>>({});
     const [agreements, setAgreements] = useState<any[]>([]);
     const [isLoadingAgreements, setIsLoadingAgreements] = useState(false);
     const isMounted = useRef(true);
@@ -198,6 +202,32 @@ export default function B2BDashboard() {
 
         setSelectedProductForModal(null);
         setSelectedOptions({});
+    };
+
+    const handleQuickAdd = (product: any, qty: number) => {
+        if (qty <= 0) return;
+        const baseName = locale === 'en' ? (product.name_en || product.name) : product.name;
+        const exists = orderItems.find(item => item.product_id === product.id);
+
+        if (exists) {
+            updateQuantity(exists.id, exists.quantity + qty);
+        } else {
+            const newItem: OrderItem = {
+                id: Math.random().toString(36).substr(2, 9),
+                product_id: product.id,
+                product_name: product.name,
+                product_name_en: product.name_en,
+                product_image: product.image_url || '',
+                quantity: qty,
+                unit: product.unit_of_measure || 'Kg'
+            };
+            setOrderItems(prev => [...prev, newItem].sort((a, b) => {
+                const nameA = locale === 'en' ? (a.product_name_en || a.product_name) : a.product_name;
+                const nameB = locale === 'en' ? (b.product_name_en || b.product_name) : b.product_name;
+                return nameA.localeCompare(nameB);
+            }));
+        }
+        alert(`✅ ${baseName} (${qty} ${product.unit_of_measure || 'Kg'}) ${locale === 'en' ? 'added to order' : 'agregado al pedido'}`);
     };
 
     // Time calculation logic
@@ -391,11 +421,14 @@ export default function B2BDashboard() {
         const fetchConsumption = async () => {
             setIsLoadingConsumption(true);
             try {
-                // Fetch all orders to get their IDs
+                // Fetch all orders with created_at, delivery_date, total, status
                 const { data: ordersData, error: ordersError } = await supabase
                     .from('orders')
-                    .select('id')
-                    .eq('profile_id', profile.id);
+                    .select('id, created_at, delivery_date, total, status')
+                    .eq('profile_id', profile.id)
+                    .neq('status', 'draft')
+                    .neq('status', 'cancelled')
+                    .order('delivery_date', { ascending: true });
 
                 if (ordersError) throw ordersError;
                 
@@ -405,33 +438,99 @@ export default function B2BDashboard() {
                     // Fetch all items from those orders joining with products
                     const { data: itemsData, error: itemsError } = await supabase
                         .from('order_items')
-                        .select('quantity, products(name, name_en, unit_of_measure, image_url)')
+                        .select('product_id, order_id, quantity, products(id, name, name_en, unit_of_measure, image_url, base_price)')
                         .in('order_id', orderIds);
 
                     if (itemsError) throw itemsError;
 
-                    // Aggregate
+                    // Filter based on consumptionTimeRange (client-side)
+                    const now = new Date();
+                    const daysLimit = consumptionTimeRange === '30days' ? 30 : 90;
+                    const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
+
+                    const filteredOrders = (ordersData || []).filter(o => {
+                        const dateVal = new Date(o.delivery_date || o.created_at);
+                        return dateVal >= cutoffDate;
+                    });
+
+                    const filteredOrderIds = new Set(filteredOrders.map(o => o.id));
+                    const filteredItems = (itemsData || []).filter(item => filteredOrderIds.has(item.order_id));
+
+                    // 1. KPI calculations
+                    const totalCop = filteredOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+                    const totalKg = filteredItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+                    const avgPrice = totalKg > 0 ? (totalCop / totalKg) : 0;
+                    if (isMounted.current) {
+                        setConsumptionKpis({ totalCop, totalKg, avgPrice });
+                    }
+
+                    // 2. Aggregate top products
                     const aggregation: Record<string, any> = {};
-                    itemsData?.forEach(item => {
+                    filteredItems.forEach(item => {
                         const p = Array.isArray(item.products) ? item.products[0] : item.products;
-                        const pName = locale === 'en' ? (p?.name_en || p?.name) : (p?.name || 'Producto');
-                        if (!aggregation[pName]) {
-                            aggregation[pName] = {
+                        if (!p) return;
+                        const pName = locale === 'en' ? (p.name_en || p.name) : p.name;
+                        const pId = p.id;
+                        if (!aggregation[pId]) {
+                            aggregation[pId] = {
+                                id: pId,
                                 name: pName,
                                 totalQuantity: 0,
-                                unit: p?.unit_of_measure || 'un',
-                                image: p?.image_url || '',
-                                ordersCount: 0
+                                unit: p.unit_of_measure || 'Kg',
+                                image: p.image_url || '',
+                                ordersCount: 0,
+                                product: p
                             };
                         }
-                        aggregation[pName].totalQuantity += Number(item.quantity || 0);
-                        aggregation[pName].ordersCount += 1;
+                        aggregation[pId].totalQuantity += Number(item.quantity || 0);
+                        aggregation[pId].ordersCount += 1;
                     });
 
                     const sorted = Object.values(aggregation)
                         .sort((a: any, b: any) => b.totalQuantity - a.totalQuantity);
                     
-                    if (isMounted.current) setConsumptionData(sorted);
+                    if (isMounted.current) {
+                        setConsumptionData(sorted);
+                    }
+
+                    // 3. History timeline for line graph
+                    const historyMap: Record<string, { date: string, cop: number, kg: number }> = {};
+                    // Initialize each order as a plot point to make sure we show all orders chronologically
+                    filteredOrders.forEach(o => {
+                        const rawDate = new Date(o.delivery_date || o.created_at);
+                        const dateStr = rawDate.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                        if (!historyMap[dateStr]) {
+                            historyMap[dateStr] = { date: dateStr, cop: 0, kg: 0 };
+                        }
+                        historyMap[dateStr].cop += Number(o.total || 0);
+                    });
+
+                    filteredItems.forEach(item => {
+                        const order = filteredOrders.find(o => o.id === item.order_id);
+                        if (!order) return;
+                        const rawDate = new Date(order.delivery_date || order.created_at);
+                        const dateStr = rawDate.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                        if (historyMap[dateStr]) {
+                            historyMap[dateStr].kg += Number(item.quantity || 0);
+                        }
+                    });
+
+                    const historyList = Object.values(historyMap);
+                    if (isMounted.current) {
+                        setConsumptionHistory(historyList);
+                    }
+                } else {
+                    if (isMounted.current) {
+                        setConsumptionData([]);
+                        setConsumptionHistory([]);
+                        setConsumptionKpis({ totalCop: 0, totalKg: 0, avgPrice: 0 });
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching consumption:", err);
@@ -441,7 +540,7 @@ export default function B2BDashboard() {
         };
 
         fetchConsumption();
-    }, [activeTab, profile?.company_name]);
+    }, [activeTab, profile?.company_name, consumptionTimeRange]);
 
     // Fetch Agreements
     useEffect(() => {
@@ -1310,7 +1409,6 @@ export default function B2BDashboard() {
                         )}
                     </div>
                 )}
-
                 {/* CONSUMPTION TAB */}
                 {activeTab === 'consumption' && (
                     <div style={{
@@ -1319,82 +1417,341 @@ export default function B2BDashboard() {
                         padding: '2.5rem',
                         boxShadow: 'var(--shadow-lg)',
                     }}>
-                        <div style={{ marginBottom: '2.5rem' }}>
-                            <h2 style={{ 
-                                fontFamily: 'var(--font-outfit), sans-serif', 
-                                fontWeight: 900, 
-                                fontSize: '1.5rem',
-                                margin: 0,
-                                color: 'var(--text-main)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px'
-                            }}>
-                                <BarChart3 size={28} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.consumptionTitle}
-                            </h2>
-                            <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
-                                {t.b2b.dashboard.consumptionDesc}
-                            </p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2.5rem' }}>
+                            <div>
+                                <h2 style={{ 
+                                    fontFamily: 'var(--font-outfit), sans-serif', 
+                                    fontWeight: 900, 
+                                    fontSize: '1.5rem',
+                                    margin: 0,
+                                    color: 'var(--text-main)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <BarChart3 size={28} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.consumptionTitle}
+                                </h2>
+                                <p style={{ color: 'var(--text-muted)', margin: '0.4rem 0 0', fontSize: '0.95rem', fontWeight: '500' }}>
+                                    {t.b2b.dashboard.consumptionDesc}
+                                </p>
+                            </div>
+
+                            {/* Range Selector */}
+                            <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: 'var(--radius-md)', gap: '2px' }}>
+                                <button
+                                    onClick={() => setConsumptionTimeRange('30days')}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        backgroundColor: consumptionTimeRange === '30days' ? 'white' : 'transparent',
+                                        color: consumptionTimeRange === '30days' ? 'var(--primary)' : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        boxShadow: consumptionTimeRange === '30days' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {locale === 'en' ? 'Last 30 Days' : 'Últimos 30 días'}
+                                </button>
+                                <button
+                                    onClick={() => setConsumptionTimeRange('3months')}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '800',
+                                        border: 'none',
+                                        backgroundColor: consumptionTimeRange === '3months' ? 'white' : 'transparent',
+                                        color: consumptionTimeRange === '3months' ? 'var(--primary)' : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        boxShadow: consumptionTimeRange === '3months' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {locale === 'en' ? 'Last 3 Months' : 'Últimos 3 meses'}
+                                </button>
+                            </div>
                         </div>
 
                         {isLoadingConsumption ? (
-                            <div style={{ padding: '3rem', textAlign: 'center' }}>
+                            <div style={{ padding: '4rem', textAlign: 'center' }}>
                                 <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
                                 <p style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{t.b2b.dashboard.calculating}</p>
                             </div>
                         ) : consumptionData.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                                {consumptionData.slice(0, 6).map((item, index) => (
-                                    <div key={item.name} style={{
-                                        backgroundColor: '#F8FAFC',
-                                        borderRadius: 'var(--radius-lg)',
-                                        padding: '1.25rem',
-                                        border: '1px solid var(--border)',
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}>
-                                        {index < 3 && (
-                                            <div style={{ 
-                                                position: 'absolute', 
-                                                top: 10, 
-                                                right: 10, 
-                                                backgroundColor: index === 0 ? '#FEF3C7' : '#F1F5F9',
-                                                color: index === 0 ? '#92400E' : '#475569',
-                                                padding: '2px 8px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: '900'
-                                            }}>
-                                                TOP {index + 1}
-                                            </div>
-                                        )}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                            <div style={{ width: '56px', height: '56px', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
-                                                {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>{item.name}</h4>
-                                                <p style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>Total: {item.totalQuantity} {item.unit}</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <div style={{ marginTop: '1.25rem' }}>
-                                            <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                                                <div style={{ 
-                                                    width: `${Math.min(100, (item.ordersCount / invoices.length) * 100)}%`, 
-                                                    height: '100%', 
-                                                    backgroundColor: 'var(--primary)',
-                                                    borderRadius: '3px'
-                                                }}></div>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>
-                                                <span>{t.b2b.dashboard.frequency}</span>
-                                                <span>{item.ordersCount} {t.b2b.dashboard.ordersLabel}</span>
-                                            </div>
-                                        </div>
+                            <>
+                                {/* KPIs Cards */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {locale === 'en' ? 'Total Spent' : 'Total Gasto (COP)'}
+                                        </p>
+                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            ${Math.round(consumptionKpis.totalCop).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                        </h3>
                                     </div>
-                                ))}
-                            </div>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {locale === 'en' ? 'Total Volume' : 'Volumen Total'}
+                                        </p>
+                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#1E40AF', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            {Math.round(consumptionKpis.totalKg).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')} Kg
+                                        </h3>
+                                    </div>
+                                    <div style={{ backgroundColor: '#F8FAFC', padding: '1.25rem 1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {locale === 'en' ? 'Avg. Price / Kg' : 'Precio Promedio / Kg'}
+                                        </p>
+                                        <h3 style={{ margin: '0.4rem 0 0', fontSize: '1.6rem', fontWeight: '900', color: '#D97706', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            ${Math.round(consumptionKpis.avgPrice).toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
+                                        </h3>
+                                    </div>
+                                </div>
+
+                                {/* Historical Dual Line Chart */}
+                                {consumptionHistory.length > 0 && (
+                                    <div style={{
+                                        backgroundColor: '#FFFFFF',
+                                        borderRadius: 'var(--radius-lg)',
+                                        padding: '1.5rem',
+                                        border: '1px solid var(--border)',
+                                        marginBottom: '2.5rem'
+                                    }}>
+                                        <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                            {locale === 'en' ? 'Volume (Kg) vs Value (COP) Evolution' : 'Evolución de Volumen (Kg) vs Gasto (COP)'}
+                                        </h3>
+                                        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', fontSize: '0.75rem', fontWeight: '800' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <div style={{ width: '12px', height: '3px', backgroundColor: 'var(--primary)', borderRadius: '1.5px' }}></div>
+                                                <span style={{ color: 'var(--primary)' }}>{locale === 'en' ? 'Volume (Kg)' : 'Volumen (Kg)'}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <div style={{ width: '12px', height: '3px', backgroundColor: '#3B82F6', borderRadius: '1.5px' }}></div>
+                                                <span style={{ color: '#3B82F6' }}>{locale === 'en' ? 'Gasto (COP)' : 'Gasto (COP)'}</span>
+                                            </div>
+                                        </div>
+
+                                        {(() => {
+                                            const width = 800;
+                                            const height = 220;
+                                            const paddingLeft = 50;
+                                            const paddingRight = 80;
+                                            const paddingTop = 20;
+                                            const paddingBottom = 30;
+
+                                            const chartWidth = width - paddingLeft - paddingRight;
+                                            const chartHeight = height - paddingTop - paddingBottom;
+
+                                            const maxKg = Math.max(...consumptionHistory.map(d => d.kg), 10);
+                                            const maxCop = Math.max(...consumptionHistory.map(d => d.cop), 10000);
+
+                                            const pointsKg = consumptionHistory.map((d, index) => {
+                                                const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
+                                                const y = paddingTop + chartHeight - (d.kg / maxKg) * chartHeight;
+                                                return `${x},${y}`;
+                                            }).join(' ');
+
+                                            const pointsCop = consumptionHistory.map((d, index) => {
+                                                const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
+                                                const y = paddingTop + chartHeight - (d.cop / maxCop) * chartHeight;
+                                                return `${x},${y}`;
+                                            }).join(' ');
+
+                                            return (
+                                                <div style={{ width: '100%', overflowX: 'auto' }}>
+                                                    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '600px', display: 'block' }}>
+                                                        {/* Grid & Axis Lines */}
+                                                        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                                                            const y = paddingTop + chartHeight * ratio;
+                                                            return (
+                                                                <g key={i}>
+                                                                    <line
+                                                                        x1={paddingLeft}
+                                                                        y1={y}
+                                                                        x2={width - paddingRight}
+                                                                        y2={y}
+                                                                        stroke="#F1F5F9"
+                                                                        strokeWidth={1}
+                                                                    />
+                                                                    {/* Left axis (Kg) */}
+                                                                    <text x={paddingLeft - 10} y={y + 4} textAnchor="end" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                                                        {Math.round(maxKg - (maxKg * ratio))}
+                                                                    </text>
+                                                                    {/* Right axis (COP) */}
+                                                                    <text x={width - paddingRight + 10} y={y + 4} textAnchor="start" style={{ fontSize: '9px', fill: '#3B82F6', fontWeight: 'bold' }}>
+                                                                        ${Math.round(maxCop - (maxCop * ratio)).toLocaleString(locale === 'en' ? 'en' : 'es')}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* Polyline paths */}
+                                                        {consumptionHistory.length > 1 && (
+                                                            <>
+                                                                <polyline
+                                                                    fill="none"
+                                                                    stroke="var(--primary)"
+                                                                    strokeWidth={3.5}
+                                                                    points={pointsKg}
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                                <polyline
+                                                                    fill="none"
+                                                                    stroke="#3B82F6"
+                                                                    strokeWidth={3.5}
+                                                                    points={pointsCop}
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                />
+                                                            </>
+                                                        )}
+
+                                                        {/* Graph Dots and X Axis labels */}
+                                                        {consumptionHistory.map((d, index) => {
+                                                            const x = paddingLeft + (index / (consumptionHistory.length - 1 || 1)) * chartWidth;
+                                                            const yKg = paddingTop + chartHeight - (d.kg / maxKg) * chartHeight;
+                                                            const yCop = paddingTop + chartHeight - (d.cop / maxCop) * chartHeight;
+                                                            return (
+                                                                <g key={index}>
+                                                                    {/* Dots */}
+                                                                    <circle cx={x} cy={yKg} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5} />
+                                                                    <circle cx={x} cy={yCop} r={4.5} fill="#3B82F6" stroke="white" strokeWidth={1.5} />
+                                                                    
+                                                                    {/* Label */}
+                                                                    <text x={x} y={height - 8} textAnchor="middle" style={{ fontSize: '9px', fill: 'var(--text-muted)', fontWeight: 'bold' }}>
+                                                                        {d.date}
+                                                                    </text>
+                                                                </g>
+                                                            );
+                                                        })}
+                                                    </svg>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+
+                                {/* Frequently Ordered Products List */}
+                                <div style={{ marginTop: '2.5rem' }}>
+                                    <h3 style={{ 
+                                        margin: '0 0 1.25rem', 
+                                        fontSize: '1.05rem', 
+                                        fontWeight: '800', 
+                                        color: 'var(--text-main)', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px',
+                                        fontFamily: 'var(--font-outfit), sans-serif'
+                                    }}>
+                                        <Smile size={20} color="var(--primary)" strokeWidth={2.5} /> {locale === 'en' ? 'Frequently Consumed Products' : 'Productos Más Consumidos'}
+                                    </h3>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem' }}>
+                                        {consumptionData.map((item, index) => {
+                                            const qtyValue = quickAddQuantities[item.id] ?? 1;
+                                            return (
+                                                <div key={item.id} style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    backgroundColor: '#F8FAFC',
+                                                    borderRadius: 'var(--radius-lg)',
+                                                    padding: '1rem 1.25rem',
+                                                    border: '1px solid var(--border)',
+                                                    flexWrap: 'wrap',
+                                                    gap: '1rem'
+                                                }}>
+                                                    {/* Ranking badge + Product image + Name */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '250px' }}>
+                                                        <div style={{
+                                                            width: '28px',
+                                                            height: '28px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: index === 0 ? '#FEF3C7' : index === 1 ? '#F1F5F9' : index === 2 ? '#E0F2FE' : '#F1F5F9',
+                                                            color: index === 0 ? '#B45309' : index === 1 ? '#475569' : index === 2 ? '#0369A1' : '#64748B',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '900'
+                                                        }}>
+                                                            {index + 1}
+                                                        </div>
+                                                        <div style={{ width: '48px', height: '48px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#e2e8f0', border: '1px solid #E2E8F0' }}>
+                                                            {item.image && <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                        </div>
+                                                        <div>
+                                                            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em' }}>{item.name}</h4>
+                                                            <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748B', fontWeight: '600' }}>
+                                                                {locale === 'en' ? 'Total consumed' : 'Consumo total'}: <strong style={{ color: 'var(--primary)' }}>{item.totalQuantity} {item.unit}</strong>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Bar metric */}
+                                                    <div style={{ flex: 1, minWidth: '150px' }}>
+                                                        <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                            <div style={{ 
+                                                                width: `${Math.min(100, (item.ordersCount / (invoices.length || 1)) * 100)}%`, 
+                                                                height: '100%', 
+                                                                backgroundColor: 'var(--primary)',
+                                                                borderRadius: '3px'
+                                                            }}></div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.7rem', color: '#94A3B8', fontWeight: '700' }}>
+                                                            <span>{t.b2b.dashboard.frequency}</span>
+                                                            <span>{item.ordersCount} {t.b2b.dashboard.ordersLabel}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Quick purchase action */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', backgroundColor: 'white', overflow: 'hidden' }}>
+                                                            <button
+                                                                onClick={() => setQuickAddQuantities(prev => ({ ...prev, [item.id]: Math.max(1, qtyValue - 1) }))}
+                                                                style={{ border: 'none', background: 'none', padding: '0.35rem 0.6rem', fontWeight: '900', cursor: 'pointer', color: 'var(--text-muted)' }}
+                                                            >-</button>
+                                                            <input
+                                                                type="number"
+                                                                value={qtyValue}
+                                                                onChange={(e) => setQuickAddQuantities(prev => ({ ...prev, [item.id]: Math.max(1, Number(e.target.value)) }))}
+                                                                style={{ width: '40px', border: 'none', textAlign: 'center', fontSize: '0.85rem', fontWeight: '800', color: 'var(--text-main)', outline: 'none' }}
+                                                            />
+                                                            <button
+                                                                onClick={() => setQuickAddQuantities(prev => ({ ...prev, [item.id]: qtyValue + 1 }))}
+                                                                style={{ border: 'none', background: 'none', padding: '0.35rem 0.6rem', fontWeight: '900', cursor: 'pointer', color: 'var(--text-muted)' }}
+                                                            >+</button>
+                                                        </div>
+                                                        
+                                                        <button
+                                                            onClick={() => handleQuickAdd(item.product, qtyValue)}
+                                                            className="btn-premium"
+                                                            style={{
+                                                                padding: '0.45rem 1rem',
+                                                                backgroundColor: 'var(--primary)',
+                                                                color: 'white',
+                                                                borderRadius: 'var(--radius-md)',
+                                                                border: 'none',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: '800',
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 2px 4px rgba(13,122,87,0.15)'
+                                                            }}
+                                                        >
+                                                            {locale === 'en' ? 'Add' : 'Agregar'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </>
                         ) : (
                             <div style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: 'var(--radius-lg)' }}>
                                 <div style={{ backgroundColor: '#F1F5F9', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
@@ -1414,9 +1771,9 @@ export default function B2BDashboard() {
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center'
-                            }}>
+                             }}>
                                 <div style={{ opacity: 0.7, fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-                                    * {t.b2b.dashboard.basedOn.replace('{count}', invoices.length.toString())}
+                                    * {t.b2b.dashboard.basedOn.replace('{count}', (invoices.length || 0).toString())}
                                 </div>
                                 <button onClick={() => alert('Pronto: Reporte en PDF')} style={{
                                     backgroundColor: '#EFF6FF',
