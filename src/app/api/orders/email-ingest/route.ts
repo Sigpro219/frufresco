@@ -543,6 +543,14 @@ export async function POST(req: Request) {
       }
     }
 
+    const addrVal = extractedData.address;
+    const addressDetected = !!(addrVal && 
+      addrVal.toLowerCase() !== 'no detectado' && 
+      addrVal.toLowerCase() !== 'no detectada' && 
+      addrVal.toLowerCase() !== 'null' && 
+      addrVal.toLowerCase() !== 'vacio' && 
+      addrVal.trim() !== '');
+
     if (profile) {
       if (!extractedData.address && profile.address) {
         extractedData.address = profile.address;
@@ -634,6 +642,7 @@ export async function POST(req: Request) {
           { 
             isMetadata: true, 
             address: extractedData.address || null,
+            addressDetected: addressDetected,
             deliverySlot: finalDeliverySlot,
             deliveryDate: extractedData.deliveryDate || null,
             phone: extractedData.phone || null,

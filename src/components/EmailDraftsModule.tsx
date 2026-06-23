@@ -1165,6 +1165,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
  
   const handleApprove = async () => {
     if (!selectedDraft) return;
+    
+    const isAddressMissingVal = !editableAddress || 
+      editableAddress.trim() === '' || 
+      editableAddress.toLowerCase().includes('no detectad') || 
+      editableAddress.toLowerCase() === 'null';
+
+    if (isAddressMissingVal) {
+      showToast('Por favor, ingresa una dirección de entrega válida antes de continuar.', 'error');
+      return;
+    }
+
     setSaving(true);
     
     // 1. Prepare new aliases to save
@@ -2485,27 +2496,101 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     </div>
 
                     {/* Sucursal / Dirección */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Sucursal/Dirección</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {isEditing ? (
-                          <>
-                            <input
-                              type="text"
-                              value={editableAddress}
-                              onChange={(e) => setEditableAddress(e.target.value)}
-                              onBlur={() => triggerGeocoding(editableAddress)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); triggerGeocoding(editableAddress); } }}
-                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', outline: 'none' }}
-                              placeholder="Editar dirección de entrega..."
-                            />
-                            {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600 }}>🔍 Validando...</span>}
-                          </>
-                        ) : (
-                          <span>{editableAddress || getDraftMetadata(selectedDraft).address || 'No detectada'}</span>
-                        )}
-                      </div>
-                    </div>
+                    {(() => {
+                      const cleanForComparison = (str: string) => {
+                        return str
+                          .toLowerCase()
+                          .normalize("NFD")
+                          .replace(/[\u0300-\u036f]/g, "")
+                          .replace(/[^a-z0-9]/g, '');
+                      };
+                      
+                      const addressVal = editableAddress || '';
+                      const cleanBody = cleanForComparison(selectedDraft.email_body || '');
+                      const cleanSubject = cleanForComparison(selectedDraft.email_subject || '');
+                      const cleanAddress = cleanForComparison(addressVal);
+                      
+                      const isAddressMissing = !addressVal || 
+                        addressVal.trim() === '' || 
+                        addressVal.toLowerCase().includes('no detectado') || 
+                        addressVal.toLowerCase().includes('no detectada') || 
+                        addressVal.toLowerCase() === 'null';
+                        
+                      const meta = getDraftMetadata(selectedDraft);
+                      const wasAddressAssumed = isAddressMissing || 
+                        (meta.addressDetected === false) || 
+                        (cleanAddress && !cleanBody.includes(cleanAddress) && !cleanSubject.includes(cleanAddress));
+
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Sucursal/Dirección</div>
+                          <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                            {isEditing ? (
+                              <div style={{ width: '100%' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                                  <input
+                                    type="text"
+                                    value={editableAddress}
+                                    onChange={(e) => setEditableAddress(e.target.value)}
+                                    onBlur={() => triggerGeocoding(editableAddress)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); triggerGeocoding(editableAddress); } }}
+                                    style={{ 
+                                      padding: '8px 12px', 
+                                      borderRadius: '6px', 
+                                      border: wasAddressAssumed ? '1px solid #EF4444' : `1px solid ${THEME.colors.border}`, 
+                                      backgroundColor: wasAddressAssumed ? '#FEF2F2' : '#FFFFFF',
+                                      width: '100%', 
+                                      outline: 'none',
+                                      transition: 'all 0.2s ease-in-out'
+                                    }}
+                                    placeholder="Editar dirección de entrega..."
+                                  />
+                                  {geocoding && <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 600, flexShrink: 0 }}>🔍 Validando...</span>}
+                                </div>
+                                {wasAddressAssumed && (
+                                  <div style={{ 
+                                    marginTop: '6px', 
+                                    padding: '6px 12px', 
+                                    borderRadius: '4px', 
+                                    backgroundColor: isAddressMissing ? '#FEF2F2' : '#FFFBEB', 
+                                    borderLeft: `3px solid ${isAddressMissing ? '#EF4444' : '#D97706'}`,
+                                    color: isAddressMissing ? '#991B1B' : '#92400E',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                  }}>
+                                    <span>{isAddressMissing ? '⚠️ Dirección requerida. No se detectó ninguna dirección en el pedido.' : '⚠️ Dirección no detectada en el correo/documento. Se cargó la dirección por defecto del cliente.'}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <span style={{ 
+                                  color: wasAddressAssumed ? '#EF4444' : 'inherit', 
+                                  fontWeight: wasAddressAssumed ? 600 : 'normal' 
+                                }}>
+                                  {editableAddress || meta.address || 'No detectada'}
+                                </span>
+                                {wasAddressAssumed && (
+                                  <div style={{ 
+                                    marginTop: '4px',
+                                    color: isAddressMissing ? '#EF4444' : '#D97706',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600
+                                  }}>
+                                    {isAddressMissing ? '⚠️ Dirección requerida (No detectada)' : '⚠️ Dirección no detectada (Cargada de perfil)'}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Lista de precios */}
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
