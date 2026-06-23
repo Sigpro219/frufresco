@@ -362,7 +362,21 @@ export async function POST(req: Request) {
         `;
         try {
           let text = await fetchGemini(apiKey, excelPrompt);
-          text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          console.log('[Email Inbound] Raw Gemini Excel text:', text);
+          
+          // Extraer bloque de código JSON si existe
+          const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
+          if (jsonMatch) {
+            text = jsonMatch[1];
+          }
+          text = text.trim();
+          
+          // Eliminar posibles caracteres basura comunes al inicio/final
+          if (text.startsWith('```json')) text = text.substring(7);
+          if (text.startsWith('```')) text = text.substring(3);
+          if (text.endsWith('```')) text = text.substring(0, text.length - 3);
+          text = text.trim();
+
           extractedData = JSON.parse(text);
           if (extractedData.items && !Array.isArray(extractedData.items)) {
             if (typeof extractedData.items === 'object') {
@@ -428,7 +442,21 @@ export async function POST(req: Request) {
 
       try {
         let text = await fetchGemini(apiKey, prompt);
-        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+        console.log('[Email Inbound] Raw Gemini plain text:', text);
+        
+        // Extraer bloque de código JSON si existe
+        const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
+        if (jsonMatch) {
+          text = jsonMatch[1];
+        }
+        text = text.trim();
+        
+        // Eliminar posibles caracteres basura comunes al inicio/final
+        if (text.startsWith('```json')) text = text.substring(7);
+        if (text.startsWith('```')) text = text.substring(3);
+        if (text.endsWith('```')) text = text.substring(0, text.length - 3);
+        text = text.trim();
+
         extractedData = JSON.parse(text);
         if (extractedData.items && !Array.isArray(extractedData.items)) {
           if (typeof extractedData.items === 'object') {
