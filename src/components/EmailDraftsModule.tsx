@@ -764,8 +764,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
       );
 
+      const isTextInput = (target.tagName === 'INPUT' && (
+        (target as HTMLInputElement).type === 'text' ||
+        (target as HTMLInputElement).type === 'number' ||
+        (target as HTMLInputElement).type === 'search' ||
+        (target as HTMLInputElement).type === 'email' ||
+        (target as HTMLInputElement).type === 'password'
+      )) || target.tagName === 'TEXTAREA';
+
       const isBypassKey = isAltShortcut || e.ctrlKey || e.metaKey || e.key === 'Escape' ||
-        (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal));
+        (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal)) ||
+        (e.key === 'Delete' && !isTextInput);
 
       if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
 
@@ -915,9 +924,47 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       }
       
       if (e.key === 'Delete') {
+        // 1. If any delete-related confirmation modal is open, confirm the action
+        if (actionConfirm && actionConfirm.isOpen && actionConfirm.isDanger) {
+          e.preventDefault();
+          actionConfirm.onConfirm();
+          setActionConfirm(null);
+          return;
+        }
+        if (deleteConfirm && deleteConfirm.isOpen) {
+          e.preventDefault();
+          if (deleteConfirm.step === 1) {
+            setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null);
+          } else {
+            const runConfirm = async () => {
+              await deleteConfirm.onConfirmNotify();
+              setDeleteConfirm(null);
+            };
+            runConfirm();
+          }
+          return;
+        }
+        if (rejectModal && rejectModal.isOpen) {
+          e.preventDefault();
+          const confirmBtn = document.getElementById('btn-confirm-reject') as HTMLButtonElement | null;
+          if (confirmBtn && !confirmBtn.disabled) {
+            confirmBtn.click();
+          }
+          return;
+        }
+        
+        // 2. If the main draft details modal is open, trigger the rejection flow
+        if (selectedDraft && !showConfirmModal) {
+          e.preventDefault();
+          document.getElementById('btn-reject-draft')?.click();
+          return;
+        }
+
+        // 3. If selected drafts are present in the list, trigger the bulk delete
         if (selectedDraftIds.length > 0 && !actionConfirm) {
-           document.getElementById('btn-bulk-reject-delete')?.click();
            e.preventDefault();
+           document.getElementById('btn-bulk-reject-delete')?.click();
+           return;
         }
       }
     };
