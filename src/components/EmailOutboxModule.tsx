@@ -137,11 +137,21 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
       const {
         selectedEmail,
         deleteConfirm,
-        bulkDeleteConfirm
+        bulkDeleteConfirm,
+        selectedIds
       } = stateRef.current;
 
+      const isTextInput = (target.tagName === 'INPUT' && (
+        (target as HTMLInputElement).type === 'text' ||
+        (target as HTMLInputElement).type === 'number' ||
+        (target as HTMLInputElement).type === 'search' ||
+        (target as HTMLInputElement).type === 'email' ||
+        (target as HTMLInputElement).type === 'password'
+      )) || target.tagName === 'TEXTAREA';
+
       const isBypassKey = e.key === 'Escape' ||
-        (e.key === 'Enter' && (!!selectedEmail || deleteConfirm.isOpen || bulkDeleteConfirm));
+        (e.key === 'Enter' && (!!selectedEmail || deleteConfirm.isOpen || bulkDeleteConfirm)) ||
+        (e.key === 'Delete' && !isTextInput && (deleteConfirm.isOpen || bulkDeleteConfirm || selectedIds.length > 0 || !!selectedEmail));
 
       if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
 
@@ -165,6 +175,29 @@ export default function EmailOutboxModule({ onOutboxChange }: EmailOutboxModuleP
         if (selectedEmail) {
           e.preventDefault();
           setSelectedEmail(null);
+          return;
+        }
+      }
+
+      if (e.key === 'Delete') {
+        if (bulkDeleteConfirm) {
+          e.preventDefault();
+          actionsRef.current.handleBulkDelete();
+          return;
+        }
+        if (deleteConfirm.isOpen) {
+          e.preventDefault();
+          actionsRef.current.handleDeleteEmail();
+          return;
+        }
+        if (selectedEmail) {
+          e.preventDefault();
+          setSelectedEmail(null);
+          return;
+        }
+        if (selectedIds.length > 0 && !deleteConfirm.isOpen && !bulkDeleteConfirm) {
+          e.preventDefault();
+          setBulkDeleteConfirm(true);
           return;
         }
       }
