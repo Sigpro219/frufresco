@@ -253,7 +253,9 @@ export async function POST(req: Request) {
         TAREA:
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
         2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física si está explícita en el documento. Si el documento dice "DIRECCION: 0" o no especifica una dirección clara, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones a partir del nombre del cliente o siglas. Si no está escrita textualmente, no la pongas. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
+           - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
+           - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
+           - DIRECCIÓN DE ENTREGA: Extrae la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78"). Limpia cualquier texto extra de despedida o firma, guardando únicamente la nomenclatura de la dirección. Si no hay dirección explícita, devuelve null o vacío.
         3. Identifica la franja u horario de entrega. Si en el correo o documento se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -323,19 +325,16 @@ export async function POST(req: Request) {
         Eres un asistente de logística para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
-        
-        CORREO ELECTRÓNICO:
-        ${currentPlainText}
-        
-        TAREA:
+              TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
+           - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
+           - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
         2. Extrae todos los productos solicitados con sus cantidades.
            - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - NO confundas el código PLU (primera columna) con la cantidad. 
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C.") si está escrita textualmente. Si no hay dirección especificada, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones basándote en el nombre del cliente o sus iniciales. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
-           Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
+           - DIRECCIÓN DE ENTREGA: Extrae la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78"). Limpia cualquier texto extra de despedida o firma, guardando únicamente la nomenclatura de la dirección. Si no hay dirección explícita, devuelve null o vacío. después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
         4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -432,7 +431,18 @@ export async function POST(req: Request) {
 
       // Fallback for client name extraction from signature lines above C.C./NIT/Celular
       const lowerClientName = String(extractedData.clientInDocument || '').toLowerCase().trim();
-      if (!lowerClientName || lowerClientName === 'desconocido' || lowerClientName === 'no detectado' || lowerClientName === 'none' || lowerClientName === 'no especificado' || lowerClientName === 'no especificada') {
+      const isBlacklistedName = !lowerClientName || 
+        lowerClientName === 'desconocido' || 
+        lowerClientName === 'no detectado' || 
+        lowerClientName === 'none' || 
+        lowerClientName === 'no especificado' || 
+        lowerClientName === 'no especificada' ||
+        lowerClientName.includes('bogota') ||
+        lowerClientName.includes('colombia') ||
+        lowerClientName.includes('atentamente') ||
+        lowerClientName.includes('cordialmente');
+
+      if (isBlacklistedName) {
         let nameCandidate = '';
         const signatureLines = currentPlainText.split('\n');
         for (let k = 0; k < signatureLines.length; k++) {
@@ -445,7 +455,7 @@ export async function POST(req: Request) {
                 prevLine !== '' && 
                 prevLine.length > 3 && 
                 prevLine.length < 50 &&
-                !prevLine.match(/direcci[óo]n|correo|email|pedido|tomate|papa|cebolla|zanahoria|gracias|atentamente|saludos|cordialmente/i) &&
+                !prevLine.match(/direcci[óo]n|correo|email|pedido|tomate|papa|cebolla|zanahoria|gracias|atentamente|saludos|cordialmente|bogota|colombia/i) &&
                 !prevLine.includes(':') &&
                 !prevLine.includes('/') &&
                 prevLine.match(/[a-zA-ZñÑáéíóúÁÉÍÓÚ]/)
