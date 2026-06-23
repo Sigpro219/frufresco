@@ -3,10 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import https from 'https';
 import * as XLSX from 'xlsx';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const getSupabaseAdmin = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return createClient(url, key);
+};
 
 function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -64,6 +68,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export async function POST(req: Request) {
+  const supabaseAdmin = getSupabaseAdmin();
   try {
     const payload = await req.json();
 
