@@ -253,7 +253,9 @@ export async function POST(req: Request) {
         TAREA:
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
         2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física si está explícita en el documento. Si el documento dice "DIRECCION: 0" o no especifica una dirección clara, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones a partir del nombre del cliente o siglas. Si no está escrita textualmente, no la pongas. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
+           - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
+           - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
+           - DIRECCIÓN DE ENTREGA: Extrae la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78"). Limpia cualquier texto extra de despedida o firma, guardando únicamente la nomenclatura de la dirección. Si no hay dirección explícita, devuelve null o vacío.
         3. Identifica la franja u horario de entrega. Si en el correo o documento se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -310,32 +312,102 @@ export async function POST(req: Request) {
         }
       } else {
         console.log('[Email Inbound] Attachment is Excel. Sending CSV data as text to Gemini.');
-        currentPlainText = currentPlainText + "\n\nCONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:\n" + excelTextContext;
+        // We use the same detailed prompt style but adapt it for Excel context
+        const excelPrompt = `
+        Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
+        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+        
+        CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
+        """
+        ${currentPlainText}
+        """
+
+        CONTENIDO DEL ARCHIVO ADJUNTO EXCEL/CSV:
+        ${excelTextContext}
+        
+        TAREA:
+        1. Analiza el contenido de texto del archivo Excel adjunto para extraer la lista de productos solicitados.
+        2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del correo y del Excel.
+           - NOMBRE DEL CLIENTE: Identifica la compañía matriz o razón social principal. NUNCA uses nombres de sucursales o ciudades.
+        3. Identifica la franja u horario de entrega. El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
+        4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia.
+        6. Extrae todos los productos solicitados y su cantidad numérica.
+             - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
+             - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
+             - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
+             - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
+             - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
+             - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+        7. Extrae las observaciones o especificaciones en el campo "observations".
+        
+        REGLAS CRÍTICAS:
+        - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
+        - Las cantidades deben ser estrictamente numéricas.
+        
+        FORMATO DE RESPUESTA ESPERADO:
+        {
+          "clientInDocument": "Nombre o Empresa Detectada",
+          "documentType": "Email con Excel adjunto",
+          "address": "Dirección física limpia extraída o vacio",
+          "phone": "Teléfono extraído o vacio",
+          "nit": "NIT o cédula extraída o vacio",
+          "deliverySlot": "AM / PM / Cualquier hora / null",
+          "deliveryDate": "YYYY-MM-DD o null",
+          "clientType": "b2b_client o b2c_client",
+          "items": [
+            { "originalName": "Nombre del Producto", "quantity": 10, "observations": "Cualquier nota u observación específica del producto o null" }
+          ]
+        }
+        `;
+        try {
+          let text = await fetchGemini(apiKey, excelPrompt);
+          console.log('[Email Inbound] Raw Gemini Excel text:', text);
+          
+          // Extraer bloque de código JSON si existe
+          const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
+          if (jsonMatch) {
+            text = jsonMatch[1];
+          }
+          text = text.trim();
+          
+          // Eliminar posibles caracteres basura comunes al inicio/final
+          if (text.startsWith('```json')) text = text.substring(7);
+          if (text.startsWith('```')) text = text.substring(3);
+          if (text.endsWith('```')) text = text.substring(0, text.length - 3);
+          text = text.trim();
+
+          extractedData = JSON.parse(text);
+          if (extractedData.items && !Array.isArray(extractedData.items)) {
+            if (typeof extractedData.items === 'object') {
+              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+            } else {
+              extractedData.items = [];
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse Gemini output for Excel content:', e);
+        }
       }
     }
     
-    if (attachments.length === 0 || isExcel) {
-      if (!isExcel) {
-        console.log('[Email Inbound] Processing plain text email body');
-      }
+    if (attachments.length === 0) {
+      console.log('[Email Inbound] Processing plain text email body');
       // No attachments, parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
-        
-        CORREO ELECTRÓNICO:
-        ${currentPlainText}
-        
-        TAREA:
+              TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
+           - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
+           - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
         2. Extrae todos los productos solicitados con sus cantidades.
            - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - NO confundas el código PLU (primera columna) con la cantidad. 
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C.") si está escrita textualmente. Si no hay dirección especificada, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones basándote en el nombre del cliente o sus iniciales. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
-           Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
+           - DIRECCIÓN DE ENTREGA: Extrae la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78"). Limpia cualquier texto extra de despedida o firma, guardando únicamente la nomenclatura de la dirección. Si no hay dirección explícita, devuelve null o vacío. después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
         4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -370,7 +442,21 @@ export async function POST(req: Request) {
 
       try {
         let text = await fetchGemini(apiKey, prompt);
-        text = text.trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+        console.log('[Email Inbound] Raw Gemini plain text:', text);
+        
+        // Extraer bloque de código JSON si existe
+        const jsonMatch = text.match(/```(?:json)?([\s\S]*?)```/);
+        if (jsonMatch) {
+          text = jsonMatch[1];
+        }
+        text = text.trim();
+        
+        // Eliminar posibles caracteres basura comunes al inicio/final
+        if (text.startsWith('```json')) text = text.substring(7);
+        if (text.startsWith('```')) text = text.substring(3);
+        if (text.endsWith('```')) text = text.substring(0, text.length - 3);
+        text = text.trim();
+
         extractedData = JSON.parse(text);
         if (extractedData.items && !Array.isArray(extractedData.items)) {
           if (typeof extractedData.items === 'object') {
@@ -432,7 +518,18 @@ export async function POST(req: Request) {
 
       // Fallback for client name extraction from signature lines above C.C./NIT/Celular
       const lowerClientName = String(extractedData.clientInDocument || '').toLowerCase().trim();
-      if (!lowerClientName || lowerClientName === 'desconocido' || lowerClientName === 'no detectado' || lowerClientName === 'none' || lowerClientName === 'no especificado' || lowerClientName === 'no especificada') {
+      const isBlacklistedName = !lowerClientName || 
+        lowerClientName === 'desconocido' || 
+        lowerClientName === 'no detectado' || 
+        lowerClientName === 'none' || 
+        lowerClientName === 'no especificado' || 
+        lowerClientName === 'no especificada' ||
+        lowerClientName.includes('bogota') ||
+        lowerClientName.includes('colombia') ||
+        lowerClientName.includes('atentamente') ||
+        lowerClientName.includes('cordialmente');
+
+      if (isBlacklistedName) {
         let nameCandidate = '';
         const signatureLines = currentPlainText.split('\n');
         for (let k = 0; k < signatureLines.length; k++) {
@@ -445,7 +542,7 @@ export async function POST(req: Request) {
                 prevLine !== '' && 
                 prevLine.length > 3 && 
                 prevLine.length < 50 &&
-                !prevLine.match(/direcci[óo]n|correo|email|pedido|tomate|papa|cebolla|zanahoria|gracias|atentamente|saludos|cordialmente/i) &&
+                !prevLine.match(/direcci[óo]n|correo|email|pedido|tomate|papa|cebolla|zanahoria|gracias|atentamente|saludos|cordialmente|bogota|colombia/i) &&
                 !prevLine.includes(':') &&
                 !prevLine.includes('/') &&
                 prevLine.match(/[a-zA-ZñÑáéíóúÁÉÍÓÚ]/)
@@ -503,10 +600,36 @@ export async function POST(req: Request) {
       }
     }
 
-    // Only if we haven't found any profiles by NIT AND there was NO NIT in the email,
-    // we fall back to searching by sender email address.
-    if (candidateProfiles.length === 0 && !cleanExtractedNit) {
-      console.log(`[Email Ingest] No NIT provided. Searching client by sender email: ${senderEmail}`);
+    // Try searching by phone number (clean digits match) if no profile was matched by NIT
+    let cleanExtractedPhone = '';
+    if (extractedData.phone) {
+      cleanExtractedPhone = String(extractedData.phone).replace(/\D/g, '');
+    }
+
+    if (candidateProfiles.length === 0 && cleanExtractedPhone && cleanExtractedPhone.length >= 7) {
+      console.log(`[Email Ingest] Searching client by phone: ${cleanExtractedPhone}`);
+      const { data: profilesByPhone, error: phoneError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit');
+
+      if (phoneError) {
+        console.error('[Email Ingest] Error listing profiles for phone matching:', phoneError);
+      } else if (profilesByPhone) {
+        // Match if the db phone contains the extracted phone or vice-versa
+        const matched = profilesByPhone.filter(p => {
+          const dbPhoneClean = String(p.phone || '').replace(/\D/g, '');
+          return dbPhoneClean && (dbPhoneClean.includes(cleanExtractedPhone) || cleanExtractedPhone.includes(dbPhoneClean));
+        });
+        if (matched.length > 0) {
+          console.log(`[Email Ingest] Found ${matched.length} profiles matching phone number.`);
+          candidateProfiles = matched;
+        }
+      }
+    }
+
+    // Only if we haven't found any profiles by NIT or Phone, search by sender email address
+    if (candidateProfiles.length === 0) {
+      console.log(`[Email Ingest] Searching client by sender email: ${senderEmail}`);
       const { data: profilesByEmail, error: emailError } = await supabaseAdmin
         .from('profiles')
         .select('id, company_name, contact_name, role, is_active, address, phone, nit')
@@ -516,6 +639,42 @@ export async function POST(req: Request) {
         console.error('[Email Ingest] Error querying profiles by email:', emailError);
       } else if (profilesByEmail && profilesByEmail.length > 0) {
         candidateProfiles = profilesByEmail;
+      }
+    }
+
+    // If still no profile found, try a global fuzzy name match search against the whole database
+    let detectedNameForFuzzy = extractedData.clientInDocument || '';
+    if (typeof detectedNameForFuzzy !== 'string') {
+      detectedNameForFuzzy = String(detectedNameForFuzzy);
+    }
+    detectedNameForFuzzy = detectedNameForFuzzy.trim();
+
+    if (candidateProfiles.length === 0 && detectedNameForFuzzy && detectedNameForFuzzy.length > 3) {
+      console.log(`[Email Ingest] Attempting global fuzzy name match for: "${detectedNameForFuzzy}"`);
+      const { data: allProfiles, error: allProfilesError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, company_name, contact_name, role, is_active, address, phone, nit');
+      
+      if (!allProfilesError && allProfiles) {
+        const namesMatch = (detName: string, profName: string): boolean => {
+          if (!detName || !profName) return false;
+          const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          
+          const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+          const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+          
+          return words1.some(w => words2.includes(w));
+        };
+
+        const matched = allProfiles.filter(p => 
+          namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
+        );
+
+        if (matched.length > 0) {
+          console.log(`[Email Ingest] Found ${matched.length} profiles via global fuzzy name search.`);
+          candidateProfiles = matched;
+        }
       }
     }
 
@@ -546,15 +705,24 @@ export async function POST(req: Request) {
           }
         }
       } else {
+        // Multiple profiles found (e.g. sharing testing email higuera200@gmail.com)
+        // We MUST find the one that matches the client name extracted from the email/document
         const exactOrSimilarMatch = candidateProfiles.find(p => 
           namesMatch(detectedName, p.contact_name || '') || namesMatch(detectedName, p.company_name || '')
         );
         if (exactOrSimilarMatch) {
           profile = exactOrSimilarMatch;
+          console.log(`[Email Ingest] Matched specific profile by name: "${profile.company_name}"`);
         } else {
+          // If no names match, fall back to a B2B client candidate
           const b2bCandidate = candidateProfiles.find(p => p.role === 'b2b_client');
           if (b2bCandidate) {
             profile = b2bCandidate;
+            console.log(`[Email Ingest] No name matched detected "${detectedName}". Falling back to B2B candidate: "${profile.company_name}"`);
+          } else {
+            // Fallback to the first one
+            profile = candidateProfiles[0];
+            console.log(`[Email Ingest] No B2B candidate. Falling back to first candidate: "${profile.company_name}"`);
           }
         }
       }
