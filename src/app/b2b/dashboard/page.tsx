@@ -1858,12 +1858,16 @@ export default function B2BDashboard() {
                         position: sticky;
                         top: 80px;
                         z-index: 10;
+                        background-color: white;
+                        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
                         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
                     }
                     .b2b-sticky-cart-header {
                         position: sticky;
                         top: 80px;
                         z-index: 10;
+                        background-color: #F8FAFC;
+                        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
                         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
                     }
                     .b2b-cart-sidebar {
