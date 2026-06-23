@@ -52,7 +52,7 @@ export async function POST(req: Request) {
         "nitInDocument": "NIT/Cédula Extraída o null",
         "documentType": "PDF / Excel / Imagen",
         "items": [
-          { "originalName": "Nombre del Producto en el documento", "quantity": 10 }
+          { "originalName": "Nombre del Producto en el documento", "quantity": 10, "unit": "Kg / Unidad / null", "observations": "Cualquier nota u observación específica del producto o null" }
         ]
       }
     `;
