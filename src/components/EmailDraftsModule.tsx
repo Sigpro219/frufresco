@@ -115,7 +115,45 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     totalValue: number;
   } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
+
+  const stateRef = useRef({
+    isEditing,
+    focusedRowIndex,
+    products,
+    editableItems,
+    selectedDraft,
+    showConfirmModal,
+    activeEquivalenceRow,
+    activeVariantRow
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      isEditing,
+      focusedRowIndex,
+      products,
+      editableItems,
+      selectedDraft,
+      showConfirmModal,
+      activeEquivalenceRow,
+      activeVariantRow
+    };
+  }, [isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal, activeEquivalenceRow, activeVariantRow]);
+
+  const getRowBgColor = (idx: number) => {
+    if (focusedRowIndex === idx) return '#EFF6FF'; // Soft blue for currently focused/edited row
+    if (activeEquivalenceRow === idx) return '#EEF2FF'; // Soft indigo for equivalence row
+    if (activeVariantRow === idx) return '#F0FDF4'; // Soft green for variant row
+    return null;
+  };
+
+  const getCellBgColor = (idx: number, isLightGrayCol = false) => {
+    const rowBg = getRowBgColor(idx);
+    if (rowBg) return rowBg;
+    return isLightGrayCol ? '#F9FAFB' : 'transparent';
+  };
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 5000);
@@ -687,7 +725,75 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      const isAltShortcut = e.altKey && (
+        e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
+        e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
+      );
+
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isAltShortcut) return;
+
+      const {
+        isEditing,
+        focusedRowIndex,
+        products,
+        editableItems,
+        selectedDraft,
+        showConfirmModal
+      } = stateRef.current;
+
+      // Handle Alt+E shortcut globally
+      if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
+        if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
+          e.preventDefault();
+          const i = focusedRowIndex;
+          setActiveEquivalenceRow(prev => {
+            const next = prev === i ? null : i;
+            setTimeout(() => {
+              if (next === i) {
+                const equivInput = document.getElementById(`equiv-input-${i}`);
+                if (equivInput) {
+                  equivInput.focus();
+                  setFocusedRowIndex(i);
+                }
+              } else {
+                if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+              }
+            }, 50);
+            return next;
+          });
+          setActiveVariantRow(null);
+          return;
+        }
+      }
+
+      // Handle Alt+V shortcut globally
+      if (e.altKey && (e.code === 'KeyV' || e.key === 'v' || e.key === 'V')) {
+        if (selectedDraft && isEditing && focusedRowIndex !== null && !showConfirmModal) {
+          e.preventDefault();
+          const i = focusedRowIndex;
+          const matched = products.find(p => p.id === editableItems[i]?.matched_product_id);
+          if (matched && matched.variants && matched.variants.length > 0) {
+            setActiveVariantRow(prev => {
+              const next = prev === i ? null : i;
+              setTimeout(() => {
+                if (next === i) {
+                  const firstSelect = document.getElementById(`variant-select-${i}-0`);
+                  if (firstSelect) {
+                    firstSelect.focus();
+                    setFocusedRowIndex(i);
+                  }
+                } else {
+                  if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                }
+              }, 50);
+              return next;
+            });
+            setActiveEquivalenceRow(null);
+          }
+          return;
+        }
+      }
 
       if (e.key === 'Escape') {
         if (showShortcuts) { setShowShortcuts(false); return; }
@@ -2467,7 +2573,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     style={{ 
                                       borderBottom: `1px solid ${THEME.colors.border}`,
                                       animationDelay: `${i * 0.04}s`,
-                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      backgroundColor: getRowBgColor(i) || 'transparent',
                                       transition: 'background-color 0.2s'
                                     }}
                                   >
@@ -2476,7 +2582,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           padding: '1rem 0.5rem', 
                                           textAlign: 'center', 
                                           width: '40px', 
-                                          backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                          backgroundColor: getCellBgColor(i, true),
                                           transition: 'background-color 0.2s'
                                         }}>
                                           <input
@@ -2496,7 +2602,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       <td style={{ 
                                         padding: '1rem 0.5rem', 
                                         width: '15%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
                                         <div style={{ fontSize: '0.85rem', color: '#4B5563', textTransform: 'uppercase', fontWeight: 700 }}>
@@ -2507,7 +2613,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         padding: '1rem 0.5rem', 
                                         textAlign: 'center', 
                                         width: '6%', 
-                                        backgroundColor: activeVariantRow === i ? '#F0FDF4' : '#F9FAFB',
+                                        backgroundColor: getCellBgColor(i, true),
                                         transition: 'background-color 0.2s'
                                       }}>
                                         <div style={{ fontSize: '1rem', color: '#4B5563', fontWeight: 800 }}>
@@ -2517,7 +2623,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                     <td style={{ 
                                       padding: '1rem 0.5rem', 
                                       width: '30%', 
-                                      backgroundColor: activeVariantRow === i ? '#F0FDF4' : 'transparent',
+                                      backgroundColor: getCellBgColor(i, false),
                                       transition: 'background-color 0.2s'
                                     }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2528,6 +2634,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             disabled={!isEditing}
                                             value={matchedProd ? matchedProd.name : (item.searchQuery || '')}
                                             placeholder="-- Buscar Producto --"
+                                            onFocus={() => setFocusedRowIndex(i)}
+                                            onBlur={() => setFocusedRowIndex(null)}
                                             onChange={(e) => {
                                               const val = e.target.value;
                                               const found = products.find(p => p.name === val);
@@ -2546,19 +2654,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }
                                               setEditableItems(newEdits);
                                             }}
-                                            onKeyDown={(e) => {
-                                              if (e.altKey && (e.key === 'v' || e.key === 'V')) {
-                                                e.preventDefault();
-                                                const matched = products.find(p => p.id === item.matched_product_id);
-                                                if (matched && matched.variants && matched.variants.length > 0) {
-                                                  setActiveVariantRow(prev => prev === i ? null : i);
-                                                  setTimeout(() => {
-                                                    const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                    if (firstSelect) firstSelect.focus();
-                                                  }, 50);
-                                                }
-                                              }
-                                            }}
+
                                             style={{
                                               flex: 1,
                                               padding: '0.5rem',
@@ -2593,6 +2689,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       {isEditing ? (
                                         <select
                                           value={item.unit || (matchedProd ? matchedProd.unit_of_measure : 'Kg')}
+                                          onFocus={() => setFocusedRowIndex(i)}
+                                          onBlur={() => setFocusedRowIndex(null)}
                                           onChange={(e) => {
                                             const newEdits = [...editableItems];
                                             newEdits[i].unit = e.target.value;
@@ -2624,24 +2722,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                         type="number"
                                         disabled={!isEditing}
                                         value={item.quantity === 0 ? '' : (item.quantity || item.cant || item.cantidad || '')}
+                                        onFocus={() => setFocusedRowIndex(i)}
+                                        onBlur={() => setFocusedRowIndex(null)}
                                         onChange={(e) => {
                                           const newEdits = [...editableItems];
                                           newEdits[i].quantity = parseFloat(e.target.value) || 0;
                                           setEditableItems(newEdits);
                                         }}
                                         onKeyDown={(e) => {
-                                          if (e.altKey && (e.key === 'v' || e.key === 'V')) {
-                                            e.preventDefault();
-                                            const matched = products.find(p => p.id === item.matched_product_id);
-                                            if (matched && matched.variants && matched.variants.length > 0) {
-                                              setActiveVariantRow(prev => prev === i ? null : i);
-                                              setTimeout(() => {
-                                                const firstSelect = document.getElementById(`variant-select-${i}-0`);
-                                                if (firstSelect) firstSelect.focus();
-                                              }, 50);
-                                            }
-                                            return;
-                                          }
                                           if (e.key === 'Enter') {
                                             e.preventDefault();
                                             // Añadir nueva fila
@@ -2686,34 +2774,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                               }, 50);
                                             }}
                                             style={{
-                                              padding: '0.2rem 0.4rem',
+                                              padding: '0.25rem 0.5rem',
                                               backgroundColor: activeEquivalenceRow === i
                                                 ? '#4338CA'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '#EEF2FF'
-                                                  : 'transparent',
+                                                  : '#F3F4F6',
                                               color: activeEquivalenceRow === i
                                                 ? '#FFFFFF'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '#4338CA'
-                                                  : '#9CA3AF',
+                                                  : '#4B5563',
                                               border: activeEquivalenceRow === i
                                                 ? '1px solid #4338CA'
                                                 : item.conversion_factor && item.conversion_factor !== 1
                                                   ? '1px solid #C7D2FE'
-                                                  : '1px dashed #D1D5DB',
-                                              borderRadius: '20px',
+                                                  : '1px solid #D1D5DB',
+                                              borderRadius: '6px',
                                               cursor: 'pointer',
-                                              display: 'flex',
+                                              display: 'inline-flex',
                                               alignItems: 'center',
                                               gap: '4px',
                                               transition: 'all 0.2s',
+                                              outline: 'none',
+                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                             }}
-                                            title="Equivalencias / Conversión"
+                                            onFocus={(e) => {
+                                              e.currentTarget.style.borderColor = '#6366F1';
+                                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.2)';
+                                            }}
+                                            onBlur={(e) => {
+                                              e.currentTarget.style.borderColor = activeEquivalenceRow === i ? '#4338CA' : item.conversion_factor && item.conversion_factor !== 1 ? '#C7D2FE' : '#D1D5DB';
+                                              e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                                            }}
+                                            title="Equivalencias (Alt+E)"
                                           >
-                                            <span style={{ fontSize: '0.9rem' }}>⚖️</span>
+                                            <span style={{ fontSize: '0.95rem' }}>⚖️</span>
+                                            <kbd style={{ 
+                                              fontSize: '0.65rem', 
+                                              fontWeight: 'bold',
+                                              padding: '1px 3px', 
+                                              backgroundColor: activeEquivalenceRow === i ? 'rgba(255,255,255,0.2)' : '#E0E7FF', 
+                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA',
+                                              borderRadius: '3px',
+                                              border: activeEquivalenceRow === i ? '1px solid rgba(255,255,255,0.4)' : '1px solid #C7D2FE'
+                                            }}>Alt+E</kbd>
                                             {item.conversion_factor && item.conversion_factor !== 1 && (
-                                              <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                                              <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
                                                 x{item.conversion_factor}
                                               </span>
                                             )}
@@ -2853,6 +2960,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   <select
                                                     id={`variant-select-${i}-${vIdx}`}
                                                     value={currentValue}
+                                                    onFocus={() => setFocusedRowIndex(i)}
+                                                    onBlur={() => setFocusedRowIndex(null)}
                                                     onChange={(e) => {
                                                       const val = e.target.value;
                                                       const newEdits = [...editableItems];
@@ -2956,6 +3065,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 step="0.01"
                                                 min="0.01"
                                                 value={item.conversion_factor || 1}
+                                                onFocus={() => setFocusedRowIndex(i)}
+                                                onBlur={() => setFocusedRowIndex(null)}
                                                 onChange={(e) => {
                                                   const factor = parseFloat(e.target.value) || 1;
                                                   const newEdits = [...editableItems];
