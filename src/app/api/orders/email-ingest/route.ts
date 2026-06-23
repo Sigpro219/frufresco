@@ -241,11 +241,11 @@ export async function POST(req: Request) {
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
-           - Presta MUCHA ATENCIÓN a las columnas si el texto es un arreglo JSON o CSV. 
-           - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
-           - Ignora la primera columna (suelen ser códigos PLU o referencias internas).
-           - Asegúrate de extraer la CANTIDAD PEDIDA correcta que aparece junto al nombre del producto, no extraigas el PLU como cantidad.
-           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+            - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
+            - Evita extraer Códigos de Barras o códigos PLU como si fueran cantidades.
+            - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
+            - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
+            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
         7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
