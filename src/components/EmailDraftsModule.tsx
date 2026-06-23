@@ -593,13 +593,59 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const getDraftMetadata = (draft: any) => {
     const raw = draft.extracted_items || [];
     const meta = raw.find((i: any) => i.isMetadata);
+    
+    // Normalize and/or assume delivery slot based on metadata or email content
+    let deliverySlot = meta?.deliverySlot || draft.delivery_slot || null;
+    
+    if (deliverySlot) {
+      const lowerSlot = deliverySlot.toString().toLowerCase().trim();
+      if (lowerSlot.includes('am') || lowerSlot.includes('mañana') || lowerSlot.includes('morning') || lowerSlot.includes('mñn') || lowerSlot.includes('7:00') || lowerSlot.includes('7:30') || lowerSlot.includes('8:00') || lowerSlot.includes('11:00') || lowerSlot.includes('11:50')) {
+        deliverySlot = 'AM';
+      } else if (lowerSlot.includes('pm') || lowerSlot.includes('tarde') || lowerSlot.includes('afternoon') || lowerSlot.includes('12:') || lowerSlot.includes('13:') || lowerSlot.includes('14:') || lowerSlot.includes('15:') || lowerSlot.includes('16:') || lowerSlot.includes('17:')) {
+        deliverySlot = 'PM';
+      } else if (lowerSlot.includes('cualquier') || lowerSlot.includes('todo') || lowerSlot.includes('any') || lowerSlot.includes('all')) {
+        deliverySlot = 'Cualquier hora';
+      } else {
+        if (deliverySlot !== 'AM' && deliverySlot !== 'PM' && deliverySlot !== 'Cualquier hora') {
+          deliverySlot = null;
+        }
+      }
+    }
+    
+    if (!deliverySlot && draft.email_body) {
+      const bodyLower = draft.email_body.toLowerCase();
+      const address = (meta?.address || draft.extracted_address || '').toLowerCase();
+      const clientName = (draft.client_detected_name || '').toLowerCase();
+      
+      if (address.includes('athan') || clientName.includes('athan') || address.includes('bosques') || clientName.includes('bosques')) {
+        // "Bosques de Athan" schedule: 7:00am a 04:00pm -> Cualquier hora
+        deliverySlot = 'Cualquier hora';
+      } else if (address.includes('roma') || clientName.includes('roma') || address.includes('clínica') || clientName.includes('clínica')) {
+        // "Clínica Roma" schedule: 7:30am a 8:00am y 11:00am a 11:50am -> AM
+        deliverySlot = 'AM';
+      } else {
+        // General schedule or standard range check in email text
+        if (bodyLower.includes('7:00 a 11:00') || bodyLower.includes('7:00am a 11:00am') || bodyLower.includes('7:00 a.m. a 11:00 a.m.') || bodyLower.includes('7:00 a 11:00 de la mañana')) {
+          deliverySlot = 'AM';
+        } else if (bodyLower.includes('7:00am a 04:00pm') || bodyLower.includes('7:00 am a 4:00 pm') || bodyLower.includes('7:00am a 4:00pm')) {
+          deliverySlot = 'Cualquier hora';
+        } else if (bodyLower.includes('7:30am a 8:00am') || bodyLower.includes('11:00am a 11:50am')) {
+          deliverySlot = 'AM';
+        } else if (bodyLower.includes('mañana') || bodyLower.includes('morning') || bodyLower.includes('am')) {
+          deliverySlot = 'AM';
+        } else if (bodyLower.includes('tarde') || bodyLower.includes('pm')) {
+          deliverySlot = 'PM';
+        }
+      }
+    }
+
     return {
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
       deliveryDate: meta?.deliveryDate || null,
-      deliverySlot: meta?.deliverySlot || null,
+      deliverySlot: deliverySlot,
       attachmentUrl: meta?.attachmentUrl || null,
       attachmentName: meta?.attachmentName || null,
       rejectReason: meta?.rejectReason || null,

@@ -237,7 +237,13 @@ export async function POST(req: Request) {
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
         2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
-        3. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto del correo (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacío.
+        3. Identifica la franja u horario de entrega. Si en el correo o documento se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
+           - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
+           - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
+           - Si el horario cubre tanto mañana como tarde (ej. "7:00 am a 4:00 pm", "todo el día", "cualquier hora"), asume "Cualquier hora".
+           - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
+           - Si no hay información de horario, pon null.
+           - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
@@ -260,7 +266,7 @@ export async function POST(req: Request) {
           "address": "Dirección física limpia extraída o vacio",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
-          "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliverySlot": "AM / PM / Cualquier hora / null",
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
@@ -313,7 +319,13 @@ export async function POST(req: Request) {
            REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
            Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
            Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
-        4. Extrae la jornada u horario de entrega preferido si el cliente lo menciona explícitamente en el texto (por ejemplo: "AM", "PM", "Tarde", "Mañana", "Entre las 8 y 10 am"). Si no se menciona o no se registra de manera clara, pon null o vacio.
+        4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
+           - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
+           - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
+           - Si el horario cubre tanto mañana como tarde (ej. "7:00 am a 4:00 pm", "todo el día", "cualquier hora"), asume "Cualquier hora".
+           - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
+           - Si no hay información de horario, pon null.
+           - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
@@ -328,7 +340,7 @@ export async function POST(req: Request) {
           "clientInDocument": "Nombre o Empresa Detectada",
           "documentType": "Email",
           "address": "Dirección física limpia extraída o vacio",
-          "deliverySlot": "AM / PM / Mañana / Tarde / null",
+          "deliverySlot": "AM / PM / Cualquier hora / null",
           "deliveryDate": "YYYY-MM-DD o null",
           "phone": "Teléfono extraído o vacio",
           "nit": "NIT o cédula extraída o vacio",
@@ -564,6 +576,47 @@ export async function POST(req: Request) {
       }
     }
 
+    // Normalize and/or assume delivery slot based on metadata or email content
+    let finalDeliverySlot = extractedData.deliverySlot || null;
+    if (finalDeliverySlot) {
+      const lowerSlot = finalDeliverySlot.toString().toLowerCase().trim();
+      if (lowerSlot.includes('am') || lowerSlot.includes('mañana') || lowerSlot.includes('morning') || lowerSlot.includes('mñn') || lowerSlot.includes('7:00') || lowerSlot.includes('7:30') || lowerSlot.includes('8:00') || lowerSlot.includes('11:00') || lowerSlot.includes('11:50')) {
+        finalDeliverySlot = 'AM';
+      } else if (lowerSlot.includes('pm') || lowerSlot.includes('tarde') || lowerSlot.includes('afternoon') || lowerSlot.includes('12:') || lowerSlot.includes('13:') || lowerSlot.includes('14:') || lowerSlot.includes('15:') || lowerSlot.includes('16:') || lowerSlot.includes('17:')) {
+        finalDeliverySlot = 'PM';
+      } else if (lowerSlot.includes('cualquier') || lowerSlot.includes('todo') || lowerSlot.includes('any') || lowerSlot.includes('all')) {
+        finalDeliverySlot = 'Cualquier hora';
+      } else {
+        if (finalDeliverySlot !== 'AM' && finalDeliverySlot !== 'PM' && finalDeliverySlot !== 'Cualquier hora') {
+          finalDeliverySlot = null;
+        }
+      }
+    }
+    
+    if (!finalDeliverySlot && currentPlainText) {
+      const bodyLower = currentPlainText.toLowerCase();
+      const address = (extractedData.address || '').toLowerCase();
+      const clientName = (extractedData.clientInDocument || '').toLowerCase();
+      
+      if (address.includes('athan') || clientName.includes('athan') || address.includes('bosques') || clientName.includes('bosques')) {
+        finalDeliverySlot = 'Cualquier hora';
+      } else if (address.includes('roma') || clientName.includes('roma') || address.includes('clínica') || clientName.includes('clínica')) {
+        finalDeliverySlot = 'AM';
+      } else {
+        if (bodyLower.includes('7:00 a 11:00') || bodyLower.includes('7:00am a 11:00am') || bodyLower.includes('7:00 a.m. a 11:00 a.m.') || bodyLower.includes('7:00 a 11:00 de la mañana')) {
+          finalDeliverySlot = 'AM';
+        } else if (bodyLower.includes('7:00am a 04:00pm') || bodyLower.includes('7:00 am a 4:00 pm') || bodyLower.includes('7:00am a 4:00pm')) {
+          finalDeliverySlot = 'Cualquier hora';
+        } else if (bodyLower.includes('7:30am a 8:00am') || bodyLower.includes('11:00am a 11:50am')) {
+          finalDeliverySlot = 'AM';
+        } else if (bodyLower.includes('mañana') || bodyLower.includes('morning') || bodyLower.includes('am')) {
+          finalDeliverySlot = 'AM';
+        } else if (bodyLower.includes('tarde') || bodyLower.includes('pm')) {
+          finalDeliverySlot = 'PM';
+        }
+      }
+    }
+
     // 5. Save draft to public.order_drafts
     // Use the predefined draftUuid so we can reference its short ID immediately
     const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
@@ -581,7 +634,7 @@ export async function POST(req: Request) {
           { 
             isMetadata: true, 
             address: extractedData.address || null,
-            deliverySlot: extractedData.deliverySlot || null,
+            deliverySlot: finalDeliverySlot,
             deliveryDate: extractedData.deliveryDate || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
