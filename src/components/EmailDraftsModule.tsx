@@ -2518,7 +2518,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         
                       const meta = getDraftMetadata(selectedDraft);
                       const wasAddressAssumed = isAddressMissing || 
-                        (meta.addressDetected === false) || 
+                        ((meta as any).addressDetected === false) || 
                         (cleanAddress && !cleanBody.includes(cleanAddress) && !cleanSubject.includes(cleanAddress));
 
                       return (
