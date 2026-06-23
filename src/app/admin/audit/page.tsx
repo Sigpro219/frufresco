@@ -379,12 +379,12 @@ export default function AuditLogPage() {
                 {/* Banner Informativo sobre Políticas de Retención */}
                 <div style={{ 
                     backgroundColor: '#FDF8F2', border: '1px solid #F59E0B33', borderRadius: THEME.radius.lg, 
-                    padding: '1rem 1.5rem', display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '1.5rem'
+                    padding: '0.6rem 1rem', display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '1rem'
                 }}>
-                    <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
                     <div>
-                        <h4 style={{ margin: 0, fontWeight: '800', color: '#B45309', fontSize: '0.8rem', fontFamily: THEME.typography.fontFamilyMain }}>POLÍTICA DE OPTIMIZACIÓN (BÚSQUEDA LIMITADA A 3 MESES)</h4>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#B45309', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        <h4 style={{ margin: 0, fontWeight: '800', color: '#B45309', fontSize: '0.72rem', fontFamily: THEME.typography.fontFamilyMain }}>POLÍTICA DE OPTIMIZACIÓN (BÚSQUEDA LIMITADA A 3 MESES)</h4>
+                        <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: '#B45309', fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
                             Para garantizar la velocidad y el óptimo rendimiento de la plataforma, las consultas en tiempo real de este panel muestran los últimos 3 meses de trazabilidad. Para acceder a registros anteriores a este período, por favor solicite la exportación del consolidado histórico.
                         </p>
                     </div>
