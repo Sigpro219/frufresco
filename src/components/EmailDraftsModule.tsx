@@ -2891,15 +2891,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             title="Equivalencias (Alt+E)"
                                           >
                                             <span style={{ fontSize: '0.95rem' }}>⚖️</span>
-                                            <kbd style={{ 
-                                              fontSize: '0.65rem', 
-                                              fontWeight: 'bold',
-                                              padding: '1px 3px', 
-                                              backgroundColor: activeEquivalenceRow === i ? 'rgba(255,255,255,0.2)' : '#E0E7FF', 
-                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA',
-                                              borderRadius: '3px',
-                                              border: activeEquivalenceRow === i ? '1px solid rgba(255,255,255,0.4)' : '1px solid #C7D2FE'
-                                            }}>Alt+E</kbd>
+                                            <span style={{ 
+                                              fontSize: '0.75rem', 
+                                              fontWeight: 700,
+                                              color: activeEquivalenceRow === i ? '#FFFFFF' : '#4338CA'
+                                            }}>Equivalencias</span>
                                             {item.conversion_factor && item.conversion_factor !== 1 && (
                                               <span style={{ fontSize: '0.75rem', fontWeight: 800 }}>
                                                 x{item.conversion_factor}
@@ -2955,7 +2951,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 {Object.values(item.selected_options).join(', ')}
                                               </span>
                                             ) : (
-                                              <span style={{ fontSize: '0.75rem' }}>Elegir variables</span>
+                                              <span style={{ fontSize: '0.75rem' }}>Variantes</span>
                                             )}
                                           </button>
                                         )}
