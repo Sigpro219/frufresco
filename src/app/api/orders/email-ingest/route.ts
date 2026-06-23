@@ -236,7 +236,7 @@ export async function POST(req: Request) {
         TAREA:
         1. Analiza el documento adjunto (puede ser una imagen de WhatsApp, foto de pedido, PDF) para extraer la lista de productos solicitados.
         2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del documento adjunto y del cuerpo del correo electrónico anterior.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
+           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física si está explícita en el documento. Si el documento dice "DIRECCION: 0" o no especifica una dirección clara, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones a partir del nombre del cliente o siglas. Si no está escrita textualmente, no la pongas. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, o notas sobre el horario de entrega en el campo "address".
         3. Identifica la franja u horario de entrega. Si en el correo o documento se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -316,8 +316,7 @@ export async function POST(req: Request) {
            - NO confundas el código PLU (primera columna) con la cantidad. 
            - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
         3. Extrae la dirección de entrega de forma limpia.
-           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C."). 
-           Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
+           REGLA DE DIRECCIÓN: Extrae ÚNICAMENTE la dirección de entrega física (por ejemplo: "Calle 127 # 7A-28 Oficina 801, Bogotá D.C.") si está escrita textualmente. Si no hay dirección especificada, devuelve null o vacío. NO deduzcas, asumas ni inventes direcciones basándote en el nombre del cliente o sus iniciales. Bajo ninguna circunstancia incluyas texto de la firma, despedidas, fórmulas de cortesía (como "Cordialmente", "Atentamente"), ni notas sobre el valor total o el horario de entrega en el campo "address". 
            Si hay texto extra después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
         4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
