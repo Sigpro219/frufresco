@@ -240,10 +240,7 @@ export default function CommandCenter() {
     };
 
     const applyAuditFilters = useCallback((query: any) => {
-        // ENFORCE 6 MONTHS LIMIT (Strict Hot Storage Policy)
-        const limitDate = new Date();
-        limitDate.setMonth(limitDate.getMonth() - 6);
-        query = query.gte('created_at', limitDate.toISOString());
+        // UNRESTRICTED: No global date cap, retrieve all history.
 
         if (auditSearchTerm.trim()) {
             const term = `%${auditSearchTerm.trim()}%`;
@@ -1002,13 +999,13 @@ export default function CommandCenter() {
                     {activeTab === 'audit' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             {/* Banner Informativo sobre Políticas de Retención */}
-                            <div style={{ backgroundColor: '#FDF8F2', border: '1px solid #F59E0B33', borderRadius: '16px', padding: '1.2rem', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+                            <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #10B98133', borderRadius: '16px', padding: '1.2rem', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '1.5rem' }}>🛡️</span>
                                 <div>
-                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#B45309', fontSize: '0.85rem' }}>POLÍTICA DE RETENCIÓN DE LOGS (HOT STORAGE: 6 MESES)</h4>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#B45309', fontWeight: '600' }}>
-                                        Por rendimiento del motor FruFresco, solo los últimos 6 meses de logs están indexados en tiempo real. 
-                                        Para auditorías históricas o reportes de años anteriores, favor solicitar al administrador de base de datos la exportación del storage en frío.
+                                    <h4 style={{ margin: 0, fontWeight: '800', color: '#065F46', fontSize: '0.85rem' }}>CONSOLA DE AUDITORÍA MASTER (ACCESO TÉCNICO COMPLETO IRRESTRICTO)</h4>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#047857', fontWeight: '600' }}>
+                                        Nivel de acceso `sys_admin` activo. Tienes visibilidad completa de todo el historial de transacciones 
+                                        y movimientos registrados desde la creación de la base de datos sin límite de tiempo.
                                     </p>
                                 </div>
                             </div>
@@ -1053,14 +1050,14 @@ export default function CommandCenter() {
 
                                     {/* Selector de Rango de Fechas */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Rango de Fechas (Máx. 6 meses)</label>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Rango de Fechas</label>
                                         <div style={{ display: 'flex', gap: '10px' }}>
                                             <select 
                                                 value={auditDatePreset} 
                                                 onChange={e => setAuditDatePreset(e.target.value)}
                                                 style={{ padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700', backgroundColor: '#F9FAFB' }}
                                             >
-                                                <option value="all">Todo el historial (6 meses)</option>
+                                                <option value="all">Todo el historial</option>
                                                 <option value="today">Hoy</option>
                                                 <option value="week">Esta semana</option>
                                                 <option value="month">Este mes</option>
