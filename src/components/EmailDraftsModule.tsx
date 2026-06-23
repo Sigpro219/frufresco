@@ -118,29 +118,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => { setToast({ message, type }); };
 
-  const stateRef = useRef({
-    isEditing,
-    focusedRowIndex,
-    products,
-    editableItems,
-    selectedDraft,
-    showConfirmModal,
-    activeEquivalenceRow,
-    activeVariantRow
-  });
 
-  useEffect(() => {
-    stateRef.current = {
-      isEditing,
-      focusedRowIndex,
-      products,
-      editableItems,
-      selectedDraft,
-      showConfirmModal,
-      activeEquivalenceRow,
-      activeVariantRow
-    };
-  }, [isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal, activeEquivalenceRow, activeVariantRow]);
 
   const getRowBgColor = (idx: number) => {
     if (focusedRowIndex === idx) return '#EFF6FF'; // Soft blue for currently focused/edited row
@@ -709,6 +687,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [sendConfirmationEmail, setSendConfirmationEmail] = useState(true);
   const [isAuthorizedForChanges, setIsAuthorizedForChanges] = useState(false);
+
+  const stateRef = useRef({
+    isEditing,
+    focusedRowIndex,
+    products,
+    editableItems,
+    selectedDraft,
+    showConfirmModal,
+    activeEquivalenceRow,
+    activeVariantRow
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      isEditing,
+      focusedRowIndex,
+      products,
+      editableItems,
+      selectedDraft,
+      showConfirmModal,
+      activeEquivalenceRow,
+      activeVariantRow
+    };
+  }, [isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal, activeEquivalenceRow, activeVariantRow]);
 
   useEffect(() => {
     const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts);
