@@ -576,7 +576,7 @@ export default function B2BDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
 
-            <div className="container" style={{ padding: '2rem 1rem', maxWidth: '800px' }}>
+            <div className="container" style={{ padding: '2rem 1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
 
                 {/* HEADER */}
                 <div style={{ marginBottom: '2rem' }}>
@@ -639,11 +639,10 @@ export default function B2BDashboard() {
                     ))}
                 </div>
 
-                {/* ORDER CARD */}
-                {/* TAB CONTENT */}
+                      {/* TAB CONTENT */}
                 {activeTab === 'order' && (
-                    <>
-                        {/* Order Card */}
+                    <div className="b2b-dashboard-grid">
+                        {/* LEFT COLUMN: Catalog Browser */}
                         <div style={{
                             backgroundColor: THEME.colors.surface,
                             borderRadius: THEME.radius.lg,
@@ -652,477 +651,553 @@ export default function B2BDashboard() {
                             overflow: 'visible',
                             position: 'relative'
                         }}>
-                            {/* Header — neutral flat */}
-                            <div style={{
-                                backgroundColor: THEME.colors.surface,
-                                padding: '1.25rem 1.5rem',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                borderBottom: `1px solid ${THEME.colors.border}`,
-                                borderLeft: `3px solid ${THEME.colors.primary}`,
-                                borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
-                            }}>
-                                <div>
-                                    <h2 style={{ 
-                                        fontFamily: THEME.typography.fontFamilyMain,
-                                        fontSize: '1.1rem', 
-                                        fontWeight: '600', 
-                                        margin: 0,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        color: THEME.colors.textMain,
-                                    }}>
-                                        <Package size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
-                                    </h2>
-                                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '400' }}>
-                                        {t.b2b.dashboard.cardDesc}
-                                    </p>
-                                </div>
-                                {orderItems.length > 0 && (
-                                    <button
-                                        onClick={handleClearOrder}
-                                        title="Borrar todo y empezar de cero"
-                                        style={{
-                                            padding: '0.4rem 0.9rem',
-                                            borderRadius: THEME.radius.md,
-                                            border: `1px solid ${THEME.colors.border}`,
-                                            background: 'white',
-                                            color: THEME.colors.textSecondary,
-                                            fontSize: '0.75rem',
+                            {/* Sticky Header Wrapper for Catalog Search and Categories */}
+                            <div className="b2b-sticky-catalog-header">
+                                {/* Header — neutral flat */}
+                                <div style={{
+                                    backgroundColor: THEME.colors.surface,
+                                    padding: '1.25rem 1.5rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                    borderLeft: `3px solid ${THEME.colors.primary}`,
+                                    borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                }}>
+                                    <div>
+                                        <h2 style={{ 
+                                            fontFamily: THEME.typography.fontFamilyMain,
+                                            fontSize: '1.1rem', 
+                                            fontWeight: '600', 
+                                            margin: 0,
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '5px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                        }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#FCA5A5'; e.currentTarget.style.color = '#EF4444'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.color = THEME.colors.textSecondary; }}
-                                    >
-                                        <Trash2 size={13} strokeWidth={1.5} /> {t.b2b.dashboard.btnClear}
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Search Bar Inside Card */}
-                            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
-                                <div style={{ position: 'relative' }}>
-                                    <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
-                                        <Search size={20} strokeWidth={2.5} />
+                                            gap: '8px',
+                                            color: THEME.colors.textMain,
+                                        }}>
+                                            <Search size={18} strokeWidth={1.5} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Buscar Productos'}
+                                        </h2>
+                                        <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontWeight: '400' }}>
+                                            {t.b2b.dashboard.cardDesc}
+                                        </p>
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder={t.b2b.dashboard.searchPlaceholder}
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.85rem 3rem 0.85rem 2.8rem',
-                                            borderRadius: 'var(--radius-md)',
-                                            border: '1px solid var(--border)',
-                                            fontSize: '1rem',
-                                            fontWeight: '500',
-                                            outline: 'none',
-                                            transition: 'all 0.2s',
-                                            backgroundColor: '#F9FAFB'
-                                        }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor = 'var(--primary)';
-                                            e.target.style.backgroundColor = 'white';
-                                            e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor = 'var(--border)';
-                                            e.target.style.backgroundColor = '#F9FAFB';
-                                            e.target.style.boxShadow = 'none';
-                                        }}
-                                    />
-                                    {searchTerm && (
-                                        <button
-                                            onClick={() => setSearchTerm('')}
+                                </div>
+
+                                {/* Search Bar Inside Card */}
+                                <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', position: 'relative' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex' }}>
+                                            <Search size={20} strokeWidth={2.5} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder={t.b2b.dashboard.searchPlaceholder}
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
                                             style={{
-                                                position: 'absolute',
-                                                right: '12px',
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                background: '#f3f4f6',
-                                                border: 'none',
-                                                borderRadius: '50%',
-                                                width: '24px',
-                                                height: '24px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#6b7280',
-                                                cursor: 'pointer',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 'bold',
-                                                zIndex: 5
+                                                width: '100%',
+                                                padding: '0.85rem 3rem 0.85rem 2.8rem',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: '1px solid var(--border)',
+                                                fontSize: '1rem',
+                                                fontWeight: '500',
+                                                outline: 'none',
+                                                transition: 'all 0.2s',
+                                                backgroundColor: '#F9FAFB'
                                             }}
-                                            title="Limpiar búsqueda"
-                                        >
-                                            ✕
-                                        </button>
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = 'var(--primary)';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 4px rgba(26, 77, 46, 0.05)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = 'var(--border)';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        />
+                                        {searchTerm && (
+                                            <button
+                                                onClick={() => setSearchTerm('')}
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: '12px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: '#f3f4f6',
+                                                    border: 'none',
+                                                    borderRadius: '50%',
+                                                    width: '24px',
+                                                    height: '24px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#6b7280',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 'bold',
+                                                    zIndex: 5
+                                                }}
+                                                title="Limpiar búsqueda"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Search Results Dropdown */}
+                                    {(searchResults.length > 0 || isSearching) && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                                            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                                            zIndex: 100,
+                                            marginTop: '2px',
+                                            maxHeight: '300px',
+                                            overflowY: 'auto',
+                                            border: '1px solid var(--border)'
+                                        }}>
+                                            {isSearching ? (
+                                                <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
+                                            ) : (
+                                                searchResults.map(p => (
+                                                    <div
+                                                        key={p.id}
+                                                        onClick={() => addFromSearch(p)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '1rem',
+                                                            padding: '0.75rem 1rem',
+                                                            cursor: 'pointer',
+                                                            borderBottom: '1px solid #f0f0f0'
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                    >
+                                                        <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
+                                                        <div style={{ flex: 1 }}>
+                                                            <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
+                                                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.unit_of_measure}</p>
+                                                        </div>
+                                                        <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     )}
                                 </div>
 
-                                {/* Search Results Dropdown */}
-                                {(searchResults.length > 0 || isSearching) && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        left: 0,
-                                        right: 0,
-                                        backgroundColor: 'white',
-                                        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                                        borderRadius: '0 0 var(--radius-md) var(--radius-md)',
-                                        zIndex: 100,
-                                        marginTop: '2px',
-                                        maxHeight: '300px',
-                                        overflowY: 'auto',
-                                        border: '1px solid var(--border)'
-                                    }}>
-                                        {isSearching ? (
-                                            <p style={{ padding: '1rem', margin: 0, color: 'var(--text-muted)' }}>{t.b2b.dashboard.searching}</p>
-                                        ) : (
-                                            searchResults.map(p => (
-                                                <div
-                                                    key={p.id}
-                                                    onClick={() => addFromSearch(p)}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '1rem',
-                                                        padding: '0.75rem 1rem',
-                                                        cursor: 'pointer',
-                                                        borderBottom: '1px solid #f0f0f0'
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                                >
-                                                    <img src={p.image_url} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
-                                                    <div style={{ flex: 1 }}>
-                                                        <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem' }}>{locale === 'en' ? (p.name_en || p.name) : p.name}</p>
-                                                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>SKU: {p.sku}</p>
-                                                    </div>
-                                                    <span style={{ color: 'var(--primary)', fontWeight: '700' }}>+ {t.b2b.dashboard.add}</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Category Selector */}
-                            <div style={{ 
-                                display: 'flex', 
-                                gap: '0.75rem', 
-                                overflowX: 'auto', 
-                                padding: '0.5rem 1rem 1rem', 
-                                borderBottom: '1px solid var(--border)' 
-                            }}>
-                                <button
-                                    onClick={() => setSelectedCategory(null)}
-                                    className="category-pill"
-                                    style={{
-                                        padding: '0.55rem 1.25rem',
-                                        borderRadius: 'var(--radius-full)',
-                                        border: selectedCategory === null ? 'none' : '1px solid var(--border)',
-                                        backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
-                                        color: selectedCategory === null ? 'white' : 'var(--text-main)',
-                                        fontSize: '0.85rem',
-                                        fontWeight: '800',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >{t.b2b.dashboard.allCategories}</button>
-                                {categories.map(cat => (
+                                {/* Category Selector */}
+                                <div style={{ 
+                                    display: 'flex', 
+                                    gap: '0.75rem', 
+                                    overflowX: 'auto', 
+                                    padding: '0.5rem 1rem 1rem', 
+                                    borderBottom: '1px solid var(--border)' 
+                                }}>
                                     <button
-                                        key={cat}
-                                        onClick={() => setSelectedCategory(cat)}
+                                        onClick={() => setSelectedCategory(null)}
                                         className="category-pill"
                                         style={{
                                             padding: '0.55rem 1.25rem',
                                             borderRadius: 'var(--radius-full)',
-                                            border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
-                                            backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
-                                            color: selectedCategory === cat ? 'white' : 'var(--text-main)',
+                                            border: selectedCategory === null ? 'none' : '1px solid var(--border)',
+                                            backgroundColor: selectedCategory === null ? 'var(--primary)' : 'white',
+                                            color: selectedCategory === null ? 'white' : 'var(--text-main)',
                                             fontSize: '0.85rem',
                                             fontWeight: '800',
                                             cursor: 'pointer',
                                             whiteSpace: 'nowrap'
                                         }}
-                                    >{t.categories[cat as keyof typeof t.categories] || cat}</button>
-                                ))}
+                                    >{t.b2b.dashboard.allCategories}</button>
+                                    {categories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setSelectedCategory(cat)}
+                                            className="category-pill"
+                                            style={{
+                                                padding: '0.55rem 1.25rem',
+                                                borderRadius: 'var(--radius-full)',
+                                                border: selectedCategory === cat ? 'none' : '1px solid var(--border)',
+                                                backgroundColor: selectedCategory === cat ? 'var(--primary)' : 'white',
+                                                color: selectedCategory === cat ? 'white' : 'var(--text-main)',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '800',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >{t.categories[cat as keyof typeof t.categories] || cat}</button>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Category Products Results */}
-                            {selectedCategory && (
-                                <div style={{ marginTop: '1rem', borderTop: '1px solid #f0f0f0', paddingTop: '1rem', padding: '0 1rem 1rem' }}>
-                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t.navCatalog}: {t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory}</h4>
-                                    {isLoadingCategory ? (
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
-                                    ) : categoryProducts.length > 0 ? (
-                                        <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                                            {categoryProducts.map(p => (
-                                                <div
-                                                    key={p.id}
-                                                    onClick={() => {
-                                                        setModalQuantity(1);
-                                                        setSelectedProductForModal(p);
-                                                    }}
-                                                    style={{
-                                                        padding: '0',
-                                                        border: '1px solid var(--border)',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        cursor: 'pointer',
-                                                        textAlign: 'center',
-                                                        backgroundColor: '#fff',
-                                                        transition: 'all 0.2s',
-                                                        display: 'flex',
-                                                        flexDirection: 'column'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                                                        e.currentTarget.style.borderColor = 'var(--primary)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.transform = 'translateY(0)';
-                                                        e.currentTarget.style.boxShadow = 'none';
-                                                        e.currentTarget.style.borderColor = 'var(--border)';
-                                                    }}
-                                                >
-                                                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
-                                                    <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                        <h5 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
-                                                            {locale === 'en' ? (p.name_en || p.name) : p.name}
-                                                        </h5>
-                                                        <p style={{ margin: 'auto 0 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                                                            SKU: {p.sku} | {p.unit_of_measure}
-                                                        </p>
+                            <div style={{ padding: '1.5rem 1rem' }}>
+                                <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Package size={16} /> {selectedCategory ? (t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory) : t.b2b.dashboard.allCategories}
+                                </h4>
+                                {isLoadingCategory ? (
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
+                                ) : categoryProducts.length > 0 ? (
+                                    <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
+                                        {categoryProducts.map(p => (
+                                            <div
+                                                key={p.id}
+                                                onClick={() => {
+                                                    setModalQuantity(1);
+                                                    setSelectedProductForModal(p);
+                                                }}
+                                                style={{
+                                                    padding: '0',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    cursor: 'pointer',
+                                                    textAlign: 'center',
+                                                    backgroundColor: '#fff',
+                                                    transition: 'all 0.2s',
+                                                    display: 'flex',
+                                                    flexDirection: 'column'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
+                                                    e.currentTarget.style.borderColor = 'var(--primary)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                    e.currentTarget.style.boxShadow = 'none';
+                                                    e.currentTarget.style.borderColor = 'var(--border)';
+                                                }}
+                                            >
+                                                <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
+                                                <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    <h5 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                        {locale === 'en' ? (p.name_en || p.name) : p.name}
+                                                    </h5>
+                                                    <p style={{ margin: 'auto 0 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                                                        {p.unit_of_measure}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                                        <p style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t.b2b.dashboard.noProducts}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Order Summary / Cart */}
+                        <div className="b2b-cart-sidebar">
+                            <div style={{
+                                backgroundColor: THEME.colors.surface,
+                                borderRadius: THEME.radius.lg,
+                                boxShadow: THEME.shadow.md,
+                                border: `1px solid ${THEME.colors.border}`,
+                                overflow: 'visible',
+                            }}>
+                                {/* Cart Header */}
+                                <div className="b2b-sticky-cart-header" style={{
+                                    backgroundColor: '#F8FAFC',
+                                    padding: '1.25rem 1.5rem',
+                                    borderBottom: `1px solid ${THEME.colors.border}`,
+                                    borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <h3 style={{ 
+                                                fontFamily: THEME.typography.fontFamilyMain,
+                                                fontSize: '1.05rem', 
+                                                fontWeight: '800', 
+                                                margin: 0,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                color: THEME.colors.textMain,
+                                            }}>
+                                                <ShoppingCart size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
+                                            </h3>
+                                            <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                                de acuerdo a tu última compra
+                                            </p>
+                                        </div>
+                                        {orderItems.length > 0 && (
+                                            <button
+                                                onClick={handleClearOrder}
+                                                title="Borrar todo y empezar de cero"
+                                                style={{
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: `1px solid ${THEME.colors.border}`,
+                                                    background: 'white',
+                                                    color: '#EF4444',
+                                                    fontSize: '0.75rem',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'white'; }}
+                                            >
+                                                <Trash2 size={13} strokeWidth={2} /> {t.b2b.dashboard.btnClear}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Items List */}
+                                {orderItems.length > 0 ? (
+                                    <div>
+                                        <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
+                                            {orderItems.map((item) => (
+                                                <div key={item.id} className="cart-item-row" style={{
+                                                    display: 'flex',
+                                                    gap: '0.75rem',
+                                                    padding: '1rem 1.25rem',
+                                                    borderBottom: '1px solid #F3F4F6',
+                                                    alignItems: 'flex-start'
+                                                }}>
+                                                    <div style={{ width: '52px', height: '52px', backgroundColor: '#f0f0f0', borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
+                                                        {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                    </div>
+                                                    
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                                            <h4 style={{ 
+                                                                fontFamily: 'var(--font-outfit), sans-serif',
+                                                                fontWeight: '800', 
+                                                                fontSize: '0.95rem',
+                                                                margin: 0,
+                                                                color: 'var(--text-main)',
+                                                                letterSpacing: '-0.01em',
+                                                                lineHeight: '1.25',
+                                                                wordBreak: 'break-word'
+                                                            }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                                {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
+                                                            </h4>
+                                                            <button
+                                                                onClick={() => removeItem(item.id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#EF4444',
+                                                                    cursor: 'pointer',
+                                                                    padding: '2px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0
+                                                                }}
+                                                                title={t.b2b.dashboard.remove}
+                                                            >
+                                                                <Trash2 size={16} strokeWidth={2} />
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Unit Price, Subtotal display and Quantity Controls */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', gap: '0.5rem' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                                                    $0 / {item.unit}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>
+                                                                    Total: $0
+                                                                </span>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '8px', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                                                                <button
+                                                                    onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                                                                    style={{
+                                                                        width: '26px', height: '26px',
+                                                                        borderRadius: '6px',
+                                                                        border: 'none',
+                                                                        backgroundColor: 'white',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '0.85rem',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.2s',
+                                                                        fontWeight: '700',
+                                                                        color: 'var(--text-main)',
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                    }}
+                                                                >−</button>
+                                                                
+                                                                <div style={{ minWidth: '32px', textAlign: 'center' }}>
+                                                                    <span style={{ fontWeight: '900', fontSize: '0.9rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif', display: 'block' }}>
+                                                                        {item.quantity}
+                                                                    </span>
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                                    style={{
+                                                                        width: '26px', height: '26px',
+                                                                        borderRadius: '6px',
+                                                                        border: 'none',
+                                                                        backgroundColor: 'var(--primary)',
+                                                                        color: 'white',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '0.85rem',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.2s',
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                                    }}
+                                                                >+</button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                    ) : (
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.noProducts}</p>
-                                    )}
-                                </div>
-                            )}
 
-                            {/* Items List - Inside Card for better grouping */}
-                            {orderItems.length > 0 ? (
-                                <div style={{ borderTop: '4px solid #F9FAFB' }}>
-                                    {orderItems.map((item) => (
-                                        <div key={item.id} style={{
+                                        {/* Total Summary */}
+                                        <div style={{
+                                            padding: '1.25rem 1.5rem',
+                                            borderTop: '1px solid #E2E8F0',
+                                            backgroundColor: '#F8FAFC',
                                             display: 'flex',
-                                            alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            padding: '1.25rem 2rem',
-                                            borderBottom: '1px solid #F3F4F6'
+                                            alignItems: 'center'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flex: 1 }}>
-                                                <div style={{ width: '64px', height: '64px', backgroundColor: '#f0f0f0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                                                    {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                                </div>
-                                                <div>
-                                                    <p style={{ 
-                                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                                        fontWeight: '800', 
-                                                        fontSize: '1.1rem',
-                                                        margin: 0,
-                                                        color: 'var(--text-main)',
-                                                        letterSpacing: '-0.02em'
-                                                    }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}</p>
-                                                    {item.variant_label && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{item.variant_label}</span>}
-                                                </div>
-                                            </div>
-
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                <button
-                                                    onClick={() => updateQuantity(item.id, Math.max(0, item.quantity - 1))}
-                                                    style={{
-                                                        width: '38px', height: '38px',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid var(--border)',
-                                                        backgroundColor: 'white',
-                                                        cursor: 'pointer',
-                                                        fontSize: '1.2rem',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        transition: 'all 0.2s',
-                                                        fontWeight: '600',
-                                                        color: 'var(--text-main)'
-                                                    }}
-                                                >−</button>
-                                                
-                                                <div style={{ minWidth: '70px', textAlign: 'center' }}>
-                                                    <div style={{ fontWeight: '900', fontSize: '1.2rem', color: 'var(--primary)', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                        {item.quantity}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.7rem', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>
-                                                        {item.unit}
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                                    style={{
-                                                        width: '38px', height: '38px',
-                                                        borderRadius: '12px',
-                                                        border: 'none',
-                                                        backgroundColor: 'var(--primary)',
-                                                        color: 'white',
-                                                        cursor: 'pointer',
-                                                        fontSize: '1.2rem',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        transition: 'all 0.2s',
-                                                        boxShadow: '0 4px 10px rgba(26, 77, 46, 0.2)'
-                                                    }}
-                                                >+</button>
-
-                                                <button
-                                                    onClick={() => removeItem(item.id)}
-                                                    style={{
-                                                        marginLeft: '1.5rem',
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        color: '#94A3B8',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.8rem',
-                                                        fontWeight: '700',
-                                                        textTransform: 'uppercase'
-                                                    }}
-                                                > {t.b2b.dashboard.remove} </button>
-                                            </div>
+                                            <span style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>Total:</span>
+                                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                                $0
+                                            </span>
                                         </div>
-                                    ))}
 
-                                    {/* Submit Button Section */}
-                                    <div style={{ padding: '2.5rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)' }}>
-                                        {orderItems.filter(i => i.quantity > 0).length === 0 && (
-                                            <p style={{ 
-                                                color: '#DC2626', 
-                                                fontSize: '0.95rem', 
-                                                fontWeight: '600',
-                                                marginBottom: '1.5rem',
-                                                backgroundColor: '#FEF2F2',
-                                                padding: '1rem',
-                                                borderRadius: '12px',
-                                                border: '1px solid #FEE2E2',
-                                                display: 'inline-block'
-                                            }}>
-                                                {t.b2b.dashboard.minQtyWarning}
-                                            </p>
-                                        )}
-                                        <button
-                                            onClick={handleSubmit}
-                                            disabled={submitting || orderItems.filter(i => i.quantity > 0).length === 0}
-                                            className="btn-premium"
-                                            style={{
-                                                width: '100%',
-                                                maxWidth: '400px',
-                                                fontSize: '1.3rem',
-                                                padding: '1.2rem',
-                                                backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
-                                                color: 'white',
-                                                cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '15px',
-                                                border: 'none',
-                                                borderRadius: 'var(--radius-full)',
-                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                fontWeight: '900',
-                                                boxShadow: '0 12px 24px rgba(26, 77, 46, 0.3)',
-                                                margin: '0 auto'
-                                            }}
-                                        >
-                                            {submitting ? t.b2b.dashboard.submitting : (
-                                                <>
-                                                    <ShoppingCart size={26} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
-                                                </>
+                                        {/* Submit Button Section */}
+                                        <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}` }}>
+                                            {orderItems.filter(i => i.quantity > 0).length === 0 && (
+                                                <p style={{ 
+                                                    color: '#DC2626', 
+                                                    fontSize: '0.85rem', 
+                                                    fontWeight: '600',
+                                                    marginBottom: '1rem',
+                                                    backgroundColor: '#FEF2F2',
+                                                    padding: '0.75rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #FEE2E2',
+                                                    display: 'inline-block'
+                                                }}>
+                                                    {t.b2b.dashboard.minQtyWarning}
+                                                </p>
                                             )}
-                                        </button>
+                                            <button
+                                                onClick={handleSubmit}
+                                                disabled={submitting || orderItems.filter(i => i.quantity > 0).length === 0}
+                                                className="btn-premium"
+                                                style={{
+                                                    width: '100%',
+                                                    fontSize: '1.1rem',
+                                                    padding: '0.9rem',
+                                                    backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
+                                                    color: 'white',
+                                                    cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '10px',
+                                                    border: 'none',
+                                                    borderRadius: 'var(--radius-full)',
+                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                    fontWeight: '900',
+                                                    boxShadow: '0 8px 16px rgba(26, 77, 46, 0.2)',
+                                                }}
+                                            >
+                                                {submitting ? t.b2b.dashboard.submitting : (
+                                                    <>
+                                                        <ShoppingCart size={20} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-                                    <div style={{ backgroundColor: '#F3F4F6', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                                        <Package size={40} color="#94A3B8" />
+                                ) : (
+                                    <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+                                        <div style={{ backgroundColor: '#F3F4F6', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                            <Package size={32} color="#94A3B8" />
+                                        </div>
+                                        <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '1.5rem', fontWeight: '500' }}>
+                                            {t.b2b.dashboard.emptyOrder}
+                                        </p>
+                                        <button 
+                                            onClick={() => setSelectedCategory('FR')}
+                                            className="btn btn-primary"
+                                            style={{ padding: '0.6rem 1.5rem', fontSize: '0.85rem' }}
+                                        >{t.b2b.dashboard.exploreCatalog}</button>
                                     </div>
-                                    <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '2rem', fontWeight: '500' }}>
-                                        {t.b2b.dashboard.emptyOrder}
-                                    </p>
-                                    <button 
-                                        onClick={() => setSelectedCategory('FR')}
-                                        className="btn btn-primary"
-                                        style={{ padding: '0.8rem 2rem' }}
-                                    >{t.b2b.dashboard.exploreCatalog}</button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Support Section - Below the card for cleaner look */}
-                        <div className="mobile-stack" style={{
-                            marginTop: '2.5rem',
-                            backgroundColor: 'white',
-                            borderRadius: 'var(--radius-lg)',
-                            padding: '1.5rem 2rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            border: '1px solid var(--border)',
-                            boxShadow: 'var(--shadow-sm)'
-                        }}>
-                            <div style={{ flex: 1 }}>
-                                <h3 style={{ 
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    fontSize: '1.1rem', 
-                                    fontWeight: '800', 
-                                    margin: 0, 
-                                    color: 'var(--text-main)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px'
-                                }}>
-                                    <Smile size={22} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
-                                </h3>
-                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                    {t.b2b.dashboard.specialReqDesc}
-                                </p>
+                                )}
                             </div>
-                            <a
-                                href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido%20institucional"
-                                target="_blank"
-                                className="btn-premium"
-                                style={{
-                                    backgroundColor: '#075e54',
-                                    color: 'white',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.75rem',
-                                    fontWeight: '900',
-                                    textDecoration: 'none',
-                                    padding: '0.75rem 1.5rem',
-                                    borderRadius: 'var(--radius-full)',
-                                    whiteSpace: 'nowrap',
-                                    fontSize: '0.9rem',
-                                    fontFamily: 'var(--font-outfit), sans-serif',
-                                    boxShadow: '0 6px 12px rgba(7, 94, 84, 0.15)'
-                                }}
-                            >
-                                {t.b2b.dashboard.whatsappBtn}
-                            </a>
+
+                            {/* Support Section - Below the card for cleaner look */}
+                            <div style={{
+                                marginTop: '1.5rem',
+                                backgroundColor: 'white',
+                                borderRadius: 'var(--radius-lg)',
+                                padding: '1.25rem 1.5rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1rem',
+                                border: '1px solid var(--border)',
+                                boxShadow: 'var(--shadow-sm)'
+                            }}>
+                                <div>
+                                    <h3 style={{ 
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        fontSize: '1rem', 
+                                        fontWeight: '800', 
+                                        margin: 0, 
+                                        color: 'var(--text-main)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        <Smile size={20} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
+                                    </h3>
+                                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                        {t.b2b.dashboard.specialReqDesc}
+                                    </p>
+                                </div>
+                                <a
+                                    href="https://wa.me/573001234567?text=Hola,%20necesito%20ayuda%20con%20mi%20pedido%20institucional"
+                                    target="_blank"
+                                    className="btn-premium"
+                                    style={{
+                                        backgroundColor: '#075e54',
+                                        color: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        fontWeight: '900',
+                                        textDecoration: 'none',
+                                        padding: '0.65rem 1.25rem',
+                                        borderRadius: 'var(--radius-full)',
+                                        fontSize: '0.85rem',
+                                        fontFamily: 'var(--font-outfit), sans-serif',
+                                        boxShadow: '0 4px 10px rgba(7, 94, 84, 0.15)'
+                                    }}
+                                >
+                                    {t.b2b.dashboard.whatsappBtn}
+                                </a>
+                            </div>
                         </div>
-                    </>
+                    </div>
                 )}
 
                 {/* INVOICES TAB */}
@@ -1767,6 +1842,36 @@ export default function B2BDashboard() {
             )}
 
             <style jsx global>{`
+                .b2b-dashboard-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 1.5rem;
+                    width: 100%;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                }
+                @media (min-width: 1024px) {
+                    .b2b-dashboard-grid {
+                        grid-template-columns: 1.5fr 1fr;
+                    }
+                    .b2b-sticky-catalog-header {
+                        position: sticky;
+                        top: 80px;
+                        z-index: 10;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                    }
+                    .b2b-sticky-cart-header {
+                        position: sticky;
+                        top: 80px;
+                        z-index: 10;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                    }
+                    .b2b-cart-sidebar {
+                        position: sticky;
+                        top: 80px;
+                        align-self: start;
+                    }
+                }
                 @media print {
                     body * {
                         visibility: hidden;
