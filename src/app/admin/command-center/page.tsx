@@ -1010,133 +1010,133 @@ export default function CommandCenter() {
                                 </div>
                             </div>
 
-                            {/* SUPER BUSCADOR MULTICRITERIO */}
-                            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '1.2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#111827' }}>🔍 Super Buscador Avanzado</h3>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                            {/* SUPER BUSCADOR MULTICRITERIO COMPACTO */}
+                            <div style={{ backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '0.75rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    {/* Título */}
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                                        🔍 Super Buscador
+                                    </h3>
+
+                                    {/* Entrada de búsqueda */}
+                                    <div style={{ flex: '1', minWidth: '240px', position: 'relative' }}>
+                                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                                        <input 
+                                            value={auditSearchTerm}
+                                            onChange={e => setAuditSearchTerm(e.target.value)}
+                                            placeholder="Buscar por usuario, acción o módulo..." 
+                                            style={{ width: '100%', padding: '6px 10px 6px 30px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.75rem', fontWeight: '600', color: '#111827' }}
+                                        />
+                                    </div>
+
+                                    {/* Selector de Rango de Fechas */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <select 
+                                            value={auditDatePreset} 
+                                            onChange={e => setAuditDatePreset(e.target.value)}
+                                            style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#F9FAFB', cursor: 'pointer' }}
+                                        >
+                                            <option value="all">Todo el historial</option>
+                                            <option value="today">Hoy</option>
+                                            <option value="week">Esta semana</option>
+                                            <option value="month">Este mes</option>
+                                            <option value="custom">Rango Personalizado</option>
+                                        </select>
+                                        
+                                        {auditDatePreset === 'custom' && (
+                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                <input type="date" value={auditStartDate} onChange={e => setAuditStartDate(e.target.value)} style={{ padding: '5px 8px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.7rem', fontWeight: '600' }} />
+                                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#6B7280' }}>a</span>
+                                                <input type="date" value={auditEndDate} onChange={e => setAuditEndDate(e.target.value)} style={{ padding: '5px 8px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.7rem', fontWeight: '600' }} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Botones */}
+                                    <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
                                         <button 
                                             onClick={() => setAuditRefreshKey(p => p + 1)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 0.8rem', background: '#F3F4F6', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem', color: '#475569' }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', background: '#F3F4F6', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem', color: '#475569', transition: 'background 0.2s' }}
                                         >
-                                            <RefreshCw size={14} className={auditLoading ? 'animate-spin' : ''} />
+                                            <RefreshCw size={12} className={auditLoading ? 'animate-spin' : ''} />
                                             Recargar
                                         </button>
                                         <button 
                                             onClick={handleExportAuditXLSX}
                                             disabled={auditExporting || auditLogs.length === 0}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 1rem', background: '#10B981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem' }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#10B981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem', transition: 'opacity 0.2s' }}
                                         >
-                                            <Download size={14} />
-                                            Exportar Filtro (XLSX)
+                                            <Download size={12} />
+                                            Exportar (XLSX)
                                         </button>
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                    {/* Entrada de texto general */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Búsqueda General (Usuario, Acción, Módulo)</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                                            <input 
-                                                value={auditSearchTerm}
-                                                onChange={e => setAuditSearchTerm(e.target.value)}
-                                                placeholder="Buscar por nombre, acción de base de datos..." 
-                                                style={{ width: '100%', padding: '10px 10px 10px 32px', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '600' }}
-                                            />
+                                {/* Selección múltiple de módulos y acciones en dos columnas */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '0.75rem 1.5rem', borderTop: '1px solid #F3F4F6', paddingTop: '0.6rem' }}>
+                                    {/* Módulos */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Módulos:</span>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                            {[
+                                                { id: 'PRODUCTS', label: 'Productos' },
+                                                { id: 'SECURITY', label: 'Seguridad / Perfiles' },
+                                                { id: 'ORDERS', label: 'Pedidos' },
+                                                { id: 'SETTINGS', label: 'Configuración' },
+                                                { id: 'HR_ADMIN', label: 'Talento Humano' }
+                                            ].map(mod => {
+                                                const isSelected = auditSelectedModules.includes(mod.id);
+                                                return (
+                                                    <button
+                                                        key={mod.id}
+                                                        onClick={() => {
+                                                            setAuditSelectedModules(prev => 
+                                                                isSelected ? prev.filter(x => x !== mod.id) : [...prev, mod.id]
+                                                            );
+                                                        }}
+                                                        style={{
+                                                            padding: '3px 8px', borderRadius: '12px', border: isSelected ? '1px solid #111827' : '1px solid #E2E8F0',
+                                                            backgroundColor: isSelected ? '#111827' : 'white', color: isSelected ? 'white' : '#475569',
+                                                            fontWeight: '700', fontSize: '0.7rem', cursor: 'pointer', transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        {mod.label}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
-                                    {/* Selector de Rango de Fechas */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Rango de Fechas</label>
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            <select 
-                                                value={auditDatePreset} 
-                                                onChange={e => setAuditDatePreset(e.target.value)}
-                                                style={{ padding: '10px', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.8rem', fontWeight: '700', backgroundColor: '#F9FAFB' }}
-                                            >
-                                                <option value="all">Todo el historial</option>
-                                                <option value="today">Hoy</option>
-                                                <option value="week">Esta semana</option>
-                                                <option value="month">Este mes</option>
-                                                <option value="custom">Rango Personalizado</option>
-                                            </select>
-                                            
-                                            {auditDatePreset === 'custom' && (
-                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                    <input type="date" value={auditStartDate} onChange={e => setAuditStartDate(e.target.value)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.75rem' }} />
-                                                    <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>a</span>
-                                                    <input type="date" value={auditEndDate} onChange={e => setAuditEndDate(e.target.value)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.75rem' }} />
-                                                </div>
-                                            )}
+                                    {/* Acciones */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Acciones:</span>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                            {[
+                                                { id: 'create', label: 'Creación (INSERT)' },
+                                                { id: 'update', label: 'Modificación (UPDATE)' },
+                                                { id: 'delete', label: 'Eliminación (DELETE)' },
+                                                { id: 'security', label: 'Seguridad' }
+                                            ].map(act => {
+                                                const isSelected = auditSelectedActions.includes(act.id);
+                                                return (
+                                                    <button
+                                                        key={act.id}
+                                                        onClick={() => {
+                                                            setAuditSelectedActions(prev => 
+                                                                isSelected ? prev.filter(x => x !== act.id) : [...prev, act.id]
+                                                            );
+                                                        }}
+                                                        style={{
+                                                            padding: '3px 8px', borderRadius: '12px', border: isSelected ? '1px solid #111827' : '1px solid #E2E8F0',
+                                                            backgroundColor: isSelected ? '#111827' : 'white', color: isSelected ? 'white' : '#475569',
+                                                            fontWeight: '700', fontSize: '0.7rem', cursor: 'pointer', transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        {act.label}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* Selección múltiple de módulos mediante chips */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Filtrar por Módulos</label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                        {[
-                                            { id: 'PRODUCTS', label: 'Productos' },
-                                            { id: 'SECURITY', label: 'Seguridad / Perfiles' },
-                                            { id: 'ORDERS', label: 'Pedidos' },
-                                            { id: 'SETTINGS', label: 'Configuración' },
-                                            { id: 'HR_ADMIN', label: 'Talento Humano' }
-                                        ].map(mod => {
-                                            const isSelected = auditSelectedModules.includes(mod.id);
-                                            return (
-                                                <button
-                                                    key={mod.id}
-                                                    onClick={() => {
-                                                        setAuditSelectedModules(prev => 
-                                                            isSelected ? prev.filter(x => x !== mod.id) : [...prev, mod.id]
-                                                        );
-                                                    }}
-                                                    style={{
-                                                        padding: '6px 12px', borderRadius: '20px', border: isSelected ? '1px solid #111827' : '1px solid #E2E8F0',
-                                                        backgroundColor: isSelected ? '#111827' : 'white', color: isSelected ? 'white' : '#475569',
-                                                        fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.15s'
-                                                    }}
-                                                >
-                                                    {mod.label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Selección múltiple de acciones mediante chips */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>Filtrar por Tipo de Acción</label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                        {[
-                                            { id: 'create', label: 'Creación (INSERT)' },
-                                            { id: 'update', label: 'Modificación (UPDATE)' },
-                                            { id: 'delete', label: 'Eliminación (DELETE)' },
-                                            { id: 'security', label: 'Seguridad' }
-                                        ].map(act => {
-                                            const isSelected = auditSelectedActions.includes(act.id);
-                                            return (
-                                                <button
-                                                    key={act.id}
-                                                    onClick={() => {
-                                                        setAuditSelectedActions(prev => 
-                                                            isSelected ? prev.filter(x => x !== act.id) : [...prev, act.id]
-                                                        );
-                                                    }}
-                                                    style={{
-                                                        padding: '6px 12px', borderRadius: '20px', border: isSelected ? '1px solid #111827' : '1px solid #E2E8F0',
-                                                        backgroundColor: isSelected ? '#111827' : 'white', color: isSelected ? 'white' : '#475569',
-                                                        fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.15s'
-                                                    }}
-                                                >
-                                                    {act.label}
-                                                </button>
-                                            );
-                                        })}
                                     </div>
                                 </div>
                             </div>
