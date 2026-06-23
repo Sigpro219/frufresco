@@ -2951,79 +2951,102 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             </span>
                                           </div>
                                           
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
-                                            {matchedProd.variants.map((v: any, vIdx: number) => {
-                                              const currentValue = (item.selected_options || {})[v.name] || '';
-                                              return (
-                                                <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
-                                                    {v.name}:
-                                                  </label>
-                                                  <select
-                                                    id={`variant-select-${i}-${vIdx}`}
-                                                    value={currentValue}
-                                                    onFocus={() => setFocusedRowIndex(i)}
-                                                    onBlur={() => setFocusedRowIndex(null)}
-                                                    onChange={(e) => {
-                                                      const val = e.target.value;
-                                                      const newEdits = [...editableItems];
-                                                      if (!newEdits[i].selected_options) {
-                                                        newEdits[i].selected_options = {};
-                                                      }
-                                                      newEdits[i].selected_options[v.name] = val;
-                                                      setEditableItems(newEdits);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === 'Escape') {
-                                                        setActiveVariantRow(null);
-                                                        setTimeout(() => {
-                                                          if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
-                                                        }, 50);
-                                                      } else if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                        if (nextSelect) {
-                                                          nextSelect.focus();
-                                                        } else {
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                            {(() => {
+                                              const variantOptionNames = new Set<string>();
+                                              let isOldFormat = false;
+                                              matchedProd.variants.forEach((v: any) => {
+                                                if (v.name && Array.isArray(v.options)) {
+                                                  isOldFormat = true;
+                                                } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+                                                  Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+                                                }
+                                              });
+
+                                              let variantOptionsList = matchedProd.variants;
+                                              if (!isOldFormat) {
+                                                variantOptionsList = Array.from(variantOptionNames).map(name => {
+                                                  const values = new Set<string>();
+                                                  matchedProd.variants.forEach((v: any) => {
+                                                    if (v.options && v.options[name]) values.add(v.options[name]);
+                                                  });
+                                                  return { name, options: Array.from(values) };
+                                                });
+                                              }
+
+                                              return variantOptionsList.map((v: any, vIdx: number) => {
+                                                const currentValue = (item.selected_options || {})[v.name] || '';
+                                                return (
+                                                  <div key={vIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4B5563', whiteSpace: 'nowrap' }}>
+                                                      {v.name}:
+                                                    </label>
+                                                    <select
+                                                      id={`variant-select-${i}-${vIdx}`}
+                                                      value={currentValue}
+                                                      onFocus={() => setFocusedRowIndex(i)}
+                                                      onBlur={() => setFocusedRowIndex(null)}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const newEdits = [...editableItems];
+                                                        if (!newEdits[i].selected_options) {
+                                                          newEdits[i].selected_options = {};
+                                                        }
+                                                        newEdits[i].selected_options[v.name] = val;
+                                                        setEditableItems(newEdits);
+                                                      }}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Escape') {
                                                           setActiveVariantRow(null);
                                                           setTimeout(() => {
                                                             if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
                                                           }, 50);
-                                                        }
-                                                      } else if (e.key === 'ArrowRight' && !e.altKey) {
-                                                        const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
-                                                        if (nextSelect) {
+                                                        } else if (e.key === 'Enter') {
                                                           e.preventDefault();
-                                                          nextSelect.focus();
+                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                          if (nextSelect) {
+                                                            nextSelect.focus();
+                                                          } else {
+                                                            setActiveVariantRow(null);
+                                                            setTimeout(() => {
+                                                              if (productInputRefs.current[i]) productInputRefs.current[i]?.focus();
+                                                            }, 50);
+                                                          }
+                                                        } else if (e.key === 'ArrowRight' && !e.altKey) {
+                                                          const nextSelect = document.getElementById(`variant-select-${i}-${vIdx + 1}`);
+                                                          if (nextSelect) {
+                                                            e.preventDefault();
+                                                            nextSelect.focus();
+                                                          }
+                                                        } else if (e.key === 'ArrowLeft' && !e.altKey) {
+                                                          const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
+                                                          if (prevSelect) {
+                                                            e.preventDefault();
+                                                            prevSelect.focus();
+                                                          }
                                                         }
-                                                      } else if (e.key === 'ArrowLeft' && !e.altKey) {
-                                                        const prevSelect = document.getElementById(`variant-select-${i}-${vIdx - 1}`);
-                                                        if (prevSelect) {
-                                                          e.preventDefault();
-                                                          prevSelect.focus();
-                                                        }
-                                                      }
-                                                    }}
-                                                    style={{
-                                                      padding: '0.3rem 1.5rem 0.3rem 0.5rem',
-                                                      borderRadius: '6px',
-                                                      border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
-                                                      fontSize: '0.75rem',
-                                                      fontWeight: 600,
-                                                      backgroundColor: currentValue ? '#ECFDF5' : 'white',
-                                                      color: '#111827',
-                                                      outline: 'none',
-                                                      cursor: 'pointer'
-                                                    }}
-                                                  >
-                                                    <option value="">-- Seleccionar {v.name} --</option>
-                                                    {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
-                                                      <option key={optIdx} value={opt}>{opt}</option>
-                                                    ))}
-                                                  </select>
-                                                </div>
-                                              );
-                                            })}
+                                                      }}
+                                                      style={{
+                                                        padding: '0.3rem 1.5rem 0.3rem 0.5rem',
+                                                        borderRadius: '6px',
+                                                        border: currentValue ? '1.5px solid #10B981' : '1px solid #D1D5DB',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
+                                                        backgroundColor: currentValue ? '#ECFDF5' : 'white',
+                                                        color: '#111827',
+                                                        outline: 'none',
+                                                        cursor: 'pointer'
+                                                      }}
+                                                    >
+                                                      <option value="">-- Seleccionar {v.name} --</option>
+                                                      {(Array.isArray(v.options) ? v.options : []).map((opt: string, optIdx: number) => (
+                                                        <option key={optIdx} value={opt}>{opt}</option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                );
+                                              });
+                                            })()}
                                           </div>
                                           
                                           <div style={{ fontSize: '0.65rem', color: '#6B7280', fontWeight: 500 }}>
