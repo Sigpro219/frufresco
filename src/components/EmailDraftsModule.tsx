@@ -696,7 +696,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     selectedDraft,
     showConfirmModal,
     activeEquivalenceRow,
-    activeVariantRow
+    activeVariantRow,
+    actionConfirm,
+    deleteConfirm,
+    obsModal,
+    rejectModal,
+    showShortcuts,
+    selectedDraftIds
   });
 
   useEffect(() => {
@@ -708,9 +714,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       selectedDraft,
       showConfirmModal,
       activeEquivalenceRow,
-      activeVariantRow
+      activeVariantRow,
+      actionConfirm,
+      deleteConfirm,
+      obsModal,
+      rejectModal,
+      showShortcuts,
+      selectedDraftIds
     };
-  }, [isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal, activeEquivalenceRow, activeVariantRow]);
+  }, [
+    isEditing, focusedRowIndex, products, editableItems, selectedDraft, showConfirmModal,
+    activeEquivalenceRow, activeVariantRow, actionConfirm, deleteConfirm, obsModal,
+    rejectModal, showShortcuts, selectedDraftIds
+  ]);
 
   useEffect(() => {
     const isAnyModalOpen = !!(selectedDraft || showConfirmModal || rejectModal || obsModal || actionConfirm || deleteConfirm || showShortcuts);
@@ -728,21 +744,79 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
 
-      const isAltShortcut = e.altKey && (
-        e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
-        e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
-      );
-
-      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isAltShortcut) return;
-
       const {
         isEditing,
         focusedRowIndex,
         products,
         editableItems,
         selectedDraft,
-        showConfirmModal
+        showConfirmModal,
+        actionConfirm,
+        deleteConfirm,
+        obsModal,
+        rejectModal,
+        showShortcuts,
+        selectedDraftIds
       } = stateRef.current;
+
+      const isAltShortcut = e.altKey && (
+        e.code === 'KeyE' || e.key === 'e' || e.key === 'E' ||
+        e.code === 'KeyV' || e.key === 'v' || e.key === 'V'
+      );
+
+      const isBypassKey = isAltShortcut || e.ctrlKey || e.metaKey || e.key === 'Escape' ||
+        (e.key === 'Enter' && (!!actionConfirm || !!deleteConfirm || !!rejectModal || !!showConfirmModal || !!obsModal));
+
+      if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') && !isBypassKey) return;
+
+      // Handle Enter key for confirmation modals
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (target.tagName === 'TEXTAREA') return;
+
+        if (actionConfirm && actionConfirm.isOpen) {
+          e.preventDefault();
+          actionConfirm.onConfirm();
+          setActionConfirm(null);
+          return;
+        }
+        if (deleteConfirm && deleteConfirm.isOpen) {
+          e.preventDefault();
+          if (deleteConfirm.step === 1) {
+            setDeleteConfirm(prev => prev ? { ...prev, step: 2 } : null);
+          } else {
+            const runConfirm = async () => {
+              await deleteConfirm.onConfirmNotify();
+              setDeleteConfirm(null);
+            };
+            runConfirm();
+          }
+          return;
+        }
+        if (rejectModal && rejectModal.isOpen) {
+          e.preventDefault();
+          const confirmBtn = document.getElementById('btn-confirm-reject') as HTMLButtonElement | null;
+          if (confirmBtn && !confirmBtn.disabled) {
+            confirmBtn.click();
+          }
+          return;
+        }
+        if (showConfirmModal && selectedDraft) {
+          e.preventDefault();
+          const confirmBtn = document.getElementById('btn-confirm-order-final') as HTMLButtonElement | null;
+          if (confirmBtn && !confirmBtn.disabled) {
+            confirmBtn.click();
+          }
+          return;
+        }
+        if (obsModal && obsModal.isOpen) {
+          e.preventDefault();
+          const newEdits = [...editableItems];
+          newEdits[obsModal.rowIndex].observations = obsModal.text;
+          setEditableItems(newEdits);
+          setObsModal(null);
+          return;
+        }
+      }
 
       // Handle Alt+E shortcut globally
       if (e.altKey && (e.code === 'KeyE' || e.key === 'e' || e.key === 'E')) {
@@ -849,7 +923,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [actionConfirm, deleteConfirm, obsModal, rejectModal, showConfirmModal, selectedDraft, showShortcuts, selectedDraftIds.length]);
+  }, []);
 
   const isInvoiceModified = () => {
     if (!selectedDraft) return false;
@@ -870,12 +944,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const handleSendManualReceipt = async () => {
     if (!selectedDraft) return;
-    const confirmSend = window.confirm(
-      `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`
-    );
-    if (!confirmSend) return;
-    
-    setSendingReceipt(true);
+
+    setActionConfirm({
+      isOpen: true,
+      title: 'Enviar Acuse de Recibo',
+      message: `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`,
+      confirmText: 'Enviar Acuse',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        setSendingReceipt(true);
     try {
       const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
       const clientName = selectedDraft.client_detected_name || 'Cliente';
@@ -989,6 +1066,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     } finally {
       setSendingReceipt(false);
     }
+      }
+    });
   };
  
   const handleApprove = async () => {
@@ -3956,6 +4035,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 Cancelar
               </button>
               <button
+                id="btn-confirm-reject"
                 type="button"
                 disabled={
                   !rejectReason || 
@@ -4230,6 +4310,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 Cancelar
               </button>
               <button
+                id="btn-confirm-order-final"
                 onClick={handleConfirmOrderDirectly}
                 disabled={confirmingOrder || (isInvoiceModified() && sendConfirmationEmail && !isAuthorizedForChanges)}
                 style={{
