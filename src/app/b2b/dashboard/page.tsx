@@ -69,17 +69,18 @@ export default function B2BDashboard() {
         const signal = controller.signal;
 
         const fetchCategoryProducts = async () => {
-            if (!selectedCategory) {
-                if (isMounted.current) setCategoryProducts([]);
-                return;
-            }
             setIsLoadingCategory(true);
             try {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('products')
                     .select('id, name, name_en, unit_of_measure, image_url, sku, options_config')
-                    .eq('category', selectedCategory)
-                    .eq('is_active', true)
+                    .eq('is_active', true);
+
+                if (selectedCategory) {
+                    query = query.eq('category', selectedCategory);
+                }
+
+                const { data, error } = await query
                     .order('name')
                     .abortSignal(signal as any);
 
