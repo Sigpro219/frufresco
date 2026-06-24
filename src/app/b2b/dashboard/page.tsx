@@ -678,76 +678,83 @@ export default function B2BDashboard() {
 
             <div className="container" style={{ padding: '2rem 1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
 
-                {/* HEADER */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h1 style={{ 
-                        fontFamily: THEME.typography.fontFamilyMain,
-                        fontSize: '1.75rem', 
-                        fontWeight: '600', 
-                        color: THEME.colors.textMain, 
-                        marginBottom: '0',
-                        letterSpacing: '-0.02em'
-                    }}>
-                        {profile?.company_name || t.b2b.dashboard.title}
-                    </h1>
-                    <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
-                </div>
-
-                {/* TAB NAVIGATION — segmented control (Sticky top) */}
-                <div style={{
-                    display: 'flex',
-                    backgroundColor: THEME.colors.background,
-                    borderRadius: THEME.radius.lg,
-                    padding: '4px',
-                    marginBottom: '1.5rem',
-                    border: `1px solid ${THEME.colors.border}`,
-                    gap: '2px',
-                    position: 'sticky',
-                    top: '0px',
-                    zIndex: 40,
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                {/* HEADER & TAB NAVIGATION ROW (Compact in Y) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    flexWrap: 'wrap',
+                    gap: '1.5rem',
+                    marginBottom: '1.5rem' 
                 }}>
-                    {[
-                        { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
-                        { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
-                        { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
-                        { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
-                    ].map(tab => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setActiveTab(tab.key as any)}
-                            style={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                padding: '0.6rem 0.75rem',
-                                borderRadius: THEME.radius.md,
-                                border: 'none',
-                                backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
-                                color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
-                                fontWeight: activeTab === tab.key ? '600' : '500',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap',
-                                fontFamily: THEME.typography.fontFamilySecondary,
-                                boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
-                            }}
-                            onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
-                            onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
-                        >
-                            {tab.icon} <span className="tab-label">{tab.label}</span>
-                        </button>
-                    ))}
+                    <div>
+                        <h1 style={{ 
+                            fontFamily: THEME.typography.fontFamilyMain,
+                            fontSize: '1.75rem', 
+                            fontWeight: '600', 
+                            color: THEME.colors.textMain, 
+                            marginBottom: '0',
+                            letterSpacing: '-0.02em'
+                        }}>
+                            {profile?.company_name || t.b2b.dashboard.title}
+                        </h1>
+                        <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
+                    </div>
+
+                    {/* TAB NAVIGATION — segmented control aligned right */}
+                    <div style={{
+                        display: 'flex',
+                        backgroundColor: THEME.colors.background,
+                        borderRadius: THEME.radius.lg,
+                        padding: '4px',
+                        border: `1px solid ${THEME.colors.border}`,
+                        gap: '2px',
+                        minWidth: '400px',
+                        maxWidth: '600px',
+                        flex: '1 1 auto'
+                    }}>
+                        {[
+                            { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
+                            { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
+                            { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
+                            { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
+                        ].map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key as any)}
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '0.6rem 0.75rem',
+                                    borderRadius: THEME.radius.md,
+                                    border: 'none',
+                                    backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
+                                    color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
+                                    fontWeight: activeTab === tab.key ? '600' : '500',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap',
+                                    fontFamily: THEME.typography.fontFamilySecondary,
+                                    boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
+                                }}
+                                onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            >
+                                {tab.icon} <span className="tab-label">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                       {/* TAB CONTENT */}
                 {activeTab === 'order' && (
                     <div className="b2b-dashboard-grid">
                         {/* LEFT COLUMN: Catalog Browser */}
-                        <div style={{
+                        <div className="b2b-catalog-container" style={{
                             backgroundColor: THEME.colors.surface,
                             borderRadius: THEME.radius.lg,
                             boxShadow: THEME.shadow.md,
@@ -2267,12 +2274,19 @@ export default function B2BDashboard() {
                         align-items: start;
                     }
                     /* Columna 1 (Catálogo) con altura fija */
-                    .b2b-dashboard-grid > div:first-child {
+                    .b2b-catalog-container {
                         height: 858px;
-                        overflow-y: auto !important;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
                         position: relative;
-                        padding-top: 140px; /* Espacio para el header sticky absoluto */
                         box-sizing: border-box;
+                    }
+                    /* Cuerpo scrolleable de productos en Columna 1 (1) */
+                    .b2b-catalog-container > div:last-child {
+                        flex: 1;
+                        overflow-y: auto !important;
+                        padding: 1.5rem 1rem;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
@@ -2288,7 +2302,6 @@ export default function B2BDashboard() {
                         flex-direction: column;
                         overflow: hidden;
                         position: relative;
-                        padding-top: 75px; /* Espacio para el header del carrito absoluto */
                         box-sizing: border-box;
                     }
                     /* Sección pequeña de Soporte WhatsApp de 174px */
@@ -2298,24 +2311,18 @@ export default function B2BDashboard() {
                         box-sizing: border-box;
                     }
                     .b2b-sticky-catalog-header {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
+                        position: relative;
                         z-index: 10;
                         background-color: white;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        border-bottom: 1px solid var(--border);
                     }
                     .b2b-sticky-cart-header {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
+                        position: relative;
                         z-index: 10;
                         background-color: #F8FAFC;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        border-bottom: 1px solid var(--border);
                     }
                 }
                 @media print {
