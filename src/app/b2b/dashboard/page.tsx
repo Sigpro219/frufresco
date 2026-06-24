@@ -678,76 +678,83 @@ export default function B2BDashboard() {
 
             <div className="container" style={{ padding: '2rem 1.5rem', maxWidth: '1400px', margin: '0 auto' }}>
 
-                {/* HEADER */}
-                <div style={{ marginBottom: '2rem' }}>
-                    <h1 style={{ 
-                        fontFamily: THEME.typography.fontFamilyMain,
-                        fontSize: '1.75rem', 
-                        fontWeight: '600', 
-                        color: THEME.colors.textMain, 
-                        marginBottom: '0',
-                        letterSpacing: '-0.02em'
-                    }}>
-                        {profile?.company_name || t.b2b.dashboard.title}
-                    </h1>
-                    <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
-                </div>
-
-                {/* TAB NAVIGATION — segmented control (Sticky top) */}
-                <div style={{
-                    display: 'flex',
-                    backgroundColor: THEME.colors.background,
-                    borderRadius: THEME.radius.lg,
-                    padding: '4px',
-                    marginBottom: '1.5rem',
-                    border: `1px solid ${THEME.colors.border}`,
-                    gap: '2px',
-                    position: 'sticky',
-                    top: '0px',
-                    zIndex: 40,
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                {/* HEADER & TAB NAVIGATION ROW (Compact in Y) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    flexWrap: 'wrap',
+                    gap: '1.5rem',
+                    marginBottom: '1.5rem' 
                 }}>
-                    {[
-                        { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
-                        { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
-                        { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
-                        { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
-                    ].map(tab => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setActiveTab(tab.key as any)}
-                            style={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                padding: '0.6rem 0.75rem',
-                                borderRadius: THEME.radius.md,
-                                border: 'none',
-                                backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
-                                color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
-                                fontWeight: activeTab === tab.key ? '600' : '500',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap',
-                                fontFamily: THEME.typography.fontFamilySecondary,
-                                boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
-                            }}
-                            onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
-                            onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
-                        >
-                            {tab.icon} <span className="tab-label">{tab.label}</span>
-                        </button>
-                    ))}
+                    <div>
+                        <h1 style={{ 
+                            fontFamily: THEME.typography.fontFamilyMain,
+                            fontSize: '1.75rem', 
+                            fontWeight: '600', 
+                            color: THEME.colors.textMain, 
+                            marginBottom: '0',
+                            letterSpacing: '-0.02em'
+                        }}>
+                            {profile?.company_name || t.b2b.dashboard.title}
+                        </h1>
+                        <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
+                    </div>
+
+                    {/* TAB NAVIGATION — segmented control aligned right */}
+                    <div style={{
+                        display: 'flex',
+                        backgroundColor: THEME.colors.background,
+                        borderRadius: THEME.radius.lg,
+                        padding: '4px',
+                        border: `1px solid ${THEME.colors.border}`,
+                        gap: '2px',
+                        minWidth: '400px',
+                        maxWidth: '600px',
+                        flex: '1 1 auto'
+                    }}>
+                        {[
+                            { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
+                            { key: 'invoices', icon: <FileText size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabInvoices },
+                            { key: 'consumption', icon: <BarChart3 size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabConsumption },
+                            { key: 'agreements', icon: <Rocket size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabAgreements },
+                        ].map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key as any)}
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '0.6rem 0.75rem',
+                                    borderRadius: THEME.radius.md,
+                                    border: 'none',
+                                    backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
+                                    color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
+                                    fontWeight: activeTab === tab.key ? '600' : '500',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap',
+                                    fontFamily: THEME.typography.fontFamilySecondary,
+                                    boxShadow: activeTab === tab.key ? '0 1px 4px rgba(13,122,87,0.25)' : 'none',
+                                }}
+                                onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
+                                onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            >
+                                {tab.icon} <span className="tab-label">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                       {/* TAB CONTENT */}
                 {activeTab === 'order' && (
                     <div className="b2b-dashboard-grid">
                         {/* LEFT COLUMN: Catalog Browser */}
-                        <div style={{
+                        <div className="b2b-catalog-container" style={{
                             backgroundColor: THEME.colors.surface,
                             borderRadius: THEME.radius.lg,
                             boxShadow: THEME.shadow.md,
@@ -1180,29 +1187,29 @@ export default function B2BDashboard() {
 
                                         {/* Total Summary */}
                                         <div style={{
-                                            padding: '1.25rem 1.5rem',
+                                            padding: '1rem 1.25rem',
                                             borderTop: '1px solid #E2E8F0',
                                             backgroundColor: '#F8FAFC',
                                             display: 'flex',
                                             justifyContent: 'space-between',
                                             alignItems: 'center'
                                         }}>
-                                            <span style={{ fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>Total:</span>
-                                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                            <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total:</span>
+                                            <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
                                                 $0
                                             </span>
                                         </div>
 
                                         {/* Submit Button Section */}
-                                        <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}` }}>
+                                        <div style={{ padding: '1rem 1.25rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}` }}>
                                             {orderItems.filter(i => i.quantity > 0).length === 0 && (
                                                 <p style={{ 
                                                     color: '#DC2626', 
-                                                    fontSize: '0.85rem', 
+                                                    fontSize: '0.8rem', 
                                                     fontWeight: '600',
-                                                    marginBottom: '1rem',
+                                                    marginBottom: '0.75rem',
                                                     backgroundColor: '#FEF2F2',
-                                                    padding: '0.75rem',
+                                                    padding: '0.5rem',
                                                     borderRadius: '8px',
                                                     border: '1px solid #FEE2E2',
                                                     display: 'inline-block'
@@ -1216,8 +1223,8 @@ export default function B2BDashboard() {
                                                 className="btn-premium"
                                                 style={{
                                                     width: '100%',
-                                                    fontSize: '1.1rem',
-                                                    padding: '0.9rem',
+                                                    fontSize: '1rem',
+                                                    padding: '0.75rem',
                                                     backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : 'var(--primary)',
                                                     color: 'white',
                                                     cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
@@ -1234,7 +1241,7 @@ export default function B2BDashboard() {
                                             >
                                                 {submitting ? t.b2b.dashboard.submitting : (
                                                     <>
-                                                        <ShoppingCart size={20} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
+                                                        <ShoppingCart size={18} strokeWidth={2.5} /> {t.b2b.dashboard.finishOrder}
                                                     </>
                                                 )}
                                             </button>
@@ -1262,17 +1269,18 @@ export default function B2BDashboard() {
                                 marginTop: '1.5rem',
                                 backgroundColor: 'white',
                                 borderRadius: 'var(--radius-lg)',
-                                padding: '1.25rem 1.5rem',
+                                padding: '0.85rem 1.25rem',
+                                height: '124px',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: '1rem',
+                                gap: '0.75rem',
                                 border: '1px solid var(--border)',
                                 boxShadow: 'var(--shadow-sm)'
                             }}>
                                 <div>
                                     <h3 style={{ 
                                         fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontSize: '1rem', 
+                                        fontSize: '0.95rem', 
                                         fontWeight: '800', 
                                         margin: 0, 
                                         color: 'var(--text-main)',
@@ -1280,9 +1288,9 @@ export default function B2BDashboard() {
                                         alignItems: 'center',
                                         gap: '8px'
                                     }}>
-                                        <Smile size={20} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
+                                        <Smile size={18} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
                                     </h3>
-                                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                    <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
                                         {t.b2b.dashboard.specialReqDesc}
                                     </p>
                                 </div>
@@ -1299,9 +1307,9 @@ export default function B2BDashboard() {
                                         gap: '0.5rem',
                                         fontWeight: '900',
                                         textDecoration: 'none',
-                                        padding: '0.65rem 1.25rem',
+                                        padding: '0.55rem 1.25rem',
                                         borderRadius: 'var(--radius-full)',
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.8rem',
                                         fontFamily: 'var(--font-outfit), sans-serif',
                                         boxShadow: '0 4px 10px rgba(7, 94, 84, 0.15)'
                                     }}
@@ -2267,12 +2275,19 @@ export default function B2BDashboard() {
                         align-items: start;
                     }
                     /* Columna 1 (Catálogo) con altura fija */
-                    .b2b-dashboard-grid > div:first-child {
+                    .b2b-catalog-container {
                         height: 858px;
-                        overflow-y: auto !important;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
                         position: relative;
-                        padding-top: 140px; /* Espacio para el header sticky absoluto */
                         box-sizing: border-box;
+                    }
+                    /* Cuerpo scrolleable de productos en Columna 1 (1) */
+                    .b2b-catalog-container > div:last-child {
+                        flex: 1;
+                        overflow-y: auto !important;
+                        padding: 1.5rem 1rem;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
@@ -2283,39 +2298,32 @@ export default function B2BDashboard() {
                     }
                     /* Carrito con altura fija */
                     .b2b-cart-sidebar > div:first-child {
-                        height: 660px;
+                        height: 710px;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
                         position: relative;
-                        padding-top: 75px; /* Espacio para el header del carrito absoluto */
                         box-sizing: border-box;
                     }
-                    /* Sección pequeña de Soporte WhatsApp de 174px */
+                    /* Sección pequeña de Soporte WhatsApp de 124px */
                     .b2b-cart-sidebar > div:last-child {
-                        height: 174px;
+                        height: 124px;
                         margin-top: 24px !important;
                         box-sizing: border-box;
                     }
                     .b2b-sticky-catalog-header {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
+                        position: relative;
                         z-index: 10;
                         background-color: white;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        border-bottom: 1px solid var(--border);
                     }
                     .b2b-sticky-cart-header {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
+                        position: relative;
                         z-index: 10;
                         background-color: #F8FAFC;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        border-bottom: 1px solid var(--border);
                     }
                 }
                 @media print {

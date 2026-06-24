@@ -13,6 +13,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const pathname = usePathname();
     const isOpsOrAdmin = pathname?.startsWith('/ops') || pathname?.startsWith('/admin');
     const isPrintPage = pathname?.includes('/print');
+    const isB2BDashboard = pathname === '/b2b/dashboard';
 
     return (
         <Providers>
@@ -20,7 +21,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 {!isOpsOrAdmin && <GlobalBanner />}
                 {!pathname?.startsWith('/ops') && !isPrintPage && <Navbar />}
                 {children}
-                {!isOpsOrAdmin && <Footer />}
+                {!isOpsOrAdmin && !isB2BDashboard && <Footer />}
             </Suspense>
             {isOpsOrAdmin && !isPrintPage && (
                 <>
