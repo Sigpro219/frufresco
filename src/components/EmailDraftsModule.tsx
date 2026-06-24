@@ -2519,6 +2519,30 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
               )}
 
+              {draftCoordinates && !checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+                <div style={{
+                  backgroundColor: '#FEE2E2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left'
+                }}>
+                  <AlertTriangle size={24} style={{ color: '#EF4444', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#991B1B', fontSize: '0.9rem' }}>
+                      ⚠️ DIRECCIÓN FUERA DE COBERTURA
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#B91C1C', fontWeight: 600, marginTop: '2px' }}>
+                      La dirección ingresada ({editableAddress}) se encuentra fuera del área de cobertura de FruFresco. Por favor valida o rechaza el pedido.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {checkIsNewClient(selectedDraft) && (
                 <div style={{
                   backgroundColor: '#FEF3C7',
@@ -3829,8 +3853,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             {/* Map Container */}
             <div style={{ width: '100%', height: '400px', backgroundColor: '#F3F4F6', position: 'relative' }}>
               <Map
+                key={`${draftCoordinates.lat}-${draftCoordinates.lng}`}
                 defaultCenter={draftCoordinates}
-                center={draftCoordinates}
                 defaultZoom={15}
                 gestureHandling={'greedy'}
                 style={{ width: '100%', height: '100%' }}
