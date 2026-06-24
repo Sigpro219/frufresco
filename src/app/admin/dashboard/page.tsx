@@ -178,7 +178,38 @@ export default function AdminDashboard() {
                             Resumen operativo de <span style={{ color: THEME.colors.primary, fontWeight: '600' }}>FruFresco</span> en tiempo real.
                         </p>
                     </div>
-                    <div>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        {profile?.role === 'sys_admin' && (
+                            <Link href="/admin/command-center" style={{ textDecoration: 'none' }}>
+                                <button
+                                    style={{
+                                        padding: '0.6rem 1.2rem',
+                                        borderRadius: THEME.radius.md,
+                                        backgroundColor: THEME.colors.primaryLight,
+                                        border: `1px solid ${THEME.colors.primary}20`,
+                                        fontWeight: '700',
+                                        color: THEME.colors.primary,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.85rem',
+                                        boxShadow: THEME.shadow.sm,
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.backgroundColor = THEME.colors.primary;
+                                        e.currentTarget.style.color = 'white';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.backgroundColor = THEME.colors.primaryLight;
+                                        e.currentTarget.style.color = THEME.colors.primary;
+                                    }}
+                                >
+                                    <Radio size={14} strokeWidth={2} /> Delta Command
+                                </button>
+                            </Link>
+                        )}
                         <button
                             onClick={fetchDashboardData}
                             style={{ 
@@ -238,8 +269,8 @@ export default function AdminDashboard() {
                     />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 340px', gap: '1.5rem', marginBottom: '2rem', alignItems: 'start' }}>
-                    {/* COLUMNA 1: OPERACIONES CLAVE */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 340px', gap: '1.5rem', marginBottom: '2rem', alignItems: 'start' }}>
+                    {/* COLUMNA 1: PORTAL DE COMPRAS */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ 
                             background: 'linear-gradient(135deg, #111827 0%, #1E2B25 100%)', // Deep organic slate
@@ -251,7 +282,9 @@ export default function AdminDashboard() {
                             boxShadow: THEME.shadow.md,
                             position: 'relative',
                             overflow: 'hidden',
-                            border: `1px solid ${THEME.colors.border}`
+                            border: `1px solid ${THEME.colors.border}`,
+                            height: '100%',
+                            justifyContent: 'center'
                         }}>
                             <div style={{ position: 'absolute', bottom: '-10px', right: '-10px', opacity: 0.04, color: 'white' }}>
                                 <ShoppingBag size={140} strokeWidth={1} />
@@ -291,55 +324,9 @@ export default function AdminDashboard() {
                                 </button>
                             </Link>
                         </div>
-
-                        <div style={{ 
-                            backgroundColor: THEME.colors.surface, 
-                            borderRadius: THEME.radius.lg, 
-                            padding: '1.25rem', 
-                            border: `1px solid ${THEME.colors.border}`, 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            boxShadow: THEME.shadow.sm 
-                        }}>
-                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ 
-                                    width: '40px', 
-                                    height: '40px', 
-                                    backgroundColor: THEME.colors.primaryLight, 
-                                    borderRadius: THEME.radius.md, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center', 
-                                    color: THEME.colors.primary
-                                }}>
-                                    <ShieldCheck size={20} strokeWidth={1.5} />
-                                </div>
-                                <div>
-                                    <h2 style={{ fontSize: '0.95rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>Gobernanza</h2>
-                                    <p style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, margin: 0, fontWeight: '500' }}>Auditoría y Trazabilidad</p>
-                                </div>
-                            </div>
-                            <Link href="/admin/audit" style={{ textDecoration: 'none' }}>
-                                <button style={{ 
-                                    padding: '0.5rem 1rem', 
-                                    borderRadius: THEME.radius.md, 
-                                    backgroundColor: THEME.colors.textMain, 
-                                    color: 'white', 
-                                    border: 'none', 
-                                    fontWeight: '700', 
-                                    fontSize: '0.75rem',
-                                    cursor: 'pointer',
-                                    transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#2D3748'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.textMain}
-                                >GESTIONAR</button>
-                            </Link>
-                        </div>
                     </div>
-
-                    {/* COLUMNA 2: GESTIÓN DE MAESTROS */}
+ 
+                    {/* COLUMNA 2: GESTIÓN DE MAESTROS, GOBERNANZA Y AJUSTES */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         {hasPermission('admin.products.catalog') && (
                             <AdminCard title="Catálogo Web" href="/admin/products" icon={<ShoppingBag size={22} strokeWidth={1.5} />} desc="Precios B2C" />
@@ -353,53 +340,12 @@ export default function AdminDashboard() {
                         {hasPermission('admin.procurement.providers') && (
                             <AdminCard title="Proveedores" href="/admin/procurement/providers" icon={<Store size={22} strokeWidth={1.5} />} desc="Maestro Compras" />
                         )}
+                        <AdminCard title="Gobernanza" href="/admin/audit" icon={<ShieldCheck size={22} strokeWidth={1.5} />} desc="Auditoría" />
                         {hasPermission('admin.dashboard.settings') && (
-                            <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" style={{ gridColumn: profile?.role === 'sys_admin' ? 'auto' : 'span 2' }} />
-                        )}
-                        
-                        {profile?.role === 'sys_admin' && (
-                            <Link href="/admin/command-center" style={{ gridColumn: 'span 2', textDecoration: 'none' }}>
-                                <div style={{ 
-                                    backgroundColor: THEME.colors.surface, 
-                                    padding: '1.25rem', 
-                                    borderRadius: THEME.radius.lg, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'space-between',
-                                    border: `1px solid ${THEME.colors.border}`,
-                                    boxShadow: THEME.shadow.sm,
-                                    backgroundImage: 'linear-gradient(to right, rgba(0,0,0,0.01) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.01) 1px, transparent 1px)',
-                                    backgroundSize: '16px 16px',
-                                    transition: 'all 0.2s ease-in-out'
-                                }}
-                                onMouseEnter={e => {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                    e.currentTarget.style.borderColor = THEME.colors.primary;
-                                    e.currentTarget.style.boxShadow = THEME.shadow.lg;
-                                }}
-                                onMouseLeave={e => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.borderColor = THEME.colors.border;
-                                    e.currentTarget.style.boxShadow = THEME.shadow.sm;
-                                }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ color: THEME.colors.primary }}>
-                                            <Radio size={24} strokeWidth={1.5} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontWeight: '800', color: THEME.colors.primary, fontSize: '0.9rem', letterSpacing: '0.05em' }}>DELTA COMMAND CENTER</div>
-                                            <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase' }}>Infraestructura & Datos</div>
-                                        </div>
-                                    </div>
-                                    <div style={{ color: THEME.colors.primary, fontWeight: '800' }}>
-                                        <ArrowRight size={16} strokeWidth={1.5} />
-                                    </div>
-                                </div>
-                            </Link>
+                            <AdminCard title="Ajustes" href="/admin/settings" icon={<Settings size={22} strokeWidth={1.5} />} desc="Configuración" />
                         )}
                     </div>
-
+ 
                     {/* COLUMNA 3: RADAR (Fija a la derecha) */}
                     <div style={{ 
                         backgroundColor: THEME.colors.surface, 
