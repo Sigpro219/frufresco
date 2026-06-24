@@ -12,8 +12,16 @@ BEGIN
     -- Resolve authenticated session user
     v_user_id := auth.uid();
     
-    -- Cross-reference profile details
-    IF v_user_id IS NOT NULL THEN
+    -- Cross-reference profile details or use parameters directly to avoid transaction recursion on same table
+    IF TG_TABLE_NAME = 'profiles' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_user_name := COALESCE(OLD.contact_name, OLD.company_name, OLD.email, v_user_id::text);
+            v_collab_id := OLD.collaborator_id;
+        ELSE
+            v_user_name := COALESCE(NEW.contact_name, NEW.company_name, NEW.email, v_user_id::text);
+            v_collab_id := NEW.collaborator_id;
+        END IF;
+    ELSIF v_user_id IS NOT NULL THEN
         SELECT 
             COALESCE(contact_name, company_name, email, v_user_id::text),
             collaborator_id
@@ -22,12 +30,23 @@ BEGIN
             v_collab_id
         FROM public.profiles
         WHERE id = v_user_id;
-        
-        IF v_user_name IS NULL THEN
+    END IF;
+
+    -- Fallback name
+    IF v_user_name IS NULL THEN
+        IF v_user_id IS NOT NULL THEN
             v_user_name := 'Authenticated User (' || v_user_id::text || ')';
+        ELSE
+            v_user_name := 'System / DB Direct';
         END IF;
-    ELSE
-        v_user_name := 'System / DB Direct';
+    END IF;
+
+    -- Verify that the collaborator_id exists in public.collaborators to prevent foreign key violations.
+    -- If it does not exist, safe fallback to NULL.
+    IF v_collab_id IS NOT NULL THEN
+        IF NOT EXISTS (SELECT 1 FROM public.collaborators WHERE id = v_collab_id) THEN
+            v_collab_id := NULL;
+        END IF;
     END IF;
 
     -- Format action name
