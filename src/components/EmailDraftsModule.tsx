@@ -667,7 +667,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const initialQty = parseFloat(item.quantity || 1);
         let conversionFactor = isLibra ? 0.5 : (item.conversion_factor || 1);
         let finalQty = isLibra ? parseFloat((initialQty * 0.5).toFixed(2)) : initialQty;
-        let finalUnit = isLibra ? 'Kg' : parsedUnit;
+        let finalUnit = prod?.unit_of_measure || (isLibra ? 'Kg' : parsedUnit);
 
         if (initialQty >= 100 && !isLibra) {
           const targetUnit = prod?.unit_of_measure || 'Kg';
@@ -3371,11 +3371,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
                                                 }
                                                 
-                                                const currentUnit = newEdits[i].unit;
-                                                const isSpecialUnit = ['Litro', 'Lb', 'Paquete 250 gramos', 'Paquete 500 gramos'].includes(currentUnit);
-                                                if (!isSpecialUnit) {
-                                                  newEdits[i].unit = normalizedUnit;
-                                                }
+                                                newEdits[i].unit = normalizedUnit;
                                                 // Extract variants from observations/originalName
                                                 const autoSelectedOptions: Record<string, string> = {};
                                                 const rawOriginalName = newEdits[i].originalName || '';
