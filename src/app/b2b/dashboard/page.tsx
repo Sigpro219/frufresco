@@ -1067,7 +1067,7 @@ export default function B2BDashboard() {
                                 {/* Items List */}
                                 {orderItems.length > 0 ? (
                                     <div>
-                                        <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
+                                        <div style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto' }}>
                                             {orderItems.map((item) => (
                                                 <div key={item.id} className="cart-item-row" style={{
                                                     display: 'flex',
