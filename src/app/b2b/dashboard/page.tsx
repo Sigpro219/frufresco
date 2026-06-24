@@ -693,7 +693,7 @@ export default function B2BDashboard() {
                     <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
                 </div>
 
-                {/* TAB NAVIGATION — segmented control */}
+                {/* TAB NAVIGATION — segmented control (Sticky top) */}
                 <div style={{
                     display: 'flex',
                     backgroundColor: THEME.colors.background,
@@ -702,6 +702,10 @@ export default function B2BDashboard() {
                     marginBottom: '1.5rem',
                     border: `1px solid ${THEME.colors.border}`,
                     gap: '2px',
+                    position: 'sticky',
+                    top: '0px',
+                    zIndex: 40,
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
                 }}>
                     {[
                         { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
@@ -2267,6 +2271,8 @@ export default function B2BDashboard() {
                         height: 858px;
                         overflow-y: auto !important;
                         position: relative;
+                        padding-top: 140px; /* Espacio para el header sticky absoluto */
+                        box-sizing: border-box;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
@@ -2281,6 +2287,9 @@ export default function B2BDashboard() {
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
+                        position: relative;
+                        padding-top: 75px; /* Espacio para el header del carrito absoluto */
+                        box-sizing: border-box;
                     }
                     /* Sección pequeña de Soporte WhatsApp de 174px */
                     .b2b-cart-sidebar > div:last-child {
@@ -2289,16 +2298,20 @@ export default function B2BDashboard() {
                         box-sizing: border-box;
                     }
                     .b2b-sticky-catalog-header {
-                        position: sticky;
+                        position: absolute;
                         top: 0;
+                        left: 0;
+                        right: 0;
                         z-index: 10;
                         background-color: white;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
                         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
                     }
                     .b2b-sticky-cart-header {
-                        position: sticky;
+                        position: absolute;
                         top: 0;
+                        left: 0;
+                        right: 0;
                         z-index: 10;
                         background-color: #F8FAFC;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
