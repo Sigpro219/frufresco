@@ -374,7 +374,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
               quantity: itm.quantity,
               unitPrice: mProd ? mProd.base_price : 0,
-              unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+              unitOfMeasure: itm.unit || (mProd ? mProd.unit_of_measure : 'und')
             };
           });
 
@@ -540,20 +540,77 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       // Initialize editable items
       const rawItems = getDraftItems(selectedDraft);
       const initialEdits = rawItems.map((item: any) => {
+        let cleanName = item.originalName || item.name || '';
+        const rawOriginalName = cleanName;
+        if (cleanName) {
+          cleanName = cleanName
+            .replace(/^[0-9]+(?:[\.,][0-9]+)?(?:\s*(?:kg|kilos?|g|gr|gramos?|litros?|l|lbs?|libras?|unidades?|uds?|unds?|paquetes?))?\s+(?:de\s+)?/i, '')
+            .replace(/^(libras?\s+de\s+|libra\s+de\s+|unidades?\s+de\s+|litros?\s+de\s+|paquetes?\s+de\s+)/i, '')
+            .trim();
+        }
+
         let matchedId = item.matched_product_id || null;
+        
+        // Load preference from memory/localStorage first
+        if (typeof window !== 'undefined') {
+          const clientName = selectedDraft.client_detected_name || 'default';
+          const prefKey = `frufresco_pref_${clientName}_${cleanName}`;
+          const savedPrefId = localStorage.getItem(prefKey);
+          if (savedPrefId) {
+            matchedId = savedPrefId;
+          }
+        }
+
         if (!matchedId) {
-          const matchedProd = findMatchedProduct(item.originalName);
+          const matchedProd = findMatchedProduct(cleanName);
           if (matchedProd) matchedId = matchedProd.id;
         }
         const prod = products.find(p => p.id === matchedId);
         return {
             ...item,
+            originalName: cleanName,
             originalQuantity: item.quantity || 1,
             quantity: item.quantity || 1,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
-            unit: item.unit || prod?.unit_of_measure || 'Kg',
+            unit: (() => {
+              const u = (item.unit || '').toLowerCase().trim();
+              if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
+              if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
+              if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return 'Unidad';
+              if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) return 'Paquete 500 gramos';
+              if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) return 'Paquete 250 gramos';
+              if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
+              if (u === 'g' || u === 'gr' || u === 'gramo' || u === 'gramos') {
+                const qty = Number(item.quantity || 1);
+                if (qty === 500) return 'Paquete 500 gramos';
+                if (qty === 250) return 'Paquete 250 gramos';
+                return 'Kg';
+              }
+              if (u === 'atado' || u === 'atados') return 'Atado';
+              if (u === 'bulto' || u === 'bultos') return 'Bulto';
+              if (u === 'canastilla' || u === 'canastillas') return 'Canastilla';
+              if (u === 'paquete' || u === 'paquetes') {
+                const qty = Number(item.quantity || 1);
+                if (qty === 500) return 'Paquete 500 gramos';
+                if (qty === 250) return 'Paquete 250 gramos';
+                return prod?.unit_of_measure || 'Kg';
+              }
+              
+              const origLower = rawOriginalName.toLowerCase();
+              if (origLower.includes('libra')) return 'Lb';
+              if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
+              if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
+              if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
+              if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
+              if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
+                return prod?.unit_of_measure || 'Kg';
+              }
+              
+              // Si no contiene ninguna palabra clave de unidades en el texto del pedido, se asume obligatoriamente 'Unidad'
+              return 'Unidad';
+            })(),
             observations: item.observations || '',
             selected_options: item.selected_options || {}
         };
@@ -2843,7 +2900,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 newEdits[i].matched_product_id = found.id;
                                                 newEdits[i].searchQuery = found.name;
                                                 newEdits[i].skuQuery = found.sku || '';
-                                                newEdits[i].unit = found.unit_of_measure || 'Kg';
+                                                
+                                                const u = (found.unit_of_measure || '').toLowerCase().trim();
+                                                let normalizedUnit = 'Kg';
+                                                if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
+                                                else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
+                                                else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
+                                                else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
+                                                else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
+                                                else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') normalizedUnit = 'Kg';
+                                                else if (found.unit_of_measure) normalizedUnit = found.unit_of_measure;
+                                                
+                                                const currentUnit = newEdits[i].unit;
+                                                const isSpecialUnit = ['Litro', 'Lb', 'Paquete 250 gramos', 'Paquete 500 gramos'].includes(currentUnit);
+                                                if (!isSpecialUnit) {
+                                                  newEdits[i].unit = normalizedUnit;
+                                                }
                                                 newEdits[i].selected_options = {};
                                               } else {
                                                 newEdits[i].matched_product_id = null;
@@ -2906,7 +2978,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                             color: '#111827'
                                           }}
                                         >
-                                          {Array.from(new Set(['Kg', 'Unidad', 'Paquete', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
+                                          {Array.from(new Set(['Kg', 'Lb', 'Unidad', 'Litro', 'Paquete 250 gramos', 'Paquete 500 gramos', 'Atado', 'Bulto', 'Canastilla', item.unit || 'Kg'])).map(opt => (
                                             <option key={opt} value={opt}>{opt}</option>
                                           ))}
                                         </select>
@@ -3384,7 +3456,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   productName: mProd ? mProd.name : (itm.searchQuery || itm.originalName || 'No especificado'),
                                   quantity: itm.quantity,
                                   unitPrice: mProd ? mProd.base_price : 0,
-                                  unitOfMeasure: mProd ? mProd.unit_of_measure : 'und'
+                                  unitOfMeasure: itm.unit || (mProd ? mProd.unit_of_measure : 'und')
                                 };
                               });
 

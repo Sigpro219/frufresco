@@ -32,7 +32,7 @@ function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeT
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -95,6 +95,11 @@ export async function POST(req: Request) {
     const subject = headers.subject || headers.Subject || '';
     const plainText = payload.plain || '';
     const attachments = payload.attachments || [];
+    
+    // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
+    let cleanedBodyText = plainText;
+    const forwardBlockRegex = /[-]+\s*Forwarded\s+message\s*[-]+\s*\r?\n(?:(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc):\s*[^\r\n]*\r?\n)*/i;
+    cleanedBodyText = cleanedBodyText.replace(forwardBlockRegex, '').trim();
     
     // DEBUG: Append attachment info to plainText so we can see it in Supabase
     let debugInfo = '\n\n[DEBUG] Attachments info: ' + JSON.stringify(attachments.map((a: any) => ({name: a.filename, type: a.content_type, size: a.content ? a.content.length : 0})));
@@ -247,7 +252,7 @@ export async function POST(req: Request) {
         
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
-        ${currentPlainText}
+        ${cleanedBodyText}
         """
         
         TAREA:
@@ -272,6 +277,7 @@ export async function POST(req: Request) {
              - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+             - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
@@ -290,7 +296,7 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "observations": "Cualquier nota u observación específica del producto o null" }
+            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
           ]
         }
       `;
@@ -339,6 +345,7 @@ export async function POST(req: Request) {
              - Si la tabla incluye una columna de CANTIDAD TOTAL y luego columnas adicionales que desglosan esa cantidad por sedes, usa ÚNICAMENTE la CANTIDAD TOTAL. Ignora los desgloses para no duplicar las cantidades.
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+             - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         7. Extrae las observaciones o especificaciones en el campo "observations".
         
         REGLAS CRÍTICAS:
@@ -356,7 +363,7 @@ export async function POST(req: Request) {
           "deliveryDate": "YYYY-MM-DD o null",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Nombre del Producto", "quantity": 10, "observations": "Cualquier nota u observación específica del producto o null" }
+            { "originalName": "Nombre del Producto", "quantity": 10, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
           ]
         }
         `;
@@ -397,17 +404,24 @@ export async function POST(req: Request) {
       const prompt = `
         Eres un asistente de logística para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+        
+        CUERPO DEL CORREO ELECTRÓNICO ENVIADO POR EL CLIENTE:
+        """
+        ${cleanedBodyText}
+        """
+
         Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
-              TAREA:
+        TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
            - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
            - NOMBRE DEL CLIENTE: Identifica el nombre comercial de la empresa, marca o contacto en la firma/pie de página. NUNCA uses nombres de ciudades/países (como "Bogotá-Colombia", "Bogotá", "Colombia") como el nombre del cliente; busca el nombre real del negocio o contacto.
         2. Extrae todos los productos solicitados con sus cantidades.
            - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - NO confundas el código PLU (primera columna) con la cantidad. 
-           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0. 
+           - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
+           - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
         3. Extrae la dirección de entrega de forma limpia.
-           - DIRECCIÓN DE ENTREGA: Extrae la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78"). Limpia cualquier texto extra de despedida o firma, guardando únicamente la nomenclatura de la dirección. Si no hay dirección explícita, devuelve null o vacío. después de la dirección física, recórtalo y quédate solo con la nomenclatura de la dirección.
+           - DIRECCIÓN DE ENTREGA: Extrae únicamente la dirección física escrita en el correo o firma (ej. "Carrera 7 #45-78", "Carrera 15 # 134A 25, Apartamento 802, Barrio Cedritos, Bogotá"). Limpia cualquier texto extra de comentarios, solicitudes, despedida o firma. Quédate estrictamente con la nomenclatura geográfica de la dirección. NUNCA incluyas frases del cuerpo del correo como "Por favor confirmar disponibilidad...", "Adjunto pedido...", etc. Si no hay dirección explícita, devuelve null o vacío.
         4. Identifica la franja u horario de entrega. Si en el correo se indica un horario o franja horaria de entrega, debes asumir la jornada correspondiente:
            - Si el horario está en el rango de la mañana (ej. "7:00 a 11:00 am", "7:30 a 11:50 am", "mañana", "7:00am a 12:00pm"), asume "AM".
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
@@ -435,7 +449,7 @@ export async function POST(req: Request) {
           "nit": "NIT o cédula extraída o vacio",
           "clientType": "b2b_client o b2c_client",
           "items": [
-            { "originalName": "Tomate Chonto", "quantity": 15, "observations": "Cualquier nota u observación específica del producto o null" }
+            { "originalName": "Tomate Chonto", "quantity": 15, "unit": "Kg / Lb / Unidad / Litro / null", "observations": "Cualquier nota u observación específica del producto o null" }
           ]
         }
       `;
@@ -456,7 +470,7 @@ export async function POST(req: Request) {
         if (text.startsWith('```')) text = text.substring(3);
         if (text.endsWith('```')) text = text.substring(0, text.length - 3);
         text = text.trim();
-
+ 
         extractedData = JSON.parse(text);
         if (extractedData.items && !Array.isArray(extractedData.items)) {
           if (typeof extractedData.items === 'object') {
@@ -472,7 +486,7 @@ export async function POST(req: Request) {
       // FALLBACK: If Gemini failed to extract items, try regex extraction
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
-        const lines = currentPlainText.split('\n');
+        const lines = cleanedBodyText.split('\n');
         const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
@@ -482,14 +496,15 @@ export async function POST(req: Request) {
           if (match) {
             extractedData.items.push({
               originalName: match[4].trim().replace(/^-+/, '').trim(),
-              quantity: parseFloat(match[1].replace(',', '.'))
+              quantity: parseFloat(match[1].replace(',', '.')),
+              unit: match[2] ? match[2] : 'Unidad'
             });
           }
         }
       }
       
       // FALLBACK: If Gemini failed to extract metadata, use regex
-      const lines = currentPlainText.split('\n');
+      const lines = cleanedBodyText.split('\n');
       let addressStr = '';
       let addressFound = false;
       for (let line of lines) {
@@ -505,8 +520,12 @@ export async function POST(req: Request) {
           if (nitMatch && !extractedData.nit) extractedData.nit = nitMatch[1].replace(/\D/g, '');
         }
         // Extract Address
-        if (addressFound && line !== '' && !line.match(/celular|tel[ée]fono|c\.c\.|nit|atentamente|gracias|agradezco|quedo/i) && addressStr.length < 120) {
-          addressStr += (addressStr ? ', ' : '') + line;
+        if (addressFound && line !== '') {
+          if (line.match(/celular|tel[ée]fono|c\.c\.|nit|atentamente|gracias|agradezco|quedo|favor|confirmar|disponibilidad|productos|valor|total|pedido|saludo/i)) {
+            addressFound = false;
+          } else if (addressStr.length < 120) {
+            addressStr += (addressStr ? ', ' : '') + line;
+          }
         }
         if (line.match(/direcci[óo]n/i)) {
           addressFound = true;
@@ -531,7 +550,7 @@ export async function POST(req: Request) {
 
       if (isBlacklistedName) {
         let nameCandidate = '';
-        const signatureLines = currentPlainText.split('\n');
+        const signatureLines = cleanedBodyText.split('\n');
         for (let k = 0; k < signatureLines.length; k++) {
           const line = signatureLines[k].trim();
           if (line.match(/c\.c\.|nit|celular|tel[ée]fono/i)) {
@@ -836,7 +855,39 @@ export async function POST(req: Request) {
             attachmentUrl: attachmentUrl || null,
             attachmentName: attachmentName || null
           },
-          ...(Array.isArray(extractedData.items) ? extractedData.items : [])
+          ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
+            const nameLower = String(itm.originalName || itm.name || '').toLowerCase();
+            let quantity = itm.quantity;
+            let observations = itm.observations || '';
+            
+            // Si el nombre original contiene la palabra 'libra' o 'libras' o 'lb'
+            if (nameLower.includes('libra') || nameLower.includes('lb')) {
+              // Si la unidad detectada en base de datos es Kg, 1 libra = 0.5 Kg.
+              // Indicamos en las observaciones que se solicitó en libras
+              if (!observations.toLowerCase().includes('libra')) {
+                observations = `Solicitado en Libras. ${observations}`.trim();
+              }
+              // Opcional: Podríamos convertir la cantidad a Kg (ej: 1 libra = 0.5 Kg) si se asume Kg por defecto
+              // Pero el frontend/sistema de equivalencias requiere saber la cantidad original y la unidad.
+              // Agregamos un flag de unidad 'Lb' o similar al objeto del item
+              return {
+                ...itm,
+                unit: 'Lb',
+                observations: observations
+              };
+            }
+            if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+              if (!observations.toLowerCase().includes('litro')) {
+                observations = `Solicitado en Litros. ${observations}`.trim();
+              }
+              return {
+                ...itm,
+                unit: 'Litro',
+                observations: observations
+              };
+            }
+            return itm;
+          }) : [])
         ],
         status: 'pending'
       })
