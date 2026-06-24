@@ -4388,6 +4388,21 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
             )}
 
+            {rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+              <div style={{
+                backgroundColor: '#FEF2F2',
+                borderLeft: '4px solid #EF4444',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: '#991B1B',
+                marginBottom: '1.25rem'
+              }}>
+                ⚠️ No es posible rechazar por falta de cobertura ya que la dirección se encuentra dentro de la zona de cobertura actual de FruFresco.
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.5rem' }}>
               <button
                 type="button"
@@ -4411,6 +4426,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 disabled={
                   !rejectReason || 
                   (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) ||
+                  (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) ||
                   saving
                 }
                 onClick={async () => {
@@ -4432,7 +4448,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       throw new Error(errData.error || 'Error en el servidor');
                     }
 
-                    showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
+                    const data = await res.json();
+                    if (data.warning) {
+                      showToast(data.warning, 'warning');
+                    } else {
+                      showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
+                    }
                     setRejectModal(null);
                     setSelectedDraft(null);
                     fetchDrafts();
@@ -4452,7 +4473,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   fontWeight: 700,
                   color: 'white',
                   cursor: 'pointer',
-                  opacity: (!rejectReason || (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) || saving) ? 0.5 : 1
+                  opacity: (!rejectReason || (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) || (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) || saving) ? 0.5 : 1
                 }}
               >
                 {saving ? 'Procesando...' : 'Rechazar'}

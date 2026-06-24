@@ -250,6 +250,8 @@ export async function POST(req: Request) {
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
+        ASUNTO DEL CORREO: "${subject}"
+        
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
         ${cleanedBodyText}
@@ -269,7 +271,7 @@ export async function POST(req: Request) {
            - Si no hay información de horario, pon null.
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
              - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
              - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
@@ -323,6 +325,8 @@ export async function POST(req: Request) {
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
+        ASUNTO DEL CORREO: "${subject}"
+        
         CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
         """
         ${currentPlainText}
@@ -337,7 +341,7 @@ export async function POST(req: Request) {
            - NOMBRE DEL CLIENTE: Identifica la compañía matriz o razón social principal. NUNCA uses nombres de sucursales o ciudades.
         3. Identifica la franja u horario de entrega. El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/Excel para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/Excel, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
              - Identifica dinámicamente qué columna contiene la "CANTIDAD PEDIDA" o "CANTIDAD TOTAL". No asumas que siempre es la tercera columna.
              - Si la cabecera (título) de la columna de cantidades está vacía o es nula en el documento/tabla, pero claramente contiene los valores totales numéricos del pedido, asume que esa es la columna correcta y extrae las cantidades de ahí.
@@ -405,12 +409,14 @@ export async function POST(req: Request) {
         Eres un asistente de logística para FruFresco.
         FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
         
+        ASUNTO DEL CORREO: "${subject}"
+        
         CUERPO DEL CORREO ELECTRÓNICO ENVIADO POR EL CLIENTE:
         """
         ${cleanedBodyText}
         """
 
-        Analiza este cuerpo de correo electrónico que contiene una solicitud de pedido.
+        Analiza tanto el asunto como el cuerpo de este correo electrónico que contiene una solicitud de pedido.
         TAREA:
         1. Identifica el nombre o empresa del CLIENTE que firma o envía el correo.
            - GUÍA DE FIRMA/PIE DE PÁGINA: La firma o pie de página del correo suele contener el NOMBRE DE LA EMPRESA, la DIRECCIÓN y el NÚMERO DE TELÉFONO de contacto. Busca en esa zona específica (generalmente al final del correo, después de expresiones como "Atentamente" o "Cordialmente") para identificar y extraer estos datos con precisión.
@@ -429,7 +435,7 @@ export async function POST(req: Request) {
            - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
            - Si no hay información de horario, pon null.
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
-        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD" usando la fecha actual del sistema como referencia (si dice "mañana", suma un día a la fecha actual). Si no la especifica, pon null.
+        5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
         7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
         
@@ -829,6 +835,23 @@ export async function POST(req: Request) {
       }
     }
 
+    // Extract date from subject or body if present as fallback/override
+    let targetDeliveryDate = extractedData.deliveryDate || null;
+    if (subject) {
+      const dateMatchSlash = subject.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
+      if (dateMatchSlash) {
+        const day = dateMatchSlash[1];
+        const month = dateMatchSlash[2];
+        const year = dateMatchSlash[3];
+        targetDeliveryDate = `${year}-${month}-${day}`;
+      } else {
+        const dateMatchDash = subject.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
+        if (dateMatchDash) {
+          targetDeliveryDate = `${dateMatchDash[1]}-${dateMatchDash[2]}-${dateMatchDash[3]}`;
+        }
+      }
+    }
+
     // 5. Save draft to public.order_drafts
     // Use the predefined draftUuid so we can reference its short ID immediately
     const shortCode = `EML-${draftUuid.substring(0, 6).toUpperCase()}`;
@@ -848,7 +871,7 @@ export async function POST(req: Request) {
             address: extractedData.address || null,
             addressDetected: addressDetected,
             deliverySlot: finalDeliverySlot,
-            deliveryDate: extractedData.deliveryDate || null,
+            deliveryDate: targetDeliveryDate || null,
             phone: extractedData.phone || null,
             nit: extractedData.nit || null,
             clientType: clientType,

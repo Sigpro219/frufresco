@@ -214,8 +214,10 @@ export async function POST(req: Request) {
           console.error('[Reject Draft API] Failed to log failed mail in database:', insertError);
         }
         return NextResponse.json({ 
-          error: `Error al enviar el correo por SMTP: ${smtpErr.message || 'SMTP Error'}` 
-        }, { status: 500 });
+          success: true,
+          emailSent: false,
+          warning: `Borrador rechazado, pero el correo no se pudo enviar por SMTP: ${smtpErr.message || 'SMTP Error'}`
+        });
       }
     } else {
       console.warn('[Reject Draft API] No SMTP credentials found (SMTP_USER/SMTP_PASS). Simulating mail send in development.');
