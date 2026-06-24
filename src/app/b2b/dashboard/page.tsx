@@ -693,7 +693,7 @@ export default function B2BDashboard() {
                     <p style={{ margin: '0.25rem 0 0', color: THEME.colors.textSecondary, fontSize: '0.875rem' }}>Portal institucional</p>
                 </div>
 
-                {/* TAB NAVIGATION — segmented control */}
+                {/* TAB NAVIGATION — segmented control (Sticky top) */}
                 <div style={{
                     display: 'flex',
                     backgroundColor: THEME.colors.background,
@@ -702,6 +702,10 @@ export default function B2BDashboard() {
                     marginBottom: '1.5rem',
                     border: `1px solid ${THEME.colors.border}`,
                     gap: '2px',
+                    position: 'sticky',
+                    top: '0px',
+                    zIndex: 40,
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
                 }}>
                     {[
                         { key: 'order', icon: <ShoppingCart size={16} strokeWidth={1.5} />, label: t.b2b.dashboard.tabQuickOrder },
