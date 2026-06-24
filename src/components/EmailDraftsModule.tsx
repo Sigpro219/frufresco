@@ -4423,11 +4423,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (!rejectReason) return true;
           if (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) return true;
           if (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) return true;
-          if (rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null)) return true;
+          if (rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null)) return true;
           if (rejectReason === 'datos_incompletos' && editableAddress && editableAddress.toLowerCase() !== 'no detectada' && rejectModal.sourceEmail && getDraftMetadata(selectedDraft).phone && getDraftMetadata(selectedDraft).phone !== '0') return true;
           if (rejectReason === 'pedido_duplicado' && !drafts.some(d => d.id !== selectedDraft.id && d.source_email === selectedDraft.source_email && new Date(d.created_at).toDateString() === new Date(selectedDraft.created_at).toDateString())) return true;
           if (rejectReason === 'bloqueo_cartera' && selectedDraft?.profiles?.is_active === true) return true;
-          if (rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null)) return true;
+          if (rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null)) return true;
           if (rejectReason === 'fuera_de_horario' && new Date(selectedDraft.created_at).getHours() < 20) return true;
           return false;
         })();
@@ -4540,7 +4540,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
               )}
 
-              {rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null) && (
+              {rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null) && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -4551,7 +4551,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   color: '#991B1B',
                   marginBottom: '1.25rem'
                 }}>
-                  ⚠️ No es posible rechazar por productos no comercializados ya que todos los productos del pedido se encuentran homologados en nuestro catálogo.
+                  ⚠️ No es posible rechazar la totalidad del pedido por productos no comercializados ya que tienes productos homologados válidos. Elimina del listado los productos no comercializados y procesa el resto.
                 </div>
               )}
 
@@ -4600,7 +4600,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 </div>
               )}
 
-              {rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null) && (
+              {rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.some(itm => itm.matched_product_id !== null) && (
                 <div style={{
                   backgroundColor: '#FEF2F2',
                   borderLeft: '4px solid #EF4444',
@@ -4611,7 +4611,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   color: '#991B1B',
                   marginBottom: '1.25rem'
                 }}>
-                  ⚠️ No es posible rechazar por falta de stock ya que todos los productos del pedido se encuentran homologados y disponibles en el catálogo.
+                  ⚠️ No es posible rechazar la totalidad del pedido por falta de stock ya que tienes productos disponibles. Elimina del listado los productos sin stock y procesa el resto.
                 </div>
               )}
 
