@@ -57,6 +57,45 @@ const matchVariantOption = (searchText: string, optionValue: string) => {
   return { matched: false, matchedTextInSearch: null };
 };
 
+const getDeliverySlotFromLogistics = (logisticsData: any): string | null => {
+  if (!logisticsData) return null;
+  const startTime = logisticsData.start_time;
+  const endTime = logisticsData.end_time;
+  
+  if (!startTime && !endTime) return null;
+  
+  const parseTimeToDecimal = (timeStr: string) => {
+    if (!timeStr) return null;
+    const parts = timeStr.split(':');
+    const hours = parseInt(parts[0], 10) || 0;
+    const minutes = parseInt(parts[1], 10) || 0;
+    return hours + minutes / 60;
+  };
+
+  const startDecimal = parseTimeToDecimal(startTime);
+  const endDecimal = parseTimeToDecimal(endTime);
+
+  if (endDecimal !== null && endDecimal <= 12.5) {
+    return 'AM';
+  }
+  if (startDecimal !== null && startDecimal >= 12.0) {
+    return 'PM';
+  }
+  return 'Cualquier hora';
+};
+
+const formatLogisticsTime = (timeStr: string): string => {
+  if (!timeStr) return '';
+  const parts = timeStr.split(':');
+  let hours = parseInt(parts[0], 10) || 0;
+  const minutes = parts[1] || '00';
+  const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minStr = minutes.substring(0, 2);
+  return `${hours.toString().padStart(2, '0')}:${minStr} ${ampm}`;
+};
+
 const getSmartFallbackUnit = (prodName: string, databaseUnit: string): string => {
   const name = prodName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (name.includes('huevo')) {
@@ -81,6 +120,7 @@ interface EmailDraftsModuleProps {
 export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleProps = {}) {
   const [drafts, setDrafts] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [conversions, setConversions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
@@ -108,6 +148,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
   const productInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [obsModal, setObsModal] = useState<{
@@ -230,8 +272,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   useEffect(() => {
     fetchDrafts();
     fetchProducts();
+    fetchConversions();
     fetchAliases();
     fetchGeofence();
+    fetchProfiles();
 
     const channel = supabase.channel('realtime-drafts')
       .on(
@@ -354,11 +398,33 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     }
   };
 
+  const fetchConversions = async () => {
+    try {
+      const { data } = await supabase.from('product_conversions').select('*');
+      if (data) setConversions(data);
+    } catch (e) {
+      console.error('Error loading product conversions:', e);
+    }
+  };
+
+  const fetchProfiles = async () => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data')
+        .eq('is_active', true)
+        .order('company_name', { ascending: true });
+      if (data) setProfiles(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
   const handleToggleEdit = async () => {
     if (isEditing) {
       setSaving(true);
       try {
         const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+        const selectedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
         const updatedMetaItem = {
           ...metaItem,
           address: editableAddress,
@@ -368,7 +434,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           orderDocument: orderDocument,
           purchaseOrder: purchaseOrder,
           latitude: draftCoordinates?.lat || metaItem.latitude || null,
-          longitude: draftCoordinates?.lng || metaItem.longitude || null
+          longitude: draftCoordinates?.lng || metaItem.longitude || null,
+          nit: selectedProfile ? selectedProfile.nit : metaItem.nit,
+          phone: selectedProfile ? selectedProfile.phone : metaItem.phone,
+          clientType: selectedProfile ? selectedProfile.role : metaItem.clientType
         };
         const updatedExtractedItems = [
           updatedMetaItem,
@@ -377,16 +446,27 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
         const { error } = await supabase
           .from('order_drafts')
-          .update({ extracted_items: updatedExtractedItems })
+          .update({ 
+            extracted_items: updatedExtractedItems,
+            profile_id: selectedDraft.profile_id,
+            client_detected_name: selectedDraft.client_detected_name
+          })
           .eq('id', selectedDraft.id);
 
         if (error) throw error;
         
         setSelectedDraft((prev: any) => ({
           ...prev,
+          profile_id: selectedDraft.profile_id,
+          client_detected_name: selectedDraft.client_detected_name,
           extracted_items: updatedExtractedItems
         }));
-        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+        setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { 
+          ...d, 
+          profile_id: selectedDraft.profile_id,
+          client_detected_name: selectedDraft.client_detected_name,
+          extracted_items: updatedExtractedItems 
+        } : d));
         showToast('Borrador de pedido guardado exitosamente.', 'success');
       } catch (e: any) {
         console.warn('Error saving edits:', e?.message || e);
@@ -502,7 +582,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data, error } = await supabase
         .from('order_drafts')
-        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active)')
+        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data)')
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false });
 
@@ -585,6 +665,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const meta = getDraftMetadata(selectedDraft);
       setEditableAddress(meta.address || '');
       
+      const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+      const initialClientName = matchedProfile ? (matchedProfile.company_name || matchedProfile.contact_name || '') : (selectedDraft.client_detected_name || '');
+      setClientSearchQuery(initialClientName);
+      
       setEditableClientName(selectedDraft.client_detected_name || '');
       setEditableClientPhone(meta.phone && meta.phone !== 'No detectado' ? meta.phone : '');
       setEditableClientNit(meta.nit && meta.nit !== 'No detectado' ? meta.nit : '');
@@ -663,24 +747,42 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           return prod ? getSmartFallbackUnit(prod.name, prod.unit_of_measure || 'Kg') : 'Unidad';
         })();
 
-        const isLibra = parsedUnit === 'Lb';
         const initialQty = parseFloat(item.quantity || 1);
-        let conversionFactor = isLibra ? 0.5 : (item.conversion_factor || 1);
-        let finalQty = isLibra ? parseFloat((initialQty * 0.5).toFixed(2)) : initialQty;
-        let finalUnit = prod?.unit_of_measure || (isLibra ? 'Kg' : parsedUnit);
+        let conversionFactor = 1;
+        let finalUnit = prod?.unit_of_measure || parsedUnit;
+        let foundDbConversion = false;
 
-        if (initialQty >= 100 && !isLibra) {
-          const targetUnit = prod?.unit_of_measure || 'Kg';
-          if (targetUnit === 'Kg') {
-            conversionFactor = 0.001;
-            finalQty = parseFloat((initialQty * 0.001).toFixed(3));
-            finalUnit = 'Kg';
-          } else if (targetUnit === 'Atado') {
-            conversionFactor = 0.002; // 500g = 1 Atado
-            finalQty = parseFloat((initialQty * 0.002).toFixed(2));
-            finalUnit = 'Atado';
+        if (prod && conversions && conversions.length > 0) {
+          const dbConv = conversions.find(c => 
+            c.product_id === prod.id &&
+            c.from_unit.toLowerCase().trim() === parsedUnit.toLowerCase().trim() &&
+            c.to_unit.toLowerCase().trim() === prod.unit_of_measure.toLowerCase().trim()
+          );
+          if (dbConv) {
+            conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+            finalUnit = dbConv.to_unit || prod.unit_of_measure;
+            foundDbConversion = true;
           }
         }
+
+        if (!foundDbConversion) {
+          const isLibra = parsedUnit === 'Lb';
+          conversionFactor = isLibra ? 0.5 : (item.conversion_factor || 1);
+          finalUnit = prod?.unit_of_measure || (isLibra ? 'Kg' : parsedUnit);
+
+          if (initialQty >= 100 && !isLibra) {
+            const targetUnit = prod?.unit_of_measure || 'Kg';
+            if (targetUnit === 'Kg') {
+              conversionFactor = 0.001;
+              finalUnit = 'Kg';
+            } else if (targetUnit === 'Atado') {
+              conversionFactor = 0.002;
+              finalUnit = 'Atado';
+            }
+          }
+        }
+
+        let finalQty = parseFloat((initialQty * conversionFactor).toFixed(3));
 
         return {
             ...item,
@@ -799,7 +901,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
       // Initialize delivery date from metadata if present
       const metadata = getDraftMetadata(selectedDraft);
-      setEditableDeliverySlot(metadata.deliverySlot || '');
+      const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
+      setEditableDeliverySlot(computedSlot || metadata.deliverySlot || '');
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
@@ -827,7 +930,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPurchaseOrder('');
       setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
-  }, [selectedDraft, products, aliases]);
+  }, [selectedDraft, products, aliases, conversions]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -1672,6 +1775,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setSaving(false);
       setSendConfirmationEmail(true);
       setIsAuthorizedForChanges(false);
+      setDeliverySlot(editableDeliverySlot === 'PM' ? 'PM' : 'AM');
       setShowConfirmModal(true);
     } catch (e) {
       console.error('Error in handleApprove:', e);
@@ -2953,14 +3057,53 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
                       <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Cliente</div>
                       <div style={{ padding: '8px 16px', color: '#111827', fontWeight: 600 }}>
-                        {!selectedDraft.profile_id ? (
-                          <input
-                            type="text"
-                            value={editableClientName}
-                            onChange={(e) => setEditableClientName(e.target.value)}
-                            style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
-                            placeholder="Nombre del nuevo cliente..."
-                          />
+                        {isEditing ? (
+                          <div style={{ position: 'relative', width: '100%', maxWidth: '500px' }}>
+                            <input
+                              type="text"
+                              value={clientSearchQuery}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setClientSearchQuery(val);
+                                
+                                const foundProf = profiles.find(p => (p.company_name || p.contact_name || '') === val);
+                                if (foundProf) {
+                                  setSelectedDraft(prev => ({
+                                    ...prev,
+                                    profile_id: foundProf.id,
+                                    client_detected_name: foundProf.company_name || foundProf.contact_name || ''
+                                  }));
+                                  setEditableClientName(foundProf.company_name || foundProf.contact_name || '');
+                                  setEditableClientPhone(foundProf.phone && foundProf.phone !== '0' ? foundProf.phone : '');
+                                  setEditableClientNit(foundProf.nit || '');
+                                  setEditableClientType(foundProf.role || 'b2b_client');
+                                  if (foundProf.address) {
+                                    setEditableAddress(foundProf.address);
+                                    triggerGeocoding(foundProf.address);
+                                  }
+                                  const computedSlot = getDeliverySlotFromLogistics(foundProf.logistics_data);
+                                  if (computedSlot) {
+                                    setEditableDeliverySlot(computedSlot);
+                                  }
+                                } else {
+                                  setSelectedDraft(prev => ({
+                                    ...prev,
+                                    profile_id: null,
+                                    client_detected_name: val
+                                  }));
+                                  setEditableClientName(val);
+                                }
+                              }}
+                              list="client-profiles-list"
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', outline: 'none', fontWeight: 600, fontSize: '0.9rem' }}
+                              placeholder="Buscar cliente existente o escribir nuevo..."
+                            />
+                            <datalist id="client-profiles-list">
+                              {profiles.map(p => (
+                                <option key={p.id} value={p.company_name || p.contact_name || ''} />
+                              ))}
+                            </datalist>
+                          </div>
                         ) : (
                           <>
                             {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
@@ -3161,17 +3304,50 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     {/* Hora de entrega */}
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
                       <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Hora de entrega</div>
-                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
-                        {isEditing ? (
-                          <select value={editableDeliverySlot} onChange={(e) => setEditableDeliverySlot(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', minWidth: '150px' }}>
-                            <option value="">-- -- : -- --</option>
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                            <option value="Cualquier hora">Cualquier hora</option>
-                          </select>
-                        ) : (
-                          <span>{editableDeliverySlot || '-- -- : -- --'}</span>
-                        )}
+                      <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        {(() => {
+                          const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
+                          const hasCustomSchedule = matchedProfile?.logistics_data && 
+                            (matchedProfile.logistics_data.start_time || matchedProfile.logistics_data.end_time);
+                          return isEditing ? (
+                            <>
+                              <select 
+                                value={editableDeliverySlot} 
+                                onChange={(e) => setEditableDeliverySlot(e.target.value)} 
+                                disabled={!!hasCustomSchedule}
+                                style={{ 
+                                  padding: '6px 12px', 
+                                  borderRadius: '6px', 
+                                  border: `1px solid ${THEME.colors.border}`, 
+                                  backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white', 
+                                  color: hasCustomSchedule ? '#9CA3AF' : '#111827',
+                                  minWidth: '150px',
+                                  cursor: hasCustomSchedule ? 'not-allowed' : 'default'
+                                }}
+                              >
+                                <option value="">-- -- : -- --</option>
+                                <option value="AM">AM</option>
+                                <option value="PM">PM</option>
+                                <option value="Cualquier hora">Cualquier hora</option>
+                              </select>
+                              {hasCustomSchedule && (
+                                <span style={{ fontSize: '0.8rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                                  <Info size={14} />
+                                  Horario establecido: {formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{editableDeliverySlot || '-- -- : -- --'}</span>
+                              {hasCustomSchedule && (
+                                <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 500 }}>
+                                  ({formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'})
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {!editableDeliverySlot && <span style={{ marginLeft: '12px', color: '#DC2626', fontSize: '0.75rem' }}>La hora de entrega del pedido es obligatoria</span>}
                       </div>
                     </div>
@@ -3357,21 +3533,58 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 newEdits[i].searchQuery = found.name;
                                                 newEdits[i].skuQuery = found.sku || '';
                                                 
-                                                const u = (found.unit_of_measure || '').toLowerCase().trim();
-                                                let normalizedUnit = 'Kg';
-                                                if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
-                                                else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
-                                                else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
-                                                else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
-                                                else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
-                                                else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
-                                                  normalizedUnit = getSmartFallbackUnit(found.name, 'Kg');
+                                                const currentOriginalUnit = newEdits[i].originalUnit || newEdits[i].unit || 'Kg';
+                                                let conversionFactor = 1;
+                                                let targetUnit = found.unit_of_measure || 'Kg';
+                                                let foundDbConversion = false;
+
+                                                if (conversions && conversions.length > 0) {
+                                                  const dbConv = conversions.find(c => 
+                                                    c.product_id === found.id &&
+                                                    c.from_unit.toLowerCase().trim() === currentOriginalUnit.toLowerCase().trim() &&
+                                                    c.to_unit.toLowerCase().trim() === targetUnit.toLowerCase().trim()
+                                                  );
+                                                  if (dbConv) {
+                                                    conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
+                                                    targetUnit = dbConv.to_unit || found.unit_of_measure;
+                                                    foundDbConversion = true;
+                                                  }
                                                 }
-                                                else if (found.unit_of_measure) {
-                                                  normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
+
+                                                if (!foundDbConversion) {
+                                                  const u = (found.unit_of_measure || '').toLowerCase().trim();
+                                                  let normalizedUnit = 'Kg';
+                                                  if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
+                                                  else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
+                                                  else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
+                                                  else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
+                                                  else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
+                                                  else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
+                                                    normalizedUnit = getSmartFallbackUnit(found.name, 'Kg');
+                                                  }
+                                                  else if (found.unit_of_measure) {
+                                                    normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
+                                                  }
+                                                  targetUnit = normalizedUnit;
+
+                                                  const isLibra = currentOriginalUnit === 'Lb';
+                                                  conversionFactor = isLibra ? 0.5 : 1;
+                                                  
+                                                  const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
+                                                  if (origQty >= 100 && !isLibra) {
+                                                    if (targetUnit === 'Kg') {
+                                                      conversionFactor = 0.001;
+                                                    } else if (targetUnit === 'Atado') {
+                                                      conversionFactor = 0.002;
+                                                    }
+                                                  }
                                                 }
+
+                                                newEdits[i].conversion_factor = conversionFactor;
+                                                newEdits[i].unit = targetUnit;
+                                                const origQty = parseFloat(newEdits[i].originalQuantity || newEdits[i].quantity || 1);
+                                                newEdits[i].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
                                                 
-                                                newEdits[i].unit = normalizedUnit;
                                                 // Extract variants from observations/originalName
                                                 const autoSelectedOptions: Record<string, string> = {};
                                                 const rawOriginalName = newEdits[i].originalName || '';
@@ -5161,14 +5374,40 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>FRANJA HORARIA:</label>
-                <select 
-                  value={deliverySlot} 
-                  onChange={(e) => setDeliverySlot(e.target.value)} 
-                  style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: `1.5px solid ${THEME.colors.border}`, outline: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', backgroundColor: 'white' }}
-                >
-                  <option value="AM">Mañana (AM)</option>
-                  <option value="PM">Tarde (PM)</option>
-                </select>
+                {(() => {
+                  const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
+                  const hasCustomSchedule = matchedProfile?.logistics_data && 
+                    (matchedProfile.logistics_data.start_time || matchedProfile.logistics_data.end_time);
+                  return (
+                    <>
+                      <select 
+                        value={deliverySlot} 
+                        onChange={(e) => setDeliverySlot(e.target.value)} 
+                        disabled={!!hasCustomSchedule}
+                        style={{ 
+                          width: '100%', 
+                          padding: '0.65rem 0.8rem', 
+                          borderRadius: '10px', 
+                          border: `1.5px solid ${THEME.colors.border}`, 
+                          outline: 'none', 
+                          fontSize: '0.85rem', 
+                          fontWeight: 700, 
+                          cursor: hasCustomSchedule ? 'not-allowed' : 'pointer', 
+                          backgroundColor: hasCustomSchedule ? '#F3F4F6' : 'white',
+                          color: hasCustomSchedule ? '#9CA3AF' : '#111827'
+                        }}
+                      >
+                        <option value="AM">Mañana (AM)</option>
+                        <option value="PM">Tarde (PM)</option>
+                      </select>
+                      {hasCustomSchedule && (
+                        <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '0.25rem', fontWeight: 500 }}>
+                          Horario establecido: {formatLogisticsTime(matchedProfile.logistics_data.start_time) || '00:00'} - {formatLogisticsTime(matchedProfile.logistics_data.end_time) || '00:00'}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem' }}>MÉTODO DE PAGO:</label>

@@ -743,8 +743,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Only if we haven't found any profiles by NIT or Phone, search by sender email address
-    if (candidateProfiles.length === 0) {
+    // Only if we haven't found any profiles by NIT or Phone, search by sender email address (skip if it is the test email)
+    if (candidateProfiles.length === 0 && senderEmail !== 'higuera200@gmail.com') {
       console.log(`[Email Ingest] Searching client by sender email: ${senderEmail}`);
       const { data: profilesByEmail, error: emailError } = await supabaseAdmin
         .from('profiles')
