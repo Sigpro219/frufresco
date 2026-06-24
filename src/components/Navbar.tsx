@@ -221,7 +221,8 @@ export default function Navbar() {
                 height: '85px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                maxWidth: '1600px'
             }}>
                 {/* LOGO */}
                 <Link href={`/${locale === 'en' ? '?lang=en' : ''}`} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
