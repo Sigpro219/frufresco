@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { Mail, ArrowRight, Trash2, MapPin, Phone, Hash, X, Check, Calendar, Search, ChevronDown, Info, List, Grid, AlertTriangle, MessageSquare, UploadCloud, Home, Building2, Globe, Edit2, FileText, Send, Keyboard } from 'lucide-react';
+import { Map, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 
 const getChannelBadge = (source: string) => {
@@ -35,6 +36,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<{lat: number, lng: number} | null>(null);
+  const [showMapModal, setShowMapModal] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [editableItems, setEditableItems] = useState<any[]>([]);
@@ -2575,7 +2577,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                       <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Cliente</div>
                       <div style={{ padding: '12px 16px', color: '#111827', fontWeight: 600 }}>
                         {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
-                        <span style={{ color: '#6B7280', fontWeight: 'normal' }}> (NIT: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                        <span style={{ color: '#6B7280', fontWeight: 'normal' }}> ({getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'NIT' : 'CC'}: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                      </div>
+                    </div>
+
+                    {/* Asunto */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Asunto del Correo</div>
+                      <div style={{ padding: '12px 16px', color: '#374151', fontWeight: 500, fontStyle: selectedDraft.email_subject ? 'normal' : 'italic' }}>
+                        {selectedDraft.email_subject || '(Sin Asunto)'}
                       </div>
                     </div>
 
@@ -2750,12 +2760,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                         <div><strong>Teléfono:</strong> {getDraftMetadata(selectedDraft).phone || '0'}</div>
                         <div><strong>Hora de recepción:</strong> {new Date(selectedDraft.created_at).toLocaleString('es-CO')}</div>
                         {draftCoordinates && (
-                          <div style={{
-                            color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',
-                            fontWeight: 600, marginTop: '4px'
-                          }}>
+                          <div 
+                            onClick={() => setShowMapModal(true)}
+                            style={{
+                              color: checkIsNewClient(selectedDraft) ? (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626') : '#059669',
+                              fontWeight: 600, 
+                              marginTop: '4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              textDecoration: 'underline'
+                            }}
+                            title="Haz clic para ver la ubicación exacta en el mapa"
+                          >
                             {checkIsNewClient(selectedDraft) && (checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '✅ En Zona de Cobertura ' : '❌ Fuera de Zona de Cobertura ')}
-                            (Lat: {draftCoordinates.lat.toFixed(6)}, Lng: {draftCoordinates.lng.toFixed(6)})
+                            📍 (Lat: {draftCoordinates.lat.toFixed(6)}, Lng: {draftCoordinates.lng.toFixed(6)})
                           </div>
                         )}
                       </div>
@@ -3738,6 +3758,130 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMapModal && draftCoordinates && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(17, 24, 39, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 15000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '600px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            overflow: 'hidden',
+            border: '1px solid #E5E7EB'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #F3F4F6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#FFFFFF'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  📍 Ubicación del Pedido
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
+                  {editableAddress}
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowMapModal(false)}
+                style={{
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#9CA3AF',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 0.2s',
+                  outline: 'none'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Map Container */}
+            <div style={{ width: '100%', height: '400px', backgroundColor: '#F3F4F6', position: 'relative' }}>
+              <Map
+                defaultCenter={draftCoordinates}
+                center={draftCoordinates}
+                defaultZoom={15}
+                gestureHandling={'greedy'}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <Marker position={draftCoordinates} />
+              </Map>
+            </div>
+
+            {/* Footer / Actions */}
+            <div style={{
+              padding: '12px 20px',
+              backgroundColor: '#F9FAFB',
+              borderTop: '1px solid #E5E7EB',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px'
+            }}>
+              <span style={{
+                marginRight: 'auto',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '#059669' : '#DC2626',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                {checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) ? '✅ Dirección en cobertura de FruFresco' : '❌ Dirección fuera de cobertura'}
+              </span>
+              <button
+                onClick={() => setShowMapModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F9FAFB';
+                  e.currentTarget.style.borderColor = '#C5C7CD';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  e.currentTarget.style.borderColor = '#D1D5DB';
+                }}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
