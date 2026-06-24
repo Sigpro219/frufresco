@@ -844,7 +844,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const hasOnlyGenericSharedWords = originalWords.filter(w => {
         const productClean = cleanText(bestMatch.name || '');
         return productClean.split(/\s+/).includes(w);
-      }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+      }).every(w => ['tipo', 'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'en', 'bulto', 'bultos', 'kilo', 'kilos', 'kg', 'g', 'gr', 'gramos', 'libra', 'libras', 'lb', 'litro', 'litros', 'l', 'lt', 'unidad', 'unidades', 'paquete', 'paquetes', 'atado', 'atados', 'canastilla', 'canastillas', 'caja', 'cajas', 'bolsa', 'bolsas', 'x'].includes(w));
 
       if (highestScore < 8 || hasOnlyGenericSharedWords) {
         bestMatch = null;
