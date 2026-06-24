@@ -1066,8 +1066,8 @@ export default function B2BDashboard() {
 
                                 {/* Items List */}
                                 {orderItems.length > 0 ? (
-                                    <div>
-                                        <div style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto' }}>
+                                    <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                                        <div style={{ flex: 1, overflowY: 'auto' }}>
                                             {orderItems.map((item) => (
                                                 <div key={item.id} className="cart-item-row" style={{
                                                     display: 'flex',
@@ -2260,10 +2260,30 @@ export default function B2BDashboard() {
                 @media (min-width: 1024px) {
                     .b2b-dashboard-grid {
                         grid-template-columns: 1.5fr 1fr;
+                        height: calc(100vh - 180px);
+                        align-items: stretch;
+                    }
+                    /* Left column scrollable (1) */
+                    .b2b-dashboard-grid > div:first-child {
+                        height: 100%;
+                        overflow-y: auto !important;
+                        position: relative;
+                    }
+                    /* Right column (sidebar container) */
+                    .b2b-cart-sidebar {
+                        height: 100%;
+                        position: relative;
+                    }
+                    /* Card wrapper inside right column scrollable (2) */
+                    .b2b-cart-sidebar > div {
+                        height: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
                     }
                     .b2b-sticky-catalog-header {
                         position: sticky;
-                        top: 80px;
+                        top: 0;
                         z-index: 10;
                         background-color: white;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -2271,16 +2291,11 @@ export default function B2BDashboard() {
                     }
                     .b2b-sticky-cart-header {
                         position: sticky;
-                        top: 80px;
+                        top: 0;
                         z-index: 10;
                         background-color: #F8FAFC;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
                         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                    }
-                    .b2b-cart-sidebar {
-                        position: sticky;
-                        top: 80px;
-                        align-self: start;
                     }
                 }
                 @media print {
