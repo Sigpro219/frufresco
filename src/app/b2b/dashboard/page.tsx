@@ -2260,26 +2260,33 @@ export default function B2BDashboard() {
                 @media (min-width: 1024px) {
                     .b2b-dashboard-grid {
                         grid-template-columns: 1.5fr 1fr;
-                        height: calc(100vh - 180px);
-                        align-items: stretch;
+                        align-items: start;
                     }
-                    /* Left column scrollable (1) */
+                    /* Columna 1 (Catálogo) con altura fija */
                     .b2b-dashboard-grid > div:first-child {
-                        height: 100%;
+                        height: 780px;
                         overflow-y: auto !important;
                         position: relative;
                     }
-                    /* Right column (sidebar container) */
+                    /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
-                        height: 100%;
-                        position: relative;
+                        height: 780px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
                     }
-                    /* Card wrapper inside right column scrollable (2) */
-                    .b2b-cart-sidebar > div {
-                        height: 100%;
+                    /* Carrito con altura fija */
+                    .b2b-cart-sidebar > div:first-child {
+                        height: 600px;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
+                    }
+                    /* Sección pequeña de Soporte WhatsApp de 156px */
+                    .b2b-cart-sidebar > div:last-child {
+                        height: 156px;
+                        margin-top: 24px !important;
+                        box-sizing: border-box;
                     }
                     .b2b-sticky-catalog-header {
                         position: sticky;
