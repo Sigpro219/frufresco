@@ -702,15 +702,13 @@ export default function B2BDashboard() {
                     </div>
 
                     {/* TAB NAVIGATION — segmented control aligned right */}
-                    <div style={{
+                    <div className="b2b-tab-navigation" style={{
                         display: 'flex',
                         backgroundColor: THEME.colors.background,
                         borderRadius: THEME.radius.lg,
                         padding: '4px',
                         border: `1px solid ${THEME.colors.border}`,
                         gap: '2px',
-                        minWidth: '400px',
-                        maxWidth: '600px',
                         flex: '1 1 auto'
                     }}>
                         {[
@@ -722,13 +720,14 @@ export default function B2BDashboard() {
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key as any)}
+                                className="b2b-tab-button"
                                 style={{
                                     flex: 1,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: '6px',
-                                    padding: '0.6rem 0.75rem',
+                                    padding: '0.6rem 0.5rem',
                                     borderRadius: THEME.radius.md,
                                     border: 'none',
                                     backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
@@ -744,7 +743,7 @@ export default function B2BDashboard() {
                                 onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = THEME.colors.primaryLight; }}
                                 onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
                             >
-                                {tab.icon} <span className="tab-label">{tab.label}</span>
+                                <span className="b2b-tab-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>{tab.icon}</span> <span className="tab-label">{tab.label}</span>
                             </button>
                         ))}
                     </div>
@@ -1323,7 +1322,7 @@ export default function B2BDashboard() {
 
                 {/* INVOICES TAB */}
                 {activeTab === 'invoices' && (
-                    <div style={{
+                    <div className="b2b-responsive-card" style={{
                         backgroundColor: 'white',
                         borderRadius: 'var(--radius-lg)',
                         padding: '2.5rem',
@@ -1433,7 +1432,7 @@ export default function B2BDashboard() {
                 )}
                 {/* CONSUMPTION TAB */}
                 {activeTab === 'consumption' && (
-                    <div style={{
+                    <div className="b2b-responsive-card" style={{
                         backgroundColor: 'white',
                         borderRadius: 'var(--radius-lg)',
                         padding: '2.5rem',
@@ -1854,7 +1853,7 @@ export default function B2BDashboard() {
 
                 {/* AGREEMENTS TAB */}
                 {activeTab === 'agreements' && (
-                    <div style={{
+                    <div className="b2b-responsive-card" style={{
                         backgroundColor: 'white',
                         borderRadius: 'var(--radius-lg)',
                         padding: '2rem',
@@ -2268,6 +2267,68 @@ export default function B2BDashboard() {
                     width: 100%;
                     max-width: 1400px;
                     margin: 0 auto;
+                }
+                @media (max-width: 768px) {
+                    .b2b-tab-navigation {
+                        gap: 1px !important;
+                    }
+                    .b2b-tab-button {
+                        padding: 0.5rem 0.25rem !important;
+                    }
+                    .b2b-tab-icon {
+                        display: none !important;
+                    }
+                    .b2b-catalog-container {
+                        max-height: 680px;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+                    .b2b-catalog-container > div:last-child {
+                        flex: 1;
+                        overflow-y: auto !important;
+                    }
+                    .b2b-cart-sidebar {
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .b2b-cart-sidebar > div:first-child {
+                        max-height: 580px;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+                    .b2b-cart-items-wrapper {
+                        flex: 1;
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .b2b-cart-items-wrapper > div:first-child {
+                        flex: 1;
+                        overflow-y: auto !important;
+                    }
+                    /* Tablas Responsivas */
+                    .b2b-responsive-card {
+                        padding: 1rem !important;
+                    }
+                    .b2b-responsive-card table th, 
+                    .b2b-responsive-card table td {
+                        font-size: 0.75rem !important;
+                        padding: 0.6rem 0.5rem !important;
+                    }
+                    .b2b-responsive-card table th {
+                        font-weight: 800 !important;
+                    }
+                    .b2b-responsive-card table td button {
+                        font-size: 0.75rem !important;
+                    }
+                    .b2b-responsive-card h2 {
+                        font-size: 1.15rem !important;
+                    }
+                    .b2b-responsive-card p {
+                        font-size: 0.8rem !important;
+                    }
                 }
                 @media (min-width: 1024px) {
                     .b2b-dashboard-grid {
