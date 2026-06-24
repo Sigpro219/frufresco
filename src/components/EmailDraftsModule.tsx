@@ -613,8 +613,86 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               // Si no contiene ninguna palabra clave de unidades en el texto del pedido, se asume obligatoriamente 'Unidad'
               return 'Unidad';
             })(),
-            observations: item.observations || '',
-            selected_options: item.selected_options || {}
+            observations: (() => {
+              let finalObservations = item.observations || '';
+              if (prod && prod.variants && prod.variants.length > 0) {
+                const variantOptionNames = new Set<string>();
+                let isOldFormat = false;
+                prod.variants.forEach((v: any) => {
+                  if (v.name && Array.isArray(v.options)) {
+                    isOldFormat = true;
+                  } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+                    Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+                  }
+                });
+
+                let variantOptionsList = prod.variants;
+                if (!isOldFormat) {
+                  variantOptionsList = Array.from(variantOptionNames).map(name => {
+                    const values = new Set<string>();
+                    prod.variants.forEach((v: any) => {
+                      if (v.options && v.options[name]) values.add(v.options[name]);
+                    });
+                    return { name, options: Array.from(values) };
+                  });
+                }
+
+                const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
+                variantOptionsList.forEach((v: any) => {
+                  if (Array.isArray(v.options)) {
+                    for (const optVal of v.options) {
+                      const optValLower = String(optVal).toLowerCase().trim();
+                      if (optValLower && searchText.includes(optValLower)) {
+                        const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp(`\\b${escapeRegex(optValLower)}\\b`, 'gi');
+                        finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
+                        break;
+                      }
+                    }
+                  }
+                });
+              }
+              return finalObservations;
+            })(),
+            selected_options: (() => {
+              const autoSelectedOptions: Record<string, string> = { ...(item.selected_options || {}) };
+              if (prod && prod.variants && prod.variants.length > 0) {
+                const variantOptionNames = new Set<string>();
+                let isOldFormat = false;
+                prod.variants.forEach((v: any) => {
+                  if (v.name && Array.isArray(v.options)) {
+                    isOldFormat = true;
+                  } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+                    Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+                  }
+                });
+
+                let variantOptionsList = prod.variants;
+                if (!isOldFormat) {
+                  variantOptionsList = Array.from(variantOptionNames).map(name => {
+                    const values = new Set<string>();
+                    prod.variants.forEach((v: any) => {
+                      if (v.options && v.options[name]) values.add(v.options[name]);
+                    });
+                    return { name, options: Array.from(values) };
+                  });
+                }
+
+                const searchText = `${rawOriginalName} ${(item.observations || '')}`.toLowerCase();
+                variantOptionsList.forEach((v: any) => {
+                  if (!autoSelectedOptions[v.name] && Array.isArray(v.options)) {
+                    for (const optVal of v.options) {
+                      const optValLower = String(optVal).toLowerCase().trim();
+                      if (optValLower && searchText.includes(optValLower)) {
+                        autoSelectedOptions[v.name] = optVal;
+                        break;
+                      }
+                    }
+                  }
+                });
+              }
+              return autoSelectedOptions;
+            })()
         };
       });
       setEditableItems(initialEdits);
@@ -2960,7 +3038,52 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 if (!isSpecialUnit) {
                                                   newEdits[i].unit = normalizedUnit;
                                                 }
-                                                newEdits[i].selected_options = {};
+                                                // Extract variants from observations/originalName
+                                                const autoSelectedOptions: Record<string, string> = {};
+                                                let finalObservations = newEdits[i].observations || '';
+                                                const rawOriginalName = newEdits[i].originalName || '';
+                                                
+                                                if (found.variants && found.variants.length > 0) {
+                                                  const variantOptionNames = new Set<string>();
+                                                  let isOldFormat = false;
+                                                  found.variants.forEach((v: any) => {
+                                                    if (v.name && Array.isArray(v.options)) {
+                                                      isOldFormat = true;
+                                                    } else if (v.options && typeof v.options === 'object' && !Array.isArray(v.options)) {
+                                                      Object.keys(v.options).forEach(k => variantOptionNames.add(k));
+                                                    }
+                                                  });
+
+                                                  let variantOptionsList = found.variants;
+                                                  if (!isOldFormat) {
+                                                    variantOptionsList = Array.from(variantOptionNames).map(name => {
+                                                      const values = new Set<string>();
+                                                      found.variants.forEach((v: any) => {
+                                                        if (v.options && v.options[name]) values.add(v.options[name]);
+                                                      });
+                                                      return { name, options: Array.from(values) };
+                                                    });
+                                                  }
+                                                  
+                                                  const searchText = `${rawOriginalName} ${finalObservations}`.toLowerCase();
+                                                  variantOptionsList.forEach((v: any) => {
+                                                    if (Array.isArray(v.options)) {
+                                                      for (const optVal of v.options) {
+                                                        const optValLower = String(optVal).toLowerCase().trim();
+                                                        if (optValLower && searchText.includes(optValLower)) {
+                                                          autoSelectedOptions[v.name] = optVal;
+                                                          const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                                                          const regex = new RegExp(`\\b${escapeRegex(optValLower)}\\b`, 'gi');
+                                                          finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
+                                                          break;
+                                                        }
+                                                      }
+                                                    }
+                                                  });
+                                                }
+                                                
+                                                newEdits[i].selected_options = autoSelectedOptions;
+                                                newEdits[i].observations = finalObservations;
                                               } else {
                                                 newEdits[i].matched_product_id = null;
                                                 newEdits[i].searchQuery = val;
@@ -4295,193 +4418,293 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         </div>
       )}
 
-      {rejectModal && rejectModal.isOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 11000
-        }}>
+      {rejectModal && rejectModal.isOpen && (() => {
+        const isRejectionInvalid = (() => {
+          if (!rejectReason) return true;
+          if (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) return true;
+          if (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) return true;
+          if (rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null)) return true;
+          if (rejectReason === 'datos_incompletos' && editableAddress && editableAddress.toLowerCase() !== 'no detectada' && rejectModal.sourceEmail && getDraftMetadata(selectedDraft).phone && getDraftMetadata(selectedDraft).phone !== '0') return true;
+          if (rejectReason === 'pedido_duplicado' && !drafts.some(d => d.id !== selectedDraft.id && d.source_email === selectedDraft.source_email && new Date(d.created_at).toDateString() === new Date(selectedDraft.created_at).toDateString())) return true;
+          if (rejectReason === 'bloqueo_cartera' && selectedDraft?.profiles?.is_active === true) return true;
+          if (rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null)) return true;
+          if (rejectReason === 'fuera_de_horario' && new Date(selectedDraft.created_at).getHours() < 20) return true;
+          return false;
+        })();
+
+        return (
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '20px',
-            padding: '2rem',
-            width: '90%',
-            maxWidth: '420px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-            textAlign: 'left'
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 11000
           }}>
             <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              backgroundColor: '#FEF2F2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem',
-              color: '#EF4444'
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '2rem',
+              width: '90%',
+              maxWidth: '420px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              textAlign: 'left'
             }}>
-              <AlertTriangle size={28} />
-            </div>
-            
-            <h3 style={{
-              fontSize: '1.25rem',
-              fontWeight: 800,
-              color: '#111827',
-              margin: '0 0 1rem 0',
-              textAlign: 'center'
-            }}>
-              Rechazar Solicitud de Pedido
-            </h3>
-            
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem' }}>
-                Causa de Reclamación / Cancelación:
-              </label>
-              <select
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 1rem',
-                  borderRadius: '10px',
-                  border: `1px solid ${THEME.colors.border}`,
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  outline: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: 'white'
-                }}
-              >
-                <option value="">-- Selecciona una causa --</option>
-                <option value="cobertura">Falta de cobertura geográfica</option>
-                <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
-                <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
-                <option value="datos_incompletos">Datos de contacto o dirección insuficientes</option>
-                <option value="pedido_duplicado">Solicitud ya procesada (Pedido duplicado)</option>
-                <option value="bloqueo_cartera">Cliente con bloqueo de cartera o saldo en mora</option>
-                <option value="sin_stock">Agotamiento de inventario en productos principales</option>
-                <option value="fuera_de_horario">Pedido recibido fuera del horario límite de programación</option>
-              </select>
-            </div>
-
-            {rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000 && (
               <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
                 backgroundColor: '#FEF2F2',
-                borderLeft: '4px solid #EF4444',
-                padding: '0.75rem 1rem',
-                borderRadius: '8px',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: '#991B1B',
-                marginBottom: '1.25rem'
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.5rem',
+                color: '#EF4444'
               }}>
-                ⚠️ No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).
+                <AlertTriangle size={28} />
               </div>
-            )}
-
-            {rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
-              <div style={{
-                backgroundColor: '#FEF2F2',
-                borderLeft: '4px solid #EF4444',
-                padding: '0.75rem 1rem',
-                borderRadius: '8px',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                color: '#991B1B',
-                marginBottom: '1.25rem'
+              
+              <h3 style={{
+                fontSize: '1.25rem',
+                fontWeight: 800,
+                color: '#111827',
+                margin: '0 0 1rem 0',
+                textAlign: 'center'
               }}>
-                ⚠️ No es posible rechazar por falta de cobertura ya que la dirección se encuentra dentro de la zona de cobertura actual de FruFresco.
+                Rechazar Solicitud de Pedido
+              </h3>
+              
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.5rem' }}>
+                  Causa de Reclamación / Cancelación:
+                </label>
+                <select
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '10px',
+                    border: `1px solid ${THEME.colors.border}`,
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    outline: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  <option value="">-- Selecciona una causa --</option>
+                  <option value="cobertura">Falta de cobertura geográfica</option>
+                  <option value="monto_minimo">Monto menor al mínimo ($100.000)</option>
+                  <option value="no_comercializado">Productos no comercializados (Construcción, etc.)</option>
+                  <option value="datos_incompletos">Datos de contacto o dirección insuficientes</option>
+                  <option value="pedido_duplicado">Solicitud ya procesada (Pedido duplicado)</option>
+                  <option value="bloqueo_cartera">Cliente con bloqueo de cartera o saldo en mora</option>
+                  <option value="sin_stock">Agotamiento de inventario en productos principales</option>
+                  <option value="fuera_de_horario">Pedido recibido fuera del horario límite de programación</option>
+                </select>
               </div>
-            )}
 
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setRejectModal(null)}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#F3F4F6',
-                  border: 'none',
-                  borderRadius: '12px',
+              {rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000 && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
                   fontWeight: 700,
-                  color: '#4B5563',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                id="btn-confirm-reject"
-                type="button"
-                disabled={
-                  !rejectReason || 
-                  (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) ||
-                  (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) ||
-                  saving
-                }
-                onClick={async () => {
-                  setSaving(true);
-                  try {
-                    const res = await fetch('/api/orders/reject-draft', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        draftId: rejectModal.draftId,
-                        address: rejectModal.address,
-                        sourceEmail: rejectModal.sourceEmail,
-                        reason: rejectReason
-                      })
-                    });
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por monto mínimo ya que el valor estimado de este pedido es de {formatMoney(rejectModal.totalValue)} (igual o mayor a $100.000).
+                </div>
+              )}
 
-                    if (!res.ok) {
-                      const errData = await res.json();
-                      throw new Error(errData.error || 'Error en el servidor');
-                    }
-
-                    const data = await res.json();
-                    if (data.warning) {
-                      showToast(data.warning, 'warning');
-                    } else {
-                      showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
-                    }
-                    setRejectModal(null);
-                    setSelectedDraft(null);
-                    fetchDrafts();
-                  } catch (e: any) {
-                    console.error('Error rejecting draft:', e);
-                    showToast(`Error al rechazar el borrador: ${e.message}`, 'error');
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#EF4444',
-                  border: 'none',
-                  borderRadius: '12px',
+              {rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng) && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
                   fontWeight: 700,
-                  color: 'white',
-                  cursor: 'pointer',
-                  opacity: (!rejectReason || (rejectReason === 'monto_minimo' && rejectModal.totalValue >= 100000) || (rejectReason === 'cobertura' && draftCoordinates && checkIfInCoverage(draftCoordinates.lat, draftCoordinates.lng)) || saving) ? 0.5 : 1
-                }}
-              >
-                {saving ? 'Procesando...' : 'Rechazar'}
-              </button>
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por falta de cobertura ya que la dirección se encuentra dentro de la zona de cobertura actual de FruFresco.
+                </div>
+              )}
+
+              {rejectReason === 'no_comercializado' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null) && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por productos no comercializados ya que todos los productos del pedido se encuentran homologados en nuestro catálogo.
+                </div>
+              )}
+
+              {rejectReason === 'datos_incompletos' && editableAddress && editableAddress.toLowerCase() !== 'no detectada' && rejectModal.sourceEmail && getDraftMetadata(selectedDraft).phone && getDraftMetadata(selectedDraft).phone !== '0' && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por datos insuficientes ya que se cuenta con dirección de entrega, correo y teléfono de contacto completos.
+                </div>
+              )}
+
+              {rejectReason === 'pedido_duplicado' && !drafts.some(d => d.id !== selectedDraft.id && d.source_email === selectedDraft.source_email && new Date(d.created_at).toDateString() === new Date(selectedDraft.created_at).toDateString()) && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por duplicado ya que no se encontraron otras solicitudes del mismo remitente el día de hoy.
+                </div>
+              )}
+
+              {rejectReason === 'bloqueo_cartera' && selectedDraft?.profiles?.is_active === true && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ El perfil del cliente se encuentra activo y no registra bloqueos vigentes en la base de datos.
+                </div>
+              )}
+
+              {rejectReason === 'sin_stock' && editableItems.length > 0 && editableItems.every(itm => itm.matched_product_id !== null) && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ No es posible rechazar por falta de stock ya que todos los productos del pedido se encuentran homologados y disponibles en el catálogo.
+                </div>
+              )}
+
+              {rejectReason === 'fuera_de_horario' && new Date(selectedDraft.created_at).getHours() < 20 && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  borderLeft: '4px solid #EF4444',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#991B1B',
+                  marginBottom: '1.25rem'
+                }}>
+                  ⚠️ El correo del pedido fue recibido antes de la hora de corte operativa (8:00 PM), por lo que se encuentra dentro del horario para entrega de mañana.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setRejectModal(null)}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: '#F3F4F6',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    color: '#4B5563',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  id="btn-confirm-reject"
+                  type="button"
+                  disabled={isRejectionInvalid || saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const res = await fetch('/api/orders/reject-draft', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          draftId: rejectModal.draftId,
+                          address: rejectModal.address,
+                          sourceEmail: rejectModal.sourceEmail,
+                          reason: rejectReason
+                        })
+                      });
+
+                      if (!res.ok) {
+                        const errData = await res.json();
+                        throw new Error(errData.error || 'Error en el servidor');
+                      }
+
+                      const data = await res.json();
+                      if (data.warning) {
+                        showToast(data.warning, 'warning');
+                      } else {
+                        showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
+                      }
+                      setRejectModal(null);
+                      setSelectedDraft(null);
+                      fetchDrafts();
+                    } catch (e: any) {
+                      console.error('Error rejecting draft:', e);
+                      showToast(`Error al rechazar el borrador: ${e.message}`, 'error');
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: '#EF4444',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    color: 'white',
+                    cursor: 'pointer',
+                    opacity: (isRejectionInvalid || saving) ? 0.5 : 1
+                  }}
+                >
+                  {saving ? 'Procesando...' : 'Rechazar'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {showConfirmModal && selectedDraft && (
         <div style={{
