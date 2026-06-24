@@ -2264,27 +2264,27 @@ export default function B2BDashboard() {
                     }
                     /* Columna 1 (Catálogo) con altura fija */
                     .b2b-dashboard-grid > div:first-child {
-                        height: 780px;
+                        height: 858px;
                         overflow-y: auto !important;
                         position: relative;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
-                        height: 780px;
+                        height: 858px;
                         display: flex;
                         flex-direction: column;
                         justify-content: space-between;
                     }
                     /* Carrito con altura fija */
                     .b2b-cart-sidebar > div:first-child {
-                        height: 600px;
+                        height: 660px;
                         display: flex;
                         flex-direction: column;
                         overflow: hidden;
                     }
-                    /* Sección pequeña de Soporte WhatsApp de 156px */
+                    /* Sección pequeña de Soporte WhatsApp de 174px */
                     .b2b-cart-sidebar > div:last-child {
-                        height: 156px;
+                        height: 174px;
                         margin-top: 24px !important;
                         box-sizing: border-box;
                     }
