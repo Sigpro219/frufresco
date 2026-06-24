@@ -12,56 +12,66 @@ const getSupabaseAdmin = () => {
   return createClient(url, key);
 };
 
-function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: base64Image ? [
-            { inlineData: { data: base64Image, mimeType: mimeType } },
-            { text: prompt }
-          ] : [
-            { text: prompt }
-          ]
-        }
-      ],
-      generationConfig: { responseMimeType: "application/json" }
-    });
+async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
+  const models = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+  let lastError: any = null;
+  for (const model of models) {
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const data = JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: base64Image ? [
+                { inlineData: { data: base64Image, mimeType: mimeType } },
+                { text: prompt }
+              ] : [
+                { text: prompt }
+              ]
+            }
+          ],
+          generationConfig: { responseMimeType: "application/json" }
+        });
 
-    const options = {
-      hostname: 'generativelanguage.googleapis.com',
-      port: 443,
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data)
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          try {
-            const parsed = JSON.parse(body);
-            const text = parsed.candidates[0].content.parts[0].text;
-            resolve(text);
-          } catch (e) {
-            reject(new Error("Invalid JSON response from Gemini: " + body));
+        const options = {
+          hostname: 'generativelanguage.googleapis.com',
+          port: 443,
+          path: `/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(data)
           }
-        } else {
-          reject(new Error(`Gemini API Error: ${res.statusCode} ${body}`));
-        }
-      });
-    });
+        };
 
-    req.on('error', (e) => reject(e));
-    req.write(data);
-    req.end();
-  });
+        const req = https.request(options, (res) => {
+          let body = '';
+          res.on('data', (chunk) => body += chunk);
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                const parsed = JSON.parse(body);
+                const text = parsed.candidates[0].content.parts[0].text;
+                resolve(text);
+              } catch (e) {
+                reject(new Error("Invalid JSON response from Gemini: " + body));
+              }
+            } else {
+              reject(new Error(`Gemini API Error: ${res.statusCode} ${body}`));
+            }
+          });
+        });
+
+        req.on('error', (e) => reject(e));
+        req.write(data);
+        req.end();
+      });
+    } catch (err: any) {
+      console.warn(`[Gemini Inbound Ingest] Model ${model} failed, trying fallback. Error:`, err.message);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error("All Gemini models failed");
 }
 
 export const maxDuration = 60; // Increase Vercel timeout to 60s for Gemini
@@ -185,6 +195,7 @@ export async function POST(req: Request) {
     // 2. Parse email body or attachment with Gemini
     let isExcel = false;
     let excelTextContext = '';
+    let programmaticExcelItems: any[] = [];
 
     if (attachments.length > 0) {
       const attFileName = attachments[0].file_name || attachments[0].filename || 'adjunto.xlsx';
@@ -212,6 +223,78 @@ export async function POST(req: Request) {
           }
           excelTextContext = JSON.stringify(allRows);
           console.log(`[Email Inbound] Extracted text from all sheets of Excel attachment: ${attachmentName}`);
+
+          // Lector programático directo para archivos Excel grandes
+          let headerRowIdx = -1;
+          let nameColIdx = -1;
+          let qtyColIdx = -1;
+          let unitColIdx = -1;
+          let obsColIdx = -1;
+
+          for (let r = 0; r < Math.min(allRows.length, 30); r++) {
+            const row = allRows[r];
+            if (!row || !Array.isArray(row)) continue;
+            let nameIdx = -1, qtyIdx = -1, unitIdx = -1, obsIdx = -1;
+            for (let c = 0; c < row.length; c++) {
+              const val = String(row[c] || '').toLowerCase().trim();
+              if (!val) continue;
+              if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
+                nameIdx = c;
+              } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
+                qtyIdx = c;
+              } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
+                unitIdx = c;
+              } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
+                obsIdx = c;
+              }
+            }
+            if (nameIdx !== -1 && qtyIdx !== -1) {
+              headerRowIdx = r;
+              nameColIdx = nameIdx;
+              qtyColIdx = qtyIdx;
+              if (unitIdx !== -1) unitColIdx = unitIdx;
+              if (obsIdx !== -1) obsColIdx = obsIdx;
+              break;
+            }
+          }
+
+          if (nameColIdx === -1 || qtyColIdx === -1) {
+            for (let r = 0; r < Math.min(allRows.length, 15); r++) {
+              const row = allRows[r];
+              if (!row || row.length < 2) continue;
+              if (typeof row[0] === 'string' && row[0].length > 3 && typeof row[1] === 'number') {
+                headerRowIdx = r - 1;
+                nameColIdx = 0;
+                qtyColIdx = 1;
+                break;
+              }
+              if (typeof row[1] === 'string' && row[1].length > 3 && typeof row[2] === 'number') {
+                headerRowIdx = r - 1;
+                nameColIdx = 1;
+                qtyColIdx = 2;
+                break;
+              }
+            }
+          }
+
+          const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+          for (let r = startRow; r < allRows.length; r++) {
+            const row = allRows[r];
+            if (!row || !Array.isArray(row)) continue;
+            const rawName = row[nameColIdx !== -1 ? nameColIdx : 0];
+            const rawQty = row[qtyColIdx !== -1 ? qtyColIdx : 1];
+            if (!rawName || String(rawName).trim() === '' || String(rawName).includes('--- HOJA:')) continue;
+            const qtyVal = parseFloat(String(rawQty || '').replace(',', '.'));
+            if (isNaN(qtyVal) || qtyVal <= 0) continue;
+            
+            programmaticExcelItems.push({
+              originalName: String(rawName).trim(),
+              quantity: qtyVal,
+              unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
+              observations: obsColIdx !== -1 ? String(row[obsColIdx] || '').trim() : null
+            });
+          }
+          console.log(`[Email Inbound] Programmatically parsed ${programmaticExcelItems.length} items from Excel.`);
         } catch (err) {
           console.error('[Email Inbound] Error parsing Excel:', err);
         }
@@ -280,7 +363,7 @@ export async function POST(req: Request) {
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
+        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -350,7 +433,7 @@ export async function POST(req: Request) {
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones o especificaciones en el campo "observations".
+        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -389,7 +472,10 @@ export async function POST(req: Request) {
           text = text.trim();
 
           extractedData = JSON.parse(text);
-          if (extractedData.items && !Array.isArray(extractedData.items)) {
+          if (programmaticExcelItems.length > 0) {
+            extractedData.items = programmaticExcelItems;
+            console.log(`[Email Inbound] Overwrote Gemini items list with ${programmaticExcelItems.length} programmatically parsed items.`);
+          } else if (extractedData.items && !Array.isArray(extractedData.items)) {
             if (typeof extractedData.items === 'object') {
               extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
             } else {
@@ -398,6 +484,11 @@ export async function POST(req: Request) {
           }
         } catch (e) {
           console.error('Failed to parse Gemini output for Excel content:', e);
+          if (programmaticExcelItems.length > 0) {
+            extractedData.items = programmaticExcelItems;
+            extractedData.documentType = 'Email con Excel adjunto';
+            console.log(`[Email Inbound] Gemini parsing failed, but successfully recovered ${programmaticExcelItems.length} items from Excel programmatically.`);
+          }
         }
       }
     }
@@ -437,7 +528,7 @@ export async function POST(req: Request) {
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
-        7. Extrae las observaciones, notas o especificaciones de calidad del producto (por ejemplo, 'maduro', 'pintón', 'delgados', etc.) en el campo "observations". Si no hay observaciones, pon una cadena vacía o null.
+        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -493,7 +584,7 @@ export async function POST(req: Request) {
       if (!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) {
         extractedData.items = [];
         const lines = cleanedBodyText.split('\n');
-        const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
+        const regex = /^[-*\s]*(\d+(?:[.,]\d+)?)\s*(kg|kls?|g|lb|litros?|paquetes?|unidades?|cubetas?|manojos?|atados?)?\s*(de\s+)?(.+)/i;
         for (let line of lines) {
           line = line.trim();
           if (line === '-' || line === '') continue;
@@ -667,6 +758,17 @@ export async function POST(req: Request) {
       }
     }
 
+    const namesMatch = (detName: string, profName: string): boolean => {
+      if (!detName || !profName) return false;
+      const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      
+      const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+      const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
+      
+      return words1.some(w => words2.includes(w));
+    };
+
     // If still no profile found, try a global fuzzy name match search against the whole database
     let detectedNameForFuzzy = extractedData.clientInDocument || '';
     if (typeof detectedNameForFuzzy !== 'string') {
@@ -674,24 +776,20 @@ export async function POST(req: Request) {
     }
     detectedNameForFuzzy = detectedNameForFuzzy.trim();
 
-    if (candidateProfiles.length === 0 && detectedNameForFuzzy && detectedNameForFuzzy.length > 3) {
+    let hasNameMatch = false;
+    if (candidateProfiles.length > 0 && detectedNameForFuzzy) {
+      hasNameMatch = candidateProfiles.some(p => 
+        namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
+      );
+    }
+
+    if ((candidateProfiles.length === 0 || !hasNameMatch) && detectedNameForFuzzy && detectedNameForFuzzy.length > 3) {
       console.log(`[Email Ingest] Attempting global fuzzy name match for: "${detectedNameForFuzzy}"`);
       const { data: allProfiles, error: allProfilesError } = await supabaseAdmin
         .from('profiles')
         .select('id, company_name, contact_name, role, is_active, address, phone, nit');
       
       if (!allProfilesError && allProfiles) {
-        const namesMatch = (detName: string, profName: string): boolean => {
-          if (!detName || !profName) return false;
-          const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-          const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-          
-          const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
-          const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
-          
-          return words1.some(w => words2.includes(w));
-        };
-
         const matched = allProfiles.filter(p => 
           namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
         );
@@ -708,17 +806,6 @@ export async function POST(req: Request) {
       if (typeof detectedName !== 'string') {
         detectedName = String(detectedName);
       }
-      
-      const namesMatch = (detName: string, profName: string): boolean => {
-        if (!detName || !profName) return false;
-        const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-        const norm2 = profName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-        
-        const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
-        const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
-        
-        return words1.some(w => words2.includes(w));
-      };
 
       if (candidateProfiles.length === 1) {
         const candidate = candidateProfiles[0];

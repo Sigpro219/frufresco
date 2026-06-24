@@ -26,6 +26,54 @@ const getChannelBadge = (source: string) => {
     }
 };
 
+const getSpanishStem = (word: string) => {
+  const norm = word.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '').trim();
+  if (norm.length <= 2) return norm;
+  if (norm.endsWith('as') || norm.endsWith('os') || norm.endsWith('es')) {
+    return norm.slice(0, -2);
+  }
+  if (norm.endsWith('a') || norm.endsWith('o') || norm.endsWith('e')) {
+    return norm.slice(0, -1);
+  }
+  return norm;
+};
+
+// Returns { matched: boolean, matchedTextInSearch: string | null }
+const matchVariantOption = (searchText: string, optionValue: string) => {
+  const optLower = String(optionValue).toLowerCase().trim();
+  if (!optLower) return { matched: false, matchedTextInSearch: null };
+  const optStem = getSpanishStem(optLower);
+  if (!optStem) return { matched: false, matchedTextInSearch: null };
+
+  const wordRegex = /[a-zA-Z0-9\u00C0-\u017F]+/g;
+  let match;
+  while ((match = wordRegex.exec(searchText)) !== null) {
+    const word = match[0];
+    const wordStem = getSpanishStem(word);
+    if (wordStem === optStem && wordStem.length >= 2) {
+      return { matched: true, matchedTextInSearch: word };
+    }
+  }
+  return { matched: false, matchedTextInSearch: null };
+};
+
+const getSmartFallbackUnit = (prodName: string, databaseUnit: string): string => {
+  const name = prodName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (name.includes('huevo')) {
+    return 'Unidad';
+  }
+  if (name.includes('leche') || name.includes('yogurt') || name.includes('crema de leche') || name.includes('jugo')) {
+    return 'Litro';
+  }
+  if (name.includes('pan ') || name.includes('panes') || name.includes('tajado') || name.includes('tostada') || name.includes('arepa') || name.includes('galleta')) {
+    return 'Unidad';
+  }
+  if (name.includes('aceite')) {
+    return 'Litro';
+  }
+  return databaseUnit || 'Kg';
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -45,6 +93,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
+  const [editableClientName, setEditableClientName] = useState<string>('');
+  const [editableClientPhone, setEditableClientPhone] = useState<string>('');
+  const [editableClientNit, setEditableClientNit] = useState<string>('');
+  const [editableClientType, setEditableClientType] = useState<'b2b_client' | 'b2c_client'>('b2c_client');
   const [editableDeliverySlot, setEditableDeliverySlot] = useState<string>('');
   const [priceList, setPriceList] = useState<string>('');
   const [orderDocument, setOrderDocument] = useState<string>('Remisión');
@@ -533,6 +585,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       const meta = getDraftMetadata(selectedDraft);
       setEditableAddress(meta.address || '');
       
+      setEditableClientName(selectedDraft.client_detected_name || '');
+      setEditableClientPhone(meta.phone && meta.phone !== 'No detectado' ? meta.phone : '');
+      setEditableClientNit(meta.nit && meta.nit !== 'No detectado' ? meta.nit : '');
+      setEditableClientType(meta.clientType || 'b2c_client');
+      
       if (meta.latitude && meta.longitude) {
         setDraftCoordinates({ lat: meta.latitude, lng: meta.longitude });
       } else {
@@ -546,7 +603,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const rawOriginalName = cleanName;
         if (cleanName) {
           cleanName = cleanName
-            .replace(/^[0-9]+(?:[\.,][0-9]+)?(?:\s*(?:kg|kilos?|g|gr|gramos?|litros?|l|lbs?|libras?|unidades?|uds?|unds?|paquetes?))?\s+(?:de\s+)?/i, '')
+            .replace(/^[0-9]+(?:[\.,][0-9]+)?(?:\s*(?:kg|kls?|kilos?|g|gr|gramos?|litros?|l|lbs?|libras?|unidades?|uds?|unds?|paquetes?))?\s+(?:de\s+)?/i, '')
             .replace(/^(libras?\s+de\s+|libra\s+de\s+|unidades?\s+de\s+|litros?\s+de\s+|paquetes?\s+de\s+)/i, '')
             .trim();
         }
@@ -568,53 +625,86 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           if (matchedProd) matchedId = matchedProd.id;
         }
         const prod = products.find(p => p.id === matchedId);
+        
+        const parsedUnit = (() => {
+          const u = (item.unit || '').toLowerCase().trim();
+          if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
+          if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
+          if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return 'Unidad';
+          if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) return 'Paquete 500 gramos';
+          if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) return 'Paquete 250 gramos';
+          if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos' || u === 'kl' || u === 'kls') return 'Kg';
+          if (u === 'g' || u === 'gr' || u === 'gramo' || u === 'gramos') {
+            const qty = Number(item.quantity || 1);
+            if (qty === 500) return 'Paquete 500 gramos';
+            if (qty === 250) return 'Paquete 250 gramos';
+            return 'Kg';
+          }
+          if (u === 'atado' || u === 'atados') return 'Atado';
+          if (u === 'bulto' || u === 'bultos') return 'Bulto';
+          if (u === 'canastilla' || u === 'canastillas') return 'Canastilla';
+          if (u === 'paquete' || u === 'paquetes') {
+            const qty = Number(item.quantity || 1);
+            if (qty === 500) return 'Paquete 500 gramos';
+            if (qty === 250) return 'Paquete 250 gramos';
+            return prod?.unit_of_measure || 'Kg';
+          }
+          
+          const origLower = rawOriginalName.toLowerCase();
+          if (origLower.includes('libra')) return 'Lb';
+          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
+          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
+          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
+          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
+          if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
+            return prod?.unit_of_measure || 'Kg';
+          }
+          
+          return prod ? getSmartFallbackUnit(prod.name, prod.unit_of_measure || 'Kg') : 'Unidad';
+        })();
+
+        const isLibra = parsedUnit === 'Lb';
+        const initialQty = parseFloat(item.quantity || 1);
+        let conversionFactor = isLibra ? 0.5 : (item.conversion_factor || 1);
+        let finalQty = isLibra ? parseFloat((initialQty * 0.5).toFixed(2)) : initialQty;
+        let finalUnit = isLibra ? 'Kg' : parsedUnit;
+
+        if (initialQty >= 100 && !isLibra) {
+          const targetUnit = prod?.unit_of_measure || 'Kg';
+          if (targetUnit === 'Kg') {
+            conversionFactor = 0.001;
+            finalQty = parseFloat((initialQty * 0.001).toFixed(3));
+            finalUnit = 'Kg';
+          } else if (targetUnit === 'Atado') {
+            conversionFactor = 0.002; // 500g = 1 Atado
+            finalQty = parseFloat((initialQty * 0.002).toFixed(2));
+            finalUnit = 'Atado';
+          }
+        }
+
         return {
             ...item,
             originalName: cleanName,
-            originalQuantity: item.quantity || 1,
-            quantity: item.quantity || 1,
+            originalQuantity: initialQty,
+            quantity: finalQty,
+            conversion_factor: conversionFactor,
+            originalUnit: parsedUnit,
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
             skuQuery: prod?.sku || '',
-            unit: (() => {
-              const u = (item.unit || '').toLowerCase().trim();
-              if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
-              if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
-              if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return 'Unidad';
-              if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) return 'Paquete 500 gramos';
-              if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) return 'Paquete 250 gramos';
-              if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
-              if (u === 'g' || u === 'gr' || u === 'gramo' || u === 'gramos') {
-                const qty = Number(item.quantity || 1);
-                if (qty === 500) return 'Paquete 500 gramos';
-                if (qty === 250) return 'Paquete 250 gramos';
-                return 'Kg';
-              }
-              if (u === 'atado' || u === 'atados') return 'Atado';
-              if (u === 'bulto' || u === 'bultos') return 'Bulto';
-              if (u === 'canastilla' || u === 'canastillas') return 'Canastilla';
-              if (u === 'paquete' || u === 'paquetes') {
-                const qty = Number(item.quantity || 1);
-                if (qty === 500) return 'Paquete 500 gramos';
-                if (qty === 250) return 'Paquete 250 gramos';
-                return prod?.unit_of_measure || 'Kg';
-              }
-              
-              const origLower = rawOriginalName.toLowerCase();
-              if (origLower.includes('libra')) return 'Lb';
-              if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos')) return 'Paquete 500 gramos';
-              if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos')) return 'Paquete 250 gramos';
-              if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
-              if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilogramo') || origLower.includes('gramo') || origLower.includes(' g ')) return 'Kg';
-              if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
-                return prod?.unit_of_measure || 'Kg';
-              }
-              
-              // Si no contiene ninguna palabra clave de unidades en el texto del pedido, se asume obligatoriamente 'Unidad'
-              return 'Unidad';
-            })(),
+            unit: finalUnit,
             observations: (() => {
-              let finalObservations = item.observations || '';
+              let extraDescription = '';
+              if (prod && prod.name) {
+                const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                const prodClean = prod.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
+                const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
+                const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+                extraDescription = extraWords.join(' ');
+              }
+              let finalObservations = [item.observations || '', extraDescription].filter(Boolean).join(' ').trim();
+
               if (prod && prod.variants && prod.variants.length > 0) {
                 const variantOptionNames = new Set<string>();
                 let isOldFormat = false;
@@ -641,10 +731,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 variantOptionsList.forEach((v: any) => {
                   if (Array.isArray(v.options)) {
                     for (const optVal of v.options) {
-                      const optValLower = String(optVal).toLowerCase().trim();
-                      if (optValLower && searchText.includes(optValLower)) {
+                      const matchResult = matchVariantOption(searchText, String(optVal));
+                      if (matchResult.matched && matchResult.matchedTextInSearch) {
                         const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                        const regex = new RegExp(`\\b${escapeRegex(optValLower)}\\b`, 'gi');
+                        const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
                         finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
                         break;
                       }
@@ -678,12 +768,22 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   });
                 }
 
-                const searchText = `${rawOriginalName} ${(item.observations || '')}`.toLowerCase();
+                let extraDescription = '';
+                if (prod && prod.name) {
+                  const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                  const prodClean = prod.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                  const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
+                  const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
+                  const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+                  extraDescription = extraWords.join(' ');
+                }
+                const searchText = `${rawOriginalName} ${(item.observations || '')} ${extraDescription}`.toLowerCase();
+
                 variantOptionsList.forEach((v: any) => {
                   if (!autoSelectedOptions[v.name] && Array.isArray(v.options)) {
                     for (const optVal of v.options) {
-                      const optValLower = String(optVal).toLowerCase().trim();
-                      if (optValLower && searchText.includes(optValLower)) {
+                      const matchResult = matchVariantOption(searchText, String(optVal));
+                      if (matchResult.matched) {
                         autoSelectedOptions[v.name] = optVal;
                         break;
                       }
@@ -709,10 +809,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
       }
       
+      setEditableClientName('');
+      setEditableClientPhone('');
+      setEditableClientNit('');
+      setEditableClientType('b2c_client');
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
       setEditableItems([]);
+      setEditableClientName('');
+      setEditableClientPhone('');
+      setEditableClientNit('');
+      setEditableClientType('b2c_client');
       setEditableDeliverySlot('');
       setPriceList('');
       setOrderDocument('Remisión');
@@ -1175,127 +1283,294 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const handleSendManualReceipt = async () => {
     if (!selectedDraft) return;
 
+    // --- 1. Validaciones ---
+    const isAddressMissingVal = !editableAddress || 
+      editableAddress.trim() === '' || 
+      editableAddress.toLowerCase().includes('no detectad') || 
+      editableAddress.toLowerCase() === 'null';
+
+    if (isAddressMissingVal) {
+      showToast('Por favor, ingresa una dirección de entrega válida antes de continuar.', 'error');
+      return;
+    }
+
+    const hasUnmatchedProducts = editableItems.some(item => !item.isMetadata && !item.matched_product_id);
+    if (hasUnmatchedProducts) {
+      showToast('Error: Existen productos sin emparejar. Por favor, asocia todos los productos a nuestro catálogo o elimínalos.', 'error');
+      return;
+    }
+
+    const metadataForValidations = getDraftMetadata(selectedDraft);
+    const currentDeliverySlot = editableDeliverySlot || metadataForValidations?.deliverySlot;
+    if (!deliveryDate || !currentDeliverySlot) {
+      showToast('Error: Debes seleccionar una fecha y franja de entrega válida.', 'error');
+      return;
+    }
+
+    if (!selectedDraft.profile_id) {
+      if (!editableClientName || !editableClientPhone || !editableClientNit) {
+        showToast('Error: Para registrar un cliente nuevo, debes proporcionar un Nombre, Teléfono y NIT válidos.', 'error');
+        return;
+      }
+    }
+
     setActionConfirm({
       isOpen: true,
-      title: 'Enviar Acuse de Recibo',
-      message: `¿Deseas enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`,
-      confirmText: 'Enviar Acuse',
+      title: 'Aprobar Pedido y Enviar Acuse',
+      message: `¿Deseas procesar este pedido, registrarlo en la base de datos y enviar el acuse de recibo al correo ${selectedDraft.source_email || 'del cliente'}?`,
+      confirmText: 'Procesar y Enviar',
       cancelText: 'Cancelar',
       onConfirm: async () => {
         setSendingReceipt(true);
-    try {
-      const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
-      const clientName = selectedDraft.client_detected_name || 'Cliente';
-      
-      const itemsHtml = editableItems.map((item: any) => {
-        const prod = products.find(p => p.id === item.matched_product_id);
-        const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-        const unitPrice = prod?.base_price || 0;
-        const lineTotal = unitPrice * qtyNum;
-        const lineTotalDisplay = lineTotal > 0 ? formatMoney(lineTotal) : 'Por confirmar';
-        const productNameDisplay = `${prod?.name || item.originalName || 'Producto'}${item.unit ? ` (${item.unit})` : ''}`;
-        return `
-          <tr style="border-bottom: 1px solid #E5E7EB;">
-              <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
-              <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qtyNum}</td>
-              <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
-          </tr>
-        `;
-      }).join('');
+        try {
+          const shortCode = selectedDraft.id.slice(0, 6).toUpperCase();
+          const clientName = !selectedDraft.profile_id ? editableClientName : (selectedDraft.client_detected_name || 'Cliente');
+          
+          let finalProfileId = selectedDraft.profile_id;
+          let finalAdminNotes = `[PEDIDO CORREO] Asunto: ${selectedDraft.email_subject || ''}\n---\n${selectedDraft.email_body || ''}\n---\n`;
 
-      const totalOrderDisplay = totalValue > 0 ? `Total Aprox: ${formatMoney(totalValue)}` : 'Total: A confirmar en despacho';
+          // A. Crear perfil de cliente si no existe
+          if (!finalProfileId) {
+            finalProfileId = crypto.randomUUID();
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert({
+                id: finalProfileId,
+                role: editableClientType,
+                contact_name: editableClientName,
+                contact_phone: editableClientPhone,
+                phone: editableClientPhone,
+                address: editableAddress || '',
+                city: 'Bogotá',
+                company_name: editableClientName,
+                created_at: new Date().toISOString(),
+                email: selectedDraft.source_email || null,
+                nit: editableClientNit,
+                is_active: true,
+                latitude: draftCoordinates?.lat || null,
+                longitude: draftCoordinates?.lng || null
+              });
 
-      const emailHtml = `
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-<div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
-    <center>
-        <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
-        <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
-        <p style="font-size: 16px; color: #555; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
-    </center>
-    
-    <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-        <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${shortCode}</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</p>
-        
-        <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
-            <thead>
-                <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
-                    <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
-                    <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${itemsHtml}
-            </tbody>
-        </table>
-        
-        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
-            <p style="font-size: 16px; color: #286a36; margin: 0; font-weight: 800;">
-                <span>${totalOrderDisplay}</span>
-            </p>
-        </div>
-    </div>
+            if (profileError) {
+              throw new Error('Error al crear perfil de cliente: ' + profileError.message);
+            }
+          } else {
+            // Actualizar dirección y coordenadas en perfil existente
+            const { error: profileUpdateError } = await supabase
+              .from('profiles')
+              .update({
+                address: editableAddress || metadataForValidations?.address || '',
+                latitude: draftCoordinates?.lat || metadataForValidations?.latitude || null,
+                longitude: draftCoordinates?.lng || metadataForValidations?.longitude || null
+              })
+              .eq('id', finalProfileId);
 
-    <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
-        Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
-        Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
-    </p>
-    
-    <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
-    
-    <center>
-        <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
-    </center>
-</div>
-      `;
+            if (profileUpdateError) {
+              console.error('Error updating profile coordinates:', profileUpdateError);
+            }
+          }
 
-      const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
-        to_email: selectedDraft.source_email,
-        subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
-        message: { html: emailHtml, text: `Hemos recibido tu pedido con éxito y ya está en preparación.` },
-        status: 'pending'
-      }).select().single();
+          // B. Calcular montos e ítems
+          let totalAmount = 0;
+          let totalWeight = 0;
+          const itemsData: any[] = [];
 
-      if (!mailError && insertedMail) {
-        // Trigger the mail processor immediately
-        fetch('/api/mail/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ record: insertedMail })
-        }).catch(e => console.error('Failed to trigger mail processor', e));
-      }
+          editableItems.forEach(item => {
+            if (item.matched_product_id) {
+              const prod = products.find(p => p.id === item.matched_product_id);
+              if (prod) {
+                const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+                totalAmount += prod.base_price * qtyNum;
+                const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
+                totalWeight += qtyNum * w;
 
-      const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
-      const updatedMetaItem = {
-        ...metaItem,
-        receiptEmailSent: true
-      };
-      const updatedExtractedItems = [
-        updatedMetaItem,
-        ...editableItems
-      ];
+                itemsData.push({
+                  product_id: prod.id,
+                  quantity: qtyNum,
+                  unit_price: prod.base_price,
+                  nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
+                  variant_label: item.observations || null,
+                  unit: item.unit || prod.unit_of_measure || 'Kg',
+                  selected_options: item.selected_options || {}
+                });
+              }
+            }
+          });
 
-      await supabase
-        .from('order_drafts')
-        .update({ extracted_items: updatedExtractedItems })
-        .eq('id', selectedDraft.id);
+          // C. Registrar pedido en base de datos
+          const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+              profile_id: finalProfileId,
+              total: totalAmount,
+              total_weight_kg: totalWeight,
+              status: 'pending_approval',
+              payment_status: 'Pendiente',
+              payment_method: paymentMethod,
+              origin: 'Email Ingest',
+              origin_source: 'email',
+              delivery_date: deliveryDate,
+              delivery_slot: editableDeliverySlot || metadataForValidations?.deliverySlot || 'AM',
+              admin_notes: finalAdminNotes,
+              shipping_address: editableAddress || metadataForValidations?.address || 'Dirección por definir',
+              latitude: draftCoordinates?.lat || metadataForValidations?.latitude || null,
+              longitude: draftCoordinates?.lng || metadataForValidations?.longitude || null
+            })
+            .select()
+            .single();
 
-      setReceiptSent(true);
-      setSelectedDraft((prev: any) => ({
-        ...prev,
-        extracted_items: updatedExtractedItems
-      }));
-      setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? { ...d, extracted_items: updatedExtractedItems } : d));
+          if (orderError) {
+            throw new Error('Error al registrar pedido: ' + orderError.message);
+          }
 
-      showToast('Acuse de recibo enviado con éxito 📧', 'success');
-    } catch (err: any) {
-      console.error('Error sending manual receipt:', err);
-      showToast('Error al enviar acuse de recibo: ' + err.message, 'error');
-    } finally {
-      setSendingReceipt(false);
-    }
+          // D. Registrar ítems en base de datos
+          const finalItemsData = itemsData.map(itm => ({
+            order_id: order.id,
+            ...itm
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('order_items')
+            .insert(finalItemsData);
+
+          if (itemsError) {
+            throw new Error('Error al registrar ítems: ' + itemsError.message);
+          }
+
+          // E. Guardar nuevos aliases/mapeos
+          const newAliases: Record<string, string> = {};
+          editableItems.forEach(item => {
+            const originalText = item.originalName?.toLowerCase()?.trim();
+            if (originalText && item.matched_product_id) {
+              if (aliases[originalText] !== item.matched_product_id) {
+                newAliases[originalText] = item.matched_product_id;
+              }
+            }
+          });
+          if (Object.keys(newAliases).length > 0) {
+            await fetch('/api/orders/aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ newAliases })
+            });
+          }
+
+          // F. Actualizar borrador a aprobado
+          const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
+          const updatedMetaItem = {
+            ...metaItem,
+            address: editableAddress,
+            deliverySlot: editableDeliverySlot || null,
+            deliveryDate: deliveryDate,
+            priceList: priceList,
+            orderDocument: orderDocument,
+            purchaseOrder: purchaseOrder,
+            latitude: draftCoordinates?.lat || metaItem.latitude || null,
+            longitude: draftCoordinates?.lng || metaItem.longitude || null,
+            receiptEmailSent: true
+          };
+          const updatedExtractedItems = [
+            updatedMetaItem,
+            ...editableItems
+          ];
+
+          await supabase
+            .from('order_drafts')
+            .update({ 
+              status: 'approved',
+              extracted_items: updatedExtractedItems
+            })
+            .eq('id', selectedDraft.id);
+
+          // G. Enviar correo HTML de acuse de recibo con resumen de pedido
+          const itemsHtml = editableItems.map((item: any) => {
+            const prod = products.find(p => p.id === item.matched_product_id);
+            const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
+            const unitPrice = prod?.base_price || 0;
+            const lineTotal = unitPrice * qtyNum;
+            const lineTotalDisplay = lineTotal > 0 ? formatMoney(lineTotal) : 'Por confirmar';
+            const productNameDisplay = `${prod?.name || item.originalName || 'Producto'}${item.unit ? ` (${item.unit})` : ''}`;
+            return `
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                  <td style="padding: 12px 0; color: #111827; font-family: sans-serif; font-size: 14px;">${productNameDisplay}</td>
+                  <td style="padding: 12px 0; text-align: center; color: #4B5563; font-family: sans-serif; font-size: 14px; font-weight: bold;">${qtyNum}</td>
+                  <td style="padding: 12px 0; text-align: right; color: #111827; font-family: sans-serif; font-size: 14px; font-weight: bold;">${lineTotalDisplay}</td>
+              </tr>
+            `;
+          }).join('');
+
+          const totalOrderDisplay = totalAmount > 0 ? `Total Aprox: ${formatMoney(totalAmount)}` : 'Total: A confirmar en despacho';
+
+          const emailHtml = `
+            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+            <div style="font-family: 'Playfair Display', Georgia, serif; color: #286a36; padding: 40px; background-color: #ffffff; max-width: 600px; margin: auto;">
+                <center>
+                    <img src="https://frufresco-liard.vercel.app/logo-investments.png" width="150" style="margin-bottom: 20px;" alt="Investments Cortés Logo">
+                    <h1 style="color: #286a36; font-size: 28px; margin-bottom: 10px;">¡Gracias por tu compra, ${clientName}!</h1>
+                    <p style="font-size: 16px; color: #555; margin-top: 0;">Hemos recibido tu pedido con éxito y ya está en preparación.</p>
+                </center>
+                
+                <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 30px; border-left: 5px solid #1f9040; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+                    <h3 style="color: #286a36; margin-top: 0; font-size: 18px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px;">Resumen del Pedido #${shortCode}</h3>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 20px;"><b>Fecha:</b> ${new Date().toLocaleDateString('es-CO')}</p>
+                    
+                    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #286a36; color: #286a36; text-align: left;">
+                                <th style="padding: 10px 5px; font-weight: bold;">Producto</th>
+                                <th style="padding: 10px 5px; font-weight: bold; text-align: center;">Cant.</th>
+                                <th style="padding: 10px 5px; font-weight: bold; text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #286a36; text-align: right;">
+                        <p style="font-size: 16px; color: #286a36; margin: 0; font-weight: 800;">
+                            <span>${totalOrderDisplay}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <p style="margin-top: 30px; text-align: center; color: #666; font-size: 14px;">
+                    Te enviaremos otra notificación cuando tu pedido esté en camino.<br>
+                    Si tienes alguna duda o deseas realizar cambios, puedes responder a este correo.
+                </p>
+                
+                <hr style="border: 0; border-top: 1px solid #1f9040; margin: 40px 0;">
+                
+                <center>
+                    <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Investments Cortés SAS • Del Campo a tu Negocio</p>
+                </center>
+            </div>
+          `;
+
+          const { data: insertedMail, error: mailError } = await supabase.from('mail').insert({
+            to_email: selectedDraft.source_email,
+            subject: `¡Hemos recibido tu pedido! (#${shortCode})`,
+            message: { html: emailHtml, text: `Hemos recibido tu pedido con éxito y ya está en preparación.` },
+            status: 'pending'
+          }).select().single();
+
+          if (!mailError && insertedMail) {
+            fetch('/api/mail/process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ record: insertedMail })
+            }).catch(e => console.error('Failed to trigger mail processor', e));
+          }
+
+          showToast('Pedido registrado y acuse de recibo enviado con éxito 📧✅', 'success');
+          setSelectedDraft(null);
+          fetchDrafts();
+        } catch (err: any) {
+          console.error('Error unifying order processing and receipt:', err);
+          showToast('Error al procesar: ' + err.message, 'error');
+        } finally {
+          setSendingReceipt(false);
+        }
       }
     });
   };
@@ -2676,12 +2951,71 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     
                     {/* Cliente */}
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
-                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB' }}>Cliente</div>
-                      <div style={{ padding: '12px 16px', color: '#111827', fontWeight: 600 }}>
-                        {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
-                        <span style={{ color: '#6B7280', fontWeight: 'normal' }}> ({getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'NIT' : 'CC'}: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                      <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Cliente</div>
+                      <div style={{ padding: '8px 16px', color: '#111827', fontWeight: 600 }}>
+                        {!selectedDraft.profile_id ? (
+                          <input
+                            type="text"
+                            value={editableClientName}
+                            onChange={(e) => setEditableClientName(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
+                            placeholder="Nombre del nuevo cliente..."
+                          />
+                        ) : (
+                          <>
+                            {selectedDraft.client_detected_name || 'CLIENTE NO DETECTADO'} 
+                            <span style={{ color: '#6B7280', fontWeight: 'normal' }}> ({getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'NIT' : 'CC'}: {getDraftMetadata(selectedDraft).nit || 'No detectado'})</span>
+                          </>
+                        )}
                       </div>
                     </div>
+
+                    {!selectedDraft.profile_id && (
+                      <>
+                        {/* Celular de Cliente Nuevo */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Celular</div>
+                          <div style={{ padding: '8px 16px' }}>
+                            <input
+                              type="text"
+                              value={editableClientPhone}
+                              onChange={(e) => setEditableClientPhone(e.target.value)}
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
+                              placeholder="Celular del nuevo cliente..."
+                            />
+                          </div>
+                        </div>
+
+                        {/* NIT / CC de Cliente Nuevo */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>NIT / CC</div>
+                          <div style={{ padding: '8px 16px' }}>
+                            <input
+                              type="text"
+                              value={editableClientNit}
+                              onChange={(e) => setEditableClientNit(e.target.value)}
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none' }}
+                              placeholder="NIT o Documento..."
+                            />
+                          </div>
+                        </div>
+
+                        {/* Tipo de Cliente Nuevo */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
+                          <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Tipo de Cliente</div>
+                          <div style={{ padding: '8px 16px' }}>
+                            <select
+                              value={editableClientType}
+                              onChange={(e) => setEditableClientType(e.target.value as any)}
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, width: '100%', maxWidth: '400px', outline: 'none', fontWeight: 600 }}
+                            >
+                              <option value="b2c_client">Hogar / B2C</option>
+                              <option value="b2b_client">B2B / HORECA</option>
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {/* Asunto */}
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
@@ -3030,8 +3364,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
                                                 else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
                                                 else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
-                                                else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') normalizedUnit = 'Kg';
-                                                else if (found.unit_of_measure) normalizedUnit = found.unit_of_measure;
+                                                else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
+                                                  normalizedUnit = getSmartFallbackUnit(found.name, 'Kg');
+                                                }
+                                                else if (found.unit_of_measure) {
+                                                  normalizedUnit = getSmartFallbackUnit(found.name, found.unit_of_measure);
+                                                }
                                                 
                                                 const currentUnit = newEdits[i].unit;
                                                 const isSpecialUnit = ['Litro', 'Lb', 'Paquete 250 gramos', 'Paquete 500 gramos'].includes(currentUnit);
@@ -3040,8 +3378,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                 }
                                                 // Extract variants from observations/originalName
                                                 const autoSelectedOptions: Record<string, string> = {};
-                                                let finalObservations = newEdits[i].observations || '';
                                                 const rawOriginalName = newEdits[i].originalName || '';
+                                                let extraDescription = '';
+                                                if (found && found.name) {
+                                                  const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                                                  const prodClean = found.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
+                                                  const origWords = origClean.split(/\s+/).filter(w => w.length > 0);
+                                                  const prodWords = prodClean.split(/\s+/).filter(w => w.length > 0);
+                                                  const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
+                                                  extraDescription = extraWords.join(' ');
+                                                }
+                                                let finalObservations = [newEdits[i].observations || '', extraDescription].filter(Boolean).join(' ').trim();
                                                 
                                                 if (found.variants && found.variants.length > 0) {
                                                   const variantOptionNames = new Set<string>();
@@ -3069,11 +3416,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                                   variantOptionsList.forEach((v: any) => {
                                                     if (Array.isArray(v.options)) {
                                                       for (const optVal of v.options) {
-                                                        const optValLower = String(optVal).toLowerCase().trim();
-                                                        if (optValLower && searchText.includes(optValLower)) {
+                                                        const matchResult = matchVariantOption(searchText, String(optVal));
+                                                        if (matchResult.matched && matchResult.matchedTextInSearch) {
                                                           autoSelectedOptions[v.name] = optVal;
                                                           const escapeRegex = (s: string) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                                                          const regex = new RegExp(`\\b${escapeRegex(optValLower)}\\b`, 'gi');
+                                                          const regex = new RegExp(`\\b${escapeRegex(matchResult.matchedTextInSearch)}\\b`, 'gi');
                                                           finalObservations = finalObservations.replace(regex, '').replace(/\s+/g, ' ').trim();
                                                           break;
                                                         }
@@ -3512,7 +3859,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                           
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
                                             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4B5563' }}>
-                                              {item.originalQuantity || item.cant || item.cantidad || 1} {item.unit || 'Unidades'}
+                                              {item.originalQuantity || item.cant || item.cantidad || 1} {item.originalUnit || item.unit || 'Unidades'}
                                             </div>
                                             <div style={{ fontSize: '1rem', fontWeight: 800, color: '#9CA3AF' }}>x</div>
                                             <div>
@@ -3884,7 +4231,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 {selectedDraft.status === 'pending' && (
                   <button 
                     id="btn-approve-draft"
-                    onClick={handleApprove}
+                    onClick={handleSendManualReceipt}
                     disabled={saving || hasUnmatchedItems}
                     style={{
                       padding: '0.75rem 1.5rem',
@@ -4672,7 +5019,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
                       const data = await res.json();
                       if (data.warning) {
-                        showToast(data.warning, 'warning');
+                        showToast(data.warning, 'info');
                       } else {
                         showToast(`Borrador de pedido rechazado por ${rejectReason === 'cobertura' ? 'falta de cobertura' : rejectReason === 'monto_minimo' ? 'monto mínimo' : 'productos no comercializados'}. Se ha notificado al cliente. ✉️`, 'success');
                       }
