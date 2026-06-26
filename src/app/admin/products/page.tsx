@@ -172,8 +172,13 @@ export default function AdminProductsPage() {
             .eq('id', id);
 
         if (error) {
-            console.error('Error updating product:', error);
-            showToast('Error al guardar: ' + error.message, 'error');
+            console.error('Error updating product:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            showToast('Error al guardar: ' + (error.message || 'Error desconocido'), 'error');
         } else {
             setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
             showToast('Cambio guardado con éxito', 'success');

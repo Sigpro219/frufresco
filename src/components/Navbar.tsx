@@ -172,12 +172,15 @@ export default function Navbar() {
         else if (moduleKey === 'inventory') key = 'admin.commercial.inventory';
         else if (moduleKey === 'maintenance') key = 'admin.transport.maintenance';
         else if (moduleKey === 'command_center') key = 'admin.dashboard';
+        else if (moduleKey === 'orders') key = 'admin.orders';
+        else if (moduleKey === 'products.catalog') key = 'admin.products.catalog';
+        else if (moduleKey === 'products.master') key = 'admin.products.master';
 
         return checkUserPermission(profile, key, roles);
     };
 
     const shouldShowOperations = () => {
-        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center'];
+        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center', 'orders', 'products.catalog', 'products.master'];
         return modules.some(m => hasPermission(m));
     };
 
@@ -397,7 +400,7 @@ export default function Navbar() {
 
                                             <div style={{ borderTop: `1px solid ${THEME.colors.border}`, margin: '4px 0' }} />
 
-                                            {hasPermission('commercial') && (
+                                            {(hasPermission('orders') || hasPermission('commercial')) && (
                                                 <Link href="/admin/orders/loading"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle}
@@ -463,6 +466,24 @@ export default function Navbar() {
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
                                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                     <Archive size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navInventory}
+                                                </Link>
+                                            )}
+                                            {hasPermission('products.catalog') && (
+                                                <Link href="/admin/products"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <ShoppingBag size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCatalogWeb}
+                                                </Link>
+                                            )}
+                                            {hasPermission('products.master') && (
+                                                <Link href="/admin/master/products"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Package size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navMasterSku}
                                                 </Link>
                                             )}
 
@@ -789,7 +810,7 @@ export default function Navbar() {
                                     <Settings size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navAdmin}
                                 </Link>
                             )}
-                            {hasPermission('commercial') && (
+                            {(hasPermission('orders') || hasPermission('commercial')) && (
                                 <Link href="/admin/orders/loading" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <ClipboardList size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navOrders}
                                 </Link>
@@ -820,6 +841,16 @@ export default function Navbar() {
                             {hasPermission('inventory') && (
                                 <Link href="/admin/commercial/inventory" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <Archive size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInventory}
+                                </Link>
+                            )}
+                            {hasPermission('products.catalog') && (
+                                <Link href="/admin/products" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <ShoppingBag size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalogWeb}
+                                </Link>
+                            )}
+                            {hasPermission('products.master') && (
+                                <Link href="/admin/master/products" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navMasterSku}
                                 </Link>
                             )}
                             {hasPermission('dashboard') && (
