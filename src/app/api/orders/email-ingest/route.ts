@@ -81,99 +81,126 @@ export const fetchCache = 'force-no-store';
 export async function POST(req: Request) {
   const supabaseAdmin = getSupabaseAdmin();
   
-  // 1. Webhook Security
-  const { searchParams } = new URL(req.url);
-  const secret = searchParams.get('secret');
-  if (process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
-    console.error('[Email Inbound] Unauthorized access attempt.');
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let rawPayloadStr = '';
-  try {
-    rawPayloadStr = await req.text();
-    const payload = JSON.parse(rawPayloadStr);
-
-    supabaseAdmin.from('raw_emails').insert([{ payload, status: 'pending' }]).then(()=>{}, ()=>{});
-
-    // CloudMailin structures payload containing headers, envelope, plain, html, attachments
-    const headers = payload.headers || {};
-    const envelope = payload.envelope || {};
-
-    const fromField = headers.from || headers.From || envelope.from || '';
-    const toField = headers.to || headers.To || envelope.to || '';
-    const subject = headers.subject || headers.Subject || '';
-    const plainText = payload.plain || '';
-    const attachments = payload.attachments || [];
-    
-    // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
-    let cleanedBodyText = plainText;
-    const forwardBlockRegex = /[-]+\s*Forwarded\s+message\s*[-]+\s*\r?\n(?:(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc):\s*[^\r\n]*\r?\n)*/i;
-    cleanedBodyText = cleanedBodyText.replace(forwardBlockRegex, '').trim();
-    
-    // DEBUG: Append attachment info to plainText so we can see it in Supabase
-    let debugInfo = '\n\n[DEBUG] Attachments info: ' + JSON.stringify(attachments.map((a: any) => ({name: a.filename, type: a.content_type, size: a.content ? a.content.length : 0})));
-    let currentPlainText = plainText + debugInfo;
-
-    // Extract clean email address (e.g. "John Doe <john@example.com>" -> "john@example.com")
-    let senderEmail = fromField;
-    const matchEmail = fromField.match(/<([^>]+)>/);
-    if (matchEmail) {
-      senderEmail = matchEmail[1];
-    }
-    senderEmail = senderEmail.trim().toLowerCase();
-
-    // Cuentas corporativas conocidas de FruFresco y del administrador
-    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
-    const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
-
-    // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
-    const isAutoReply = 
-      headers['auto-submitted'] || 
-      headers['Auto-Submitted'] || 
-      subject.toLowerCase().startsWith('¡hemos recibido tu pedido!') ||
-      subject.toLowerCase().startsWith('hemos recibido tu pedido') ||
-      subject.toLowerCase().includes('auto-reply') || 
-      subject.toLowerCase().includes('autoreply') || 
-      subject.toLowerCase().includes('delivery status notification') || 
-      subject.toLowerCase().includes('undelivered mail') || 
-      subject.toLowerCase().includes('failure notice') ||
-      senderEmail.includes('mailer-daemon') ||
-      senderEmail.includes('noreply') ||
-      senderEmail.includes('no-reply');
-
-    if (isAutoReply) {
-      console.log(`[Email Inbound] Ignorando correo automático para evitar bucles de respuesta. Emisor: ${senderEmail}, Asunto: ${subject}`);
-      return NextResponse.json({ success: true, message: 'Ignored automatic email/loop prevention.' });
+    // 1. Webhook Security
+    const { searchParams } = new URL(req.url);
+    const secret = searchParams.get('secret');
+    if (process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
+      console.error('[Email Inbound] Unauthorized access attempt.');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Determine if the email was sent to our corporate email address (which is normal for orders)
-    let recipientEmail = toField;
-    const matchTo = toField.match(/<([^>]+)>/);
-    if (matchTo) {
-      recipientEmail = matchTo[1];
-    }
-    recipientEmail = recipientEmail.trim().toLowerCase();
+    let rawPayloadStr = '';
+    try {
+      rawPayloadStr = await req.text();
+      const payload = JSON.parse(rawPayloadStr);
 
-    const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
+      // Save email immediately to the 'mail' table to ensure we have a record
+      const { data: mailRecord, error: mailErr } = await supabaseAdmin
+        .from('mail')
+        .insert([{
+          payload: payload,
+          sender_email: payload.headers?.from || payload.envelope?.from || 'desconocido',
+          subject: payload.headers?.subject || 'Sin Asunto',
+          status: 'pending'
+        }])
+        .select()
+        .single();
 
-    if (isCorporateSender && toField) {
-      // Si el emisor es corporativo (frufrescodigital@gmail.com), se trata de un correo saliente
-      // (ej. enviado con CCO a la plataforma). En este caso, el cliente es el destinatario (recipientEmail).
-      
-      // Si el destinatario también es corporativo, se aborta para evitar bucles.
-      if (isCorporateRecipient) {
-        console.log(`[Email Inbound] Ignorando correo corporativo interno de loop. De: ${senderEmail} Para: ${recipientEmail}`);
-        return NextResponse.json({ success: true, message: 'Ignored internal corporate email loop.' });
+      if (mailErr) {
+        console.error('[Email Inbound] Error saving raw mail payload:', mailErr);
       }
 
-      console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
-      senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente y responderle
-    } else {
-      // Si el emisor NO es corporativo (ej: higuera200@gmail.com), el cliente es el senderEmail.
-      // El correo fue enviado TO a nuestra cuenta corporativa (recipientEmail).
-      console.log(`[Email Inbound] Correo entrante recibido de cliente: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject}`);
-    }
+      // 2. KICK OFF ASYNCHRONOUS PROCESSING
+      // We process the email parsing, Gemini extraction, attachments and drafts in the background.
+      // This immediately returns 200 OK to CloudMailin to prevent Vercel Function Invocation timeouts.
+      const processMailAsync = async () => {
+        const mailId = mailRecord?.id;
+        console.log(`[Email Inbound] Asynchronously processing mail record: ${mailId}`);
+
+        try {
+          const headers = payload.headers || {};
+          const envelope = payload.envelope || {};
+
+          const fromField = headers.from || headers.From || envelope.from || '';
+          const toField = headers.to || headers.To || envelope.to || '';
+          const subject = headers.subject || headers.Subject || '';
+          const plainText = payload.plain || '';
+          const attachments = payload.attachments || [];
+          
+          // Clean forwarded message headers if present to prevent client profile matching issues and product parsing noise
+          let cleanedBodyText = plainText;
+          const forwardBlockRegex = /[-]+\s*Forwarded\s+message\s*[-]+\s*\r?\n(?:(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc):\s*[^\r\n]*\r?\n)*/i;
+          cleanedBodyText = cleanedBodyText.replace(forwardBlockRegex, '').trim();
+          
+          // DEBUG: Append attachment info to plainText so we can see it in Supabase
+          let debugInfo = '\n\n[DEBUG] Attachments info: ' + JSON.stringify(attachments.map((a: any) => ({name: a.filename, type: a.content_type, size: a.content ? a.content.length : 0})));
+          let currentPlainText = plainText + debugInfo;
+
+          // Extract clean email address (e.g. "John Doe <john@example.com>" -> "john@example.com")
+          let senderEmail = fromField;
+          const matchEmail = fromField.match(/<([^>]+)>/);
+          if (matchEmail) {
+            senderEmail = matchEmail[1];
+          }
+          senderEmail = senderEmail.trim().toLowerCase();
+
+          // Cuentas corporativas conocidas de FruFresco y del administrador
+          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+          const isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co');
+
+          // 1. IGNORAR de inmediato si es un correo automático (auto-replies, bounces, deliverability messages)
+          const isAutoReply = 
+            headers['auto-submitted'] || 
+            headers['Auto-Submitted'] || 
+            subject.toLowerCase().startsWith('¡hemos recibido tu pedido!') ||
+            subject.toLowerCase().startsWith('hemos recibido tu pedido') ||
+            subject.toLowerCase().includes('auto-reply') || 
+            subject.toLowerCase().includes('autoreply') || 
+            subject.toLowerCase().includes('delivery status notification') || 
+            subject.toLowerCase().includes('undelivered mail') || 
+            subject.toLowerCase().includes('failure notice') ||
+            senderEmail.includes('mailer-daemon') ||
+            senderEmail.includes('noreply') ||
+            senderEmail.includes('no-reply');
+
+          if (isAutoReply) {
+            console.log(`[Email Inbound] Ignorando correo automático para evitar bucles de respuesta. Emisor: ${senderEmail}, Asunto: ${subject}`);
+            if (mailId) {
+              await supabaseAdmin.from('mail').update({ status: 'ignored' }).eq('id', mailId);
+            }
+            return;
+          }
+
+          // Determine if the email was sent to our corporate email address (which is normal for orders)
+          let recipientEmail = toField;
+          const matchTo = toField.match(/<([^>]+)>/);
+          if (matchTo) {
+            recipientEmail = matchTo[1];
+          }
+          recipientEmail = recipientEmail.trim().toLowerCase();
+
+          const isCorporateRecipient = corporateEmails.includes(recipientEmail) || recipientEmail.endsWith('@frufresco.com') || recipientEmail.endsWith('@frufresco.co');
+
+          if (isCorporateSender && toField) {
+            // Si el emisor es corporativo (frufrescodigital@gmail.com), se trata de un correo saliente
+            // (ej. enviado con CCO a la plataforma). En este caso, el cliente es el destinatario (recipientEmail).
+            
+            // Si el destinatario también es corporativo, se aborta para evitar bucles.
+            if (isCorporateRecipient) {
+              console.log(`[Email Inbound] Ignorando correo corporativo interno de loop. De: ${senderEmail} Para: ${recipientEmail}`);
+              if (mailId) {
+                await supabaseAdmin.from('mail').update({ status: 'ignored' }).eq('id', mailId);
+              }
+              return;
+            }
+
+            console.log(`[Email Inbound] Correo saliente detectado (CCO/BCC) desde emisor corporativo (${senderEmail}). Asociando al destinatario (cliente): ${recipientEmail}`);
+            senderEmail = recipientEmail; // Usar el destinatario para buscar la ficha del cliente y responderle
+          } else {
+            // Si el emisor NO es corporativo (ej: higuera200@gmail.com), el cliente es el senderEmail.
+            // El correo fue enviado TO a nuestra cuenta corporativa (recipientEmail).
+            console.log(`[Email Inbound] Correo entrante recibido de cliente: ${senderEmail} hacia corporativo: ${recipientEmail} con asunto: ${subject}`);
+          }
 
     // 1. Declare client profile reference
     let profile: any = null;
@@ -239,13 +266,15 @@ export async function POST(req: Request) {
               const val = String(row[c] || '').toLowerCase().trim();
               if (!val) continue;
               if (val.match(/^(descripci[óo]n|producto|nombre|item|art[íi]culo|detalle|sku|desc|product|name)$/i) || val.match(/(descripci[óo]n\s+de\s+producto|nombre\s+del\s+producto|desc\s+producto)/i)) {
-                nameIdx = c;
+                if (nameIdx === -1) nameIdx = c;
               } else if (val.match(/^(cant|cantidad|unidades|qty|quantity|cant\.?|cant\s+pedida)$/i)) {
-                qtyIdx = c;
+                if (qtyIdx === -1 || (val === 'unidades' && qtyIdx !== -1)) {
+                  if (qtyIdx === -1) qtyIdx = c;
+                }
               } else if (val.match(/^(unidad|uom|medida|unid\.?|unit|presentaci[óo]n)$/i)) {
-                unitIdx = c;
+                if (unitIdx === -1) unitIdx = c;
               } else if (val.match(/^(obs|observaci[óo]n|observaciones|notas|nota|obs\.?)$/i)) {
-                obsIdx = c;
+                if (obsIdx === -1) obsIdx = c;
               }
             }
             if (nameIdx !== -1 && qtyIdx !== -1) {
@@ -369,6 +398,11 @@ export async function POST(req: Request) {
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
         - Las cantidades deben ser estrictamente numéricas (si dice "una libra", pon 1. Si no hay cantidad, asume 1).
         - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos. Incluso si está vacío, o si el usuario lista con guiones (-), extráelos como elementos del arreglo.
+
+        REGLAS DE EXCLUSIÓN CRÍTICA DE PRODUCTOS:
+        * NUNCA extraigas el nombre del cliente, dirección, teléfono, NIT, número de factura o cualquier información de la cabecera/pie de página como si fuera un producto.
+        * Si detectas un texto que coincide con el nombre de la empresa (ej. "CLUB BELLAVISTA", "ADR WORK", etc.) y un valor numérico extremadamente grande al lado (ej. "7900405437", "800234123", etc. que claramente es un teléfono, NIT o código de barra), es información del cliente/documento, NO es un producto del pedido. Queda TERMINANTEMENTE PROHIBIDO incluirlo en la lista de 'items'.
+        * Cualquier cantidad que sea mayor a 5000 (o que parezca un código numérico largo como un teléfono o NIT) debe ser ignorada como producto y NO debe incluirse en la lista de 'items'.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
@@ -438,6 +472,11 @@ export async function POST(req: Request) {
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
         - Las cantidades deben ser estrictamente numéricas.
+
+        REGLAS DE EXCLUSIÓN CRÍTICA DE PRODUCTOS:
+        * NUNCA extraigas el nombre del cliente, dirección, teléfono, NIT, número de factura o cualquier información de la cabecera/pie de página como si fuera un producto.
+        * Si detectas un texto que coincide con el nombre de la empresa (ej. "CLUB BELLAVISTA", "ADR WORK", etc.) y un valor numérico extremadamente grande al lado (ej. "7900405437", "800234123", etc. que claramente es un teléfono, NIT o código de barra), es información del cliente/documento, NO es un producto del pedido. Queda TERMINANTEMENTE PROHIBIDO incluirlo en la lista de 'items'.
+        * Cualquier cantidad que sea mayor a 5000 (o que parezca un código numérico largo como un teléfono o NIT) debe ser ignorada como producto y NO debe incluirse en la lista de 'items'.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
@@ -472,12 +511,12 @@ export async function POST(req: Request) {
           text = text.trim();
 
           extractedData = JSON.parse(text);
-          if (programmaticExcelItems.length > 0) {
+          if ((!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) && programmaticExcelItems.length > 0) {
             extractedData.items = programmaticExcelItems;
-            console.log(`[Email Inbound] Overwrote Gemini items list with ${programmaticExcelItems.length} programmatically parsed items.`);
+            console.log(`[Email Inbound] Gemini items list was empty. Using ${programmaticExcelItems.length} programmatically parsed items.`);
           } else if (extractedData.items && !Array.isArray(extractedData.items)) {
             if (typeof extractedData.items === 'object') {
-              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: extractedData.items[key] }));
+              extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: (extractedData.items as any)[key] }));
             } else {
               extractedData.items = [];
             }
@@ -534,6 +573,11 @@ export async function POST(req: Request) {
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
         - Las cantidades deben ser numéricas.
         - MUY IMPORTANTE: El campo "items" DEBE ser SIEMPRE un arreglo (Array) de objetos.
+
+        REGLAS DE EXCLUSIÓN CRÍTICA DE PRODUCTOS:
+        * NUNCA extraigas el nombre del cliente, dirección, teléfono, NIT, número de factura o cualquier información de la cabecera/pie de página como si fuera un producto.
+        * Si detectas un texto que coincide con el nombre de la empresa (ej. "CLUB BELLAVISTA", "ADR WORK", etc.) y un valor numérico extremadamente grande al lado (ej. "7900405437", "800234123", etc. que claramente es un teléfono, NIT o código de barra), es información del cliente/documento, NO es un producto del pedido. Queda TERMINANTEMENTE PROHIBIDO incluirlo en la lista de 'items'.
+        * Cualquier cantidad que sea mayor a 5000 (o que parezca un código numérico largo como un teléfono o NIT) debe ser ignorada como producto y NO debe incluirse en la lista de 'items'.
         
         FORMATO DE RESPUESTA ESPERADO:
         {
@@ -966,7 +1010,11 @@ export async function POST(req: Request) {
             attachmentName: attachmentName || null
           },
           ...(Array.isArray(extractedData.items) ? extractedData.items.map((itm: any) => {
-            const nameLower = String(itm.originalName || itm.name || '').toLowerCase();
+            let originalName = String(itm.originalName || itm.name || '').trim();
+            // Clean trailing package/quantity details like "x 1000 g", "x 500g", "1000 gr", etc.
+            originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
+            
+            const nameLower = originalName.toLowerCase();
             let quantity = itm.quantity;
             let observations = itm.observations || '';
             
@@ -982,6 +1030,7 @@ export async function POST(req: Request) {
               // Agregamos un flag de unidad 'Lb' o similar al objeto del item
               return {
                 ...itm,
+                originalName: originalName,
                 unit: 'Lb',
                 observations: observations
               };
@@ -992,11 +1041,15 @@ export async function POST(req: Request) {
               }
               return {
                 ...itm,
+                originalName: originalName,
                 unit: 'Litro',
                 observations: observations
               };
             }
-            return itm;
+            return {
+              ...itm,
+              originalName: originalName
+            };
           }) : [])
         ],
         status: 'pending'
@@ -1248,11 +1301,27 @@ export async function POST(req: Request) {
       console.log('[Email Inbound] SMTP credentials not set, skipping confirmation email.');
     }
 
-    return NextResponse.json({ success: true, draftId: newDraft.id });
+          if (mailId) {
+            await supabaseAdmin.from('mail').update({ status: 'success' }).eq('id', mailId);
+          }
+          console.log('[Email Inbound] Asynchronous processing finished successfully. Draft created:', newDraft.id);
 
-  } catch (err: any) {
-    console.error('[Email Inbound] Ingest error:', err);
-    supabaseAdmin.from('raw_emails').update({ status: 'error', error_message: err?.message || 'Error' }).eq('status', 'pending').then(()=>{}, ()=>{});
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+        } catch (err: any) {
+          console.error('[Email Inbound] Ingest error in background process:', err);
+          if (mailId) {
+            await supabaseAdmin.from('mail').update({ status: 'error', error_message: err?.message || 'Error parsing' }).eq('id', mailId);
+          }
+        }
+      };
+
+      // Execute background processing without awaiting it
+      processMailAsync().catch(err => console.error('[Email Inbound] Fatal background process execution error:', err));
+
+      // Return immediate 200 OK to CloudMailin to prevent serverless function timeout
+      return NextResponse.json({ success: true, message: 'Email received and queued for processing.', mailId: mailRecord?.id });
+
+    } catch (err: any) {
+      console.error('[Email Inbound] Webhook handler error:', err);
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
 }
