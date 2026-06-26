@@ -248,8 +248,10 @@ export async function POST(req: Request) {
             const validRows = rows.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== undefined && cell !== ''));
             if (validRows.length > 0) allRows = allRows.concat([[`--- HOJA: ${sheetName} ---`]], validRows);
           }
-          excelTextContext = JSON.stringify(allRows);
-          console.log(`[Email Inbound] Extracted text from all sheets of Excel attachment: ${attachmentName}`);
+          // Limit rows sent to Gemini to the first 30 rows of the spreadsheet context to keep token sizes tiny and speed up API response times dramatically.
+          const aiRows = allRows.slice(0, 30);
+          excelTextContext = JSON.stringify(aiRows);
+          console.log(`[Email Inbound] Extracted text (limited to 30 rows for Gemini) from all sheets of Excel attachment: ${attachmentName}`);
 
           // Lector programático directo para archivos Excel grandes
           let headerRowIdx = -1;
@@ -455,8 +457,8 @@ export async function POST(req: Request) {
         ${excelTextContext}
         
         TAREA:
-        1. Analiza el contenido de texto del archivo Excel adjunto para extraer la lista de productos solicitados.
-        2. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del correo y del Excel.
+        1. Identifica el nombre o empresa del CLIENTE, dirección de entrega física, número de teléfono, cédula/NIT y jornada preferida de entrega combinando el análisis del correo y del Excel.
+        2. IMPORTANTE EN EXCEL: Ya contamos con un lector programático rápido que extraerá la lista de productos del archivo. Por lo tanto, tu prioridad número 1 es extraer los metadatos del cliente y del pedido ('clientInDocument', 'address', 'phone', 'nit', 'deliverySlot', 'deliveryDate', 'clientType'). Puedes dejar la lista de 'items' vacía [] o incluir solo los primeros 2 productos de muestra en el JSON para agilizar tu velocidad de respuesta dramáticamente.
            - NOMBRE DEL CLIENTE: Identifica la compañía matriz o razón social principal. NUNCA uses nombres de sucursales o ciudades.
         3. Identifica la franja u horario de entrega. El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType": "b2b_client" o "b2c_client".
@@ -515,9 +517,9 @@ export async function POST(req: Request) {
           text = text.trim();
 
           extractedData = JSON.parse(text);
-          if ((!extractedData.items || !Array.isArray(extractedData.items) || extractedData.items.length === 0) && programmaticExcelItems.length > 0) {
+          if (programmaticExcelItems.length > 0) {
             extractedData.items = programmaticExcelItems;
-            console.log(`[Email Inbound] Gemini items list was empty. Using ${programmaticExcelItems.length} programmatically parsed items.`);
+            console.log(`[Email Inbound] Overwriting items list with ${programmaticExcelItems.length} programmatically parsed items for speed and accuracy.`);
           } else if (extractedData.items && !Array.isArray(extractedData.items)) {
             if (typeof extractedData.items === 'object') {
               extractedData.items = Object.keys(extractedData.items).map(key => ({ originalName: key, quantity: (extractedData.items as any)[key] }));
