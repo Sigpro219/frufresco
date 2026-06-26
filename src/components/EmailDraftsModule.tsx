@@ -113,6 +113,26 @@ const getSmartFallbackUnit = (prodName: string, databaseUnit: string): string =>
   return databaseUnit || 'Kg';
 };
 
+const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]): string => {
+  if (!allowedDays || allowedDays.length === 0) return baseDateStr;
+  
+  const jDays = allowedDays.map(d => d === 7 ? 0 : d);
+  
+  let date = new Date(baseDateStr + 'T12:00:00');
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  
+  for (let k = 0; k < 7; k++) {
+    const currentDay = date.getDay();
+    if (jDays.includes(currentDay)) {
+      return date.toISOString().split('T')[0];
+    }
+    date.setDate(date.getDate() + 1);
+  }
+  return baseDateStr;
+};
+
 interface EmailDraftsModuleProps {
   onDraftsChange?: (count: number) => void;
 }
@@ -411,7 +431,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department')
         .eq('is_active', true)
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
@@ -582,7 +602,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data, error } = await supabase
         .from('order_drafts')
-        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data)')
+        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false });
 
@@ -663,9 +683,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     if (selectedDraft) {
       setIsEditing(true);
       const meta = getDraftMetadata(selectedDraft);
-      setEditableAddress(meta.address || '');
-      
       const matchedProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+      
+      if (matchedProfile && matchedProfile.address) {
+        const fullAddress = `${matchedProfile.address}${matchedProfile.municipality || matchedProfile.city ? `, ${matchedProfile.municipality || matchedProfile.city}` : ''}${matchedProfile.department ? `, ${matchedProfile.department}` : ''}`;
+        setEditableAddress(fullAddress);
+      } else {
+        setEditableAddress(meta.address || '');
+      }
+      
       const initialClientName = matchedProfile ? (matchedProfile.company_name || matchedProfile.contact_name || '') : (selectedDraft.client_detected_name || '');
       setClientSearchQuery(initialClientName);
       
@@ -906,11 +932,14 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPriceList(metadata.priceList || '');
       setOrderDocument(metadata.orderDocument || 'Remisión');
       setPurchaseOrder(metadata.purchaseOrder || '');
-      if (metadata.deliveryDate) {
-        setDeliveryDate(metadata.deliveryDate);
-      } else {
-        setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      let initialDateStr = metadata.deliveryDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      if (matchedProfile?.logistics_data) {
+        const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
+        if (allowedDays && allowedDays.length > 0) {
+          initialDateStr = getNextAllowedDeliveryDate(initialDateStr, allowedDays);
+        }
       }
+      setDeliveryDate(initialDateStr);
       
       setEditableClientName('');
       setEditableClientPhone('');
@@ -3066,7 +3095,10 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                 const val = e.target.value;
                                 setClientSearchQuery(val);
                                 
-                                const foundProf = profiles.find(p => (p.company_name || p.contact_name || '') === val);
+                                const cleanVal = val.trim().toLowerCase();
+                                const foundProf = profiles.find(p => 
+                                  (p.company_name || p.contact_name || '').trim().toLowerCase() === cleanVal
+                                );
                                 if (foundProf) {
                                   setSelectedDraft(prev => ({
                                     ...prev,
@@ -3078,12 +3110,19 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                   setEditableClientNit(foundProf.nit || '');
                                   setEditableClientType(foundProf.role || 'b2b_client');
                                   if (foundProf.address) {
-                                    setEditableAddress(foundProf.address);
-                                    triggerGeocoding(foundProf.address);
+                                    const fullAddress = `${foundProf.address}${foundProf.municipality || foundProf.city ? `, ${foundProf.municipality || foundProf.city}` : ''}${foundProf.department ? `, ${foundProf.department}` : ''}`;
+                                    setEditableAddress(fullAddress);
+                                    triggerGeocoding(fullAddress);
                                   }
                                   const computedSlot = getDeliverySlotFromLogistics(foundProf.logistics_data);
                                   if (computedSlot) {
                                     setEditableDeliverySlot(computedSlot);
+                                  }
+                                  if (foundProf.logistics_data) {
+                                    const allowedDays = foundProf.logistics_data.allowed_days || foundProf.logistics_data.days;
+                                    if (allowedDays && allowedDays.length > 0) {
+                                      setDeliveryDate(prevDate => getNextAllowedDeliveryDate(prevDate, allowedDays));
+                                    }
                                   }
                                 } else {
                                   setSelectedDraft(prev => ({
@@ -3281,7 +3320,49 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid #F3F4F6' }}>
                       <div style={{ padding: '12px 16px', fontWeight: 700, color: '#4B5563', backgroundColor: '#F9FAFB', display: 'flex', alignItems: 'center' }}>Fecha de envío</div>
                       <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center' }}>
-                        <input type="date" value={deliveryDate} disabled={!isEditing} onChange={(e) => setDeliveryDate(e.target.value)} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, cursor: isEditing ? 'pointer' : 'default', backgroundColor: isEditing ? 'white' : '#F9FAFB' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <input 
+                            type="date" 
+                            value={deliveryDate} 
+                            disabled={!isEditing} 
+                            onChange={(e) => {
+                              const newDate = e.target.value;
+                              const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
+                              if (matchedProfile?.logistics_data) {
+                                const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
+                                if (allowedDays && allowedDays.length > 0) {
+                                  const adjustedDate = getNextAllowedDeliveryDate(newDate, allowedDays);
+                                  if (adjustedDate !== newDate) {
+                                    showToast(`Día no permitido. Ajustado al siguiente día válido: ${adjustedDate}`, 'info');
+                                    setDeliveryDate(adjustedDate);
+                                    return;
+                                  }
+                                }
+                              }
+                              setDeliveryDate(newDate);
+                            }} 
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${THEME.colors.border}`, cursor: isEditing ? 'pointer' : 'default', backgroundColor: isEditing ? 'white' : '#F9FAFB' }} 
+                          />
+                          {(() => {
+                            const matchedProfile = profiles.find(p => p.id === selectedDraft?.profile_id);
+                            if (matchedProfile?.logistics_data) {
+                              const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
+                              if (allowedDays && allowedDays.length > 0) {
+                                const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                                const mappedNames = allowedDays.map((d: number) => {
+                                  if (d === 7) return dayNames[0];
+                                  return dayNames[d];
+                                });
+                                return (
+                                  <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>
+                                    ✓ Días permitidos: {mappedNames.join(', ')}
+                                  </div>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </div>
                     </div>
 
