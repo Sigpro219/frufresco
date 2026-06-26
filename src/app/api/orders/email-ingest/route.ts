@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import https from 'https';
 import * as XLSX from 'xlsx';
@@ -320,7 +320,7 @@ export async function POST(req: Request) {
               originalName: String(rawName).trim(),
               quantity: qtyVal,
               unit: unitColIdx !== -1 ? String(row[unitColIdx] || '').trim() : 'Unidad',
-              observations: obsColIdx !== -1 ? String(row[obsColIdx] || '').trim() : null
+              observations: (obsColIdx !== -1 && row[obsColIdx] !== undefined && row[obsColIdx] !== null && String(row[obsColIdx]).trim() !== '') ? String(row[obsColIdx]).trim() : null
             });
           }
           console.log(`[Email Inbound] Programmatically parsed ${programmaticExcelItems.length} items from Excel.`);
@@ -392,7 +392,9 @@ export async function POST(req: Request) {
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
+        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
+           - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
+           - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código.
@@ -467,7 +469,9 @@ export async function POST(req: Request) {
              - Asegúrate de extraer la cantidad pedida correcta que aparece junto al nombre del producto.
              - IMPORTANTE: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a 0.
              - Extrae también la unidad de medida (ej. "Kg", "Lb", "Litro", etc.). Si el producto no tiene descripción de unidades en el texto del pedido (ej. "12 huevos", "1 lechuga crespa"), debes establecer obligatoriamente la unidad como "Unidad".
-        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
+        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
+           - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
+           - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -567,7 +571,9 @@ export async function POST(req: Request) {
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         5. Extrae la fecha de entrega solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
         6. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial (suele empezar con 8 o 9). Usa "b2c_client" si es un cliente individual/hogar.
-        7. Extrae las observaciones, notas o especificaciones de calidad, variantes o características especiales del producto (por ejemplo: 'maduro', 'pintón', 'verde mediano', 'grande', 'marca Colanta', 'en bolsa', etc.) en el campo "observations". Cualquier palabra descriptiva del producto que indique una variante, tamaño, color, maduración, marca o presentación debe ir en este campo. Si no hay observaciones, pon una cadena vacía o null.
+        7. Extrae las observaciones, notas o especificaciones de calidad del producto en el campo "observations".
+           - REGLA CRÍTICA DE OBSERVACIONES: Las observaciones deben venir ÚNICAMENTE de anotaciones explícitas de calidad (por ejemplo: 'maduro', 'pintón', 'delgados').
+           - NUNCA asumas que los textos que acompañan al nombre en la columna del producto (como "INSTITUCIONAL", "1000G", "KILO", "PAQ 1000 G") son observaciones o características. Esos textos pertenecen al nombre del producto, NO a observaciones. Si no hay una observación explícita y separada del producto, pon null.
         
         REGLAS CRÍTICAS:
         - Devuelve ÚNICAMENTE un objeto JSON puro. Sin texto extra, sin bloques de código markdown.
@@ -1314,8 +1320,14 @@ export async function POST(req: Request) {
         }
       };
 
-      // Execute background processing without awaiting it
-      processMailAsync().catch(err => console.error('[Email Inbound] Fatal background process execution error:', err));
+      // Execute background processing using Next.js after() to keep the serverless container alive
+      after(async () => {
+        try {
+          await processMailAsync();
+        } catch (err) {
+          console.error('[Email Inbound] Fatal background process execution error:', err);
+        }
+      });
 
       // Return immediate 200 OK to CloudMailin to prevent serverless function timeout
       return NextResponse.json({ success: true, message: 'Email received and queued for processing.', mailId: mailRecord?.id });
