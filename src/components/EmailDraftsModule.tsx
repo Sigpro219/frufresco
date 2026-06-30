@@ -2197,7 +2197,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           padding: '0.4rem 0.8rem',
           gap: '8px'
         }}>
-          <Calendar size={16} color="#6B7280" />
+          <Calendar size={16} color={THEME.colors.textSecondary} />
           <input 
             type="date"
             value={selectedDate}
@@ -2207,7 +2207,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               outline: 'none',
               fontWeight: 800,
               fontSize: '0.85rem',
-              color: '#111827',
+              color: THEME.colors.textMain,
               fontFamily: 'inherit',
               cursor: 'pointer'
             }}
@@ -2219,7 +2219,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#9CA3AF',
+                color: THEME.colors.textSecondary,
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
@@ -2235,13 +2235,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           flex: 1, 
           display: 'flex', 
           alignItems: 'center', 
-          backgroundColor: '#F9FAFB', 
+          backgroundColor: THEME.colors.background, 
           border: 'none', 
           borderRadius: THEME.radius.md,
           padding: '0.6rem 1rem',
           gap: '8px'
         }}>
-          <Search size={16} color="#6B7280" />
+          <Search size={16} color={THEME.colors.textSecondary} />
           <input 
             id="search-input"
             type="text" 
@@ -2254,7 +2254,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               outline: 'none', 
               width: '100%', 
               fontSize: '0.85rem',
-              color: '#4B5563',
+              color: THEME.colors.textMain,
               fontWeight: 600
             }} 
           />
@@ -2265,7 +2265,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#9CA3AF',
+                color: THEME.colors.textSecondary,
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
@@ -2290,11 +2290,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'pending' ? '#FFFBEB' : 'white',
-              border: selectedStatus === 'pending' ? '2px solid #D97706' : '1px solid #E5E7EB',
+              border: selectedStatus === 'pending' ? '2px solid #D97706' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'pending' ? '#B45309' : '#4B5563',
+              color: selectedStatus === 'pending' ? '#B45309' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'pending' ? '0 2px 4px rgba(217, 119, 6, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2307,8 +2307,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'pending' ? '#FBBF24' : '#F3F4F6',
-              color: selectedStatus === 'pending' ? '#78350F' : '#6B7280',
+              backgroundColor: selectedStatus === 'pending' ? '#FBBF24' : THEME.colors.background,
+              color: selectedStatus === 'pending' ? '#78350F' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2325,11 +2325,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'approved' ? '#ECFDF5' : 'white',
-              border: selectedStatus === 'approved' ? '2px solid #059669' : '1px solid #E5E7EB',
+              border: selectedStatus === 'approved' ? '2px solid #059669' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'approved' ? '#047857' : '#4B5563',
+              color: selectedStatus === 'approved' ? '#047857' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'approved' ? '0 2px 4px rgba(5, 150, 105, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2342,8 +2342,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'approved' ? '#A7F3D0' : '#F3F4F6',
-              color: selectedStatus === 'approved' ? '#064E3B' : '#6B7280',
+              backgroundColor: selectedStatus === 'approved' ? '#A7F3D0' : THEME.colors.background,
+              color: selectedStatus === 'approved' ? '#064E3B' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2360,11 +2360,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               gap: '6px',
               padding: '0.5rem 1rem',
               backgroundColor: selectedStatus === 'rejected' ? '#FEF2F2' : 'white',
-              border: selectedStatus === 'rejected' ? '2px solid #DC2626' : '1px solid #E5E7EB',
+              border: selectedStatus === 'rejected' ? '2px solid #DC2626' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'rejected' ? '#B91C1C' : '#4B5563',
+              color: selectedStatus === 'rejected' ? '#B91C1C' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'rejected' ? '0 2px 4px rgba(220, 38, 38, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2377,8 +2377,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'rejected' ? '#FCA5A5' : '#F3F4F6',
-              color: selectedStatus === 'rejected' ? '#7F1D1D' : '#6B7280',
+              backgroundColor: selectedStatus === 'rejected' ? '#FCA5A5' : THEME.colors.background,
+              color: selectedStatus === 'rejected' ? '#7F1D1D' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2394,12 +2394,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               alignItems: 'center',
               gap: '6px',
               padding: '0.5rem 1rem',
-              backgroundColor: selectedStatus === 'all' ? '#F3F4F6' : 'white',
-              border: selectedStatus === 'all' ? '2px solid #4B5563' : '1px solid #E5E7EB',
+              backgroundColor: selectedStatus === 'all' ? THEME.colors.background : 'white',
+              border: selectedStatus === 'all' ? '2px solid #4B5563' : `1px solid ${THEME.colors.border}`,
               borderRadius: '10px',
               fontWeight: 800,
               fontSize: '0.8rem',
-              color: selectedStatus === 'all' ? '#1F2937' : '#4B5563',
+              color: selectedStatus === 'all' ? '#1F2937' : THEME.colors.textSecondary,
               cursor: 'pointer',
               boxShadow: selectedStatus === 'all' ? '0 2px 4px rgba(75, 85, 99, 0.15)' : 'none',
               transition: 'all 0.15s',
@@ -2411,8 +2411,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <span style={{
               marginLeft: '4px',
               fontSize: '0.75rem',
-              backgroundColor: selectedStatus === 'all' ? '#D1D5DB' : '#F3F4F6',
-              color: selectedStatus === 'all' ? '#1F2937' : '#6B7280',
+              backgroundColor: selectedStatus === 'all' ? '#D1D5DB' : THEME.colors.background,
+              color: selectedStatus === 'all' ? '#1F2937' : THEME.colors.textSecondary,
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 800
@@ -2468,7 +2468,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          backgroundColor: '#F3F4F6', 
+          backgroundColor: THEME.colors.background, 
           borderRadius: THEME.radius.md,
           padding: '4px',
           gap: '4px'
@@ -2487,7 +2487,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               opacity: viewMode === 'list' ? 1 : 0.5
             }}
           >
-            <List size={16} color={viewMode === 'list' ? "#111827" : "#6B7280"} />
+            <List size={16} color={viewMode === 'list' ? THEME.colors.textMain : THEME.colors.textSecondary} />
           </div>
           <div 
             onClick={() => setViewMode('grid')}
@@ -2503,7 +2503,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               opacity: viewMode === 'grid' ? 1 : 0.5
             }}
           >
-            <Grid size={16} color={viewMode === 'grid' ? "#111827" : "#6B7280"} />
+            <Grid size={16} color={viewMode === 'grid' ? THEME.colors.textMain : THEME.colors.textSecondary} />
           </div>
         </div>
       </div>
