@@ -1986,7 +1986,7 @@ export default function OrderLoadingPage() {
                 )}
                     </>
                 ) : activeTab === 'emails' ? (
-                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginTop: '1rem', padding: '1.5rem' }}>
                         <EmailDraftsModule onDraftsChange={(count) => setPendingEmailCount(count)} />
                     </div>
                 ) : (
