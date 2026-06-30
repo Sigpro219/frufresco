@@ -847,18 +847,18 @@ export default function OrderLoadingPage() {
                             padding: '0.6rem 0.2rem',
                             border: 'none',
                             background: 'transparent',
-                            color: activeTab === 'emails' ? '#7C3AED' : '#64748B',
+                            color: activeTab === 'emails' ? THEME.colors.primary : '#64748B',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
-                            borderBottom: activeTab === 'emails' ? '3px solid #7C3AED' : '3px solid transparent',
+                            borderBottom: activeTab === 'emails' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px'
                         }}
                     >
-                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
+                        <Mail size={16} /> Bandeja de Entrada Email {pendingEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{pendingEmailCount}</span>}
                     </button>
                     <button 
                         onClick={() => setActiveTab('outbox')}
@@ -866,18 +866,18 @@ export default function OrderLoadingPage() {
                             padding: '0.6rem 0.2rem',
                             border: 'none',
                             background: 'transparent',
-                            color: activeTab === 'outbox' ? '#10B981' : '#64748B',
+                            color: activeTab === 'outbox' ? THEME.colors.primary : '#64748B',
                             fontWeight: '700',
                             fontSize: '0.9rem',
                             cursor: 'pointer',
-                            borderBottom: activeTab === 'outbox' ? `3px solid #10B981` : '3px solid transparent',
+                            borderBottom: activeTab === 'outbox' ? `3px solid ${THEME.colors.primary}` : '3px solid transparent',
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px'
                         }}
                     >
-                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: '#ECFDF5', color: '#10B981', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
+                        <Send size={16} /> Bandeja de Salida Email {sentEmailCount > 0 && <span style={{ backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{sentEmailCount}</span>}
                     </button>
                 </div>
 
@@ -1098,16 +1098,16 @@ export default function OrderLoadingPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
-                            backgroundColor: pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6',
-                            color: pendingEmailCount > 0 ? '#7C3AED' : '#4B5563',
-                            border: `1px solid ${pendingEmailCount > 0 ? '#DDD6FE' : '#E5E7EB'}`,
+                            backgroundColor: pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6',
+                            color: pendingEmailCount > 0 ? THEME.colors.primary : '#4B5563',
+                            border: `1px solid ${pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.2)' : '#E5E7EB'}`,
                             padding: '0.5rem 1rem',
                             borderRadius: '8px',
                             fontWeight: '800',
                             fontSize: '0.75rem',
                             transition: 'all 0.2s'
-                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#EDE9FE' : '#E5E7EB'; }}
-                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? '#F5F3FF' : '#F3F4F6'; }}>
+                        }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? 'rgba(13, 122, 87, 0.15)' : '#E5E7EB'; }}
+                           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = pendingEmailCount > 0 ? THEME.colors.primaryLight : '#F3F4F6'; }}>
                             <Mail size={14} />
                             <span>{pendingEmailCount} Pendientes Email</span>
                         </button>

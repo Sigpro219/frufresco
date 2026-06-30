@@ -237,8 +237,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
 
   const getRowBgColor = (idx: number) => {
-    if (focusedRowIndex === idx) return '#EFF6FF'; // Soft blue for currently focused/edited row
-    if (activeEquivalenceRow === idx) return '#EEF2FF'; // Soft indigo for equivalence row
+    if (focusedRowIndex === idx) return THEME.colors.primaryLight; // Soft brand green for currently focused/edited row
+    if (activeEquivalenceRow === idx) return THEME.colors.primaryLight; // Soft brand green for equivalence row
     if (activeVariantRow === idx) return '#F0FDF4'; // Soft green for variant row
     return null;
   };
@@ -2430,17 +2430,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            backgroundColor: '#F3E8FF', 
+            backgroundColor: THEME.colors.primaryLight, 
             borderRadius: THEME.radius.md,
             width: '38px',
             height: '38px',
             cursor: 'pointer',
             transition: 'background-color 0.15s'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#E9D5FF'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F3E8FF'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
         >
-          <Keyboard size={20} color="#9333EA" strokeWidth={2.5} />
+          <Keyboard size={20} color={THEME.colors.primary} strokeWidth={2.5} />
         </div>
 
         {/* Info Icon */}
@@ -2451,17 +2451,17 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            backgroundColor: '#EFF6FF', 
+            backgroundColor: THEME.colors.primaryLight, 
             borderRadius: THEME.radius.md,
             width: '38px',
             height: '38px',
             cursor: 'pointer',
             transition: 'background-color 0.15s'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
         >
-          <Info size={20} color="#3B82F6" strokeWidth={3} />
+          <Info size={20} color={THEME.colors.primary} strokeWidth={3} />
         </div>
 
         {/* View Toggle */}
@@ -5689,12 +5689,12 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
           }}>
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FAFAFA' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Keyboard size={24} color="#9333EA" /> Manual de Atajos
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Keyboard size={24} color={THEME.colors.primary} /> Manual de Atajos
               </h2>
               <button 
                 onClick={() => setShowShortcuts(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', padding: '4px' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, display: 'flex', padding: '4px' }}
               >
                 <X size={20} />
               </button>
@@ -5703,62 +5703,62 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             <div style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Cerrar ventanas y modales</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Cerrar ventanas y modales</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Esc</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Esc</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Abrir este manual</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Abrir este manual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Shift</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>?</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Shift</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>?</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Aprobar y procesar pedido</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Aprobar y procesar pedido</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Enter</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Enter</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar/Eliminar selección masiva</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Rechazar/Eliminar selección masiva</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Supr / Del</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Supr / Del</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Buscar pedido</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Buscar pedido</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>F</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>F</kbd>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Modificar pedido actual</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Modificar pedido actual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#374151', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>E</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: THEME.colors.textMain, boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>E</kbd>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.95rem', color: '#4B5563', fontWeight: 600 }}>Rechazar pedido actual</span>
+                  <span style={{ fontSize: '0.95rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>Rechazar pedido actual</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
-                    <span style={{ color: '#9CA3AF' }}>+</span>
-                    <kbd style={{ backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Retroceso (Back)</kbd>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Ctrl</kbd>
+                    <span style={{ color: THEME.colors.textSecondary }}>+</span>
+                    <kbd style={{ backgroundColor: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: '4px', padding: '2px 8px', fontSize: '0.8rem', fontWeight: 700, color: '#EF4444', boxShadow: '0 1px 1px rgba(0,0,0,0.1)' }}>Retroceso (Back)</kbd>
                   </div>
                 </div>
 
@@ -5769,7 +5769,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               <button 
                 onClick={() => setShowShortcuts(false)}
                 style={{
-                  backgroundColor: '#9333EA', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 2rem', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(147, 51, 234, 0.2)'
+                  backgroundColor: THEME.colors.primary, color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 2rem', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', boxShadow: `0 2px 4px ${THEME.colors.primary}33`
                 }}
               >
                 Entendido
