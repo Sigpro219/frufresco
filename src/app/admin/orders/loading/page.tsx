@@ -164,6 +164,103 @@ export default function OrderLoadingPage() {
 
     const [selectedChannel, setSelectedChannel] = useState('');
 
+    // Edit Fields
+    const [editStatus, setEditStatus] = useState('');
+    const [editDeliveryDate, setEditDeliveryDate] = useState('');
+    
+    // Product Search for adding new items
+    const [productSearch, setProductSearch] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+
+    // Variant Selection Modal States (For products with options)
+    const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
+
+    useEffect(() => {
+        let active = true;
+
+        const fetchOrders = async () => {
+            setLoading(true);
+            try {
+                let query = supabase
+                    .from('orders')
+                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email)')
+                    .eq('delivery_date', selectedDate)
+                    .order('created_at', { ascending: false });
+
+                const { data, error } = await query;
+
+                if (error) {
+                    console.error('Error fetching orders:', error);
+                    return;
+                }
+
+                if (active) {
+                    const processedData = (data || []).map(order => {
+                        let name = 'Cliente Desconocido';
+                        let phone = 'Sin Teléfono';
+
+                        if (order.profiles) {
+                            // Unified Profile Logic
+                            if (order.profiles.role === 'b2b_client') {
+                                name = order.profiles.company_name || 'Sin Razón Social';
+                            } else {
+                                // Assume B2C or mixed
+                                name = order.profiles.contact_name || order.profiles.company_name || 'Cliente Registrado';
+                            }
+                            phone = order.profiles.contact_phone || 'Sin Teléfono';
+                        } else {
+                            // FALLBACK: Use data directly from order table if profile is missing
+                            // This happens with new B2C Wompi leads/orders
+                            name = order.customer_name || 'Cliente Desconocido';
+                            phone = order.customer_phone || 'Sin Teléfono';
+
+                            if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
+                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
+                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
+                                if (nameMatch) name = nameMatch[1];
+                                if (phoneMatch) phone = phoneMatch[1];
+                            }
+                        }
+
+                        // Payment Method Logic
+                        let paymentMethod = order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
+                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null;
+                        
+                        // Auto-detect Wompi if transaction ID exists but tags are missing
+                        if (!paymentMethod && (order.wompi_transaction_id || order.type === 'b2c_wompi')) {
+                            paymentMethod = 'Tarjeta / Wompi';
+                        }
+
+                        return {
+                            ...order,
+                            customer_name: name,
+                            customer_phone: phone,
+                            customer_nit: order.profiles?.nit || null,
+                            paymentMethod: paymentMethod,
+                            isComplete: true
+                        };
+                    });
+                    setOrders(processedData);
+                    // Reset selection on data refresh
+                    setSelectedOrders(new Set());
+                }
+            } catch (err) {
+                console.error('Exception:', err);
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchOrders();
+
+        return () => {
+            active = false;
+        };
+    }, [selectedDate, refreshTrigger]);
+
     if (authLoading || !rolesLoaded) {
         return (
             <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
@@ -219,7 +316,7 @@ export default function OrderLoadingPage() {
                         textDecoration: 'none',
                         transition: 'background-color 0.2s',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryDark || '#16a34a'}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover || '#16a34a'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
                     >
                         Volver al Inicio
@@ -321,17 +418,6 @@ export default function OrderLoadingPage() {
         setSelectedOrders(newSet);
     };
 
-    // Edit Fields
-    const [editStatus, setEditStatus] = useState('');
-    const [editDeliveryDate, setEditDeliveryDate] = useState('');
-    
-    // Product Search for adding new items
-    const [productSearch, setProductSearch] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searching, setSearching] = useState(false);
-
-    // Variant Selection Modal States (For products with options)
-    const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
 
     const handleOrderClick = async (order: any) => {
         setSelectedOrder(order);
@@ -696,96 +782,6 @@ export default function OrderLoadingPage() {
         setSelectedDate(bogota.toISOString().split('T')[0]);
         setSearchTerm('');
     };
-
-    useEffect(() => {
-        let active = true;
-
-        const fetchOrders = async () => {
-            setLoading(true);
-            try {
-                let query = supabase
-                    .from('orders')
-                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email)')
-                    .eq('delivery_date', selectedDate)
-                    .order('created_at', { ascending: false });
-
-                const { data, error } = await query;
-
-                if (error) {
-                    console.error('Error fetching orders:', error);
-                    return;
-                }
-
-                if (active) {
-                    const processedData = (data || []).map(order => {
-                        let name = 'Cliente Desconocido';
-                        let phone = 'Sin Teléfono';
-
-                        if (order.profiles) {
-                            // Unified Profile Logic
-                            if (order.profiles.role === 'b2b_client') {
-                                name = order.profiles.company_name || 'Sin Razón Social';
-                            } else {
-                                // Assume B2C or mixed
-                                name = order.profiles.contact_name || order.profiles.company_name || 'Cliente Registrado';
-                            }
-                            phone = order.profiles.contact_phone || 'Sin Teléfono';
-                        } else {
-                            // FALLBACK: Use data directly from order table if profile is missing
-                            // This happens with new B2C Wompi leads/orders
-                            name = order.customer_name || 'Cliente Desconocido';
-                            phone = order.customer_phone || 'Sin Teléfono';
-
-                            if (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')) {
-                                const nameMatch = order.admin_notes.match(/Nombre: (.*?) \|/);
-                                const phoneMatch = order.admin_notes.match(/Tel: (.*?) \|/);
-                                if (nameMatch) name = nameMatch[1];
-                                if (phoneMatch) phone = phoneMatch[1];
-                            }
-                        }
-
-                        // Payment Method Logic
-                        let paymentMethod = order.admin_notes && order.admin_notes.includes('[PAGO:') ? 
-                                           order.admin_notes.match(/\[PAGO: (.*?)\]/)?.[1] : null;
-                        
-                        // Auto-detect Wompi if transaction ID exists but tags are missing
-                        if (!paymentMethod && (order.wompi_transaction_id || order.type === 'b2c_wompi')) {
-                            paymentMethod = 'Tarjeta / Wompi';
-                        }
-
-                        return {
-                            ...order,
-                            customer_name: name,
-                            customer_phone: phone,
-                            customer_nit: order.profiles?.nit || null,
-                            paymentMethod: paymentMethod,
-                            isComplete: true /* (
-                                name && name !== 'Cliente Desconocido' && name !== 'Sin Razón Social' && name !== 'Cliente Registrado' &&
-                                phone && phone !== 'Sin Teléfono' && phone !== 'Sin tel.' &&
-                                order.shipping_address && order.shipping_address.length > 5 &&
-                                (!order.profiles || order.profiles.role !== 'b2b_client' || (order.profiles.nit && order.profiles.nit !== 'Sin NIT'))
-                            ) */
-                        };
-                    });
-                    setOrders(processedData);
-                    // Reset selection on data refresh
-                    setSelectedOrders(new Set());
-                }
-            } catch (err) {
-                console.error('Exception:', err);
-            } finally {
-                if (active) {
-                    setLoading(false);
-                }
-            }
-        };
-
-        fetchOrders();
-
-        return () => {
-            active = false;
-        };
-    }, [selectedDate, refreshTrigger]);
 
     // Summary Metrics (Dashboard)
     const totalOrders = orders.length;
