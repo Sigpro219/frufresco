@@ -261,70 +261,7 @@ export default function OrderLoadingPage() {
         };
     }, [selectedDate, refreshTrigger]);
 
-    if (authLoading || !rolesLoaded) {
-        return (
-            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
-                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando portal de pedidos...</span>
-                </div>
-            </main>
-        );
-    }
 
-    if (!canView) {
-        return (
-            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
-                <div style={{
-                    textAlign: 'center',
-                    padding: '3rem',
-                    backgroundColor: THEME.colors.surface,
-                    borderRadius: THEME.radius.lg,
-                    boxShadow: THEME.shadow.md,
-                    maxWidth: '480px',
-                    border: `1px solid ${THEME.colors.border}`,
-                }}>
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: '#EF4444',
-                        marginBottom: '1.5rem'
-                    }}>
-                        <ShieldAlert size={32} />
-                    </div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '0.75rem', fontFamily: THEME.typography.fontFamilyMain }}>
-                        Acceso Restringido
-                    </h1>
-                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-                        No tienes permisos para visualizar el panel de pedidos. Si consideras que esto es un error, por favor contacta al administrador del sistema.
-                    </p>
-                    <Link href="/" style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '0.75rem 1.5rem',
-                        backgroundColor: THEME.colors.primary,
-                        color: 'white',
-                        fontWeight: '700',
-                        fontSize: '0.875rem',
-                        borderRadius: THEME.radius.md,
-                        textDecoration: 'none',
-                        transition: 'background-color 0.2s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover || '#16a34a'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
-                    >
-                        Volver al Inicio
-                    </Link>
-                </div>
-            </main>
-        );
-    }
 
     const filteredOrders = useMemo(() => {
         return orders.filter(order => {
@@ -543,6 +480,71 @@ export default function OrderLoadingPage() {
 
         return () => clearTimeout(delayDebounceFn);
     }, [productSearch]);
+
+    if (authLoading || !rolesLoaded) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando portal de pedidos...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '0.75rem', fontFamily: THEME.typography.fontFamilyMain }}>
+                        Acceso Restringido
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        No tienes permisos para visualizar el panel de pedidos. Si consideras que esto es un error, por favor contacta al administrador del sistema.
+                    </p>
+                    <Link href="/" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.75rem 1.5rem',
+                        backgroundColor: THEME.colors.primary,
+                        color: 'white',
+                        fontWeight: '700',
+                        fontSize: '0.875rem',
+                        borderRadius: THEME.radius.md,
+                        textDecoration: 'none',
+                        transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryHover || '#16a34a'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                    >
+                        Volver al Inicio
+                    </Link>
+                </div>
+            </main>
+        );
+    }
 
     const addProductToOrder = (product: any) => {
         // Reset sub-modal states
