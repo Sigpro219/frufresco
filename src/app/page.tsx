@@ -206,7 +206,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
           }
 
           .carousel-slide-2 {
-            background-image: url('/hero_fresh_2.jpg');
+            background-image: url('/hero_fresh_2_clean.png');
             animation: kb-2 18s infinite ease-in-out;
           }
 

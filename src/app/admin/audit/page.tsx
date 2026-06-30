@@ -130,6 +130,11 @@ const formatDetailsSummary = (log: any) => {
 
 export default function AuditLogPage() {
     const { profile, loading: authLoading } = useAuth();
+    const [mounted, setMounted] = useState(false);
+    
+    useEffect(() => {
+        setMounted(true);
+    }, []);
     
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -300,7 +305,7 @@ export default function AuditLogPage() {
         return { bg: '#E5EDFF', text: '#1E40AF' }; // Security or other
     };
 
-    if (authLoading) {
+    if (!mounted || authLoading) {
         return (
             <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Loader2 size={40} className="animate-spin" color={THEME.colors.primary} />
