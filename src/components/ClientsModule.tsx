@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import { THEME } from '@/lib/adminTheme';
@@ -123,6 +124,15 @@ interface Order {
 }
 
 export default function ClientsModule() {
+    const { profile } = useAuth();
+
+    const hasEditPermission = () => {
+        if (!profile) return false;
+        if (profile.role === 'admin' || profile.role === 'sys_admin') return true;
+        const perms = profile.custom_permissions || [];
+        return perms.includes('*') || perms.includes('admin.commercial.clients') || perms.includes('admin.commercial.clients.edit') || perms.includes('admin.clients.edit');
+    };
+
     const [activeTab, setActiveTab] = useState('dashboard');
     const [clientsB2B, setClientsB2B] = useState<Profile[]>([]);
     const [clientsB2C, setClientsB2C] = useState<Profile[]>([]);
@@ -751,7 +761,7 @@ export default function ClientsModule() {
                         border: '1px solid #F1F5F9'
                     }}>
                         {/* BOTÓN DE CREACIÓN */}
-                        {activeTab === 'b2b' && (
+                        {activeTab === 'b2b' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2b_client')}
                                 style={{ 
@@ -774,7 +784,7 @@ export default function ClientsModule() {
                                 <span>➕</span> Nuevo Institucional
                             </button>
                         )}
-                        {activeTab === 'b2c' && (
+                        {activeTab === 'b2c' && hasEditPermission() && (
                             <button 
                                 onClick={() => handleCreateClient('b2c_client')}
                                 style={{ 
@@ -1110,7 +1120,7 @@ export default function ClientsModule() {
                                                 pricingModels={pricingModels} 
                                                 onUpdatePricingModel={handleUpdatePricingModel}
                                                 onViewDetails={() => handleViewDetails(client)}
-                                                onEdit={() => handleEditClient(client)}
+                                                onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                 agreementStatus={getAgreementStatus(client.id)}
                                             />
                                         ))}
@@ -1135,7 +1145,7 @@ export default function ClientsModule() {
                                                         client={client} 
                                                         pricingModels={pricingModels}
                                                         onViewDetails={() => handleViewDetails(client)}
-                                                        onEdit={() => handleEditClient(client)}
+                                                        onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                         agreementStatus={getAgreementStatus(client.id)}
                                                     />
                                                 ))}
@@ -1157,7 +1167,7 @@ export default function ClientsModule() {
                                                 type="b2c" 
                                                 data={client} 
                                                 onViewDetails={() => handleViewDetails(client)}
-                                                onEdit={() => handleEditClient(client)}
+                                                onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                             />
                                         ))}
                                         {clientsB2C.length === 0 && <EmptyState text="No hay clientes hogar registrados aún." />}
@@ -1180,7 +1190,7 @@ export default function ClientsModule() {
                                                         key={client.id} 
                                                         client={client} 
                                                         onViewDetails={() => handleViewDetails(client)}
-                                                        onEdit={() => handleEditClient(client)}
+                                                        onEdit={hasEditPermission() ? () => handleEditClient(client) : undefined}
                                                     />
                                                 ))}
                                             </tbody>
@@ -1950,7 +1960,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                         Ficha
                     </button>
                 )}
-                {(isB2B || isB2C) && (
+                {(isB2B || isB2C) && onEdit && (
                     <button 
                         onClick={onEdit}
                         style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: 'white', fontWeight: '700', cursor: 'pointer' }}

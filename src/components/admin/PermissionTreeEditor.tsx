@@ -87,26 +87,27 @@ export const permissionTree: TreeNode[] = [
           { id: 'admin.commercial.quotes', label: '1.3.1 Cotizaciones y Ofertas (B2B)', level: 3 },
           { id: 'admin.commercial.agreements', label: '1.3.2 Acuerdos y Listas de Precios', level: 3 },
           { id: 'admin.commercial.cost-matrix', label: '1.3.3 Matriz de Costos y Rentabilidad', level: 3 },
-          { id: 'admin.commercial.campaigns', label: '1.3.4 Campañas de Mercadeo (Alzas/Bajas)', level: 3 },
+          { id: 'admin.commercial.clients', label: '1.3.4 Gestión y Edición de Clientes', level: 3 },
+          { id: 'admin.commercial.campaigns', label: '1.3.5 Campañas de Mercadeo (Alzas/Bajas)', level: 3 },
           {
             id: 'admin.commercial.billing',
-            label: '1.3.5 Facturación y Cartera (Finanzas)',
+            label: '1.3.6 Facturación y Cartera (Finanzas)',
             level: 3,
             children: [
-              { id: 'admin.commercial.billing.invoicing', label: '1.3.5.1 Facturación (Cortes y Devoluciones)', level: 4 },
-              { id: 'admin.commercial.billing.portfolio', label: '1.3.5.2 Cartera y Solicitudes de Crédito', level: 4 },
-              { id: 'admin.commercial.billing.config', label: '1.3.5.3 Configuración y Roles de Crédito', level: 4 }
+              { id: 'admin.commercial.billing.invoicing', label: '1.3.6.1 Facturación (Cortes y Devoluciones)', level: 4 },
+              { id: 'admin.commercial.billing.portfolio', label: '1.3.6.2 Cartera y Solicitudes de Crédito', level: 4 },
+              { id: 'admin.commercial.billing.config', label: '1.3.6.3 Configuración y Roles de Crédito', level: 4 }
             ]
           },
           {
             id: 'admin.commercial.inventory',
-            label: '1.3.6 Control de Inventarios (Stocks)',
+            label: '1.3.7 Control de Inventarios (Stocks)',
             level: 3,
             children: [
-              { id: 'admin.commercial.inventory.stock', label: '1.3.6.1 Stock en Tiempo Real', level: 4 },
-              { id: 'admin.commercial.inventory.movements', label: '1.3.6.2 Kardex y Movimientos de Stock', level: 4 },
-              { id: 'admin.commercial.inventory.random_tasks', label: '1.3.6.3 Auditorías y Conteos Cíclicos', level: 4 },
-              { id: 'admin.commercial.inventory.novedades', label: '1.3.6.4 Bitácora de Incidencias de Piso', level: 4 }
+              { id: 'admin.commercial.inventory.stock', label: '1.3.7.1 Stock en Tiempo Real', level: 4 },
+              { id: 'admin.commercial.inventory.movements', label: '1.3.7.2 Kardex y Movimientos de Stock', level: 4 },
+              { id: 'admin.commercial.inventory.random_tasks', label: '1.3.7.3 Auditorías y Conteos Cíclicos', level: 4 },
+              { id: 'admin.commercial.inventory.novedades', label: '1.3.7.4 Bitácora de Incidencias de Piso', level: 4 }
             ]
           }
         ]
