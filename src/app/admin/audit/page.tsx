@@ -55,6 +55,12 @@ const translateDetailsKey = (key: string) => {
     if (k === 'sequence_id') return 'Consecutivo de Pedido';
     if (k === 'total_price') return 'Precio Total';
     if (k === 'status') return 'Estado';
+    if (k === 'base_price') return 'Precio Base';
+    if (k === 'is_active') return '¿Activo?';
+    if (k === 'description') return 'Descripción';
+    if (k === 'category') return 'Categoría';
+    if (k === 'unit_of_measure') return 'Unidad de Medida';
+    if (k === 'image_url') return 'URL de Imagen';
     return key;
 };
 
@@ -68,8 +74,22 @@ const formatDetailsValue = (key: string, value: any) => {
     return String(value);
 };
 
-const formatActionName = (action: string) => {
+const formatActionName = (log: any) => {
+    if (!log) return '-';
+    const action = typeof log === 'string' ? log : log.action;
     if (!action) return '-';
+    
+    // Check if it's a profile/user action but targeting a client
+    if (typeof log === 'object' && action.endsWith('_profiles') && log.details) {
+        const role = log.details.role || '';
+        const isClient = role.includes('client') || log.details.company_name;
+        
+        if (isClient) {
+            const op = action.startsWith('INSERT_') ? 'CREAR' : action.startsWith('UPDATE_') ? 'MODIFICAR' : 'ELIMINAR';
+            return `${op} Cliente B2B`;
+        }
+    }
+    
     if (action.startsWith('INSERT_')) {
         return 'CREAR ' + translateTableName(action.replace('INSERT_', ''));
     }
@@ -83,8 +103,20 @@ const formatActionName = (action: string) => {
     return action;
 };
 
-const translateModule = (module: string) => {
+const translateModule = (log: any) => {
+    if (!log) return '-';
+    const module = typeof log === 'string' ? log : log.module;
     if (!module) return '-';
+    
+    // Check if it's a security/profiles module action but targeting a client
+    if (typeof log === 'object' && module === 'SECURITY' && log.details) {
+        const role = log.details.role || '';
+        const isClient = role.includes('client') || log.details.company_name;
+        if (isClient) {
+            return 'CLIENTES';
+        }
+    }
+    
     if (module === 'PRODUCTS') return 'PRODUCTOS';
     if (module === 'SECURITY') return 'SEGURIDAD';
     if (module === 'ORDERS') return 'PEDIDOS';
@@ -124,8 +156,51 @@ const formatDetailsSummary = (log: any) => {
     if (d.total_price) parts.push(`Total: $${Number(d.total_price).toLocaleString('es-CO')}`);
     if (d.status) parts.push(`Estado: ${translateStatus(d.status)}`);
     
-    if (parts.length > 0) return parts.join(' | ');
-    return JSON.stringify(d);
+    const baseInfo = parts.join(' | ');
+
+    if (d.changes && typeof d.changes === 'object' && Object.keys(d.changes).length > 0) {
+        const changeKeys = Object.keys(d.changes);
+        
+        if (changeKeys.length <= 2) {
+            const changeParts = Object.entries(d.changes).map(([key, val]: [string, any]) => {
+                const translatedKey = translateDetailsKey(key);
+                const oldVal = formatDetailsValue(key, val.old);
+                const newVal = formatDetailsValue(key, val.new);
+                return `${translatedKey}: ${oldVal} → ${newVal}`;
+            });
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div>{baseInfo}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: '600' }}>
+                        Cambios: {changeParts.join(', ')}
+                    </div>
+                </div>
+            );
+        } else {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>{baseInfo}</span>
+                    <span 
+                        style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            padding: '0.15rem 0.45rem', 
+                            borderRadius: '12px', 
+                            backgroundColor: '#E0E7FF', 
+                            color: '#4338CA', 
+                            fontWeight: '700', 
+                            fontSize: '0.75rem',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {changeKeys.length} modificaciones
+                    </span>
+                </div>
+            );
+        }
+    }
+    
+    return baseInfo || JSON.stringify(d);
 };
 
 export default function AuditLogPage() {
@@ -135,7 +210,7 @@ export default function AuditLogPage() {
     useEffect(() => {
         setMounted(true);
     }, []);
-    
+
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
@@ -144,6 +219,17 @@ export default function AuditLogPage() {
     const [refreshKey, setRefreshKey] = useState(0);
     const [selectedLog, setSelectedLog] = useState<any | null>(null);
     const [systemRoles, setSystemRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (selectedLog) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [selectedLog]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [dateRange, setDateRange] = useState('all');
@@ -497,11 +583,11 @@ export default function AuditLogPage() {
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem' }}>
                                                     <span style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px', backgroundColor: badge.bg, color: badge.text, fontWeight: '700', fontSize: '0.75rem' }}>
-                                                        {formatActionName(log.action)}
+                                                        {formatActionName(log)}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
-                                                    {translateModule(log.module)}
+                                                    {translateModule(log)}
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textSecondary }}>
                                                     {formatDetailsSummary(log)}
@@ -546,7 +632,7 @@ export default function AuditLogPage() {
             {/* Modal: Visor de JSON de Detalles */}
             {selectedLog && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
-                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, maxWidth: '650px', width: '100%', padding: '1.5rem', boxShadow: THEME.shadow.lg }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, maxWidth: '850px', width: '100%', padding: '1.5rem', boxShadow: THEME.shadow.lg, maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.8rem' }}>
                             <h3 style={{ fontSize: '1.2rem', fontFamily: THEME.typography.fontFamilyMain, fontWeight: '800', color: THEME.colors.textMain, margin: 0 }}>
                                 Detalles de Auditoría
@@ -562,21 +648,37 @@ export default function AuditLogPage() {
                                 <strong style={{ color: THEME.colors.textSecondary }}>Usuario:</strong> {formatCollaboratorName(selectedLog.collaborator_name)}
                             </div>
                             <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Acción:</strong> {formatActionName(selectedLog.action)}
+                                <strong style={{ color: THEME.colors.textSecondary }}>Acción:</strong> {formatActionName(selectedLog)}
                             </div>
                             <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Módulo:</strong> {translateModule(selectedLog.module)}
+                                <strong style={{ color: THEME.colors.textSecondary }}>Módulo:</strong> {translateModule(selectedLog)}
                             </div>
                             
                             {selectedLog.details && typeof selectedLog.details === 'object' && Object.keys(selectedLog.details).length > 0 && (
                                 <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.4rem' }}>
                                     <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.4rem' }}>Información Procesada:</strong>
                                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '6px', backgroundColor: '#F9FAFB', padding: '0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                                        {Object.entries(selectedLog.details).map(([k, v]) => (
+                                        {Object.entries(selectedLog.details).filter(([k]) => k !== 'changes').map(([k, v]) => (
                                             <React.Fragment key={k}>
                                                 <span style={{ fontWeight: '700', color: THEME.colors.textSecondary }}>{translateDetailsKey(k)}:</span>
                                                 <span style={{ color: THEME.colors.textMain, wordBreak: 'break-all' }}>{formatDetailsValue(k, v)}</span>
                                             </React.Fragment>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedLog.details?.changes && typeof selectedLog.details.changes === 'object' && Object.keys(selectedLog.details.changes).length > 0 && (
+                                <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                                    <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Campos Modificados:</strong>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {Object.entries(selectedLog.details.changes).map(([k, val]: [string, any]) => (
+                                            <div key={k} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 20px 1fr', gap: '8px', alignItems: 'center', backgroundColor: '#FEF2F2', padding: '6px 12px', borderRadius: THEME.radius.md, border: '1px solid #FEE2E2' }}>
+                                                <span style={{ fontWeight: '700', color: THEME.colors.textMain }}>{translateDetailsKey(k)}</span>
+                                                <span style={{ color: '#EF4444', textDecoration: 'line-through', fontSize: '0.8rem' }}>{formatDetailsValue(k, val.old)}</span>
+                                                <span style={{ color: THEME.colors.textSecondary, textAlign: 'center' }}>→</span>
+                                                <span style={{ color: '#10B981', fontWeight: '700' }}>{formatDetailsValue(k, val.new)}</span>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>

@@ -176,12 +176,15 @@ export default function Navbar() {
         else if (moduleKey === 'products.catalog') key = 'admin.products.catalog';
         else if (moduleKey === 'products.master') key = 'admin.products.master';
         else if (moduleKey === 'ops') key = 'ops';
+        else if (moduleKey === 'billing') key = 'admin.commercial.billing';
+        else if (moduleKey === 'procurement') key = 'admin.procurement';
+        else if (moduleKey === 'customer_service') key = 'admin.customer-service';
 
         return checkUserPermission(profile, key, roles);
     };
 
     const shouldShowOperations = () => {
-        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center', 'orders', 'products.catalog', 'products.master', 'ops'];
+        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center', 'orders', 'products.catalog', 'products.master', 'ops', 'billing', 'procurement', 'customer_service'];
         return modules.some(m => hasPermission(m));
     };
 
@@ -419,37 +422,41 @@ export default function Navbar() {
                                                     <Truck size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navTransport}
                                                 </Link>
                                             )}
+                                            {hasPermission('billing') && (
+                                                <Link href="/admin/commercial/billing"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <DollarSign size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navBilling}
+                                                </Link>
+                                            )}
+                                            {hasPermission('procurement') && (
+                                                <Link href="/admin/procurement"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <ShoppingBag size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navProcurement}
+                                                </Link>
+                                            )}
                                             {hasPermission('commercial') && (
-                                                <>
-                                                    <Link href="/admin/commercial/billing"
-                                                        onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                        <DollarSign size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navBilling}
-                                                    </Link>
-                                                    <Link href="/admin/procurement"
-                                                        onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                        <ShoppingBag size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navProcurement}
-                                                    </Link>
-                                                    <Link href="/admin/commercial"
-                                                        onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                        <Briefcase size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCommercial}
-                                                    </Link>
-                                                    <Link href="/admin/customer-service"
-                                                        onClick={() => setOperationsOpen(false)}
-                                                        style={dropdownLinkStyle}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                                        <MessageSquare size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCustomerService}
-                                                    </Link>
-                                                </>
+                                                <Link href="/admin/commercial"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <Briefcase size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCommercial}
+                                                </Link>
+                                            )}
+                                            {hasPermission('customer_service') && (
+                                                <Link href="/admin/customer-service"
+                                                    onClick={() => setOperationsOpen(false)}
+                                                    style={dropdownLinkStyle}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.background}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <MessageSquare size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navCustomerService}
+                                                </Link>
                                             )}
                                             {hasPermission('hr') && (
                                                 <Link href="/admin/hr"
