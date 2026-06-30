@@ -175,12 +175,13 @@ export default function Navbar() {
         else if (moduleKey === 'orders') key = 'admin.orders';
         else if (moduleKey === 'products.catalog') key = 'admin.products.catalog';
         else if (moduleKey === 'products.master') key = 'admin.products.master';
+        else if (moduleKey === 'ops') key = 'ops';
 
         return checkUserPermission(profile, key, roles);
     };
 
     const shouldShowOperations = () => {
-        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center', 'orders', 'products.catalog', 'products.master'];
+        const modules = ['hr', 'inventory', 'commercial', 'transport', 'maintenance', 'command_center', 'orders', 'products.catalog', 'products.master', 'ops'];
         return modules.some(m => hasPermission(m));
     };
 
@@ -498,7 +499,7 @@ export default function Navbar() {
                                                     <Brain size={15} strokeWidth={1.5} style={dropdownIconStyle} /> {t.navStrategy}
                                                 </Link>
                                             )}
-                                            {hasPermission('transport') && (
+                                            {(hasPermission('ops') || hasPermission('transport')) && (
                                                 <Link href="/ops"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle}
@@ -858,7 +859,7 @@ export default function Navbar() {
                                     <Brain size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navStrategy}
                                 </Link>
                             )}
-                            {hasPermission('transport') && (
+                            {(hasPermission('ops') || hasPermission('transport')) && (
                                 <Link href="/ops" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                     <Factory size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navOpsPortal}
                                 </Link>
