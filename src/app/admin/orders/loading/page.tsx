@@ -797,17 +797,11 @@ export default function OrderLoadingPage() {
             <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
-            <FileText size={18} strokeWidth={1.5} />
-        </div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
-    </div>
-    
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.8 }}>
-                             <span style={{ backgroundColor: '#111827', color: '#D4AF37', padding: '2px 6px', borderRadius: '4px', fontSize: '0.55rem', fontWeight: '900', letterSpacing: '0.05em' }}>CRM & GROWTH</span>
-                             <span style={{ color: '#94A3B8', fontSize: '0.65rem', fontWeight: '700' }}>/ CARGUE DE PEDIDOS</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
+                                <FileText size={18} strokeWidth={1.5} />
+                            </div>
+                            <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
                         </div>
                     </div>
                 </header>
