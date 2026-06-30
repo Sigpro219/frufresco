@@ -628,7 +628,7 @@ export default function Navbar() {
                                 }}>
                                     <User size={16} color="var(--primary)" />
                                     <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                                        {profile?.company_name || user.email?.split('@')[0]}
+                                        {profile?.contact_name || profile?.company_name || user.email?.split('@')[0]}
                                     </span>
                                 </div>
                                 <button
@@ -798,7 +798,7 @@ export default function Navbar() {
                     {mounted && user && (
                         <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background }}>
                             <User size={16} color={THEME.colors.primary} />
-                            <span style={{ fontWeight: '600', fontSize: '0.9rem', color: THEME.colors.textMain }}>{profile?.company_name || user.email?.split('@')[0]}</span>
+                            <span style={{ fontWeight: '600', fontSize: '0.9rem', color: THEME.colors.textMain }}>{profile?.contact_name || profile?.company_name || user.email?.split('@')[0]}</span>
                         </div>
                     )}
 
