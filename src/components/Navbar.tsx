@@ -404,7 +404,7 @@ export default function Navbar() {
 
                                             <div style={{ borderTop: `1px solid ${THEME.colors.border}`, margin: '4px 0' }} />
 
-                                            {(hasPermission('orders') || hasPermission('commercial')) && (
+                                            {hasPermission('orders') && (
                                                 <Link href="/admin/orders/loading"
                                                     onClick={() => setOperationsOpen(false)}
                                                     style={dropdownLinkStyle}

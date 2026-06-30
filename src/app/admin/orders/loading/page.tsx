@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { ShieldAlert, Loader2 } from 'lucide-react';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import { 
@@ -74,6 +76,9 @@ const getChannelBadge = (source: string) => {
 };
 
 export default function OrderLoadingPage() {
+    const { profile, loading: authLoading } = useAuth();
+    const [roles, setRoles] = useState<any[]>([]);
+    const [rolesLoaded, setRolesLoaded] = useState(false);
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -82,10 +87,31 @@ export default function OrderLoadingPage() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [activeTab, setActiveTab] = useState<'orders' | 'emails' | 'outbox'>('orders');
 
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, roles);
+    };
+
+    const canView = hasPermission('admin.orders');
+
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => {
             setCurrentUser(user);
         });
+
+        supabase.from('app_settings')
+            .select('key, value')
+            .eq('key', 'system_roles')
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (!error && data?.value) {
+                    try {
+                        setRoles(JSON.parse(data.value));
+                    } catch (e) {
+                        console.error('Error parsing system_roles:', e);
+                    }
+                }
+                setRolesLoaded(true);
+            });
     }, []);
 
     useEffect(() => {
@@ -137,6 +163,71 @@ export default function OrderLoadingPage() {
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     const [selectedChannel, setSelectedChannel] = useState('');
+
+    if (authLoading || !rolesLoaded) {
+        return (
+            <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <Loader2 size={36} className="animate-spin" style={{ color: THEME.colors.primary }} />
+                    <span style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', fontWeight: '600' }}>Cargando portal de pedidos...</span>
+                </div>
+            </main>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.colors.background }}>
+                <div style={{
+                    textAlign: 'center',
+                    padding: '3rem',
+                    backgroundColor: THEME.colors.surface,
+                    borderRadius: THEME.radius.lg,
+                    boxShadow: THEME.shadow.md,
+                    maxWidth: '480px',
+                    border: `1px solid ${THEME.colors.border}`,
+                }}>
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#EF4444',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <ShieldAlert size={32} />
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: THEME.colors.textMain, marginBottom: '0.75rem', fontFamily: THEME.typography.fontFamilyMain }}>
+                        Acceso Restringido
+                    </h1>
+                    <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        No tienes permisos para visualizar el panel de pedidos. Si consideras que esto es un error, por favor contacta al administrador del sistema.
+                    </p>
+                    <Link href="/" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.75rem 1.5rem',
+                        backgroundColor: THEME.colors.primary,
+                        color: 'white',
+                        fontWeight: '700',
+                        fontSize: '0.875rem',
+                        borderRadius: THEME.radius.md,
+                        textDecoration: 'none',
+                        transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primaryDark || '#16a34a'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = THEME.colors.primary}
+                    >
+                        Volver al Inicio
+                    </Link>
+                </div>
+            </main>
+        );
+    }
 
     const filteredOrders = orders.filter(order => {
         // Filtro por canal dropdown
