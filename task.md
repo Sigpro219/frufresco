@@ -1,0 +1,7 @@
+- [x] Arreglar el trigger SQL en Supabase (`proc_log_audit`)
+- [x] Implementar Debounce en la búsqueda de productos
+- [x] Reemplazar updates individuales por Bulk Upsert en `handleUpdateOrder`
+- [x] Envolver `filteredOrders` en `useMemo`
+- [x] Optimizar join fallback en `handleOrderClick`
+- [x] Compilar y verificar el proyecto Next.js
+- [/] Subir cambios a todas las ramas (Push)

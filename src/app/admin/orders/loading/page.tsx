@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
@@ -326,78 +326,80 @@ export default function OrderLoadingPage() {
         );
     }
 
-    const filteredOrders = orders.filter(order => {
-        // Filtro por canal dropdown
-        if (selectedChannel && order.origin_source !== selectedChannel) return false;
+    const filteredOrders = useMemo(() => {
+        return orders.filter(order => {
+            // Filtro por canal dropdown
+            if (selectedChannel && order.origin_source !== selectedChannel) return false;
 
-        if (!searchTerm) return true;
-        
-        const term = searchTerm.toLowerCase().trim();
-        const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
-        const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
-        const friendlyId = getFriendlyOrderId(order).toLowerCase();
-
-        // Check for @ commands
-        if (term.startsWith('@')) {
-            const command = term.substring(1).replace(/[\s-]+/g, '_');
+            if (!searchTerm) return true;
             
-            if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
-            if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
-            if (command === 'b2b') return isB2B;
-            if (command === 'b2c' || command === 'hogar') return !isB2B;
-            const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
-            
-            // Actualizado para buscar en origin_source de forma estructurada con fallback
-            if (command === 'web' || command === '🛒' || command === 'app') {
-                return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
-            }
-            if (command === 'whatsapp' || command === '💬') {
-                return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
-            }
-            if (command === 'telefono' || command === 'phone' || command === '📞') {
-                return order.origin_source === 'phone' || notes.includes('[origin: phone]');
-            }
-            if (command === 'email' || command === 'correo') {
-                return order.origin_source === 'email' || notes.includes('[origin: email]');
-            }
-            if (command === 'carga' || command === 'excel' || command === 'ocr') {
-                return order.origin_source === 'file_upload';
-            }
-            
-            if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
-            if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
-            if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
-            if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
-            if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
-            if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
-            if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
-            if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
-            if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
-            if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
-            if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
-            if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
-        }
+            const term = searchTerm.toLowerCase().trim();
+            const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
+            const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+            const friendlyId = getFriendlyOrderId(order).toLowerCase();
 
-        // Generic search normalization
-        const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
-        const normTerm = term.replace(/[_\s-]/g, '');
-        const rawSeqStr = (order.sequence_id || '').toString();
+            // Check for @ commands
+            if (term.startsWith('@')) {
+                const command = term.substring(1).replace(/[\s-]+/g, '_');
+                
+                if (command === 'sin_coordinadas' || command === 'sin_coordenadas' || command === 'sin_gps') return !hasGPS;
+                if (command === 'con_coordinadas' || command === 'con_coordenadas' || command === 'con_gps') return hasGPS;
+                if (command === 'b2b') return isB2B;
+                if (command === 'b2c' || command === 'hogar') return !isB2B;
+                const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`.toLowerCase();
+                
+                // Actualizado para buscar en origin_source de forma estructurada con fallback
+                if (command === 'web' || command === '🛒' || command === 'app') {
+                    return order.origin_source === 'web_b2c' || order.origin_source === 'web_b2b' || notes.includes('[origin: web]') || order.type === 'b2c_wompi';
+                }
+                if (command === 'whatsapp' || command === '💬') {
+                    return order.origin_source === 'whatsapp' || notes.includes('[origin: whatsapp]');
+                }
+                if (command === 'telefono' || command === 'phone' || command === '📞') {
+                    return order.origin_source === 'phone' || notes.includes('[origin: phone]');
+                }
+                if (command === 'email' || command === 'correo') {
+                    return order.origin_source === 'email' || notes.includes('[origin: email]');
+                }
+                if (command === 'carga' || command === 'excel' || command === 'ocr') {
+                    return order.origin_source === 'file_upload';
+                }
+                
+                if (command === 'pendiente' || command === 'pending') return order.status === 'pending_approval';
+                if (command === 'para_compra' || command === 'compra') return order.status === 'para_compra';
+                if (command === 'aprobado' || command === 'approved') return order.status === 'approved';
+                if (command === 'enviado' || command === 'shipped') return order.status === 'shipped';
+                if (command === 'entregado' || command === 'delivered') return order.status === 'delivered';
+                if (command === 'incompleto' || command === 'incompletos' || command === 'error' || command === 'alerta') return !order.isComplete;
+                if (command === 'completo' || command === 'completos' || command === 'ok') return order.isComplete;
+                if (command === 'pago' || command === 'pagos' || command === 'con_pago') return !!order.paymentMethod;
+                if (command === 'sin_pago' || command === 'no_pago') return !order.paymentMethod;
+                if (command === 'efectivo' || command === 'cash') return (order.paymentMethod || '').toLowerCase().includes('efectivo');
+                if (command === 'transferencia' || command === 'banco') return (order.paymentMethod || '').toLowerCase().includes('transferencia');
+                if (command === 'contraentrega' || command === 'cobro') return (order.paymentMethod || '').toLowerCase().includes('contraentrega');
+            }
 
-        return (
-            friendlyId.includes(term) ||
-            normFriendlyId.includes(normTerm) ||
-            rawSeqStr === term ||
-            order.id.toLowerCase().includes(term) ||
-            (order.customer_name || '').toLowerCase().includes(term) ||
-            (order.customer_nit || '').toLowerCase().includes(term) ||
-            (order.customer_phone || '').toLowerCase().includes(term) ||
-            (order.shipping_address || '').toLowerCase().includes(term) ||
-            (order.status || '').toLowerCase().includes(term) ||
-            (order.paymentMethod || '').toLowerCase().includes(term) ||
-            (order.admin_notes || '').toLowerCase().includes(term) ||
-            (order.special_notes || '').toLowerCase().includes(term)
-        );
-    });
+            // Generic search normalization
+            const normFriendlyId = friendlyId.replace(/[_\s-]/g, '');
+            const normTerm = term.replace(/[_\s-]/g, '');
+            const rawSeqStr = (order.sequence_id || '').toString();
+
+            return (
+                friendlyId.includes(term) ||
+                normFriendlyId.includes(normTerm) ||
+                rawSeqStr === term ||
+                order.id.toLowerCase().includes(term) ||
+                (order.customer_name || '').toLowerCase().includes(term) ||
+                (order.customer_nit || '').toLowerCase().includes(term) ||
+                (order.customer_phone || '').toLowerCase().includes(term) ||
+                (order.shipping_address || '').toLowerCase().includes(term) ||
+                (order.status || '').toLowerCase().includes(term) ||
+                (order.paymentMethod || '').toLowerCase().includes(term) ||
+                (order.admin_notes || '').toLowerCase().includes(term) ||
+                (order.special_notes || '').toLowerCase().includes(term)
+            );
+        });
+    }, [orders, selectedChannel, searchTerm]);
 
     const toggleSelectAll = () => {
         const completeOrders = filteredOrders.filter(o => o.isComplete);
@@ -499,43 +501,48 @@ export default function OrderLoadingPage() {
         return acc + (weightFactor * item.quantity);
     }, 0);
 
-    const handleSearchProducts = async (term: string) => {
+    const handleSearchProducts = (term: string) => {
         setProductSearch(term);
-        if (term.length < 3) {
+    };
+
+    useEffect(() => {
+        if (productSearch.length < 3) {
             setSearchResults([]);
+            setSearching(false);
             return;
         }
         
         setSearching(true);
-        console.log('🔍 Buscando productos:', term);
-        try {
-            // Corregido: La columna real es 'base_price', no 'price'. Incluimos options_config para variantes.
-            const { data, error } = await supabase
-                .from('products')
-                .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
-                .or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
-                .limit(8);
-            
-            if (error) {
-                console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
-                throw error;
+        const delayDebounceFn = setTimeout(async () => {
+            console.log('🔍 Buscando productos (debounced):', productSearch);
+            try {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
+                    .limit(8);
+                
+                if (error) {
+                    console.error('❌ Error de Supabase:', error.message, error.details, error.hint, error.code);
+                    throw error;
+                }
+                
+                console.log('✅ Resultados encontrados:', data?.length || 0);
+                setSearchResults(data || []);
+            } catch (err: any) {
+                console.error('💥 Excepción en búsqueda:', err);
+                const msg = err.message || JSON.stringify(err);
+                
+                if (err.code === '42501' || msg.includes('permission denied')) {
+                    alert('⚠️ Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
+                }
+            } finally {
+                setSearching(false);
             }
-            
-            console.log('✅ Resultados encontrados:', data?.length || 0);
-            setSearchResults(data || []);
-        } catch (err: any) {
-            console.error('💥 Excepción en búsqueda:', err);
-            const msg = err.message || JSON.stringify(err);
-            
-            if (err.code === '42501' || msg.includes('permission denied')) {
-                alert('⚠️ Error de Permisos (RLS): No tienes permiso para buscar en la tabla "products". Por favor, ejecuta el script SQL de permisos.');
-            } else if (err.code === '42703') {
-                console.error('Columna no encontrada. Verificando esquema...');
-            }
-        } finally {
-            setSearching(false);
-        }
-    };
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [productSearch]);
 
     const addProductToOrder = (product: any) => {
         // Reset sub-modal states
@@ -655,35 +662,25 @@ export default function OrderLoadingPage() {
                 operations.push(supabase.from('order_items').delete().in('id', idsToDelete));
             }
 
-            // Nuevos ítems (Insertar)
-            const itemsToInsert = orderItems.filter(item => item.isNew).map(item => ({
-                order_id: selectedOrder.id,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                variant_label: item.variant_label,
-                selected_options: item.selected_options
-            }));
+            // Consolidador de Ítems (Bulk Upsert para Nuevos y Modificados)
+            const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
+                const baseItem: any = {
+                    order_id: selectedOrder.id,
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    variant_label: item.variant_label,
+                    selected_options: item.selected_options
+                };
+                if (!item.isNew) {
+                    baseItem.id = item.id;
+                }
+                return baseItem;
+            });
 
-            if (itemsToInsert.length > 0) {
-                console.log('➕ Insertando nuevos ítems:', itemsToInsert.length);
-                operations.push(supabase.from('order_items').insert(itemsToInsert));
-            }
-
-            // Ítems existentes (Actualizar cantidades)
-            const itemsToUpdate = orderItems.filter(item => !item.isNew && item.isModified);
-            for (const item of itemsToUpdate) {
-                console.log('🔄 Actualizando ítem:', item.id);
-                operations.push(
-                    supabase.from('order_items')
-                        .update({ 
-                            quantity: item.quantity, 
-                            unit_price: item.unit_price,
-                            variant_label: item.variant_label,
-                            selected_options: item.selected_options
-                        })
-                        .eq('id', item.id)
-                );
+            if (itemsToUpsert.length > 0) {
+                console.log('⚡ Sincronizando ítems en lote (Upsert):', itemsToUpsert.length);
+                operations.push(supabase.from('order_items').upsert(itemsToUpsert));
             }
 
             if (operations.length > 0) {
