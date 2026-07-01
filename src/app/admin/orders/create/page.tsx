@@ -2920,11 +2920,12 @@ function CreateOrderContent() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
                                 <button
                                     type="button"
+                                    tabIndex={-1}
                                     onClick={() => setSelectedProductForModal(null)}
-                                    style={{ padding: '0.9rem', borderRadius: '10px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    style={{ width: '120px', padding: '0.65rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '0.9rem', color: '#6B7280', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
                                     onFocus={(e) => {
                                         e.target.style.borderColor = '#3B82F6';
                                         e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
@@ -2939,7 +2940,7 @@ function CreateOrderContent() {
                                 <button
                                     type="button"
                                     onClick={confirmModalAdd}
-                                    style={{ padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    style={{ flex: 1, padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
                                     onFocus={(e) => {
                                         e.target.style.backgroundColor = '#047857';
                                         e.target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
