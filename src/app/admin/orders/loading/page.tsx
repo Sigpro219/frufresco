@@ -175,12 +175,14 @@ export default function OrderLoadingPage() {
 
     // Variant Selection Modal States (For products with options)
     const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
-
     // Contract / pricing model states
     const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
     const [activePricingModel, setActivePricingModel] = useState<any>(null);
     const [isB2CDefault, setIsB2CDefault] = useState(false);
     const [isContractExpired, setIsContractExpired] = useState(false);
+
+    // Client Exceptions (Product Nicknames & Notes) State
+    const [clientExceptions, setClientExceptions] = useState<any[]>([]);
 
     useEffect(() => {
         async function resolveContract() {
@@ -189,12 +191,24 @@ export default function OrderLoadingPage() {
                 setActivePricingModel(null);
                 setIsB2CDefault(false);
                 setIsContractExpired(false);
+                setClientExceptions([]);
                 return;
             }
 
             const profileObj = selectedOrder.profiles;
             const modelId = profileObj?.pricing_model_id || null;
             const deliveryDate = editDeliveryDate || selectedOrder.delivery_date;
+
+            // Load Client exceptions for B2B client
+            if (profileObj?.id) {
+                const { data: excs } = await supabase
+                    .from('product_nicknames')
+                    .select('*')
+                    .eq('customer_id', profileObj.id);
+                if (excs) setClientExceptions(excs);
+            } else {
+                setClientExceptions([]);
+            }
 
             let resolvedModel: any = null;
             let expired = false;
@@ -634,9 +648,44 @@ export default function OrderLoadingPage() {
     }
 
     const addProductToOrder = (product: any) => {
+        // 1. Check for product substitution exception
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        if (exc && exc.substitution_product_id) {
+            const fetchAndSubstitute = async () => {
+                const { data: subProduct } = await supabase
+                    .from('products')
+                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .eq('id', exc.substitution_product_id)
+                    .single();
+                
+                if (subProduct) {
+                    const confirmSwap = window.confirm(`El cliente prefiere sustituir "${product.name}" por "${subProduct.name}". ¿Desea aplicar la sustitución?`);
+                    if (confirmSwap) {
+                        addProductToOrder(subProduct);
+                        return;
+                    }
+                }
+                proceedAddProduct(product, exc);
+            };
+            fetchAndSubstitute();
+        } else {
+            proceedAddProduct(product, exc);
+        }
+    };
+
+    const proceedAddProduct = (product: any, exc: any) => {
         // Reset sub-modal states
         setVariantQuantity(1);
         setSelectedOptions({});
+
+        // Pre-populate preferred variant options (if any)
+        const initialOptions: Record<string, string> = {};
+        if (exc && exc.preferred_options && typeof exc.preferred_options === 'object') {
+            Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                initialOptions[k] = String(v);
+            });
+        }
+        setSelectedOptions(initialOptions);
 
         // Check if product has variants/options
         if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
@@ -647,7 +696,9 @@ export default function OrderLoadingPage() {
         }
 
         // Direct add if no variants
-        addOrUpdateItemInState(product, 1);
+        const optValues = Object.values(initialOptions).filter(v => v);
+        const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
+        addOrUpdateItemInState(product, 1, variantLabel, initialOptions);
         setProductSearch('');
         setSearchResults([]);
     };
@@ -662,9 +713,23 @@ export default function OrderLoadingPage() {
     };
 
     const addOrUpdateItemInState = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        let finalLabel = variantLabel || '';
+        let finalNickname = exc?.nickname || product.name;
+
+        // Append picking and delivery notes to variant label
+        const notes: string[] = [];
+        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
+        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
+        
+        if (notes.length > 0) {
+            const notesStr = notes.join(' | ');
+            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
+        }
+
         // Check if item with same product_id AND variant_label exists
         const existsIndex = orderItems.findIndex(item => 
-            item.product_id === product.id && item.variant_label === variantLabel
+            item.product_id === product.id && item.variant_label === finalLabel
         );
 
         if (existsIndex >= 0) {
@@ -682,8 +747,9 @@ export default function OrderLoadingPage() {
                 product_id: product.id,
                 quantity: qty,
                 unit_price: resolvedPrice,
-                variant_label: variantLabel,
-                selected_options: optionsRaw,
+                variant_label: finalLabel || null,
+                selected_options: optionsRaw || {},
+                nickname: finalNickname || null,
                 products: {
                     name: product.name,
                     sku: product.sku,
@@ -768,7 +834,8 @@ export default function OrderLoadingPage() {
                     quantity: item.quantity,
                     unit_price: item.unit_price,
                     variant_label: item.variant_label,
-                    selected_options: item.selected_options
+                    selected_options: item.selected_options,
+                    nickname: item.nickname || item.variant_label || null
                 };
                 if (!item.isNew) {
                     baseItem.id = item.id;

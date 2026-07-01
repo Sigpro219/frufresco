@@ -24,6 +24,7 @@ import {
     Sparkles,
     Trash2,
     X,
+    RefreshCw,
     FileDown,
     FileUp,
     BarChart3,
@@ -3496,24 +3497,31 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     
-    const [newException, setNewException] = useState({
+    const [newException, setNewException] = useState<any>({
         product_id: '',
         nickname: '',
-        picking_note: ''
+        picking_note: '',
+        substitution_product_id: '',
+        delivery_note: '',
+        preferred_options: {}
     });
     const [searchTerm, setSearchTerm] = useState('');
     const [showResults, setShowResults] = useState(false);
+
+    // Substitution Search states
+    const [subSearchTerm, setSubSearchTerm] = useState('');
+    const [showSubResults, setShowSubResults] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
         const { data: excData } = await supabase
             .from('product_nicknames')
-            .select('*, products(name, sku)')
+            .select('*')
             .eq('customer_id', clientId);
         
         const { data: prodData } = await supabase
             .from('products')
-            .select('id, name, sku')
+            .select('id, name, sku, options_config')
             .eq('is_active', true);
 
         if (excData) setExceptions(excData);
@@ -3530,7 +3538,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
             customer_id: clientId,
             product_id: newException.product_id,
             nickname: newException.nickname || '',
-            picking_note: newException.picking_note || ''
+            picking_note: newException.picking_note || '',
+            substitution_product_id: newException.substitution_product_id || null,
+            delivery_note: newException.delivery_note || '',
+            preferred_options: newException.preferred_options || {}
         };
 
         const { error } = editingId 
@@ -3543,8 +3554,9 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
             window.showToast?.(editingId ? 'Excepción actualizada' : 'Excepción guardada', 'success');
             setIsAdding(false);
             setEditingId(null);
-            setNewException({ product_id: '', nickname: '', picking_note: '' });
+            setNewException({ product_id: '', nickname: '', picking_note: '', substitution_product_id: '', delivery_note: '', preferred_options: {} });
             setSearchTerm('');
+            setSubSearchTerm('');
             fetchData();
         }
     };
@@ -3557,6 +3569,13 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         if (!error) fetchData();
     };
 
+    // Find original product helper
+    const getProductDetails = (id: string) => {
+        return products.find(p => p.id === id);
+    };
+
+    const selectedOriginalProd = getProductDetails(newException.product_id);
+
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '2rem' }}>
             <div style={{ backgroundColor: 'white', borderRadius: THEME.radius.xl, width: '100%', maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: THEME.shadow.lg, border: `1px solid ${THEME.colors.border}` }}>
@@ -3568,7 +3587,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                 {readOnly ? 'Consulta de Excepciones' : 'Excepciones Logísticas'}
                             </h3>
                         </div>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>{readOnly ? 'Visualizando nombres de factura y notas de picking personalizadas.' : 'Personaliza nombres de factura y notas de picking para este cliente.'}</p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>{readOnly ? 'Visualizando nombres de factura y especificaciones logísticas.' : 'Personaliza variantes, sustitutos y notas de picking/despacho para este cliente.'}</p>
                     </div>
                     <button 
                         onClick={onClose} 
@@ -3619,6 +3638,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     {!readOnly && isAdding && (
                         <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, marginBottom: '2rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                
+                                {/* A. PRODUCTO ORIGINAL */}
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Producto Original (Buscador)</label>
                                     <div style={{ position: 'relative' }}>
@@ -3628,7 +3649,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                             </span>
                                             <input 
                                                 type="text"
-                                                placeholder="Buscar por nombre o ID (SKU)..."
+                                                placeholder="Buscar por nombre o SKU..."
                                                 value={searchTerm}
                                                 onChange={(e) => {
                                                     setSearchTerm(e.target.value);
@@ -3664,19 +3685,19 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 position: 'absolute', top: '100%', left: 0, right: 0, 
                                                 backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
                                                 boxShadow: THEME.shadow.lg, 
-                                                zIndex: 10, marginTop: '8px', maxHeight: '250px', overflowY: 'auto' 
+                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
                                             }}>
                                                 {products
                                                     .filter(p => 
                                                         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                                         p.sku.toLowerCase().includes(searchTerm.toLowerCase())
                                                     )
-                                                    .slice(0, 15) // Limit results for performance
+                                                    .slice(0, 10)
                                                     .map(p => (
                                                         <div 
                                                             key={p.id}
                                                             onClick={() => {
-                                                                setNewException({...newException, product_id: p.id});
+                                                                setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
                                                                 setSearchTerm(`[${p.sku}] ${p.name}`);
                                                                 setShowResults(false);
                                                             }}
@@ -3696,35 +3717,168 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         </div>
                                                     ))
                                                 }
-                                                {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                                                    <div style={{ padding: '1.2rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.8rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        No se encontraron productos.
-                                                    </div>
-                                                )}
                                             </div>
                                         )}
                                     </div>
                                 </div>
+
+                                {/* B. VARIANTES PREFERIDAS (CONDICIONAL) */}
+                                {selectedOriginalProd?.options_config && selectedOriginalProd.options_config.length > 0 && (
+                                    <div style={{ backgroundColor: '#F0FDFA', border: '1px solid #CCFBF1', padding: '1rem', borderRadius: '8px' }}>
+                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0F766E', display: 'block', marginBottom: '8px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Variantes Preferidas del Cliente</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.8rem' }}>
+                                            {selectedOriginalProd.options_config.map((opt: any) => (
+                                                <div key={opt.name}>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: '#115E59', display: 'block', marginBottom: '4px' }}>{opt.name}</label>
+                                                    <select
+                                                        value={newException.preferred_options?.[opt.name] || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setNewException(prev => {
+                                                                const updatedOptions = { ...prev.preferred_options };
+                                                                if (val) updatedOptions[opt.name] = val;
+                                                                else delete updatedOptions[opt.name];
+                                                                return { ...prev, preferred_options: updatedOptions };
+                                                            });
+                                                        }}
+                                                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #CCFBF1', fontSize: '0.8rem', backgroundColor: 'white' }}
+                                                    >
+                                                        <option value="">Por defecto (Cualquiera)</option>
+                                                        {opt.values?.map((v: string) => (
+                                                            <option key={v} value={v}>{v}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* C. PRODUCTO DE REEMPLAZO (SUSTITUCIÓN) */}
+                                <div>
+                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block', marginBottom: '6px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Producto de Reemplazo / Sustitución (Opcional)</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                <RefreshCw size={14} style={{ color: THEME.colors.textSecondary }} />
+                                            </span>
+                                            <input 
+                                                type="text"
+                                                placeholder="Buscar producto para sustituir..."
+                                                value={subSearchTerm}
+                                                onChange={(e) => {
+                                                    setSubSearchTerm(e.target.value);
+                                                    setShowSubResults(true);
+                                                }}
+                                                onFocus={() => setShowSubResults(true)}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    height: '38px', 
+                                                    padding: '0 1rem 0 2.8rem', 
+                                                    borderRadius: '8px', 
+                                                    border: `1px solid ${THEME.colors.border}`, 
+                                                    fontWeight: '500',
+                                                    fontSize: '0.85rem',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s',
+                                                    backgroundColor: 'white',
+                                                    fontFamily: THEME.typography.fontFamilySecondary
+                                                }}
+                                                onBlur={() => setTimeout(() => setShowSubResults(false), 200)}
+                                            />
+                                            {newException.substitution_product_id && (
+                                                <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                        SUSTITUTO ACTIVO
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewException(prev => ({ ...prev, substitution_product_id: '' }));
+                                                            setSubSearchTerm('');
+                                                        }}
+                                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#EF4444', fontWeight: 'bold' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {showSubResults && subSearchTerm.length > 0 && (
+                                            <div style={{ 
+                                                position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                boxShadow: THEME.shadow.lg, 
+                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
+                                            }}>
+                                                {products
+                                                    .filter(p => 
+                                                        p.id !== newException.product_id && (
+                                                            p.name.toLowerCase().includes(subSearchTerm.toLowerCase()) || 
+                                                            p.sku.toLowerCase().includes(subSearchTerm.toLowerCase())
+                                                        )
+                                                    )
+                                                    .slice(0, 10)
+                                                    .map(p => (
+                                                        <div 
+                                                            key={p.id}
+                                                            onClick={() => {
+                                                                setNewException(prev => ({...prev, substitution_product_id: p.id}));
+                                                                setSubSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setShowSubResults(false);
+                                                            }}
+                                                            style={{ 
+                                                                padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
+                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                transition: 'background 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                        >
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
+                                                            </div>
+                                                            <span style={{ color: '#D97706', fontSize: '0.95rem', fontWeight: '600' }}>🔄</span>
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* D. NOTAS Y ALIAS */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                     <FormField 
                                         label="Nombre en Factura (Alias)" 
                                         value={newException.nickname} 
                                         onChange={(v) => setNewException({...newException, nickname: v})} 
-                                        placeholder="Ej: Papa Amarilla"
+                                        placeholder="Ej: Papa Amarilla (Sin costo)"
                                     />
                                     <FormField 
                                         label="Nota de Picking (Bodega)" 
                                         value={newException.picking_note} 
                                         onChange={(v) => setNewException({...newException, picking_note: v})} 
-                                        placeholder="Ej: Lavada y grande"
+                                        placeholder="Ej: Maduración: Pintón / Con etiqueta"
+                                    />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                    <FormField 
+                                        label="Nota de Despacho / Conductor (Entrega)" 
+                                        value={newException.delivery_note} 
+                                        onChange={(v) => setNewException({...newException, delivery_note: v})} 
+                                        placeholder="Ej: Entregar en sótano 1, recibir canastillas vacías"
                                     />
                                 </div>
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button onClick={() => {
                                         setIsAdding(false);
                                         setEditingId(null);
-                                        setNewException({ product_id: '', nickname: '', picking_note: '' });
+                                        setNewException({ product_id: '', nickname: '', picking_note: '', substitution_product_id: '', delivery_note: '', preferred_options: {} });
                                         setSearchTerm('');
+                                        setSubSearchTerm('');
                                     }} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, background: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilySecondary, fontSize: '0.8rem' }}>Cancelar</button>
                                     <button onClick={handleSave} style={{ flex: 1, padding: '0.6rem', borderRadius: THEME.radius.sm, border: 'none', background: THEME.colors.primary, color: 'white', fontWeight: '600', cursor: 'pointer', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.8rem' }}>Guardar Regla</button>
                                 </div>
@@ -3734,59 +3888,108 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         {loading ? (
-                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando reglas...</div>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>Cargando excepciones...</div>
                         ) : exceptions.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '2rem', color: THEME.colors.textSecondary, border: `1px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.lg, fontFamily: THEME.typography.fontFamilySecondary }}>No hay excepciones configuradas.</div>
                         ) : (
-                            exceptions.map(exc => (
-                                <div key={exc.id} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
-                                    <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Original: {exc.products?.name}</div>
-                                        <div style={{ display: 'flex', gap: '1.5rem', marginTop: '4px' }}>
-                                            <div>
-                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Factura: </span>
-                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.textMain, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>{exc.nickname || '---'}</span>
+                            exceptions.map(exc => {
+                                const origProd = getProductDetails(exc.product_id);
+                                const subProd = exc.substitution_product_id ? getProductDetails(exc.substitution_product_id) : null;
+                                return (
+                                    <div key={exc.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '1.2rem', padding: '1.2rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+                                        <div style={{ width: '36px', height: '36px', backgroundColor: THEME.colors.primaryLight, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '4px' }}>
+                                            <Package size={16} strokeWidth={1.5} style={{ color: THEME.colors.primary }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span>Original: {origProd?.name || '---'}</span>
+                                                <span style={{ color: '#94A3B8' }}>|</span>
+                                                <span style={{ color: '#64748B' }}>SKU: {origProd?.sku || '---'}</span>
                                             </div>
-                                            <div>
-                                                <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>Picking: </span>
-                                                <span style={{ fontSize: '0.8rem', color: THEME.colors.primary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary }}>{exc.picking_note || '---'}</span>
+
+                                            {/* RENDER DETAILED RULES */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                                                
+                                                {/* Nickname alias */}
+                                                <div>
+                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
+                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname || '---'}</span>
+                                                </div>
+
+                                                {/* Picking notes */}
+                                                <div>
+                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Instrucción Bodega (Picking): </span>
+                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note || '---'}</span>
+                                                </div>
+
+                                                {/* Delivery note */}
+                                                {exc.delivery_note && (
+                                                    <div>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Conductor (Despacho): </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#4F46E5', fontWeight: '600' }}>{exc.delivery_note}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Substitution product */}
+                                                {subProd && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>
+                                                            [{subProd.sku}] {subProd.name}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Preferred options list */}
+                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#0F766E', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>⚙️ Variantes Fijas:</span>
+                                                        {Object.entries(exc.preferred_options).map(([k, v]) => (
+                                                            <span key={k} style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                {k}: {String(v)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+
                                             </div>
                                         </div>
+                                        {!readOnly && (
+                                            <div style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingId(exc.id);
+                                                        setNewException({
+                                                            product_id: exc.product_id,
+                                                            nickname: exc.nickname,
+                                                            picking_note: exc.picking_note,
+                                                            substitution_product_id: exc.substitution_product_id || '',
+                                                            delivery_note: exc.delivery_note || '',
+                                                            preferred_options: exc.preferred_options || {}
+                                                        });
+                                                        setSearchTerm(origProd ? `[${origProd.sku}] ${origProd.name}` : '');
+                                                        setSubSearchTerm(subProd ? `[${subProd.sku}] ${subProd.name}` : '');
+                                                        setIsAdding(true);
+                                                    }} 
+                                                    style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(exc.id)} 
+                                                    style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                    {!readOnly && (
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button 
-                                                onClick={() => {
-                                                    setEditingId(exc.id);
-                                                    setNewException({
-                                                        product_id: exc.product_id,
-                                                        nickname: exc.nickname,
-                                                        picking_note: exc.picking_note
-                                                    });
-                                                    setSearchTerm(`[${exc.products?.sku}] ${exc.products?.name}`);
-                                                    setIsAdding(true);
-                                                }} 
-                                                style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDelete(exc.id)} 
-                                                style={{ border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
