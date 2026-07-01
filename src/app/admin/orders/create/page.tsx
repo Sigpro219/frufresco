@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
@@ -131,8 +131,54 @@ function CreateOrderContent() {
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
-    const [modalQuantity, setModalQuantity] = useState(1);
+    const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
+    const [modalQuantity, setModalQuantity] = useState<string | number>(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+    const [modalUnit, setModalUnit] = useState('Kg');
+    const [modalFactor, setModalFactor] = useState(1);
+    const firstSelectRef = useRef<HTMLSelectElement | null>(null);
+
+    useEffect(() => {
+        if (selectedProductForModal) {
+            setModalQuantity('1');
+
+            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+            if (hasWebUnit) {
+                setModalUnit(selectedProductForModal.web_unit);
+                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
+            } else {
+                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
+                setModalFactor(1);
+            }
+
+            // Re-fetch latest conversions for this product to prevent stale cache
+            supabase
+                .from('product_conversions')
+                .select('*')
+                .eq('product_id', selectedProductForModal.id)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setConversions(prev => {
+                            const filtered = prev.filter(c => c.product_id !== selectedProductForModal.id);
+                            return [...filtered, ...data];
+                        });
+                    }
+                });
+
+            // Auto-focus the first select or the quantity input
+            setTimeout(() => {
+                if (firstSelectRef.current) {
+                    firstSelectRef.current.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        qtyInput.focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+        }
+    }, [selectedProductForModal]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
@@ -334,7 +380,7 @@ function CreateOrderContent() {
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
                 .from('products')
-                .select('id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg')
+                .select('id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
                 .eq('is_active', true)
                 .order('name');
 
@@ -581,7 +627,14 @@ function CreateOrderContent() {
         setFocusedProductIndex(-1);
     };
 
-    const addToCartDirectly = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
+    const addToCartDirectly = (
+        product: any, 
+        qty: number, 
+        variantLabel?: string, 
+        optionsRaw?: any,
+        unit?: string,
+        factor?: number
+    ) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
         let finalNickname = exc?.nickname || product.name;
@@ -596,9 +649,13 @@ function CreateOrderContent() {
             finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
         }
 
+        const resolvedFactor = factor || 1;
+        const resolvedUnit = unit || product.unit_of_measure || 'Kg';
+        const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
+
         setCart(prev => {
             const existingIndex = prev.findIndex(item =>
-                item.product.id === product.id && item.variant_label === finalLabel
+                item.product.id === product.id && item.variant_label === finalLabel && item.originalUnit === resolvedUnit
             );
 
             const resolvedPrice = contractPrices[product.id] || 0;
@@ -606,19 +663,19 @@ function CreateOrderContent() {
             if (existingIndex >= 0) {
                 const newCart = [...prev];
                 const item = { ...newCart[existingIndex] };
-                item.qty = parseFloat((parseFloat(item.qty || 0) + qty).toFixed(2));
-                item.originalQty = parseFloat((parseFloat(item.originalQty || item.qty || 0) + qty).toFixed(2));
+                item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(2));
+                item.qty = parseFloat((item.originalQty * resolvedFactor).toFixed(2));
                 
                 const filteredCart = newCart.filter((_, i) => i !== existingIndex);
                 return [item, ...filteredCart];
             } else {
                 return [{ 
                     product, 
-                    qty, 
+                    qty: baseQty, 
                     price: resolvedPrice,
                     originalQty: qty,
-                    originalUnit: product.unit_of_measure || 'Kg',
-                    conversion_factor: 1,
+                    originalUnit: resolvedUnit,
+                    conversion_factor: resolvedFactor,
                     variant_label: finalLabel || undefined, 
                     selected_options: optionsRaw || {},
                     nickname: finalNickname
@@ -631,7 +688,16 @@ function CreateOrderContent() {
         if (!selectedProductForModal) return;
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
-        addToCartDirectly(selectedProductForModal, modalQuantity, variantLabel, selectedOptions);
+        const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
+
+        addToCartDirectly(
+            selectedProductForModal, 
+            qtyNum, 
+            variantLabel, 
+            selectedOptions,
+            modalUnit,
+            modalFactor
+        );
         setSelectedProductForModal(null);
     };
 
@@ -1365,18 +1431,23 @@ function CreateOrderContent() {
                                                     setFocusedClientIndex(-1);
                                                 }}
                                                 onKeyDown={(e) => {
+                                                    if (filteredClients.length === 0) return;
                                                     if (e.key === 'ArrowDown') {
                                                         e.preventDefault();
                                                         setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
                                                     } else if (e.key === 'ArrowUp') {
                                                         e.preventDefault();
                                                         setFocusedClientIndex(prev => Math.max(prev - 1, -1));
-                                                    } else if (e.key === 'Enter') {
-                                                        e.preventDefault();
+                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
                                                         const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
                                                         if (filteredClients[targetIndex]) {
+                                                            e.preventDefault();
                                                             selectClient(filteredClients[targetIndex]);
+                                                            setFocusedClientIndex(-1);
                                                         }
+                                                    } else if (e.key === 'Escape') {
+                                                        setClientSearch('');
+                                                        setFocusedClientIndex(-1);
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
@@ -2556,76 +2627,536 @@ function CreateOrderContent() {
             </div>
 
             {/* --- VARIANT SELECTION MODAL --- */}
-            {selectedProductForModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 1000, backdropFilter: 'blur(3px)'
-                }} onClick={() => setSelectedProductForModal(null)}>
+            {selectedProductForModal && (() => {
+                const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
+                const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
 
-                    <div
-                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center' }}
-                        onClick={e => e.stopPropagation()} // Prevent close
-                    >
-                        {selectedProductForModal.image_url && (
-                            <img
-                                src={selectedProductForModal.image_url}
-                                style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
-                            />
-                        )}
-                        <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.5rem' }}>{selectedProductForModal.name}</h3>
-                        <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+                // Build full options list for unit selection (web_unit is first, if configured)
+                const optionsList = [];
+                const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+                
+                if (hasWebUnit) {
+                    optionsList.push({
+                        unit: selectedProductForModal.web_unit,
+                        factor: parseFloat(selectedProductForModal.web_conversion_factor) || 1,
+                        label: `${selectedProductForModal.web_unit} (${selectedProductForModal.web_conversion_factor} ${selectedProductForModal.unit_of_measure})`
+                    });
+                }
+                
+                if (!hasWebUnit || selectedProductForModal.unit_of_measure !== selectedProductForModal.web_unit) {
+                    optionsList.push({
+                        unit: selectedProductForModal.unit_of_measure || 'Kg',
+                        factor: 1,
+                        label: `${selectedProductForModal.unit_of_measure || 'Kg'} (Base)`
+                    });
+                }
+                
+                itemConversions.forEach(c => {
+                    const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
+                    if (!isDuplicate) {
+                        optionsList.push({
+                            unit: c.from_unit,
+                            factor: parseFloat(c.conversion_factor) || 1,
+                            label: `${c.from_unit} (${c.conversion_factor} ${c.to_unit})`
+                        });
+                    }
+                });
 
-                        {/* RENDER OPTIONS DYNAMICALLY */}
-                        {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any) => (
-                            <div key={opt.name} style={{ marginBottom: '1rem', textAlign: 'left' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#4B5563', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
-                                    {opt.name}
-                                </label>
-                                <select
-                                    value={selectedOptions[opt.name] || ''}
-                                    onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '0.95rem', backgroundColor: '#F9FAFB' }}
-                                >
-                                    <option value="">Seleccionar {opt.name}...</option>
-                                    {opt.values?.map((val: string) => (
-                                        <option key={val} value={val}>{val}</option>
-                                    ))}
-                                </select>
+                const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (index < totalOptions - 1) {
+                            const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                            if (nextSelect) (nextSelect as HTMLElement).focus();
+                        } else {
+                            const qtyInput = document.getElementById('modal-qty-input');
+                            if (qtyInput) {
+                                (qtyInput as HTMLElement).focus();
+                                (qtyInput as HTMLInputElement).select();
+                            }
+                        }
+                    }
+                };
+
+                return (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1000, backdropFilter: 'blur(3px)'
+                    }} onClick={() => setSelectedProductForModal(null)}>
+
+                        <div
+                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            onClick={e => e.stopPropagation()} // Prevent close
+                        >
+                            {selectedProductForModal.image_url && (
+                                <img
+                                    src={selectedProductForModal.image_url}
+                                    style={{ width: '100px', height: '100px', borderRadius: '16px', objectFit: 'cover', marginBottom: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                />
+                            )}
+                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '0.3rem', color: '#111827' }}>{selectedProductForModal.name}</h3>
+                            
+                            {/* CLIENT CUSTOM REQUIREMENT INFO BOX */}
+                            {exc && (
+                                <div style={{
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1px solid #FCD34D',
+                                    borderRadius: '12px',
+                                    padding: '0.8rem 1.2rem',
+                                    margin: '0.8rem 0 1.2rem 0',
+                                    textAlign: 'left',
+                                    fontSize: '0.8rem',
+                                    color: '#92400E',
+                                    lineHeight: '1.4'
+                                }}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                        📌 Requerimientos del Cliente:
+                                    </div>
+                                    {exc.nickname && exc.nickname !== selectedProductForModal.name && (
+                                        <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
+                                    )}
+                                    {exc.picking_note && (
+                                        <div><strong>Bodega (Picking):</strong> {exc.picking_note}</div>
+                                    )}
+                                    {exc.delivery_note && (
+                                        <div><strong>Despacho (Conductores):</strong> {exc.delivery_note}</div>
+                                    )}
+                                    {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                        <div><strong>Variación Preferida:</strong> {Object.entries(exc.preferred_options).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+                                    )}
+                                </div>
+                            )}
+
+                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+
+                            {/* RENDER OPTIONS DYNAMICALLY */}
+                            {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any, index: number) => (
+                                <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        {opt.name}
+                                    </label>
+                                    <select
+                                        id={`modal-select-${index}`}
+                                        ref={index === 0 ? firstSelectRef : undefined}
+                                        value={selectedOptions[opt.name] || ''}
+                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                        onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForModal.options_config.length)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.8rem',
+                                            border: '2px solid #E2E8F0',
+                                            borderRadius: '10px',
+                                            fontSize: '1rem',
+                                            backgroundColor: '#F9FAFB',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = '#3B82F6';
+                                            e.target.style.backgroundColor = 'white';
+                                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = '#E2E8F0';
+                                            e.target.style.backgroundColor = '#F9FAFB';
+                                            e.target.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        <option value="">Seleccionar {opt.name}...</option>
+                                        {opt.values?.map((val: string) => (
+                                            <option key={val} value={val}>{val}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ))}
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Cantidad
+                                    </label>
+                                    <input
+                                        id="modal-qty-input"
+                                        type="text"
+                                        value={modalQuantity}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(',', '.');
+                                            setModalQuantity(val);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const unitSel = document.getElementById('modal-unit-select');
+                                                if (unitSel) {
+                                                    unitSel.focus();
+                                                } else {
+                                                    confirmModalAdd();
+                                                }
+                                            }
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.7rem 0.8rem',
+                                            borderRadius: '10px',
+                                            border: '2px solid #E2E8F0',
+                                            fontWeight: '700',
+                                            fontSize: '1.1rem',
+                                            textAlign: 'center',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = '#3B82F6';
+                                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            e.target.select();
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = '#E2E8F0';
+                                            e.target.style.boxShadow = 'none';
+                                            const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
+                                            if (isNaN(parsed) || parsed <= 0) {
+                                                setModalQuantity('1');
+                                            } else {
+                                                setModalQuantity(String(parsed));
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                            Unidad de Medida
+                                        </label>
+                                        <button
+                                            type="button"
+                                            tabIndex={-1}
+                                            onClick={() => {
+                                                if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
+                                                    setManageConversionsProduct(selectedProductForModal);
+                                                }
+                                            }}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#2563EB',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                                textDecoration: 'underline'
+                                            }}
+                                        >
+                                            ⚙️ Equivalencias
+                                        </button>
+                                    </div>
+                                    {optionsList.length > 1 ? (
+                                        <select
+                                            id="modal-unit-select"
+                                            value={modalUnit}
+                                            onChange={(e) => {
+                                                const selected = e.target.value;
+                                                setModalUnit(selected);
+                                                const matched = optionsList.find(o => o.unit === selected);
+                                                if (matched) {
+                                                    setModalFactor(matched.factor);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmModalAdd();
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.7rem 0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            {optionsList.map(o => (
+                                                <option key={o.unit} value={o.unit}>
+                                                    {o.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            readOnly
+                                            type="text"
+                                            value={selectedProductForModal.unit_of_measure}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.7rem 0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                backgroundColor: '#F3F4F6',
+                                                color: '#4B5563',
+                                                textAlign: 'center',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                    )}
+                                </div>
                             </div>
-                        ))}
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', margin: '2rem 0' }}>
-                            <button
-                                onClick={() => setModalQuantity(Math.max(1, modalQuantity - 1))}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '1.2rem', cursor: 'pointer' }}
-                            >−</button>
-                            <span style={{ fontSize: '1.4rem', fontWeight: '800', minWidth: '60px' }}>
-                                {modalQuantity} {selectedProductForModal.unit_of_measure}
-                            </span>
-                            <button
-                                onClick={() => setModalQuantity(modalQuantity + 1)}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', backgroundColor: '#10B981', color: 'white', fontSize: '1.2rem', cursor: 'pointer' }}
-                            >+</button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <button
-                                onClick={() => setSelectedProductForModal(null)}
-                                style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', cursor: 'pointer' }}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={confirmModalAdd}
-                                style={{ padding: '0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', cursor: 'pointer' }}
-                            >
-                                Agregar
-                            </button>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => setSelectedProductForModal(null)}
+                                    style={{ width: '120px', padding: '0.65rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '0.9rem', color: '#6B7280', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#3B82F6';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#D1D5DB';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmModalAdd}
+                                    style={{ flex: 1, padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    onFocus={(e) => {
+                                        e.target.style.backgroundColor = '#047857';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.backgroundColor = '#059669';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    Agregar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
+
+            {/* --- CONVERSIONS MANAGEMENT MODAL --- */}
+            {manageConversionsProduct && (() => {
+                const productConvs = conversions.filter(c => c.product_id === manageConversionsProduct.id);
+                const DYNAMIC_UNITS = [
+                    'Unidad', 'Lata', 'Bandeja', 'Atado', 'Malla', 'Caja', 'Bolsa', 
+                    'Saco', 'Canastilla', 'Libras', 'Gramos', 'Kilos', 'Paquete', 'Bloque'
+                ];
+
+                const handleDelete = async (id: string) => {
+                    const { error } = await supabase
+                        .from('product_conversions')
+                        .delete()
+                        .eq('id', id);
+                    if (!error) {
+                        setConversions(prev => prev.filter(c => c.id !== id));
+                    }
+                };
+
+                const handleAdd = async () => {
+                    const qty1Input = document.getElementById('new-conv-qty-1') as HTMLInputElement;
+                    const unit1Input = document.getElementById('new-conv-unit-1') as HTMLSelectElement;
+                    const qty2Input = document.getElementById('new-conv-qty-2') as HTMLInputElement;
+
+                    if (!qty1Input || !unit1Input || !qty2Input) return;
+
+                    const qty1 = parseFloat(qty1Input.value);
+                    const unit1 = unit1Input.value;
+                    const qty2 = parseFloat(qty2Input.value);
+
+                    if (!unit1) {
+                        alert('Por favor, selecciona una unidad de origen.');
+                        return;
+                    }
+                    if (isNaN(qty1) || qty1 <= 0 || isNaN(qty2) || qty2 <= 0) {
+                        alert('Las cantidades deben ser válidas y mayores a cero.');
+                        return;
+                    }
+
+                    const factor = qty2 / qty1;
+
+                    const { data, error } = await supabase
+                        .from('product_conversions')
+                        .insert([{
+                            product_id: manageConversionsProduct.id,
+                            from_unit: unit1,
+                            to_unit: manageConversionsProduct.unit_of_measure || 'Kg',
+                            conversion_factor: factor
+                        }])
+                        .select();
+
+                    if (!error && data && data.length > 0) {
+                        setConversions(prev => [...prev, data[0]]);
+                        qty1Input.value = '1';
+                        unit1Input.value = '';
+                        qty2Input.value = '';
+                    } else {
+                        alert('Ocurrió un error al guardar la equivalencia.');
+                    }
+                };
+
+                return (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1100, backdropFilter: 'blur(3px)'
+                    }} onClick={() => setManageConversionsProduct(null)}>
+
+                        <div
+                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '550px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            onClick={e => e.stopPropagation()} // Prevent close
+                        >
+                            <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                                <div style={{ textAlign: 'left' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
+                                        ⚖️ Equivalencias y Conversiones
+                                    </h3>
+                                    <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
+                                        {manageConversionsProduct.name}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setManageConversionsProduct(null)}
+                                    style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}
+                                >
+                                    ✕
+                                </button>
+                            </header>
+
+                            {/* SECCIÓN DE UNIDAD BASE */}
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #E2E8F0', textAlign: 'left' }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Unidad de Inventario (Base)
+                                </label>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <div style={{ 
+                                        padding: '0.5rem 1.25rem', 
+                                        backgroundColor: '#EFF6FF', 
+                                        border: '1px solid #BFDBFE', 
+                                        borderRadius: '8px', 
+                                        fontSize: '0.9rem', 
+                                        fontWeight: '800', 
+                                        color: '#1D4ED8',
+                                        minWidth: '100px',
+                                        textAlign: 'center'
+                                    }}>
+                                        {manageConversionsProduct.unit_of_measure}
+                                    </div>
+                                    <div style={{ flex: 1, fontSize: '0.75rem', color: '#6B7280', lineHeight: '1.4' }}>
+                                        Unidad base configurada para este SKU. Todas las equivalencias ingresadas abajo se convertirán a esta unidad base para el stock.
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* EQUIVALENCIAS EXISTENTES */}
+                            <div style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
+                                    Equivalencias de Compra
+                                </h4>
+                                {productConvs.length === 0 ? (
+                                    <div style={{ fontSize: '0.85rem', color: '#6B7280', textAlign: 'center', padding: '1rem', border: '1px dashed #D1D5DB', borderRadius: '12px' }}>
+                                        Solo se opera en {manageConversionsProduct.unit_of_measure}.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {productConvs.map(c => (
+                                            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
+                                                    <span style={{ fontWeight: '700', color: '#1F2937' }}>1 {c.from_unit}</span>
+                                                    <span style={{ color: '#9CA3AF' }}>=</span>
+                                                    <span style={{ fontWeight: '700', color: '#10B981' }}>{c.conversion_factor} {manageConversionsProduct.unit_of_measure}</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDelete(c.id)} 
+                                                    style={{ color: '#EF4444', background: '#FEF2F2', border: '1px solid #FECACA', padding: '4px 10px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '0.75rem', transition: 'all 0.15s' }}
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* AGREGAR NUEVA RELACIÓN */}
+                            <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: '1.25rem', textAlign: 'left' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center' }}>
+                                    ➕ DEFINIR NUEVA RELACIÓN
+                                </h4>
+                                
+                                <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column',
+                                    gap: '8px', 
+                                    backgroundColor: '#F0FDF4', 
+                                    padding: '1.2rem', 
+                                    borderRadius: '12px',
+                                    border: '1px solid #DCFCE7'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <input id="new-conv-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <select id="new-conv-unit-1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}>
+                                                <option value="">Selecciona unidad</option>
+                                                {DYNAMIC_UNITS.map(u => (
+                                                    <option key={u} value={u}>{u}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ textAlign: 'center', color: '#15803D', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                        EQUIVALE A
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <input id="new-conv-qty-2" type="number" placeholder="Ej: 0.3" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <div style={{ width: '100%', padding: '0.5rem', backgroundColor: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#15803D', fontSize: '0.9rem' }}>
+                                                {manageConversionsProduct.unit_of_measure}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={handleAdd} 
+                                    style={{ width: '100%', marginTop: '1rem', padding: '0.8rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.15s' }}
+                                >
+                                    Vincular Unidades
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* MAP PICKER MODAL */}
             {showMapPicker && (
