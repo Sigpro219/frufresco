@@ -2725,11 +2725,30 @@ function CreateOrderContent() {
                             style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
-                            {selectedProductForModal.image_url && (
+                            {selectedProductForModal.image_url ? (
                                 <img
                                     src={selectedProductForModal.image_url}
                                     style={{ width: '100px', height: '100px', borderRadius: '16px', objectFit: 'cover', marginBottom: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
                                 />
+                            ) : (
+                                <div style={{
+                                    width: '100px',
+                                    height: '100px',
+                                    borderRadius: '16px',
+                                    backgroundColor: '#F3F4F6',
+                                    border: '1px solid #E5E7EB',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    margin: '0 auto 1.2rem auto',
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                }}>
+                                    <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                    <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginTop: '4px', letterSpacing: '0.05em' }}>
+                                        Sin Imagen
+                                    </span>
+                                </div>
                             )}
                             <h3 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '0.3rem', color: '#111827' }}>{selectedProductForModal.name}</h3>
                             
