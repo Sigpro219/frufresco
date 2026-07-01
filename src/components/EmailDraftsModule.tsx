@@ -254,11 +254,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
           resolvedModel = pm;
           // Validate expiration against deliveryDate
           if (deliveryDate) {
-            const delivery = new Date(deliveryDate);
-            if (pm.start_date && new Date(pm.start_date) > delivery) {
+            const delivery = deliveryDate.split('T')[0];
+            const start = pm.start_date?.split('T')[0];
+            const end = pm.end_date?.split('T')[0];
+            if (start && start > delivery) {
               expired = true;
             }
-            if (pm.end_date && new Date(pm.end_date) < delivery) {
+            if (end && end < delivery) {
               expired = true;
             }
           }
@@ -559,9 +561,11 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const metadata = getDraftMetadata(draft);
         const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
         if (deliveryDateStr) {
-          const delivery = new Date(deliveryDateStr);
-          if (pm.start_date && new Date(pm.start_date) > delivery) expired = true;
-          if (pm.end_date && new Date(pm.end_date) < delivery) expired = true;
+          const delivery = deliveryDateStr.split('T')[0];
+          const start = pm.start_date?.split('T')[0];
+          const end = pm.end_date?.split('T')[0];
+          if (start && start > delivery) expired = true;
+          if (end && end < delivery) expired = true;
         }
       }
     }
@@ -1080,11 +1084,6 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         }
       }
       setDeliveryDate(initialDateStr);
-      
-      setEditableClientName('');
-      setEditableClientPhone('');
-      setEditableClientNit('');
-      setEditableClientType('b2c_client');
     } else {
       setDraftCoordinates(null);
       setGeocoding(false);
@@ -1099,7 +1098,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       setPurchaseOrder('');
       setDeliveryDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     }
-  }, [selectedDraft, products, aliases, conversions]);
+  }, [selectedDraft, products, aliases, conversions, profiles]);
 
   // Funciones de ayuda para extraer metadata (soportando ambas formas, DB column o JSON metadata)
   const getDraftItems = (draft: any) => {
@@ -1652,14 +1651,15 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
               const prod = products.find(p => p.id === item.matched_product_id);
               if (prod) {
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-                totalAmount += prod.base_price * qtyNum;
+                const resolvedPrice = getResolvedPriceForDraft(selectedDraft, prod.id);
+                totalAmount += resolvedPrice * qtyNum;
                 const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
                 totalWeight += qtyNum * w;
 
                 itemsData.push({
                   product_id: prod.id,
                   quantity: qtyNum,
-                  unit_price: prod.base_price,
+                  unit_price: resolvedPrice,
                   nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
                   variant_label: item.observations || null,
                   unit: item.unit || prod.unit_of_measure || 'Kg',
@@ -2095,7 +2095,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
         const formattedItems = editableItems.map(item => {
           const prod = products.find(p => p.id === item.matched_product_id);
           const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-          const unitPrice = prod?.base_price || 0;
+          const unitPrice = prod ? getResolvedPriceForDraft(selectedDraft, prod.id) : 0;
           return {
             name: prod?.name || item.originalName || 'Producto',
             quantity: qtyNum,
