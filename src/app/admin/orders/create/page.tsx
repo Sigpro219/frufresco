@@ -1416,18 +1416,23 @@ function CreateOrderContent() {
                                                     setFocusedClientIndex(-1);
                                                 }}
                                                 onKeyDown={(e) => {
+                                                    if (filteredClients.length === 0) return;
                                                     if (e.key === 'ArrowDown') {
                                                         e.preventDefault();
                                                         setFocusedClientIndex(prev => Math.min(prev + 1, filteredClients.length - 1));
                                                     } else if (e.key === 'ArrowUp') {
                                                         e.preventDefault();
                                                         setFocusedClientIndex(prev => Math.max(prev - 1, -1));
-                                                    } else if (e.key === 'Enter') {
-                                                        e.preventDefault();
+                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
                                                         const targetIndex = focusedClientIndex >= 0 ? focusedClientIndex : 0;
                                                         if (filteredClients[targetIndex]) {
+                                                            e.preventDefault();
                                                             selectClient(filteredClients[targetIndex]);
+                                                            setFocusedClientIndex(-1);
                                                         }
+                                                    } else if (e.key === 'Escape') {
+                                                        setClientSearch('');
+                                                        setFocusedClientIndex(-1);
                                                     }
                                                 }}
                                                 style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
