@@ -170,6 +170,7 @@ function CreateOrderContent() {
     const [modalUnit, setModalUnit] = useState('Kg');
     const [modalFactor, setModalFactor] = useState(1);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
+    const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (selectedProductForModal) {
@@ -718,7 +719,16 @@ function CreateOrderContent() {
             modalUnit,
             modalFactor
         );
+        closeProductModal();
+    };
+
+    const closeProductModal = () => {
         setSelectedProductForModal(null);
+        setTimeout(() => {
+            if (productSearchInputRef.current) {
+                productSearchInputRef.current.focus();
+            }
+        }, 80);
     };
 
     const updateQty = (index: number, newQty: any) => {
@@ -2260,6 +2270,7 @@ function CreateOrderContent() {
                             <div style={{ marginBottom: '2rem', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Agregar Productos Manualmente</label>
                             <input
+                                ref={productSearchInputRef}
                                 type="text"
                                 placeholder="Escribe para buscar (ej: Tomate)..."
                                 value={productSearch} 
@@ -2719,7 +2730,7 @@ function CreateOrderContent() {
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 1000, backdropFilter: 'blur(3px)'
-                    }} onClick={() => setSelectedProductForModal(null)}>
+                    }} onClick={() => closeProductModal()}>
 
                         <div
                             style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
@@ -2983,7 +2994,7 @@ function CreateOrderContent() {
                                 <button
                                     type="button"
                                     tabIndex={-1}
-                                    onClick={() => setSelectedProductForModal(null)}
+                                    onClick={() => closeProductModal()}
                                     style={{ width: '120px', padding: '0.65rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '0.9rem', color: '#6B7280', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
                                     onFocus={(e) => {
                                         e.target.style.borderColor = '#3B82F6';
