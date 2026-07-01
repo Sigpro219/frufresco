@@ -176,6 +176,91 @@ export default function OrderLoadingPage() {
     // Variant Selection Modal States (For products with options)
     const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
 
+    // Contract / pricing model states
+    const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+    const [activePricingModel, setActivePricingModel] = useState<any>(null);
+    const [isB2CDefault, setIsB2CDefault] = useState(false);
+    const [isContractExpired, setIsContractExpired] = useState(false);
+
+    useEffect(() => {
+        async function resolveContract() {
+            if (!selectedOrder) {
+                setContractPrices({});
+                setActivePricingModel(null);
+                setIsB2CDefault(false);
+                setIsContractExpired(false);
+                return;
+            }
+
+            const profileObj = selectedOrder.profiles;
+            const modelId = profileObj?.pricing_model_id || null;
+            const deliveryDate = selectedOrder.delivery_date;
+
+            let resolvedModel: any = null;
+            let expired = false;
+            let b2cFallback = false;
+
+            // 1. Fetch current pricing model if defined
+            if (modelId) {
+                const { data: pm } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('id', modelId)
+                    .single();
+                
+                if (pm) {
+                    resolvedModel = pm;
+                    // Validate expiration against deliveryDate
+                    if (deliveryDate) {
+                        const delivery = new Date(deliveryDate);
+                        if (pm.start_date && new Date(pm.start_date) > delivery) {
+                            expired = true;
+                        }
+                        if (pm.end_date && new Date(pm.end_date) < delivery) {
+                            expired = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback to Clientes B2C if no model or if expired
+            if (!resolvedModel || expired) {
+                b2cFallback = true;
+                const { data: b2cModel } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('name', 'Clientes B2C')
+                    .single();
+                
+                if (b2cModel) {
+                    resolvedModel = b2cModel;
+                }
+            }
+
+            setActivePricingModel(resolvedModel);
+            setIsB2CDefault(b2cFallback);
+            setIsContractExpired(expired);
+
+            // 3. Load prices for the resolved model
+            if (resolvedModel) {
+                const { data: prices } = await supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', resolvedModel.id);
+                
+                const map: Record<string, number> = {};
+                prices?.forEach((p: any) => {
+                    map[p.product_id] = p.price;
+                });
+                setContractPrices(map);
+            } else {
+                setContractPrices({});
+            }
+        }
+
+        resolveContract();
+    }, [selectedOrder]);
+
     useEffect(() => {
         let active = true;
 
@@ -184,7 +269,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email)')
+                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
@@ -589,11 +674,12 @@ export default function OrderLoadingPage() {
             };
             setOrderItems(newOrderItems);
         } else {
+            const resolvedPrice = contractPrices[product.id] !== undefined && contractPrices[product.id] !== null ? contractPrices[product.id] : product.base_price;
             const newItem = {
                 order_id: selectedOrder.id,
                 product_id: product.id,
                 quantity: qty,
-                unit_price: product.base_price,
+                unit_price: resolvedPrice,
                 variant_label: variantLabel,
                 selected_options: optionsRaw,
                 products: {
@@ -623,6 +709,14 @@ export default function OrderLoadingPage() {
 
     const handleUpdateOrder = async () => {
         if (!selectedOrder) return;
+
+        // Block Zero Margin / Zero Price
+        const zeroPriceItem = orderItems.find(item => !item.unit_price || parseFloat(item.unit_price.toString()) === 0);
+        if (zeroPriceItem) {
+            alert(`❌ No se puede guardar: El producto "${zeroPriceItem.products?.name || 'Item'}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`);
+            return;
+        }
+
         setUpdateLoading(true);
         console.log('📦 Iniciando actualización del pedido:', selectedOrder.id);
         
@@ -1725,8 +1819,17 @@ export default function OrderLoadingPage() {
                                                                 <div style={{ fontWeight: '700', color: '#1E293B' }}>{prod.name}</div>
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748B' }}>SKU: {prod.sku} | {prod.unit_of_measure}</div>
                                                             </div>
-                                                            <div style={{ fontWeight: '800', color: '#059669' }}>
-                                                                {formatMoney(prod.base_price || 0)}
+                                                            <div style={{ fontWeight: '800', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span>{formatMoney(contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : (prod.base_price || 0))}</span>
+                                                                {contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        {isB2CDefault ? 'B2C' : 'Contrato'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '0.65rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                        ⚠️ Sin Tarifa
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1809,7 +1912,24 @@ export default function OrderLoadingPage() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'right', color: '#475569', fontWeight: '600' }}>
-                                                        {formatMoney(item.unit_price || 0)}
+                                                        {editMode ? (
+                                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${!(item.unit_price) || parseFloat(item.unit_price.toString()) === 0 ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={item.unit_price || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = parseFloat(e.target.value) || 0;
+                                                                        const newOrderItems = [...orderItems];
+                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val, isModified: true };
+                                                                        setOrderItems(newOrderItems);
+                                                                    }}
+                                                                    style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            formatMoney(item.unit_price || 0)
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', color: '#059669', fontSize: '1.125rem' }}>
                                                         {formatMoney((item.unit_price || 0) * item.quantity)}

@@ -219,6 +219,89 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeVariantRow, setActiveVariantRow] = useState<number | null>(null);
   const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
+
+  const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+  const [activePricingModel, setActivePricingModel] = useState<any>(null);
+  const [isB2CDefault, setIsB2CDefault] = useState(false);
+  const [isContractExpired, setIsContractExpired] = useState(false);
+
+  useEffect(() => {
+    async function resolveContract() {
+      if (!selectedDraft) {
+        setContractPrices({});
+        setActivePricingModel(null);
+        setIsB2CDefault(false);
+        setIsContractExpired(false);
+        return;
+      }
+
+      const currentProfile = profiles.find(p => p.id === selectedDraft.profile_id);
+      const modelId = currentProfile?.pricing_model_id || null;
+
+      let resolvedModel: any = null;
+      let expired = false;
+      let b2cFallback = false;
+
+      // 1. Fetch current pricing model if defined
+      if (modelId) {
+        const { data: pm } = await supabase
+          .from('pricing_models')
+          .select('*')
+          .eq('id', modelId)
+          .single();
+        
+        if (pm) {
+          resolvedModel = pm;
+          // Validate expiration against deliveryDate
+          if (deliveryDate) {
+            const delivery = new Date(deliveryDate);
+            if (pm.start_date && new Date(pm.start_date) > delivery) {
+              expired = true;
+            }
+            if (pm.end_date && new Date(pm.end_date) < delivery) {
+              expired = true;
+            }
+          }
+        }
+      }
+
+      // 2. Fallback to Clientes B2C if no model or if expired
+      if (!resolvedModel || expired) {
+        b2cFallback = true;
+        const { data: b2cModel } = await supabase
+          .from('pricing_models')
+          .select('*')
+          .eq('name', 'Clientes B2C')
+          .single();
+        
+        if (b2cModel) {
+          resolvedModel = b2cModel;
+        }
+      }
+
+      setActivePricingModel(resolvedModel);
+      setIsB2CDefault(b2cFallback);
+      setIsContractExpired(expired);
+
+      // 3. Load prices for the resolved model
+      if (resolvedModel) {
+        const { data: prices } = await supabase
+          .from('pricing_model_prices')
+          .select('product_id, price')
+          .eq('model_id', resolvedModel.id);
+        
+        const map: Record<string, number> = {};
+        prices?.forEach((p: any) => {
+          map[p.product_id] = p.price;
+        });
+        setContractPrices(map);
+      } else {
+        setContractPrices({});
+      }
+    }
+
+    resolveContract();
+  }, [selectedDraft, deliveryDate, profiles]);
   useEffect(() => {
     setSelectedRowIndices([]);
   }, [isEditing, selectedDraft?.id]);
@@ -296,6 +379,7 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     fetchAliases();
     fetchGeofence();
     fetchProfiles();
+    fetchPricingData();
 
     const channel = supabase.channel('realtime-drafts')
       .on(
@@ -431,13 +515,69 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department')
+        .select('id, company_name, contact_name, address, nit, role, phone, logistics_data, city, municipality, department, pricing_model_id')
         .eq('is_active', true)
         .order('company_name', { ascending: true });
       if (data) setProfiles(data);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const [pricingModels, setPricingModels] = useState<any[]>([]);
+  const [allModelPrices, setAllModelPrices] = useState<Record<string, Record<string, number>>>({});
+
+  const fetchPricingData = async () => {
+    try {
+      const { data: models } = await supabase.from('pricing_models').select('*');
+      if (models) setPricingModels(models);
+
+      const { data: prices } = await supabase.from('pricing_model_prices').select('*');
+      const map: Record<string, Record<string, number>> = {};
+      prices?.forEach((row: any) => {
+        if (!map[row.model_id]) {
+          map[row.model_id] = {};
+        }
+        map[row.model_id][row.product_id] = row.price;
+      });
+      setAllModelPrices(map);
+    } catch (e) {
+      console.error('Error fetching pricing data:', e);
+    }
+  };
+  const getResolvedPriceForDraft = (draft: any, productId: string) => {
+    const profile = profiles.find(p => p.id === draft.profile_id);
+    const modelId = profile?.pricing_model_id || null;
+
+    let resolvedModelId = modelId;
+    let expired = false;
+
+    // Verify expiration of pricing model
+    if (modelId && pricingModels.length > 0) {
+      const pm = pricingModels.find(m => m.id === modelId);
+      if (pm) {
+        const metadata = getDraftMetadata(draft);
+        const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
+        if (deliveryDateStr) {
+          const delivery = new Date(deliveryDateStr);
+          if (pm.start_date && new Date(pm.start_date) > delivery) expired = true;
+          if (pm.end_date && new Date(pm.end_date) < delivery) expired = true;
+        }
+      }
+    }
+
+    if (!resolvedModelId || expired) {
+      const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
+      resolvedModelId = b2cModel?.id || null;
+    }
+
+    if (resolvedModelId && allModelPrices[resolvedModelId]) {
+      const pr = allModelPrices[resolvedModelId][productId];
+      if (pr !== undefined && pr !== null) return pr;
+    }
+
+    const prod = products.find(p => p.id === productId);
+    return prod?.base_price || 0;
   };
   const handleToggleEdit = async () => {
     if (isEditing) {
@@ -1867,20 +2007,28 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
       let totalAmount = 0;
       let totalWeight = 0;
       const itemsData: any[] = [];
+      let hasZeroPriceItem = false;
+      let zeroPriceItemName = '';
 
-      editableItems.forEach(item => {
+      for (const item of editableItems) {
         if (item.matched_product_id) {
           const prod = products.find(p => p.id === item.matched_product_id);
           if (prod) {
+            const resolvedPrice = contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null ? contractPrices[prod.id] : prod.base_price;
+            if (!resolvedPrice || parseFloat(resolvedPrice.toString()) === 0) {
+              hasZeroPriceItem = true;
+              zeroPriceItemName = prod.name;
+              break;
+            }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
-            totalAmount += prod.base_price * qtyNum;
+            totalAmount += resolvedPrice * qtyNum;
             const w = prod.weight_kg || (prod.unit_of_measure?.toLowerCase() === 'kg' ? 1 : 0);
             totalWeight += qtyNum * w;
 
             itemsData.push({
               product_id: prod.id,
               quantity: qtyNum,
-              unit_price: prod.base_price,
+              unit_price: resolvedPrice,
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: item.observations || null,
               unit: item.unit || prod.unit_of_measure || 'Kg',
@@ -1888,7 +2036,13 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
             });
           }
         }
-      });
+      }
+
+      if (hasZeroPriceItem) {
+        setConfirmingOrder(false);
+        showToast(`❌ Aprobación bloqueada: El producto "${zeroPriceItemName}" no tiene tarifa en contrato ni B2C (precio $0). Por favor asigne precio manualmente antes de aprobar.`, 'error');
+        return;
+      }
 
       // 2. Create the order
       const { data: order, error: orderError } = await supabase
@@ -2055,7 +2209,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
   const totalValue = editableItems.reduce((acc, item) => {
     const matchedProd = products.find(p => p.id === item.matched_product_id);
-    return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+    const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+    return acc + (matchedProd ? (resolvedPrice * (item.quantity || 0)) : 0);
   }, 0);
 
   const hasUnmatchedItems = editableItems.some(item => !item.matched_product_id);
@@ -2556,13 +2711,9 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                   let matchedProd = products.find(p => p.id === item.matched_product_id);
                   if (!matchedProd && !item.matched_product_id && item.originalName) {
                     matchedProd = findMatchedProduct(item.originalName);
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched dynamically to: ${matchedProd ? matchedProd.name : 'NULL'} (Price: ${matchedProd ? matchedProd.base_price : 0})`);
-                  } else if (matchedProd) {
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} matched from DB to: ${matchedProd.name} (Price: ${matchedProd.base_price})`);
-                  } else {
-                    console.log(`[TABLE] Draft ${draft.id} - ${item.originalName} has NO MATCH (matched_product_id: ${item.matched_product_id})`);
                   }
-                  return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                  const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+                  return acc + (resolvedPrice * (item.quantity || 0));
                 }, 0);
 
                 const estimatedWeight = items.reduce((acc: number, item: any) => {
@@ -2805,7 +2956,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           if (!matchedProd && !item.matched_product_id && item.originalName) {
                             matchedProd = findMatchedProduct(item.originalName);
                           }
-                          return acc + (matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0);
+                          const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+                          return acc + (resolvedPrice * (item.quantity || 0));
                         }, 0);
                         return formatMoney(estimatedTotal);
                       })()}
@@ -3533,7 +3685,8 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                           <>
                             {editableItems.map((item: any, i: number) => {
                               const matchedProd = products.find(p => p.id === item.matched_product_id);
-                              const itemTotal = matchedProd ? ((matchedProd.base_price || 0) * (item.quantity || 0)) : 0;
+                              const resolvedPrice = matchedProd ? (contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? contractPrices[matchedProd.id] : (matchedProd.base_price || 0)) : 0;
+                              const itemTotal = resolvedPrice * (item.quantity || 0);
 
                               return (
                                 <React.Fragment key={i}>
@@ -3829,7 +3982,20 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
                                       />
                                     </td>
                                     <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', color: '#4B5563', fontWeight: 600 }}>
-                                      {matchedProd ? formatMoney(matchedProd.base_price || 0) : '-'}
+                                      {matchedProd ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                          <span>{formatMoney(resolvedPrice)}</span>
+                                          {contractPrices[matchedProd.id] !== undefined && contractPrices[matchedProd.id] !== null ? (
+                                            <span style={{ fontSize: '0.6rem', padding: '1px 3px', borderRadius: '3px', backgroundColor: isB2CDefault ? '#FFE4E6' : '#DBEAFE', color: isB2CDefault ? '#BE123C' : '#1E40AF', fontWeight: 'bold' }}>
+                                              {isB2CDefault ? 'B2C' : 'Contrato'}
+                                            </span>
+                                          ) : (
+                                            <span style={{ fontSize: '0.6rem', padding: '1px 3px', borderRadius: '3px', backgroundColor: '#FEE2E2', color: '#991B1B', fontWeight: 'bold' }}>
+                                              ⚠️ Sin Tarifa
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : '-'}
                                     </td>
                                     <td style={{ padding: '1.2rem 0.5rem', textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '1.1rem' }}>
                                       {matchedProd ? formatMoney(itemTotal) : '-'}
@@ -5389,11 +5555,18 @@ export default function EmailDraftsModule({ onDraftsChange }: EmailDraftsModuleP
 
             {/* Client info summary */}
             <div style={{ backgroundColor: '#F8FAF9', borderRadius: '12px', padding: '1rem', border: '1px solid #E2E8F0', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#4B5563' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1E293B', marginBottom: '0.5rem', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                 <span>CLIENTE DETECTADO</span>
-                <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
-                  {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
-                </span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#E0F2FE' : '#FCE7F3', color: getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? '#0369A1' : '#9D174D', fontWeight: '900' }}>
+                    {getDraftMetadata(selectedDraft).clientType === 'b2b_client' ? 'B2B / HORECA' : 'HOGAR / B2C'}
+                  </span>
+                  {activePricingModel && (
+                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', fontWeight: '900' }}>
+                      🏷️ {isB2CDefault ? 'Tarifa B2C (Defecto)' : `Modelo: ${activePricingModel.name}`}
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem' }}>
                 <div><strong>Nombre:</strong> {selectedDraft.client_detected_name || 'Desconocido'}</div>
