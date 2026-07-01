@@ -44,6 +44,39 @@ function CreateOrderContent() {
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
 
+    // Helpers to format inputs with thousands separator (.) and decimal (,)
+    const formatQuantityDisplay = (qtyStr: string | number | undefined | null): string => {
+        if (qtyStr === undefined || qtyStr === null) return '';
+        // Remove existing dots and convert comma to dot to check validity
+        const clean = qtyStr.toString().replace(/\./g, '').replace(',', '.');
+        const parsed = parseFloat(clean);
+        if (isNaN(parsed)) return qtyStr.toString();
+
+        // Split by decimal comma of the input
+        const parts = qtyStr.toString().replace(/\./g, '').split(',');
+        const integerPart = parts[0];
+        const decimalPart = parts[1];
+
+        // Format integer part with dot for thousands
+        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+    };
+
+    const formatPriceDisplay = (price: number | string | undefined | null): string => {
+        if (price === undefined || price === null || price === '') return '';
+        const clean = price.toString().replace(/\./g, '').replace(',', '.');
+        const parsed = parseFloat(clean);
+        if (isNaN(parsed)) return price.toString();
+
+        const parts = price.toString().replace(/\./g, '').split(',');
+        const integerPart = parts[0];
+        const decimalPart = parts[1];
+
+        const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        return decimalPart !== undefined ? `${formattedInteger},${decimalPart}` : formattedInteger;
+    };
+
     // Data Sources
     const [clients, setClients] = useState<any[]>([]); // B2B Profiles
     const [b2cClients, setB2cClients] = useState<any[]>([]); // B2C Profiles
@@ -641,7 +674,7 @@ function CreateOrderContent() {
 
         // Append picking and delivery notes to variant label
         const notes: string[] = [];
-        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
+        if (exc?.picking_note) notes.push(`Nota: ${exc.picking_note}`);
         if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
         
         if (notes.length > 0) {
@@ -2326,7 +2359,9 @@ function CreateOrderContent() {
                                                             )}
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                                                            <span>SKU: {item.product.sku || 'N/A'}</span>
+                                                            <span title={item.product.id} style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '600' }}>
+                                                                ID: {item.product.id ? item.product.id.substring(0, 8) : 'N/A'}
+                                                            </span>
                                                             <span>•</span>
                                                             <button
                                                                 type="button"
@@ -2355,25 +2390,25 @@ function CreateOrderContent() {
 
                                                     {/* Cantidad Stepper */}
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC', height: '36px' }}>
                                                             <button
                                                                 onClick={() => {
                                                                     const nextQty = Math.max(0.5, parseFloat(item.qty.toString().replace(',', '.')) - 0.5);
                                                                     setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
+                                                                style={{ width: '32px', height: '100%', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
                                                             >−</button>
                                                             <input
                                                                 type="text"
                                                                 inputMode="decimal"
-                                                                value={item.qty.toString().replace('.', ',')}
+                                                                value={formatQuantityDisplay(item.qty)}
                                                                 onKeyDown={(e) => {
                                                                     if (e.key === '.') {
                                                                         e.preventDefault();
                                                                         const input = e.target as HTMLInputElement;
                                                                         const start = input.selectionStart || 0;
                                                                         const end = input.selectionEnd || 0;
-                                                                        const val = input.value;
+                                                                        const val = input.value.replace(/\./g, '');
                                                                         if (!val.includes(',')) {
                                                                             const newVal = val.substring(0, start) + ',' + val.substring(end);
                                                                             setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: newVal, originalQty: parseFloat(newVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
@@ -2381,21 +2416,23 @@ function CreateOrderContent() {
                                                                     }
                                                                 }}
                                                                 onChange={(e) => {
-                                                                    let val = e.target.value.replace(/[^0-9,]/g, '');
-                                                                    const parts = val.split(',');
+                                                                    let val = e.target.value.replace(/[^0-9,.]/g, '');
+                                                                    const rawVal = val.replace(/\./g, '');
+                                                                    const parts = rawVal.split(',');
+                                                                    let cleanVal = rawVal;
                                                                     if (parts.length > 2) {
-                                                                        val = parts[0] + ',' + parts.slice(1).join('');
+                                                                        cleanVal = parts[0] + ',' + parts.slice(1).join('');
                                                                     }
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: val, originalQty: parseFloat(val.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: cleanVal, originalQty: parseFloat(cleanVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '85px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
+                                                                style={{ width: '80px', height: '100%', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
                                                             />
                                                             <button
                                                                 onClick={() => {
                                                                     const nextQty = parseFloat(item.qty.toString().replace(',', '.')) + 0.5;
                                                                     setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
                                                                 }}
-                                                                style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
+                                                                style={{ width: '32px', height: '100%', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
                                                             >+</button>
                                                         </div>
                                                         <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em', minWidth: '35px' }}>
@@ -2405,16 +2442,18 @@ function CreateOrderContent() {
 
                                                     {/* Price Edit Input */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#E2E8F0'}`, borderRadius: '8px', overflow: 'hidden', padding: '0 8px', backgroundColor: 'white', height: '36px', transition: 'all 0.2s' }}>
                                                             <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
                                                             <input
-                                                                type="number"
-                                                                value={item.price || ''}
+                                                                type="text"
+                                                                value={formatPriceDisplay(item.price !== undefined && item.price !== null ? item.price : '')}
                                                                 onChange={(e) => {
-                                                                    const val = parseFloat(e.target.value) || 0;
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: val } : c));
+                                                                    const val = e.target.value.replace(/[^0-9,.]/g, '');
+                                                                    const cleanVal = val.replace(/\./g, '').replace(',', '.');
+                                                                    const parsed = parseFloat(cleanVal) || 0;
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: parsed } : c));
                                                                 }}
-                                                                style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
+                                                                style={{ width: '80px', height: '100%', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', padding: '2px 4px' }}
                                                             />
                                                         </div>
                                                         {isZeroPrice && (
