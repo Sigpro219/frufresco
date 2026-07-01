@@ -481,7 +481,7 @@ export default function OrderLoadingPage() {
                 .select(`
                     *,
                     products (
-                        name, sku, unit_of_measure, weight_kg, image_url
+                        name, sku, accounting_id, unit_of_measure, weight_kg, image_url
                     )
                 `)
                 .eq('order_id', order.id);
@@ -501,7 +501,7 @@ export default function OrderLoadingPage() {
                     const productIds = [...new Set(rawItems.map(i => i.product_id))];
                     const { data: rawProducts, error: prodErr } = await supabase
                         .from('products')
-                        .select('id, name, sku, unit_of_measure, weight_kg, image_url')
+                        .select('id, name, sku, accounting_id, unit_of_measure, weight_kg, image_url')
                         .in('id', productIds);
                     
                     if (!prodErr && rawProducts) {
@@ -556,7 +556,7 @@ export default function OrderLoadingPage() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
                     .or(`name.ilike.%${productSearch}%,sku.ilike.%${productSearch}%`)
                     .limit(8);
                 
@@ -654,7 +654,7 @@ export default function OrderLoadingPage() {
             const fetchAndSubstitute = async () => {
                 const { data: subProduct } = await supabase
                     .from('products')
-                    .select('id, name, sku, base_price, unit_of_measure, weight_kg, options_config, image_url')
+                    .select('id, name, sku, accounting_id, base_price, unit_of_measure, weight_kg, options_config, image_url')
                     .eq('id', exc.substitution_product_id)
                     .single();
                 
@@ -1917,7 +1917,7 @@ export default function OrderLoadingPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ textAlign: 'left', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>SKU</th>
+                                                <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>ID</th>
                                                 <th style={{ padding: '1rem 2rem', ...THEME.typography?.tableHeader }}>PRODUCTO</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'center' }}>CANTIDAD</th>
                                                 <th style={{ padding: '1rem', ...THEME.typography?.tableHeader, textAlign: 'right' }}>PRECIO U.</th>
@@ -1931,19 +1931,41 @@ export default function OrderLoadingPage() {
                                                     borderBottom: '1px solid #F1F5F9',
                                                     backgroundColor: item.isNew ? '#F0F9FF' : 'transparent'
                                                 }}>
-                                                    <td style={{ padding: '1.25rem 2rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#475569', fontWeight: 'bold' }}>
-                                                        {item.products?.sku || '-'}
-                                                    </td>
-                                                    <td style={{ padding: '1.25rem 2rem' }}>
-                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
-                                                            {item.products?.name}
-                                                            {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
-                                                        </div>
-                                                        {item.variant_label && (
-                                                             <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                                                 <Sparkles size={10} strokeWidth={1.5} /> {item.variant_label}
-                                                             </div>
-                                                         )}
+                                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.95rem', color: '#475569', fontWeight: '800' }}>
+                                                         {item.products?.accounting_id || '-'}
+                                                     </td>
+                                                     <td style={{ padding: '1.25rem 2rem' }}>
+                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '1rem' }}>
+                                                             {item.products?.name}
+                                                             {item.isNew && <span style={{ marginLeft: '8px', fontSize: '0.6rem', backgroundColor: '#0EA5E9', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>NUEVO</span>}
+                                                         </div>
+                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                                                             {item.variant_label && (
+                                                                  <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: '700', backgroundColor: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                      <Sparkles size={10} strokeWidth={1.5} /> {(() => {
+                                                                          const cleaned = item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim();
+                                                                          return cleaned;
+                                                                      })()}
+                                                                  </div>
+                                                             )}
+                                                             {(() => {
+                                                                 const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
+                                                                 return (
+                                                                     <>
+                                                                         {exc?.picking_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#D97706', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: '4px', border: '1px solid #FCD34D', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Nota: {exc.picking_note}
+                                                                             </div>
+                                                                         )}
+                                                                         {exc?.delivery_note && (
+                                                                             <div style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.75rem', backgroundColor: '#EEF2FF', padding: '2px 8px', borderRadius: '4px', border: '1px solid #C7D2FE', display: 'inline-flex', alignItems: 'center' }}>
+                                                                                 Entr: {exc.delivery_note}
+                                                                             </div>
+                                                                         )}
+                                                                     </>
+                                                                 );
+                                                             })()}
+                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1.25rem 1rem', textAlign: 'center' }}>
                                                         {editMode ? (
