@@ -415,7 +415,7 @@ function CreateOrderContent() {
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
                 .from('products')
-                .select('id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
+                .select('id, accounting_id, sku, name, base_price, unit_of_measure, image_url, options_config, weight_kg, web_unit, web_conversion_factor')
                 .eq('is_active', true)
                 .order('name');
 
