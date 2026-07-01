@@ -2796,7 +2796,7 @@ function CreateOrderContent() {
                                         }}
                                         style={{
                                             width: '100%',
-                                            padding: '0.8rem',
+                                            padding: '0.7rem 0.8rem',
                                             borderRadius: '10px',
                                             border: '2px solid #E2E8F0',
                                             fontWeight: '700',
@@ -2847,7 +2847,7 @@ function CreateOrderContent() {
                                             }}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.8rem',
+                                                padding: '0.7rem 0.8rem',
                                                 borderRadius: '10px',
                                                 border: '2px solid #E2E8F0',
                                                 fontWeight: '700',
@@ -2855,7 +2855,6 @@ function CreateOrderContent() {
                                                 backgroundColor: '#F9FAFB',
                                                 outline: 'none',
                                                 cursor: 'pointer',
-                                                height: '47px',
                                                 transition: 'all 0.2s ease-in-out'
                                             }}
                                             onFocus={(e) => {
@@ -2882,7 +2881,7 @@ function CreateOrderContent() {
                                             value={selectedProductForModal.unit_of_measure}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.8rem',
+                                                padding: '0.7rem 0.8rem',
                                                 borderRadius: '10px',
                                                 border: '2px solid #E2E8F0',
                                                 fontWeight: '700',
@@ -2890,8 +2889,7 @@ function CreateOrderContent() {
                                                 backgroundColor: '#F3F4F6',
                                                 color: '#4B5563',
                                                 textAlign: 'center',
-                                                outline: 'none',
-                                                height: '47px'
+                                                outline: 'none'
                                             }}
                                         />
                                     )}
