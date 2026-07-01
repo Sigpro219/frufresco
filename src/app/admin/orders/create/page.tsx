@@ -224,6 +224,8 @@ function CreateOrderContent() {
         originalUnit?: string;
         conversion_factor?: number;
         nickname?: string;
+        picking_note?: string;
+        delivery_note?: string;
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -672,16 +674,6 @@ function CreateOrderContent() {
         let finalLabel = variantLabel || '';
         let finalNickname = exc?.nickname || product.name;
 
-        // Append picking and delivery notes to variant label
-        const notes: string[] = [];
-        if (exc?.picking_note) notes.push(`Nota: ${exc.picking_note}`);
-        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
-        
-        if (notes.length > 0) {
-            const notesStr = notes.join(' | ');
-            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
-        }
-
         const resolvedFactor = factor || 1;
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
         const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
@@ -711,7 +703,9 @@ function CreateOrderContent() {
                     conversion_factor: resolvedFactor,
                     variant_label: finalLabel || undefined, 
                     selected_options: optionsRaw || {},
-                    nickname: finalNickname
+                    nickname: finalNickname,
+                    picking_note: exc?.picking_note || undefined,
+                    delivery_note: exc?.delivery_note || undefined
                 }, ...prev];
             }
         });
@@ -2347,6 +2341,16 @@ function CreateOrderContent() {
                                                                     {item.variant_label}
                                                                 </span>
                                                             )}
+                                                            {item.picking_note && (
+                                                                <span style={{ fontWeight: '600', color: '#D97706', fontSize: '0.8em', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FCD34D' }}>
+                                                                    Nota: {item.picking_note}
+                                                                </span>
+                                                            )}
+                                                            {item.delivery_note && (
+                                                                <span style={{ fontWeight: '600', color: '#4F46E5', fontSize: '0.8em', backgroundColor: '#EEF2FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #C7D2FE' }}>
+                                                                    Entr: {item.delivery_note}
+                                                                </span>
+                                                            )}
                                                             {/* Pricing Source Badge */}
                                                             {contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
@@ -2359,8 +2363,8 @@ function CreateOrderContent() {
                                                             )}
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                                                            <span title={item.product.id} style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '600' }}>
-                                                                ID: {item.product.id ? item.product.id.substring(0, 8) : 'N/A'}
+                                                            <span style={{ fontSize: '0.75rem', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E2E8F0', fontWeight: '700' }}>
+                                                                ID: {item.product.accounting_id || 'N/A'}
                                                             </span>
                                                             <span>•</span>
                                                             <button
