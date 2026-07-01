@@ -53,7 +53,7 @@ const translateDetailsKey = (key: string) => {
     if (k === 'value') return 'Valor';
     if (k === 'id') return 'ID';
     if (k === 'sequence_id') return 'Consecutivo de Pedido';
-    if (k === 'total_price') return 'Precio Total';
+    if (k === 'total' || k === 'total_price') return 'Precio Total';
     if (k === 'status') return 'Estado';
     if (k === 'base_price') return 'Precio Base';
     if (k === 'is_active') return '¿Activo?';
@@ -69,7 +69,7 @@ const formatDetailsValue = (key: string, value: any) => {
     const k = key.toLowerCase();
     if (k === 'role') return translateRole(String(value));
     if (k === 'status') return translateStatus(String(value));
-    if (k === 'total_price') return `$${Number(value).toLocaleString('es-CO')}`;
+    if (k === 'total' || k === 'total_price') return `$${Number(value).toLocaleString('es-CO')}`;
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
 };
@@ -218,7 +218,38 @@ export default function AuditLogPage() {
     const [exporting, setExporting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [selectedLog, setSelectedLog] = useState<any | null>(null);
+    const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+    const [auditOrderItems, setAuditOrderItems] = useState<any[]>([]);
     const [systemRoles, setSystemRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (selectedLog && selectedLog.module === 'ORDERS' && selectedLog.details?.id) {
+            setLoadingOrderItems(true);
+            setAuditOrderItems([]);
+            supabase
+                .from('order_items')
+                .select(`
+                    quantity,
+                    unit_price,
+                    variant_label,
+                    products (
+                        name,
+                        unit_of_measure,
+                        accounting_id
+                    )
+                `)
+                .eq('order_id', selectedLog.details.id)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setAuditOrderItems(data);
+                    }
+                    setLoadingOrderItems(false);
+                });
+        } else {
+            setAuditOrderItems([]);
+            setLoadingOrderItems(false);
+        }
+    }, [selectedLog]);
 
     useEffect(() => {
         if (selectedLog) {
@@ -683,6 +714,57 @@ export default function AuditLogPage() {
                                     </div>
                                 </div>
                             )}
+                            
+                            {selectedLog.module === 'ORDERS' && selectedLog.details?.id && (
+                                 <div style={{ borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '0.8rem', marginTop: '0.8rem' }}>
+                                     <strong style={{ color: THEME.colors.textSecondary, display: 'block', marginBottom: '0.6rem' }}>Detalle de Productos en el Pedido:</strong>
+                                     {loadingOrderItems ? (
+                                         <p style={{ color: '#64748B', fontSize: '0.85rem' }}>Cargando productos...</p>
+                                     ) : auditOrderItems.length > 0 ? (
+                                         <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, overflow: 'hidden' }}>
+                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                                 <thead>
+                                                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'left' }}>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700' }}>ID</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700' }}>Producto</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'center' }}>Cantidad</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'right' }}>Precio U.</th>
+                                                         <th style={{ padding: '6px 12px', color: '#475569', fontWeight: '700', textAlign: 'right' }}>Subtotal</th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody>
+                                                     {auditOrderItems.map((item, index) => {
+                                                         const qty = item.quantity || 0;
+                                                         const price = item.unit_price || 0;
+                                                         const prodName = item.products?.name || 'Desconocido';
+                                                         const prodId = item.products?.accounting_id || '-';
+                                                         const unit = item.products?.unit_of_measure || 'Kg';
+                                                         const subtotal = qty * price;
+                                                         return (
+                                                             <tr key={index} style={{ borderBottom: index < auditOrderItems.length - 1 ? `1px solid #F1F5F9` : 'none' }}>
+                                                                 <td style={{ padding: '6px 12px', color: '#475569', fontWeight: 'bold' }}>{prodId}</td>
+                                                                 <td style={{ padding: '6px 12px', color: '#0F172A' }}>
+                                                                     <div style={{ fontWeight: '600' }}>{prodName}</div>
+                                                                     {item.variant_label && (
+                                                                         <span style={{ fontSize: '0.7rem', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '3px', marginTop: '2px', display: 'inline-block' }}>
+                                                                             {item.variant_label.replace(/\s*\((Nota|Entr):[^\)]*\)/g, '').trim()}
+                                                                         </span>
+                                                                     )}
+                                                                 </td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'center', fontWeight: '700' }}>{qty} {unit}</td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'right', color: '#475569' }}>{`$${Number(price).toLocaleString('es-CO')}`}</td>
+                                                                 <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: '700', color: '#059669' }}>{`$${Number(subtotal).toLocaleString('es-CO')}`}</td>
+                                                             </tr>
+                                                         );
+                                                     })}
+                                                 </tbody>
+                                             </table>
+                                         </div>
+                                     ) : (
+                                         <p style={{ color: '#94A3B8', fontSize: '0.85rem', fontStyle: 'italic' }}>Este pedido no contiene productos o ya fue eliminado.</p>
+                                     )}
+                                 </div>
+                             )}
 
                             <div>
                                 <strong style={{ color: THEME.colors.textSecondary }}>Datos del Objeto (JSON original):</strong>
