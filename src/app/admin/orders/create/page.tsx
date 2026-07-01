@@ -81,6 +81,8 @@ function CreateOrderContent() {
         fetchClientExceptions();
     }, [selectedClient]);
 
+    const [focusedProductIndex, setFocusedProductIndex] = useState(-1);
+
     // B2C State
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
@@ -576,6 +578,7 @@ function CreateOrderContent() {
             addToCartDirectly(product, 1, variantLabel, initialOptions);
         }
         setProductSearch('');
+        setFocusedProductIndex(-1);
     };
 
     const addToCartDirectly = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
@@ -1143,6 +1146,27 @@ function CreateOrderContent() {
         (p.name && p.name.toLowerCase().includes(productSearch.toLowerCase())) ||
         (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
     ).slice(0, 10);
+
+    const handleProductSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (filteredProducts.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setFocusedProductIndex(prev => (prev < filteredProducts.length - 1 ? prev + 1 : prev));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setFocusedProductIndex(prev => (prev > 0 ? prev - 1 : 0));
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (focusedProductIndex >= 0 && focusedProductIndex < filteredProducts.length) {
+                e.preventDefault();
+                handleProductClick(filteredProducts[focusedProductIndex]);
+                setFocusedProductIndex(-1);
+            }
+        } else if (e.key === 'Escape') {
+            setProductSearch('');
+            setFocusedProductIndex(-1);
+        }
+    };
 
     const filteredClients = clientSearch.length < 2 ? [] : clients.filter(c =>
         (c.company_name?.toLowerCase() || '').includes(clientSearch.toLowerCase()) ||
@@ -2147,7 +2171,9 @@ function CreateOrderContent() {
                             <input
                                 type="text"
                                 placeholder="Escribe para buscar (ej: Tomate)..."
-                                value={productSearch} onChange={e => setProductSearch(e.target.value)}
+                                value={productSearch} 
+                                onChange={e => { setProductSearch(e.target.value); setFocusedProductIndex(-1); }}
+                                onKeyDown={handleProductSearchKeyDown}
                                 style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: '2px solid #E2E8F0', fontSize: '1.1rem', outline: 'none' }}
                                 onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
                                 onBlur={(e) => e.target.style.borderColor = '#E2E8F0'}
@@ -2159,16 +2185,16 @@ function CreateOrderContent() {
                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
                                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
                                 }}>
-                                    {filteredProducts.map(p => (
+                                    {filteredProducts.map((p, idx) => (
                                         <div
                                             key={p.id}
                                             onClick={() => handleProductClick(p)}
+                                            onMouseEnter={() => setFocusedProductIndex(idx)}
                                             style={{
                                                 padding: '0.8rem 1rem', cursor: 'pointer', borderBottom: '1px solid #F3F4F6',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                             }}
-                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                                         >
                                             <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
