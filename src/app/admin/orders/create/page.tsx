@@ -228,6 +228,7 @@ function CreateOrderContent() {
         picking_note?: string;
         delivery_note?: string;
     }[]>([]);
+    const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
         productName: string;
@@ -711,24 +712,53 @@ function CreateOrderContent() {
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
 
-        addToCartDirectly(
-            selectedProductForModal, 
-            qtyNum, 
-            variantLabel, 
-            selectedOptions,
-            modalUnit,
-            modalFactor
-        );
-        closeProductModal();
+        if (editingCartIndex !== null) {
+            const finalLabel = variantLabel || '';
+            const resolvedFactor = modalFactor || 1;
+            const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+            const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(2));
+
+            setCart(prev => prev.map((c, i) => i === editingCartIndex ? {
+                ...c,
+                qty: baseQty,
+                originalQty: qtyNum,
+                originalUnit: resolvedUnit,
+                conversion_factor: resolvedFactor,
+                variant_label: finalLabel || undefined,
+                selected_options: selectedOptions
+            } : c));
+            closeProductModal();
+        } else {
+            addToCartDirectly(
+                selectedProductForModal, 
+                qtyNum, 
+                variantLabel, 
+                selectedOptions,
+                modalUnit,
+                modalFactor
+            );
+            closeProductModal();
+        }
     };
 
     const closeProductModal = () => {
         setSelectedProductForModal(null);
+        setEditingCartIndex(null);
         setTimeout(() => {
             if (productSearchInputRef.current) {
                 productSearchInputRef.current.focus();
             }
         }, 80);
+    };
+
+    const startEditingCartItem = (idx: number) => {
+        const item = cart[idx];
+        setEditingCartIndex(idx);
+        setSelectedProductForModal(item.product);
+        setModalQuantity(item.originalQty || 1);
+        setModalUnit(item.originalUnit || item.product.unit_of_measure || 'Kg');
+        setModalFactor(item.conversion_factor || 1);
+        setSelectedOptions(item.selected_options || {});
     };
 
     const updateQty = (index: number, newQty: any) => {
@@ -1486,7 +1516,8 @@ function CreateOrderContent() {
                                                 <div style={{
                                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
                                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
+                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
+                                                    maxHeight: '280px', overflowY: 'auto'
                                                 }}>
                                                     {filteredClients.map((c, idx) => (
                                                         <div
@@ -2285,7 +2316,8 @@ function CreateOrderContent() {
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
                                     backgroundColor: 'white', border: '1px solid #E5E7EB', borderRadius: '12px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', marginTop: '0.5rem', overflow: 'hidden'
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.15)', marginTop: '0.5rem',
+                                    maxHeight: '280px', overflowY: 'auto'
                                 }}>
                                     {filteredProducts.map((p, idx) => (
                                         <div
@@ -2319,12 +2351,12 @@ function CreateOrderContent() {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     {/* Table Header */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 80px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         <div>Producto</div>
                                         <div style={{ textAlign: 'center' }}>Cantidad</div>
                                         <div style={{ textAlign: 'right' }}>Precio Unit.</div>
                                         <div style={{ textAlign: 'right' }}>Subtotal</div>
-                                        <div></div>
+                                        <div style={{ textAlign: 'center' }}>Acciones</div>
                                     </div>
 
                                     {cart.map((item, idx) => {
@@ -2336,12 +2368,16 @@ function CreateOrderContent() {
                                         return (
                                             <div key={`${item.product.id}-${idx}`} style={{ backgroundColor: 'white', borderBottom: '1px solid #E5E7EB' }}>
                                                 {/* Main Row */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 80px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem' }}>
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                                             <span>{item.product.name}</span>
                                                             {item.variant_label && (
-                                                                <span style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                <span 
+                                                                    onClick={() => startEditingCartItem(idx)}
+                                                                    style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer' }}
+                                                                    title="Haz clic para editar variaciones"
+                                                                >
                                                                     {item.variant_label}
                                                                 </span>
                                                             )}
@@ -2474,8 +2510,17 @@ function CreateOrderContent() {
                                                         {formatMoney(unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
                                                     </div>
 
-                                                    {/* Delete */}
-                                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                    {/* Actions (Edit and Delete) */}
+                                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
+                                                        <button
+                                                            onClick={() => startEditingCartItem(idx)}
+                                                            style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                                            title="Editar item (variantes, unidad, etc.)"
+                                                        >
+                                                            ✏️
+                                                        </button>
                                                         <button
                                                             onClick={() => removeFromCart(idx)}
                                                             style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
