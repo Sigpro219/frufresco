@@ -2831,7 +2831,12 @@ function CreateOrderContent() {
                                         </label>
                                         <button
                                             type="button"
-                                            onClick={() => setManageConversionsProduct(selectedProductForModal)}
+                                            tabIndex={-1}
+                                            onClick={() => {
+                                                if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
+                                                    setManageConversionsProduct(selectedProductForModal);
+                                                }
+                                            }}
                                             style={{
                                                 background: 'none',
                                                 border: 'none',
