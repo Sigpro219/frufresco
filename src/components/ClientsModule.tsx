@@ -3511,6 +3511,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     // Substitution Search states
     const [subSearchTerm, setSubSearchTerm] = useState('');
     const [showSubResults, setShowSubResults] = useState(false);
+    const [showGuide, setShowGuide] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -3611,6 +3612,71 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                 </header>
 
                 <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
+                    {/* INSTRUCTIVO DE USO */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <button
+                            onClick={() => setShowGuide(!showGuide)}
+                            style={{
+                                background: '#EFF6FF',
+                                border: '1px solid #BFDBFE',
+                                color: '#1D4ED8',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s',
+                                fontFamily: THEME.typography.fontFamilySecondary
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                        >
+                            📖 {showGuide ? 'Ocultar Instructivo de Uso' : 'Ver Instructivo de Uso (Guía Operativa)'}
+                        </button>
+
+                        {showGuide && (
+                            <div style={{
+                                marginTop: '8px',
+                                padding: '1.2rem',
+                                backgroundColor: '#F0F9FF',
+                                border: '1px solid #BAE6FD',
+                                borderRadius: THEME.radius.lg,
+                                fontFamily: THEME.typography.fontFamilySecondary,
+                                fontSize: '0.8rem',
+                                color: '#0369A1',
+                                animation: 'fadeSlideDown 0.15s ease-out'
+                            }}>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' }}>
+                                    Guía de Excepciones y Particularidades del Cliente
+                                </h4>
+                                <p style={{ margin: '0 0 12px 0', lineHeight: '1.4' }}>
+                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en tres tipos de particularidades:
+                                </p>
+                                <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <li>
+                                        <strong>⚙️ Variantes Fijas (Características Físicas):</strong> 
+                                        Si el producto tiene opciones configuradas (ej: Maduración, Calibre), puedes seleccionar la preferencia de este cliente. Al digitar un pedido, el sistema <em>pre-seleccionará automáticamente</em> esta opción.
+                                    </li>
+                                    <li>
+                                        <strong>🔄 Productos de Reemplazo (Sustitución):</strong> 
+                                        Define qué producto alternativo ofrecer si el original no está disponible. Al agregar el producto original, el sistema <em>propondrá y permitirá cambiarlo</em> de inmediato con un clic.
+                                    </li>
+                                    <li>
+                                        <strong>📦 Notas Logísticas y Alias de Facturación:</strong>
+                                        <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
+                                            <li><u>Nota de Picking (Bodega):</u> Indicaciones de empaque y preparación visibles para el alistador en bodega (ej: <em>Bolsa microperforada</em>).</li>
+                                            <li><u>Nota de Despacho (Conductor):</u> Instrucciones de entrega para el transportador (ej: <em>Recibir canastillas vacías</em>).</li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+
                     {!readOnly && !isAdding && (
                         <button 
                             onClick={() => setIsAdding(true)}
