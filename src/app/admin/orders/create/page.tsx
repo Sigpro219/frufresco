@@ -169,22 +169,12 @@ function CreateOrderContent() {
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [modalUnit, setModalUnit] = useState('Kg');
     const [modalFactor, setModalFactor] = useState(1);
+    const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (selectedProductForModal) {
-            setModalQuantity('1');
-
-            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
-            if (hasWebUnit) {
-                setModalUnit(selectedProductForModal.web_unit);
-                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
-            } else {
-                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
-                setModalFactor(1);
-            }
-
             // Re-fetch latest conversions for this product to prevent stale cache
             supabase
                 .from('product_conversions')
@@ -211,8 +201,24 @@ function CreateOrderContent() {
                     }
                 }
             }, 80);
+
+            // Only reset modal states to defaults if we are NOT in editing mode!
+            if (editingCartIndex !== null) {
+                return;
+            }
+
+            setModalQuantity('1');
+
+            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+            if (hasWebUnit) {
+                setModalUnit(selectedProductForModal.web_unit);
+                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
+            } else {
+                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
+                setModalFactor(1);
+            }
         }
-    }, [selectedProductForModal]);
+    }, [selectedProductForModal, editingCartIndex]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
@@ -228,7 +234,6 @@ function CreateOrderContent() {
         picking_note?: string;
         delivery_note?: string;
     }[]>([]);
-    const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
         productName: string;
