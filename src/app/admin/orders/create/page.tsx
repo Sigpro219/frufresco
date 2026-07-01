@@ -2694,102 +2694,122 @@ function CreateOrderContent() {
                                 </div>
                             ))}
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem', margin: '2rem 0' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setModalQuantity(prev => {
-                                        const cur = parseFloat(String(prev).replace(',', '.')) || 1;
-                                        return String(Math.max(1, cur - 1));
-                                    })}
-                                    style={{ width: '44px', height: '44px', borderRadius: '50%', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '1.4rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >−</button>
-                                
-                                <input
-                                    id="modal-qty-input"
-                                    type="text"
-                                    value={modalQuantity}
-                                    onChange={(e) => {
-                                        const val = e.target.value.replace(',', '.');
-                                        setModalQuantity(val);
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            confirmModalAdd();
-                                        }
-                                    }}
-                                    style={{
-                                        width: '100px',
-                                        padding: '0.7rem',
-                                        borderRadius: '10px',
-                                        border: '2px solid #E2E8F0',
-                                        fontWeight: '800',
-                                        fontSize: '1.4rem',
-                                        textAlign: 'center',
-                                        outline: 'none'
-                                    }}
-                                    onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
-                                    onBlur={(e) => {
-                                        e.target.style.borderColor = '#E2E8F0';
-                                        const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
-                                        if (isNaN(parsed) || parsed <= 0) {
-                                            setModalQuantity('1');
-                                        } else {
-                                            setModalQuantity(String(parsed));
-                                        }
-                                    }}
-                                />
-
-                                {itemConversions.length > 0 ? (
-                                    <select
-                                        id="modal-unit-select"
-                                        value={modalUnit}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Cantidad
+                                    </label>
+                                    <input
+                                        id="modal-qty-input"
+                                        type="text"
+                                        value={modalQuantity}
                                         onChange={(e) => {
-                                            const selected = e.target.value;
-                                            setModalUnit(selected);
-                                            if (selected === selectedProductForModal.unit_of_measure) {
-                                                setModalFactor(1);
-                                            } else {
-                                                const conv = itemConversions.find(c => c.from_unit === selected);
-                                                if (conv) {
-                                                    setModalFactor(parseFloat(conv.conversion_factor) || 1);
+                                            const val = e.target.value.replace(',', '.');
+                                            setModalQuantity(val);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const unitSel = document.getElementById('modal-unit-select');
+                                                if (unitSel) {
+                                                    unitSel.focus();
+                                                } else {
+                                                    confirmModalAdd();
                                                 }
                                             }
                                         }}
                                         style={{
-                                            padding: '0.7rem 0.8rem',
+                                            width: '100%',
+                                            padding: '0.8rem',
                                             borderRadius: '10px',
                                             border: '2px solid #E2E8F0',
-                                            fontWeight: '700',
-                                            fontSize: '1.1rem',
-                                            backgroundColor: '#F9FAFB',
-                                            outline: 'none',
-                                            cursor: 'pointer'
+                                            fontWeight: '800',
+                                            fontSize: '1.2rem',
+                                            textAlign: 'center',
+                                            outline: 'none'
                                         }}
-                                    >
-                                        <option value={selectedProductForModal.unit_of_measure}>
-                                            {selectedProductForModal.unit_of_measure} (Base)
-                                        </option>
-                                        {itemConversions.map(c => (
-                                            <option key={c.id} value={c.from_unit}>
-                                                {c.from_unit} ({c.conversion_factor} {c.to_unit})
-                                            </option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#4B5563', minWidth: '40px' }}>
-                                        {selectedProductForModal.unit_of_measure}
-                                    </span>
-                                )}
+                                        onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = '#E2E8F0';
+                                            const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
+                                            if (isNaN(parsed) || parsed <= 0) {
+                                                setModalQuantity('1');
+                                            } else {
+                                                setModalQuantity(String(parsed));
+                                            }
+                                        }}
+                                    />
+                                </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setModalQuantity(prev => {
-                                        const cur = parseFloat(String(prev).replace(',', '.')) || 0;
-                                        return String(cur + 1);
-                                    })}
-                                    style={{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', backgroundColor: '#10B981', color: 'white', fontSize: '1.4rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >+</button>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Unidad de Medida
+                                    </label>
+                                    {itemConversions.length > 0 ? (
+                                        <select
+                                            id="modal-unit-select"
+                                            value={modalUnit}
+                                            onChange={(e) => {
+                                                const selected = e.target.value;
+                                                setModalUnit(selected);
+                                                if (selected === selectedProductForModal.unit_of_measure) {
+                                                    setModalFactor(1);
+                                                } else {
+                                                    const conv = itemConversions.find(c => c.from_unit === selected);
+                                                    if (conv) {
+                                                        setModalFactor(parseFloat(conv.conversion_factor) || 1);
+                                                    }
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    confirmModalAdd();
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                backgroundColor: '#F9FAFB',
+                                                outline: 'none',
+                                                cursor: 'pointer',
+                                                height: '47px'
+                                            }}
+                                        >
+                                            <option value={selectedProductForModal.unit_of_measure}>
+                                                {selectedProductForModal.unit_of_measure} (Base)
+                                            </option>
+                                            {itemConversions.map(c => (
+                                                <option key={c.id} value={c.from_unit}>
+                                                    {c.from_unit} ({c.conversion_factor} {c.to_unit})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            readOnly
+                                            type="text"
+                                            value={selectedProductForModal.unit_of_measure}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.8rem',
+                                                borderRadius: '10px',
+                                                border: '2px solid #E2E8F0',
+                                                fontWeight: '700',
+                                                fontSize: '1.1rem',
+                                                backgroundColor: '#F3F4F6',
+                                                color: '#4B5563',
+                                                textAlign: 'center',
+                                                outline: 'none',
+                                                height: '47px'
+                                            }}
+                                        />
+                                    )}
+                                </div>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
