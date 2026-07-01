@@ -213,11 +213,13 @@ function CreateOrderContent() {
                     resolvedModel = pm;
                     // Validate expiration against deliveryDate
                     if (deliveryDate) {
-                        const delivery = new Date(deliveryDate);
-                        if (pm.start_date && new Date(pm.start_date) > delivery) {
+                        const delivery = deliveryDate.split('T')[0];
+                        const start = pm.start_date?.split('T')[0];
+                        const end = pm.end_date?.split('T')[0];
+                        if (start && start > delivery) {
                             expired = true;
                         }
-                        if (pm.end_date && new Date(pm.end_date) < delivery) {
+                        if (end && end < delivery) {
                             expired = true;
                         }
                     }
