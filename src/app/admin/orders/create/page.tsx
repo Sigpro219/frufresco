@@ -649,15 +649,8 @@ function CreateOrderContent() {
         }
         setSelectedOptions(initialOptions);
 
-        // Check if product has variants
-        if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
-            setSelectedProductForModal(product);
-        } else {
-            const hasOptions = Object.keys(initialOptions).length > 0;
-            const optValues = Object.values(initialOptions).filter(v => v);
-            const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
-            addToCartDirectly(product, 1, variantLabel, initialOptions);
-        }
+        // Always open the product modal to specify quantity, unit, or options
+        setSelectedProductForModal(product);
         setProductSearch('');
         setFocusedProductIndex(-1);
     };
@@ -2771,7 +2764,11 @@ function CreateOrderContent() {
                                 </div>
                             )}
 
-                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                                {selectedProductForModal.options_config && selectedProductForModal.options_config.length > 0
+                                    ? 'Personaliza tu producto:'
+                                    : 'Especifica la cantidad y unidad de medida:'}
+                            </p>
 
                             {/* RENDER OPTIONS DYNAMICALLY */}
                             {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any, index: number) => (
