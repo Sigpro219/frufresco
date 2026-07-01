@@ -150,6 +150,20 @@ function CreateOrderContent() {
                 setModalFactor(1);
             }
 
+            // Re-fetch latest conversions for this product to prevent stale cache
+            supabase
+                .from('product_conversions')
+                .select('*')
+                .eq('product_id', selectedProductForModal.id)
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        setConversions(prev => {
+                            const filtered = prev.filter(c => c.product_id !== selectedProductForModal.id);
+                            return [...filtered, ...data];
+                        });
+                    }
+                });
+
             // Auto-focus the first select or the quantity input
             setTimeout(() => {
                 if (firstSelectRef.current) {
@@ -2785,8 +2799,8 @@ function CreateOrderContent() {
                                             padding: '0.8rem',
                                             borderRadius: '10px',
                                             border: '2px solid #E2E8F0',
-                                            fontWeight: '800',
-                                            fontSize: '1.2rem',
+                                            fontWeight: '700',
+                                            fontSize: '1.1rem',
                                             textAlign: 'center',
                                             outline: 'none',
                                             transition: 'all 0.2s ease-in-out'
