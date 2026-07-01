@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
@@ -131,8 +131,32 @@ function CreateOrderContent() {
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
-    const [modalQuantity, setModalQuantity] = useState(1);
+    const [modalQuantity, setModalQuantity] = useState<string | number>(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+    const [modalUnit, setModalUnit] = useState('Kg');
+    const [modalFactor, setModalFactor] = useState(1);
+    const firstSelectRef = useRef<HTMLSelectElement | null>(null);
+
+    useEffect(() => {
+        if (selectedProductForModal) {
+            setModalQuantity('1');
+            setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
+            setModalFactor(1);
+
+            // Auto-focus the first select or the quantity input
+            setTimeout(() => {
+                if (firstSelectRef.current) {
+                    firstSelectRef.current.focus();
+                } else {
+                    const qtyInput = document.getElementById('modal-qty-input');
+                    if (qtyInput) {
+                        qtyInput.focus();
+                        (qtyInput as HTMLInputElement).select();
+                    }
+                }
+            }, 80);
+        }
+    }, [selectedProductForModal]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
@@ -581,7 +605,14 @@ function CreateOrderContent() {
         setFocusedProductIndex(-1);
     };
 
-    const addToCartDirectly = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
+    const addToCartDirectly = (
+        product: any, 
+        qty: number, 
+        variantLabel?: string, 
+        optionsRaw?: any,
+        unit?: string,
+        factor?: number
+    ) => {
         const exc = clientExceptions.find(e => e.product_id === product.id);
         let finalLabel = variantLabel || '';
         let finalNickname = exc?.nickname || product.name;
@@ -596,9 +627,13 @@ function CreateOrderContent() {
             finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
         }
 
+        const resolvedFactor = factor || 1;
+        const resolvedUnit = unit || product.unit_of_measure || 'Kg';
+        const baseQty = parseFloat((qty * resolvedFactor).toFixed(2));
+
         setCart(prev => {
             const existingIndex = prev.findIndex(item =>
-                item.product.id === product.id && item.variant_label === finalLabel
+                item.product.id === product.id && item.variant_label === finalLabel && item.originalUnit === resolvedUnit
             );
 
             const resolvedPrice = contractPrices[product.id] || 0;
@@ -606,19 +641,19 @@ function CreateOrderContent() {
             if (existingIndex >= 0) {
                 const newCart = [...prev];
                 const item = { ...newCart[existingIndex] };
-                item.qty = parseFloat((parseFloat(item.qty || 0) + qty).toFixed(2));
-                item.originalQty = parseFloat((parseFloat(item.originalQty || item.qty || 0) + qty).toFixed(2));
+                item.originalQty = parseFloat(((item.originalQty || 0) + qty).toFixed(2));
+                item.qty = parseFloat((item.originalQty * resolvedFactor).toFixed(2));
                 
                 const filteredCart = newCart.filter((_, i) => i !== existingIndex);
                 return [item, ...filteredCart];
             } else {
                 return [{ 
                     product, 
-                    qty, 
+                    qty: baseQty, 
                     price: resolvedPrice,
                     originalQty: qty,
-                    originalUnit: product.unit_of_measure || 'Kg',
-                    conversion_factor: 1,
+                    originalUnit: resolvedUnit,
+                    conversion_factor: resolvedFactor,
                     variant_label: finalLabel || undefined, 
                     selected_options: optionsRaw || {},
                     nickname: finalNickname
@@ -631,7 +666,16 @@ function CreateOrderContent() {
         if (!selectedProductForModal) return;
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
-        addToCartDirectly(selectedProductForModal, modalQuantity, variantLabel, selectedOptions);
+        const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
+
+        addToCartDirectly(
+            selectedProductForModal, 
+            qtyNum, 
+            variantLabel, 
+            selectedOptions,
+            modalUnit,
+            modalFactor
+        );
         setSelectedProductForModal(null);
     };
 
@@ -2556,76 +2600,218 @@ function CreateOrderContent() {
             </div>
 
             {/* --- VARIANT SELECTION MODAL --- */}
-            {selectedProductForModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 1000, backdropFilter: 'blur(3px)'
-                }} onClick={() => setSelectedProductForModal(null)}>
+            {selectedProductForModal && (() => {
+                const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
+                const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
 
-                    <div
-                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center' }}
-                        onClick={e => e.stopPropagation()} // Prevent close
-                    >
-                        {selectedProductForModal.image_url && (
-                            <img
-                                src={selectedProductForModal.image_url}
-                                style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
-                            />
-                        )}
-                        <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.5rem' }}>{selectedProductForModal.name}</h3>
-                        <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+                const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (index < totalOptions - 1) {
+                            const nextSelect = document.getElementById(`modal-select-${index + 1}`);
+                            if (nextSelect) (nextSelect as HTMLElement).focus();
+                        } else {
+                            const qtyInput = document.getElementById('modal-qty-input');
+                            if (qtyInput) {
+                                (qtyInput as HTMLElement).focus();
+                                (qtyInput as HTMLInputElement).select();
+                            }
+                        }
+                    }
+                };
 
-                        {/* RENDER OPTIONS DYNAMICALLY */}
-                        {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any) => (
-                            <div key={opt.name} style={{ marginBottom: '1rem', textAlign: 'left' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#4B5563', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
-                                    {opt.name}
-                                </label>
-                                <select
-                                    value={selectedOptions[opt.name] || ''}
-                                    onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '0.95rem', backgroundColor: '#F9FAFB' }}
-                                >
-                                    <option value="">Seleccionar {opt.name}...</option>
-                                    {opt.values?.map((val: string) => (
-                                        <option key={val} value={val}>{val}</option>
-                                    ))}
-                                </select>
+                return (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1000, backdropFilter: 'blur(3px)'
+                    }} onClick={() => setSelectedProductForModal(null)}>
+
+                        <div
+                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '560px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            onClick={e => e.stopPropagation()} // Prevent close
+                        >
+                            {selectedProductForModal.image_url && (
+                                <img
+                                    src={selectedProductForModal.image_url}
+                                    style={{ width: '100px', height: '100px', borderRadius: '16px', objectFit: 'cover', marginBottom: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                />
+                            )}
+                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '0.3rem', color: '#111827' }}>{selectedProductForModal.name}</h3>
+                            
+                            {/* CLIENT CUSTOM REQUIREMENT INFO BOX */}
+                            {exc && (
+                                <div style={{
+                                    backgroundColor: '#FEF3C7',
+                                    border: '1px solid #FCD34D',
+                                    borderRadius: '12px',
+                                    padding: '0.8rem 1.2rem',
+                                    margin: '0.8rem 0 1.2rem 0',
+                                    textAlign: 'left',
+                                    fontSize: '0.8rem',
+                                    color: '#92400E',
+                                    lineHeight: '1.4'
+                                }}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
+                                        📌 Requerimientos del Cliente:
+                                    </div>
+                                    {exc.nickname && exc.nickname !== selectedProductForModal.name && (
+                                        <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
+                                    )}
+                                    {exc.picking_note && (
+                                        <div><strong>Bodega (Picking):</strong> {exc.picking_note}</div>
+                                    )}
+                                    {exc.delivery_note && (
+                                        <div><strong>Despacho (Conductores):</strong> {exc.delivery_note}</div>
+                                    )}
+                                    {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
+                                        <div><strong>Variación Preferida:</strong> {Object.entries(exc.preferred_options).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+                                    )}
+                                </div>
+                            )}
+
+                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+
+                            {/* RENDER OPTIONS DYNAMICALLY */}
+                            {selectedProductForModal.options_config && selectedProductForModal.options_config.map((opt: any, index: number) => (
+                                <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        {opt.name}
+                                    </label>
+                                    <select
+                                        id={`modal-select-${index}`}
+                                        ref={index === 0 ? firstSelectRef : undefined}
+                                        value={selectedOptions[opt.name] || ''}
+                                        onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
+                                        onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForModal.options_config.length)}
+                                        style={{ width: '100%', padding: '0.8rem', border: '2px solid #E2E8F0', borderRadius: '10px', fontSize: '1rem', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                    >
+                                        <option value="">Seleccionar {opt.name}...</option>
+                                        {opt.values?.map((val: string) => (
+                                            <option key={val} value={val}>{val}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ))}
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.8rem', margin: '2rem 0' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setModalQuantity(prev => {
+                                        const cur = parseFloat(String(prev).replace(',', '.')) || 1;
+                                        return String(Math.max(1, cur - 1));
+                                    })}
+                                    style={{ width: '44px', height: '44px', borderRadius: '50%', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '1.4rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >−</button>
+                                
+                                <input
+                                    id="modal-qty-input"
+                                    type="text"
+                                    value={modalQuantity}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(',', '.');
+                                        setModalQuantity(val);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            confirmModalAdd();
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100px',
+                                        padding: '0.7rem',
+                                        borderRadius: '10px',
+                                        border: '2px solid #E2E8F0',
+                                        fontWeight: '800',
+                                        fontSize: '1.4rem',
+                                        textAlign: 'center',
+                                        outline: 'none'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#E2E8F0';
+                                        const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
+                                        if (isNaN(parsed) || parsed <= 0) {
+                                            setModalQuantity('1');
+                                        } else {
+                                            setModalQuantity(String(parsed));
+                                        }
+                                    }}
+                                />
+
+                                {itemConversions.length > 0 ? (
+                                    <select
+                                        id="modal-unit-select"
+                                        value={modalUnit}
+                                        onChange={(e) => {
+                                            const selected = e.target.value;
+                                            setModalUnit(selected);
+                                            if (selected === selectedProductForModal.unit_of_measure) {
+                                                setModalFactor(1);
+                                            } else {
+                                                const conv = itemConversions.find(c => c.from_unit === selected);
+                                                if (conv) {
+                                                    setModalFactor(parseFloat(conv.conversion_factor) || 1);
+                                                }
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '0.7rem 0.8rem',
+                                            borderRadius: '10px',
+                                            border: '2px solid #E2E8F0',
+                                            fontWeight: '700',
+                                            fontSize: '1.1rem',
+                                            backgroundColor: '#F9FAFB',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value={selectedProductForModal.unit_of_measure}>
+                                            {selectedProductForModal.unit_of_measure} (Base)
+                                        </option>
+                                        {itemConversions.map(c => (
+                                            <option key={c.id} value={c.from_unit}>
+                                                {c.from_unit} ({c.conversion_factor} {c.to_unit})
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#4B5563', minWidth: '40px' }}>
+                                        {selectedProductForModal.unit_of_measure}
+                                    </span>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setModalQuantity(prev => {
+                                        const cur = parseFloat(String(prev).replace(',', '.')) || 0;
+                                        return String(cur + 1);
+                                    })}
+                                    style={{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', backgroundColor: '#10B981', color: 'white', fontSize: '1.4rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >+</button>
                             </div>
-                        ))}
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', margin: '2rem 0' }}>
-                            <button
-                                onClick={() => setModalQuantity(Math.max(1, modalQuantity - 1))}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '1.2rem', cursor: 'pointer' }}
-                            >−</button>
-                            <span style={{ fontSize: '1.4rem', fontWeight: '800', minWidth: '60px' }}>
-                                {modalQuantity} {selectedProductForModal.unit_of_measure}
-                            </span>
-                            <button
-                                onClick={() => setModalQuantity(modalQuantity + 1)}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', backgroundColor: '#10B981', color: 'white', fontSize: '1.2rem', cursor: 'pointer' }}
-                            >+</button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <button
-                                onClick={() => setSelectedProductForModal(null)}
-                                style={{ padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', cursor: 'pointer' }}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={confirmModalAdd}
-                                style={{ padding: '0.8rem', borderRadius: '8px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', cursor: 'pointer' }}
-                            >
-                                Agregar
-                            </button>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedProductForModal(null)}
+                                    style={{ padding: '0.9rem', borderRadius: '10px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmModalAdd}
+                                    style={{ padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
+                                >
+                                    Agregar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* MAP PICKER MODAL */}
             {showMapPicker && (
