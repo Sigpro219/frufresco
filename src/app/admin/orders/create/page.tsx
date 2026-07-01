@@ -48,6 +48,12 @@ function CreateOrderContent() {
     const [clients, setClients] = useState<any[]>([]); // B2B Profiles
     const [b2cClients, setB2cClients] = useState<any[]>([]); // B2C Profiles
     const [products, setProducts] = useState<any[]>([]);
+    const [conversions, setConversions] = useState<any[]>([]);
+    const [contractPrices, setContractPrices] = useState<Record<string, number>>({});
+    const [activePricingModel, setActivePricingModel] = useState<any>(null);
+    const [isB2CDefault, setIsB2CDefault] = useState(false);
+    const [isContractExpired, setIsContractExpired] = useState(false);
+    const [activeEquivalenceRow, setActiveEquivalenceRow] = useState<number | null>(null);
 
     // Form State
     const [clientType, setClientType] = useState(searchParams.get('type')?.toUpperCase() === 'B2C' ? 'B2C' : 'B2B');
@@ -109,7 +115,16 @@ function CreateOrderContent() {
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
     // Cart Logic
-    const [cart, setCart] = useState<{ product: any, qty: any, variant_label?: string, selected_options?: any }[]>([]);
+    const [cart, setCart] = useState<{
+        product: any;
+        qty: any;
+        variant_label?: string;
+        selected_options?: any;
+        price?: number;
+        originalQty?: number;
+        originalUnit?: string;
+        conversion_factor?: number;
+    }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
         productName: string;
@@ -166,6 +181,100 @@ function CreateOrderContent() {
         }
     }, [latitude, longitude, b2cGeofence]);
 
+    // Resolve Contract / Pricing Model reactively
+    useEffect(() => {
+        async function resolveContract() {
+            let modelId: string | null = null;
+            let currentProfile: any = null;
+
+            if (clientType === 'B2B' && selectedClient) {
+                currentProfile = clients.find(c => c.id === selectedClient);
+            } else if (clientType === 'B2C' && selectedClientB2C) {
+                currentProfile = b2cClients.find(c => c.id === selectedClientB2C);
+            }
+
+            if (currentProfile) {
+                modelId = currentProfile.pricing_model_id || null;
+            }
+
+            let resolvedModel: any = null;
+            let expired = false;
+            let b2cFallback = false;
+
+            // 1. Fetch current pricing model if defined
+            if (modelId) {
+                const { data: pm } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('id', modelId)
+                    .single();
+                
+                if (pm) {
+                    resolvedModel = pm;
+                    // Validate expiration against deliveryDate
+                    if (deliveryDate) {
+                        const delivery = new Date(deliveryDate);
+                        if (pm.start_date && new Date(pm.start_date) > delivery) {
+                            expired = true;
+                        }
+                        if (pm.end_date && new Date(pm.end_date) < delivery) {
+                            expired = true;
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback to Clientes B2C if no model or if expired
+            if (!resolvedModel || expired) {
+                b2cFallback = true;
+                const { data: b2cModel } = await supabase
+                    .from('pricing_models')
+                    .select('*')
+                    .eq('name', 'Clientes B2C')
+                    .single();
+                
+                if (b2cModel) {
+                    resolvedModel = b2cModel;
+                }
+            }
+
+            setActivePricingModel(resolvedModel);
+            setIsB2CDefault(b2cFallback);
+            setIsContractExpired(expired);
+
+            // 3. Load prices for the resolved model
+            if (resolvedModel) {
+                const { data: prices } = await supabase
+                    .from('pricing_model_prices')
+                    .select('product_id, price')
+                    .eq('model_id', resolvedModel.id);
+                
+                const map: Record<string, number> = {};
+                prices?.forEach((p: any) => {
+                    map[p.product_id] = p.price;
+                });
+                setContractPrices(map);
+            } else {
+                setContractPrices({});
+            }
+        }
+
+        resolveContract();
+    }, [clientType, selectedClient, selectedClientB2C, deliveryDate, clients, b2cClients]);
+
+    // Reactively update prices in cart when contractPrices change
+    useEffect(() => {
+        if (Object.keys(contractPrices).length > 0) {
+            setCart(prev => prev.map(item => {
+                const resolvedPrice = contractPrices[item.product.id] || 0;
+                return {
+                    ...item,
+                    price: resolvedPrice
+                };
+            }));
+        }
+    }, [contractPrices]);
+
     const loadData = async () => {
         try {
             console.log("Iniciando carga de datos Maestro...");
@@ -173,24 +282,31 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id')
                 .eq('role', 'b2b_client')
                 .order('company_name', { ascending: true });
 
             const fetchB2C = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, phone, latitude, longitude, email, city, municipality, delivery_restrictions, geocoding_status, document_type, remission_with_prices')
+                .select('id, company_name, contact_name, nit, address, contact_phone, phone, latitude, longitude, email, city, municipality, delivery_restrictions, geocoding_status, document_type, remission_with_prices, pricing_model_id')
                 .eq('role', 'b2c_client') // Matched with Admin Drivers Core
                 .eq('is_active', true)
                 .order('contact_name', { ascending: true });
 
-            const [resB2B, resB2C] = await Promise.all([fetchB2B, fetchB2C]);
+            const fetchConversions = supabase
+                .from('product_conversions')
+                .select('*');
+
+            const [resB2B, resB2C, resConvs] = await Promise.all([fetchB2B, fetchB2C, fetchConversions]);
 
             if (resB2B.error) console.error("Error B2B:", resB2B.error);
             else if (resB2B.data) setClients(resB2B.data);
 
             if (resB2C.error) console.error("Error B2C:", resB2C.error);
             else if (resB2C.data) setB2cClients(resB2C.data);
+
+            if (resConvs.error) console.error("Error Conversions:", resConvs.error);
+            else if (resConvs.data) setConversions(resConvs.data);
 
             // 2. Productos
             const { data: prods, error: errorProds } = await supabase
@@ -422,17 +538,29 @@ function CreateOrderContent() {
                 item.product.id === product.id && item.variant_label === variantLabel
             );
 
+            const resolvedPrice = contractPrices[product.id] || 0;
+
             if (existingIndex >= 0) {
                 const newCart = [...prev];
                 const item = { ...newCart[existingIndex] };
-                item.qty += qty;
+                item.qty = parseFloat((parseFloat(item.qty || 0) + qty).toFixed(2));
+                item.originalQty = parseFloat((parseFloat(item.originalQty || item.qty || 0) + qty).toFixed(2));
                 
                 // Prepend and remove from old position
                 const filteredCart = newCart.filter((_, i) => i !== existingIndex);
                 return [item, ...filteredCart];
             } else {
                 // Prepend new item
-                return [{ product, qty, variant_label: variantLabel, selected_options: optionsRaw }, ...prev];
+                return [{ 
+                    product, 
+                    qty, 
+                    price: resolvedPrice,
+                    originalQty: qty,
+                    originalUnit: product.unit_of_measure || 'Kg',
+                    conversion_factor: 1,
+                    variant_label: variantLabel, 
+                    selected_options: optionsRaw 
+                }, ...prev];
             }
         });
     };
@@ -446,9 +574,19 @@ function CreateOrderContent() {
     };
 
     const updateQty = (index: number, newQty: any) => {
-        setCart(prev => prev.map((item, i) =>
-            i === index ? { ...item, qty: newQty } : item
-        ));
+        setCart(prev => prev.map((item, i) => {
+            if (i === index) {
+                const qtyVal = parseFloat(newQty.toString().replace(',', '.')) || 0;
+                return {
+                    ...item,
+                    qty: newQty,
+                    originalQty: qtyVal,
+                    conversion_factor: 1,
+                    originalUnit: item.product.unit_of_measure || 'Kg'
+                };
+            }
+            return item;
+        }));
     };
 
     const removeFromCart = (index: number) => {
@@ -466,7 +604,8 @@ function CreateOrderContent() {
     const calculateTotal = () => {
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-            return acc + (item.product.base_price * qtyNum);
+            const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
+            return acc + (unitPrice * qtyNum);
         }, 0);
     };
 
@@ -682,6 +821,12 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
+        // Block Zero Margin / Zero Price
+        const zeroPriceItem = cart.find(item => !item.price || parseFloat(item.price.toString()) === 0);
+        if (zeroPriceItem) {
+            return showToast(`❌ No se puede guardar: El producto "${zeroPriceItem.product.name}" tiene precio $0 (sin tarifa en contrato ni B2C). Por favor ingrese un precio manual.`, 'error');
+        }
+
         // Manual Delivery Validation
         if (isManualDelivery && !manualDeliveryTime) {
             return showToast('Si activas entrega manual, debes especificar la Hora.');
@@ -845,13 +990,16 @@ function CreateOrderContent() {
 
             const itemsData = cart.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
+                const unitPrice = item.price !== undefined && item.price !== null ? item.price : item.product.base_price;
                 return {
                     order_id: order.id,
                     product_id: item.product.id,
                     quantity: qtyNum,
-                    unit_price: item.product.base_price,
+                    unit_price: unitPrice,
                     nickname: item.variant_label || null,
-                    variant_label: item.variant_label || null
+                    variant_label: item.variant_label || null,
+                    unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
+                    selected_options: item.selected_options || {}
                 };
             });
 
@@ -895,7 +1043,7 @@ function CreateOrderContent() {
                 console.log(`[Outbound Mail] Enqueueing confirmation email to ${customerEmail}`);
                 const formattedItems = cart.map(item => {
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                    const unitPrice = item.product.base_price || 0;
+                    const unitPrice = item.price !== undefined && item.price !== null ? item.price : (item.product.base_price || 0);
                     return {
                         name: item.product.name + (item.variant_label ? ` (${item.variant_label})` : ''),
                         quantity: qtyNum,
@@ -1043,6 +1191,25 @@ function CreateOrderContent() {
                                                     </div>
                                                     <div style={{ fontWeight: '900', color: '#14532D', fontSize: '1.2rem', lineHeight: '1.2' }}>
                                                         {getSelectedClientDetails()?.company_name}
+                                                        {activePricingModel && (
+                                                            <div style={{
+                                                                marginTop: '0.5rem',
+                                                                padding: '0.35rem 0.65rem',
+                                                                borderRadius: '8px',
+                                                                backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE',
+                                                                border: `1px solid ${isB2CDefault ? '#FED7AA' : '#BAE6FD'}`,
+                                                                color: isB2CDefault ? '#C2410C' : '#0369A1',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 'bold',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                width: 'fit-content'
+                                                            }}>
+                                                                <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {getSelectedClientDetails()?.parent_id && (
                                                         <div style={{ fontSize: '0.85rem', color: '#15803D', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1206,6 +1373,25 @@ function CreateOrderContent() {
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ fontWeight: '700', color: '#1E40AF', fontSize: '1.1rem' }}>
                                                             {getSelectedB2CDetails()?.contact_name || getSelectedB2CDetails()?.company_name}
+                                                            {activePricingModel && (
+                                                                <div style={{
+                                                                    marginTop: '0.25rem',
+                                                                    padding: '0.2rem 0.5rem',
+                                                                    borderRadius: '6px',
+                                                                    backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE',
+                                                                    border: `1px solid ${isB2CDefault ? '#FED7AA' : '#BAE6FD'}`,
+                                                                    color: isB2CDefault ? '#C2410C' : '#0369A1',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    width: 'fit-content'
+                                                                }}>
+                                                                    <span>🏷️ {isB2CDefault ? 'Tarifa B2C (Por Defecto)' : `Modelo: ${activePricingModel.name}`}</span>
+                                                                    {isContractExpired && <span style={{ color: '#DC2626' }}>(Contrato Expirado)</span>}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
                                                             <div style={{ color: '#1E3A8A' }}>
@@ -1946,7 +2132,7 @@ function CreateOrderContent() {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: '#E5E7EB', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }}>
                                     {/* Table Header */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 120px 100px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', padding: '0.8rem 1rem', backgroundColor: '#F8FAFC', color: '#64748B', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         <div>Producto</div>
                                         <div style={{ textAlign: 'center' }}>Cantidad</div>
                                         <div style={{ textAlign: 'right' }}>Precio Unit.</div>
@@ -1954,87 +2140,283 @@ function CreateOrderContent() {
                                         <div></div>
                                     </div>
 
-                                    {cart.map((item, idx) => (
-                                        <div key={`${item.product.id}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr 190px 120px 100px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem', backgroundColor: 'white' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827' }}>
-                                                    {item.product.name}
-                                                    {item.variant_label && (
-                                                        <span style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', marginLeft: '6px', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px' }}>
-                                                            {item.variant_label}
-                                                        </span>
-                                                    )}
+                                    {cart.map((item, idx) => {
+                                        const hasPredefined = conversions.some(c => c.product_id === item.product.id);
+                                        const itemConversions = conversions.filter(c => c.product_id === item.product.id);
+                                        const unitPrice = item.price !== undefined && item.price !== null ? item.price : 0;
+                                        const isZeroPrice = parseFloat(unitPrice.toString()) === 0;
+
+                                        return (
+                                            <div key={`${item.product.id}-${idx}`} style={{ backgroundColor: 'white', borderBottom: '1px solid #E5E7EB' }}>
+                                                {/* Main Row */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px 140px 110px 50px', gap: '1rem', alignItems: 'center', padding: '0.8rem 1rem' }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#111827', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                                            <span>{item.product.name}</span>
+                                                            {item.variant_label && (
+                                                                <span style={{ fontWeight: '500', color: '#0891B2', fontSize: '0.8em', backgroundColor: '#ECFEFF', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                    {item.variant_label}
+                                                                </span>
+                                                            )}
+                                                            {/* Pricing Source Badge */}
+                                                            {contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null ? (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: isB2CDefault ? '#FFF7ED' : '#E0F2FE', color: isB2CDefault ? '#C2410C' : '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    {isB2CDefault ? 'Tarifa B2C (Defecto)' : 'Tarifa Contrato'}
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.75rem', backgroundColor: '#FEE2E2', color: '#B91C1C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                                    ⚠️ Sin Precio
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                                                            <span>SKU: {item.product.sku || 'N/A'}</span>
+                                                            <span>•</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveEquivalenceRow(activeEquivalenceRow === idx ? null : idx)}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    border: 'none',
+                                                                    backgroundColor: hasPredefined ? '#E8F5E9' : '#FFF9C4',
+                                                                    color: hasPredefined ? '#2E7D32' : '#F57F17',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold',
+                                                                    transition: 'opacity 0.2s'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                                                                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                                                            >
+                                                                ⚖️ Conversión {item.originalUnit && `(${item.originalQty} ${item.originalUnit})`}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Cantidad Stepper */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const nextQty = Math.max(0.5, parseFloat(item.qty.toString().replace(',', '.')) - 0.5);
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                }}
+                                                                style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
+                                                            >−</button>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={item.qty.toString().replace('.', ',')}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === '.') {
+                                                                        e.preventDefault();
+                                                                        const input = e.target as HTMLInputElement;
+                                                                        const start = input.selectionStart || 0;
+                                                                        const end = input.selectionEnd || 0;
+                                                                        const val = input.value;
+                                                                        if (!val.includes(',')) {
+                                                                            const newVal = val.substring(0, start) + ',' + val.substring(end);
+                                                                            setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: newVal, originalQty: parseFloat(newVal.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                onChange={(e) => {
+                                                                    let val = e.target.value.replace(/[^0-9,]/g, '');
+                                                                    const parts = val.split(',');
+                                                                    if (parts.length > 2) {
+                                                                        val = parts[0] + ',' + parts.slice(1).join('');
+                                                                    }
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: val, originalQty: parseFloat(val.replace(',', '.')) || 0, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                }}
+                                                                style={{ width: '85px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const nextQty = parseFloat(item.qty.toString().replace(',', '.')) + 0.5;
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, qty: nextQty, originalQty: nextQty, conversion_factor: 1, originalUnit: item.product.unit_of_measure || 'Kg' } : c));
+                                                                }}
+                                                                style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
+                                                            >+</button>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em', minWidth: '35px' }}>
+                                                            {item.product.unit_of_measure?.toUpperCase() || 'UND'}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Price Edit Input */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${isZeroPrice ? '#EF4444' : '#CBD5E1'}`, borderRadius: '6px', overflow: 'hidden', padding: '2px 4px', backgroundColor: 'white' }}>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
+                                                            <input
+                                                                type="number"
+                                                                value={item.price || ''}
+                                                                onChange={(e) => {
+                                                                    const val = parseFloat(e.target.value) || 0;
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: val } : c));
+                                                                }}
+                                                                style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}
+                                                            />
+                                                        </div>
+                                                        {isZeroPrice && (
+                                                            <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 'bold' }}>⚠️ Asignar Precio</span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Subtotal */}
+                                                    <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
+                                                        {formatMoney(unitPrice * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
+                                                    </div>
+
+                                                    {/* Delete */}
+                                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => removeFromCart(idx)}
+                                                            style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FECACA'}
+                                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                                                            title="Eliminar item"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>SKU: {item.product.sku || 'N/A'}</div>
-                                            </div>
 
-                                            {/* STEPPER CONTROL + UoM */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
-                                                    <button
-                                                        onClick={() => updateQty(idx, Math.max(0.5, item.qty - 0.5))}
-                                                        style={{ width: '28px', height: '28px', border: 'none', borderRight: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}
-                                                    >−</button>
-                                                    <input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={item.qty.toString().replace('.', ',')}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === '.') {
-                                                                e.preventDefault();
-                                                                const input = e.target as HTMLInputElement;
-                                                                const start = input.selectionStart || 0;
-                                                                const end = input.selectionEnd || 0;
-                                                                const val = input.value;
-                                                                // Si no hay coma, la ponemos. Si hay, no hacemos nada.
-                                                                if (!val.includes(',')) {
-                                                                    const newVal = val.substring(0, start) + ',' + val.substring(end);
-                                                                    updateQty(idx, newVal);
-                                                                }
-                                                            }
-                                                        }}
-                                                        onChange={(e) => {
-                                                            // Permitimos solo números y una única coma
-                                                            let val = e.target.value.replace(/[^0-9,]/g, '');
-                                                            const parts = val.split(',');
-                                                            if (parts.length > 2) {
-                                                                val = parts[0] + ',' + parts.slice(1).join('');
-                                                            }
-                                                            updateQty(idx, val);
-                                                        }}
-                                                        style={{ width: '85px', height: '28px', border: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.95rem', outline: 'none', backgroundColor: 'white' }}
-                                                    />
-                                                    <button
-                                                        onClick={() => updateQty(idx, item.qty + 0.5)}
-                                                        style={{ width: '28px', height: '28px', border: 'none', borderLeft: '1px solid #E2E8F0', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}
-                                                    >+</button>
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.05em', minWidth: '35px' }}>
-                                                    {item.product.unit_of_measure?.toUpperCase() || 'UND'}
-                                                </div>
-                                            </div>
+                                                {/* Equivalence Expandable Sub-panel */}
+                                                {activeEquivalenceRow === idx && (
+                                                    <div style={{
+                                                        padding: '1rem',
+                                                        backgroundColor: hasPredefined ? '#F0FDF4' : '#FFFDE7',
+                                                        borderTop: `1px solid ${hasPredefined ? '#DCFCE7' : '#FEF08A'}`,
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '0.75rem'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: hasPredefined ? '#15803D' : '#A16207' }}>
+                                                                {hasPredefined ? '⚖️ Conversiones de Equivalencia Sugeridas' : '⚖️ Calculadora Libre de Equivalencias'}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveEquivalenceRow(null)}
+                                                                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}
+                                                            >
+                                                                Cerrar
+                                                            </button>
+                                                        </div>
 
-                                            <div style={{ textAlign: 'right', fontWeight: '600', color: '#475569', fontSize: '0.9rem' }}>
-                                                {formatMoney(item.product.base_price)}
-                                            </div>
+                                                        {/* Predefined conversion buttons */}
+                                                        {hasPredefined && (
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                                {itemConversions.map(c => (
+                                                                    <button
+                                                                        key={c.id}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const factor = parseFloat(c.conversion_factor);
+                                                                            const calculatedQty = parseFloat(((item.originalQty || 1) * factor).toFixed(2));
+                                                                            setCart(prev => prev.map((itm, i) => i === idx ? {
+                                                                                ...itm,
+                                                                                originalUnit: c.from_unit,
+                                                                                conversion_factor: factor,
+                                                                                qty: calculatedQty
+                                                                            } : itm));
+                                                                        }}
+                                                                        style={{
+                                                                            backgroundColor: '#E8F5E9',
+                                                                            border: `1px solid ${item.originalUnit === c.from_unit ? '#2E7D32' : '#A5D6A7'}`,
+                                                                            color: '#1B5E20',
+                                                                            padding: '4px 10px',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '0.8rem',
+                                                                            fontWeight: 'bold',
+                                                                            cursor: 'pointer',
+                                                                            boxShadow: item.originalUnit === c.from_unit ? '0 0 0 2px #2E7D32' : 'none'
+                                                                        }}
+                                                                    >
+                                                                        {c.from_unit} ({c.conversion_factor} {c.to_unit})
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
 
-                                            <div style={{ textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.95rem' }}>
-                                                {formatMoney(item.product.base_price * parseFloat(item.qty.toString().replace(',', '.') || '0'))}
-                                            </div>
+                                                        {/* Calculation Inputs */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#374151' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <label style={{ fontWeight: 'bold' }}>Ingresar:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={item.originalQty || ''}
+                                                                    onChange={(e) => {
+                                                                        const orig = parseFloat(e.target.value) || 0;
+                                                                        const factor = item.conversion_factor || 1;
+                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(2));
+                                                                        setCart(prev => prev.map((itm, i) => i === idx ? {
+                                                                            ...itm,
+                                                                            originalQty: orig,
+                                                                            qty: calculatedQty
+                                                                        } : itm));
+                                                                    }}
+                                                                    style={{ width: '70px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', textAlign: 'center' }}
+                                                                />
+                                                            </div>
 
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                                <button
-                                                    onClick={() => removeFromCart(idx)}
-                                                    style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FECACA'}
-                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-                                                    title="Eliminar item"
-                                                >
-                                                    ✕
-                                                </button>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <select
+                                                                    value={item.originalUnit || 'Kg'}
+                                                                    onChange={(e) => {
+                                                                        const unit = e.target.value;
+                                                                        setCart(prev => prev.map((itm, i) => i === idx ? { ...itm, originalUnit: unit } : itm));
+                                                                    }}
+                                                                    style={{ padding: '4px 6px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: 'white' }}
+                                                                >
+                                                                    <option value="Bulto">Bulto</option>
+                                                                    <option value="Caja">Caja</option>
+                                                                    <option value="Canastilla">Canastilla</option>
+                                                                    <option value="Bolsa">Bolsa</option>
+                                                                    <option value="Malla">Malla</option>
+                                                                    <option value="Kg">Kg</option>
+                                                                    <option value="Libra">Libra</option>
+                                                                    <option value="Atado">Atado</option>
+                                                                    <option value="Unidad">Unidad</option>
+                                                                </select>
+                                                            </div>
+
+                                                            <span>x</span>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <label style={{ fontWeight: 'bold' }}>Factor:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={item.conversion_factor || ''}
+                                                                    onChange={(e) => {
+                                                                        const factor = parseFloat(e.target.value) || 1;
+                                                                        const orig = item.originalQty || 1;
+                                                                        const calculatedQty = parseFloat((orig * factor).toFixed(2));
+                                                                        setCart(prev => prev.map((itm, i) => i === idx ? {
+                                                                            ...itm,
+                                                                            conversion_factor: factor,
+                                                                            qty: calculatedQty
+                                                                        } : itm));
+                                                                    }}
+                                                                    style={{ width: '70px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', textAlign: 'center' }}
+                                                                />
+                                                            </div>
+
+                                                            <span>=</span>
+
+                                                            <span style={{ fontWeight: '800', color: hasPredefined ? '#1E4620' : '#713F12' }}>
+                                                                {item.qty} {item.product.unit_of_measure || 'Kg'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
