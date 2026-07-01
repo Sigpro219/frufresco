@@ -389,8 +389,8 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 backgroundColor: 'white',
                 padding: '2.5rem',
                 borderRadius: '24px',
-                width: '100%',
-                maxWidth: '1100px',
+                width: '92%',
+                maxWidth: '1450px',
                 maxHeight: '90vh',
                 overflowY: 'auto',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
