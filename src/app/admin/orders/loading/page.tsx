@@ -285,7 +285,7 @@ export default function OrderLoadingPage() {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
+                    .select('*, profiles:profiles(id, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, pricing_model_id)')
                     .eq('delivery_date', selectedDate)
                     .order('created_at', { ascending: false });
 
