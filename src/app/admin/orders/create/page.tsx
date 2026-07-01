@@ -63,6 +63,24 @@ function CreateOrderContent() {
     const [clientSearch, setClientSearch] = useState('');
     const [focusedClientIndex, setFocusedClientIndex] = useState(-1);
 
+    // Client Exceptions (Product Nicknames & Notes) State
+    const [clientExceptions, setClientExceptions] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!selectedClient) {
+            setClientExceptions([]);
+            return;
+        }
+        async function fetchClientExceptions() {
+            const { data } = await supabase
+                .from('product_nicknames')
+                .select('*')
+                .eq('customer_id', selectedClient);
+            if (data) setClientExceptions(data);
+        }
+        fetchClientExceptions();
+    }, [selectedClient]);
+
     // B2C State
     const [b2cMode, setB2CMode] = useState<'search' | 'new'>('new');
     const [clientSearchB2C, setClientSearchB2C] = useState('');
@@ -124,6 +142,7 @@ function CreateOrderContent() {
         originalQty?: number;
         originalUnit?: string;
         conversion_factor?: number;
+        nickname?: string;
     }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{
         isOpen: boolean;
@@ -525,19 +544,58 @@ function CreateOrderContent() {
         setModalQuantity(1);
         setSelectedOptions({});
 
+        // 1. Check for product substitution exception
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        if (exc && exc.substitution_product_id) {
+            const subProduct = products.find(p => p.id === exc.substitution_product_id);
+            if (subProduct) {
+                const confirmSwap = window.confirm(`El cliente prefiere sustituir "${product.name}" por "${subProduct.name}". ¿Desea aplicar la sustitución?`);
+                if (confirmSwap) {
+                    handleProductClick(subProduct);
+                    return;
+                }
+            }
+        }
+
+        // 2. Pre-populate preferred variant options (if any)
+        const initialOptions: Record<string, string> = {};
+        if (exc && exc.preferred_options && typeof exc.preferred_options === 'object') {
+            Object.entries(exc.preferred_options).forEach(([k, v]) => {
+                initialOptions[k] = String(v);
+            });
+        }
+        setSelectedOptions(initialOptions);
+
         // Check if product has variants
         if (product.options_config && Array.isArray(product.options_config) && product.options_config.length > 0) {
             setSelectedProductForModal(product);
         } else {
-            addToCartDirectly(product, 1);
+            const hasOptions = Object.keys(initialOptions).length > 0;
+            const optValues = Object.values(initialOptions).filter(v => v);
+            const variantLabel = optValues.length > 0 ? optValues.join(', ') : undefined;
+            addToCartDirectly(product, 1, variantLabel, initialOptions);
         }
         setProductSearch('');
     };
 
     const addToCartDirectly = (product: any, qty: number, variantLabel?: string, optionsRaw?: any) => {
+        const exc = clientExceptions.find(e => e.product_id === product.id);
+        let finalLabel = variantLabel || '';
+        let finalNickname = exc?.nickname || product.name;
+
+        // Append picking and delivery notes to variant label
+        const notes: string[] = [];
+        if (exc?.picking_note) notes.push(`Bodega: ${exc.picking_note}`);
+        if (exc?.delivery_note) notes.push(`Entr: ${exc.delivery_note}`);
+        
+        if (notes.length > 0) {
+            const notesStr = notes.join(' | ');
+            finalLabel = finalLabel ? `${finalLabel} (${notesStr})` : notesStr;
+        }
+
         setCart(prev => {
             const existingIndex = prev.findIndex(item =>
-                item.product.id === product.id && item.variant_label === variantLabel
+                item.product.id === product.id && item.variant_label === finalLabel
             );
 
             const resolvedPrice = contractPrices[product.id] || 0;
@@ -548,11 +606,9 @@ function CreateOrderContent() {
                 item.qty = parseFloat((parseFloat(item.qty || 0) + qty).toFixed(2));
                 item.originalQty = parseFloat((parseFloat(item.originalQty || item.qty || 0) + qty).toFixed(2));
                 
-                // Prepend and remove from old position
                 const filteredCart = newCart.filter((_, i) => i !== existingIndex);
                 return [item, ...filteredCart];
             } else {
-                // Prepend new item
                 return [{ 
                     product, 
                     qty, 
@@ -560,8 +616,9 @@ function CreateOrderContent() {
                     originalQty: qty,
                     originalUnit: product.unit_of_measure || 'Kg',
                     conversion_factor: 1,
-                    variant_label: variantLabel, 
-                    selected_options: optionsRaw 
+                    variant_label: finalLabel || undefined, 
+                    selected_options: optionsRaw || {},
+                    nickname: finalNickname
                 }, ...prev];
             }
         });
@@ -998,7 +1055,7 @@ function CreateOrderContent() {
                     product_id: item.product.id,
                     quantity: qtyNum,
                     unit_price: unitPrice,
-                    nickname: item.variant_label || null,
+                    nickname: item.nickname || item.variant_label || null,
                     variant_label: item.variant_label || null,
                     unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
                     selected_options: item.selected_options || {}
