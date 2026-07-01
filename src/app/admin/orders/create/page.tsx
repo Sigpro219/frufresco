@@ -140,8 +140,15 @@ function CreateOrderContent() {
     useEffect(() => {
         if (selectedProductForModal) {
             setModalQuantity('1');
-            setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
-            setModalFactor(1);
+
+            const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+            if (hasWebUnit) {
+                setModalUnit(selectedProductForModal.web_unit);
+                setModalFactor(parseFloat(selectedProductForModal.web_conversion_factor) || 1);
+            } else {
+                setModalUnit(selectedProductForModal.unit_of_measure || 'Kg');
+                setModalFactor(1);
+            }
 
             // Auto-focus the first select or the quantity input
             setTimeout(() => {
@@ -2604,6 +2611,37 @@ function CreateOrderContent() {
                 const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
 
+                // Build full options list for unit selection (web_unit is first, if configured)
+                const optionsList = [];
+                const hasWebUnit = selectedProductForModal.web_unit && selectedProductForModal.web_conversion_factor;
+                
+                if (hasWebUnit) {
+                    optionsList.push({
+                        unit: selectedProductForModal.web_unit,
+                        factor: parseFloat(selectedProductForModal.web_conversion_factor) || 1,
+                        label: `${selectedProductForModal.web_unit} (${selectedProductForModal.web_conversion_factor} ${selectedProductForModal.unit_of_measure})`
+                    });
+                }
+                
+                if (!hasWebUnit || selectedProductForModal.unit_of_measure !== selectedProductForModal.web_unit) {
+                    optionsList.push({
+                        unit: selectedProductForModal.unit_of_measure || 'Kg',
+                        factor: 1,
+                        label: `${selectedProductForModal.unit_of_measure || 'Kg'} (Base)`
+                    });
+                }
+                
+                itemConversions.forEach(c => {
+                    const isDuplicate = optionsList.some(o => o.unit.toLowerCase() === c.from_unit.toLowerCase());
+                    if (!isDuplicate) {
+                        optionsList.push({
+                            unit: c.from_unit,
+                            factor: parseFloat(c.conversion_factor) || 1,
+                            label: `${c.from_unit} (${c.conversion_factor} ${c.to_unit})`
+                        });
+                    }
+                });
+
                 const handleSelectKeyDown = (e: React.KeyboardEvent, index: number, totalOptions: number) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -2745,20 +2783,16 @@ function CreateOrderContent() {
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         Unidad de Medida
                                     </label>
-                                    {itemConversions.length > 0 ? (
+                                    {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
                                             value={modalUnit}
                                             onChange={(e) => {
                                                 const selected = e.target.value;
                                                 setModalUnit(selected);
-                                                if (selected === selectedProductForModal.unit_of_measure) {
-                                                    setModalFactor(1);
-                                                } else {
-                                                    const conv = itemConversions.find(c => c.from_unit === selected);
-                                                    if (conv) {
-                                                        setModalFactor(parseFloat(conv.conversion_factor) || 1);
-                                                    }
+                                                const matched = optionsList.find(o => o.unit === selected);
+                                                if (matched) {
+                                                    setModalFactor(matched.factor);
                                                 }
                                             }}
                                             onKeyDown={(e) => {
@@ -2780,12 +2814,9 @@ function CreateOrderContent() {
                                                 height: '47px'
                                             }}
                                         >
-                                            <option value={selectedProductForModal.unit_of_measure}>
-                                                {selectedProductForModal.unit_of_measure} (Base)
-                                            </option>
-                                            {itemConversions.map(c => (
-                                                <option key={c.id} value={c.from_unit}>
-                                                    {c.from_unit} ({c.conversion_factor} {c.to_unit})
+                                            {optionsList.map(o => (
+                                                <option key={o.unit} value={o.unit}>
+                                                    {o.label}
                                                 </option>
                                             ))}
                                         </select>
