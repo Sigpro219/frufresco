@@ -2727,7 +2727,26 @@ function CreateOrderContent() {
                                         value={selectedOptions[opt.name] || ''}
                                         onChange={(e) => setSelectedOptions(prev => ({ ...prev, [opt.name]: e.target.value }))}
                                         onKeyDown={(e) => handleSelectKeyDown(e, index, selectedProductForModal.options_config.length)}
-                                        style={{ width: '100%', padding: '0.8rem', border: '2px solid #E2E8F0', borderRadius: '10px', fontSize: '1rem', backgroundColor: '#F9FAFB', outline: 'none' }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.8rem',
+                                            border: '2px solid #E2E8F0',
+                                            borderRadius: '10px',
+                                            fontSize: '1rem',
+                                            backgroundColor: '#F9FAFB',
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = '#3B82F6';
+                                            e.target.style.backgroundColor = 'white';
+                                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = '#E2E8F0';
+                                            e.target.style.backgroundColor = '#F9FAFB';
+                                            e.target.style.boxShadow = 'none';
+                                        }}
                                     >
                                         <option value="">Seleccionar {opt.name}...</option>
                                         {opt.values?.map((val: string) => (
@@ -2769,11 +2788,17 @@ function CreateOrderContent() {
                                             fontWeight: '800',
                                             fontSize: '1.2rem',
                                             textAlign: 'center',
-                                            outline: 'none'
+                                            outline: 'none',
+                                            transition: 'all 0.2s ease-in-out'
                                         }}
-                                        onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = '#3B82F6';
+                                            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            e.target.select();
+                                        }}
                                         onBlur={(e) => {
                                             e.target.style.borderColor = '#E2E8F0';
+                                            e.target.style.boxShadow = 'none';
                                             const parsed = parseFloat(String(modalQuantity).replace(',', '.'));
                                             if (isNaN(parsed) || parsed <= 0) {
                                                 setModalQuantity('1');
@@ -2816,7 +2841,18 @@ function CreateOrderContent() {
                                                 backgroundColor: '#F9FAFB',
                                                 outline: 'none',
                                                 cursor: 'pointer',
-                                                height: '47px'
+                                                height: '47px',
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3B82F6';
+                                                e.target.style.backgroundColor = 'white';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.15)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#E2E8F0';
+                                                e.target.style.backgroundColor = '#F9FAFB';
+                                                e.target.style.boxShadow = 'none';
                                             }}
                                         >
                                             {optionsList.map(o => (
@@ -2852,14 +2888,30 @@ function CreateOrderContent() {
                                 <button
                                     type="button"
                                     onClick={() => setSelectedProductForModal(null)}
-                                    style={{ padding: '0.9rem', borderRadius: '10px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}
+                                    style={{ padding: '0.9rem', borderRadius: '10px', border: '1px solid #D1D5DB', backgroundColor: 'white', fontWeight: '600', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#3B82F6';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = '#D1D5DB';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="button"
                                     onClick={confirmModalAdd}
-                                    style={{ padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
+                                    style={{ padding: '0.9rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', outline: 'none', transition: 'all 0.2s ease-in-out' }}
+                                    onFocus={(e) => {
+                                        e.target.style.backgroundColor = '#047857';
+                                        e.target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.backgroundColor = '#059669';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
                                 >
                                     Agregar
                                 </button>
