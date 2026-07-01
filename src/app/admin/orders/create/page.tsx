@@ -131,6 +131,7 @@ function CreateOrderContent() {
 
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
+    const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
     const [modalQuantity, setModalQuantity] = useState<string | number>(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [modalUnit, setModalUnit] = useState('Kg');
@@ -2824,9 +2825,27 @@ function CreateOrderContent() {
                                 </div>
 
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Unidad de Medida
-                                    </label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                            Unidad de Medida
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManageConversionsProduct(selectedProductForModal)}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#2563EB',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                                textDecoration: 'underline'
+                                            }}
+                                        >
+                                            ⚙️ Equivalencias
+                                        </button>
+                                    </div>
                                     {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
@@ -2926,6 +2945,206 @@ function CreateOrderContent() {
                                     }}
                                 >
                                     Agregar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* --- CONVERSIONS MANAGEMENT MODAL --- */}
+            {manageConversionsProduct && (() => {
+                const productConvs = conversions.filter(c => c.product_id === manageConversionsProduct.id);
+                const DYNAMIC_UNITS = [
+                    'Unidad', 'Lata', 'Bandeja', 'Atado', 'Malla', 'Caja', 'Bolsa', 
+                    'Saco', 'Canastilla', 'Libras', 'Gramos', 'Kilos', 'Paquete', 'Bloque'
+                ];
+
+                const handleDelete = async (id: string) => {
+                    const { error } = await supabase
+                        .from('product_conversions')
+                        .delete()
+                        .eq('id', id);
+                    if (!error) {
+                        setConversions(prev => prev.filter(c => c.id !== id));
+                    }
+                };
+
+                const handleAdd = async () => {
+                    const qty1Input = document.getElementById('new-conv-qty-1') as HTMLInputElement;
+                    const unit1Input = document.getElementById('new-conv-unit-1') as HTMLSelectElement;
+                    const qty2Input = document.getElementById('new-conv-qty-2') as HTMLInputElement;
+
+                    if (!qty1Input || !unit1Input || !qty2Input) return;
+
+                    const qty1 = parseFloat(qty1Input.value);
+                    const unit1 = unit1Input.value;
+                    const qty2 = parseFloat(qty2Input.value);
+
+                    if (!unit1) {
+                        alert('Por favor, selecciona una unidad de origen.');
+                        return;
+                    }
+                    if (isNaN(qty1) || qty1 <= 0 || isNaN(qty2) || qty2 <= 0) {
+                        alert('Las cantidades deben ser válidas y mayores a cero.');
+                        return;
+                    }
+
+                    const factor = qty2 / qty1;
+
+                    const { data, error } = await supabase
+                        .from('product_conversions')
+                        .insert([{
+                            product_id: manageConversionsProduct.id,
+                            from_unit: unit1,
+                            to_unit: manageConversionsProduct.unit_of_measure || 'Kg',
+                            conversion_factor: factor
+                        }])
+                        .select();
+
+                    if (!error && data && data.length > 0) {
+                        setConversions(prev => [...prev, data[0]]);
+                        qty1Input.value = '1';
+                        unit1Input.value = '';
+                        qty2Input.value = '';
+                    } else {
+                        alert('Ocurrió un error al guardar la equivalencia.');
+                    }
+                };
+
+                return (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1100, backdropFilter: 'blur(3px)'
+                    }} onClick={() => setManageConversionsProduct(null)}>
+
+                        <div
+                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '550px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            onClick={e => e.stopPropagation()} // Prevent close
+                        >
+                            <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                                <div style={{ textAlign: 'left' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827' }}>
+                                        ⚖️ Equivalencias y Conversiones
+                                    </h3>
+                                    <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '600' }}>
+                                        {manageConversionsProduct.name}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setManageConversionsProduct(null)}
+                                    style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', fontWeight: 'bold' }}
+                                >
+                                    ✕
+                                </button>
+                            </header>
+
+                            {/* SECCIÓN DE UNIDAD BASE */}
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #E2E8F0', textAlign: 'left' }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Unidad de Inventario (Base)
+                                </label>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <div style={{ 
+                                        padding: '0.5rem 1.25rem', 
+                                        backgroundColor: '#EFF6FF', 
+                                        border: '1px solid #BFDBFE', 
+                                        borderRadius: '8px', 
+                                        fontSize: '0.9rem', 
+                                        fontWeight: '800', 
+                                        color: '#1D4ED8',
+                                        minWidth: '100px',
+                                        textAlign: 'center'
+                                    }}>
+                                        {manageConversionsProduct.unit_of_measure}
+                                    </div>
+                                    <div style={{ flex: 1, fontSize: '0.75rem', color: '#6B7280', lineHeight: '1.4' }}>
+                                        Unidad base configurada para este SKU. Todas las equivalencias ingresadas abajo se convertirán a esta unidad base para el stock.
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* EQUIVALENCIAS EXISTENTES */}
+                            <div style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
+                                    Equivalencias de Compra
+                                </h4>
+                                {productConvs.length === 0 ? (
+                                    <div style={{ fontSize: '0.85rem', color: '#6B7280', textAlign: 'center', padding: '1rem', border: '1px dashed #D1D5DB', borderRadius: '12px' }}>
+                                        Solo se opera en {manageConversionsProduct.unit_of_measure}.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {productConvs.map(c => (
+                                            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}>
+                                                    <span style={{ fontWeight: '700', color: '#1F2937' }}>1 {c.from_unit}</span>
+                                                    <span style={{ color: '#9CA3AF' }}>=</span>
+                                                    <span style={{ fontWeight: '700', color: '#10B981' }}>{c.conversion_factor} {manageConversionsProduct.unit_of_measure}</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDelete(c.id)} 
+                                                    style={{ color: '#EF4444', background: '#FEF2F2', border: '1px solid #FECACA', padding: '4px 10px', borderRadius: '6px', fontWeight: '700', cursor: 'pointer', fontSize: '0.75rem', transition: 'all 0.15s' }}
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* AGREGAR NUEVA RELACIÓN */}
+                            <div style={{ borderTop: '1px dashed #E2E8F0', paddingTop: '1.25rem', textAlign: 'left' }}>
+                                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800', textAlign: 'center' }}>
+                                    ➕ DEFINIR NUEVA RELACIÓN
+                                </h4>
+                                
+                                <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column',
+                                    gap: '8px', 
+                                    backgroundColor: '#F0FDF4', 
+                                    padding: '1.2rem', 
+                                    borderRadius: '12px',
+                                    border: '1px solid #DCFCE7'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <input id="new-conv-qty-1" type="number" defaultValue="1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <select id="new-conv-unit-1" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', backgroundColor: 'white', fontSize: '0.9rem' }}>
+                                                <option value="">Selecciona unidad</option>
+                                                {DYNAMIC_UNITS.map(u => (
+                                                    <option key={u} value={u}>{u}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ textAlign: 'center', color: '#15803D', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                        EQUIVALE A
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <input id="new-conv-qty-2" type="number" placeholder="Ej: 0.3" style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', textAlign: 'center', fontSize: '0.9rem' }} />
+                                        </div>
+                                        <div style={{ flex: 2 }}>
+                                            <div style={{ width: '100%', padding: '0.5rem', backgroundColor: '#FFFFFF', border: '1px solid #D1D5DB', borderRadius: '8px', fontWeight: '800', textAlign: 'center', color: '#15803D', fontSize: '0.9rem' }}>
+                                                {manageConversionsProduct.unit_of_measure}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={handleAdd} 
+                                    style={{ width: '100%', marginTop: '1rem', padding: '0.8rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.15s' }}
+                                >
+                                    Vincular Unidades
                                 </button>
                             </div>
                         </div>
