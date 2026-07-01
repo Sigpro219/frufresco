@@ -2008,11 +2008,12 @@ export default function OrderLoadingPage() {
                                                                 <span style={{ fontSize: '0.85rem', color: '#64748B', paddingLeft: '4px', fontWeight: 'bold' }}>$</span>
                                                                 <input
                                                                     type="number"
-                                                                    value={item.unit_price || ''}
+                                                                    value={item.unit_price === 0 ? 0 : (item.unit_price || '')}
+                                                                    onFocus={(e) => e.target.select()}
                                                                     onChange={(e) => {
-                                                                        const val = parseFloat(e.target.value) || 0;
+                                                                        const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
                                                                         const newOrderItems = [...orderItems];
-                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val, isModified: true };
+                                                                        newOrderItems[idx] = { ...newOrderItems[idx], unit_price: val as any, isModified: true };
                                                                         setOrderItems(newOrderItems);
                                                                     }}
                                                                     style={{ width: '90px', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.85rem', padding: '2px 4px' }}

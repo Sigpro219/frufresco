@@ -2446,6 +2446,7 @@ function CreateOrderContent() {
                                                                 type="text"
                                                                 inputMode="decimal"
                                                                 value={formatQuantityDisplay(item.qty)}
+                                                                onFocus={(e) => e.target.select()}
                                                                 onKeyDown={(e) => {
                                                                     if (e.key === '.') {
                                                                         e.preventDefault();
@@ -2491,11 +2492,12 @@ function CreateOrderContent() {
                                                             <input
                                                                 type="text"
                                                                 value={formatPriceDisplay(item.price !== undefined && item.price !== null ? item.price : '')}
+                                                                onFocus={(e) => e.target.select()}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.replace(/[^0-9,.]/g, '');
                                                                     const cleanVal = val.replace(/\./g, '').replace(',', '.');
-                                                                    const parsed = parseFloat(cleanVal) || 0;
-                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: parsed } : c));
+                                                                    const parsed = cleanVal === '' ? '' : (parseFloat(cleanVal) || 0);
+                                                                    setCart(prev => prev.map((c, i) => i === idx ? { ...c, price: parsed as any } : c));
                                                                 }}
                                                                 style={{ width: '80px', height: '100%', border: 'none', outline: 'none', textAlign: 'right', fontWeight: '700', fontSize: '0.9rem', padding: '2px 4px' }}
                                                             />
