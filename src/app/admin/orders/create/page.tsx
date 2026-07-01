@@ -2671,7 +2671,7 @@ function CreateOrderContent() {
                     }} onClick={() => setSelectedProductForModal(null)}>
 
                         <div
-                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '560px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
                             {selectedProductForModal.image_url && (
