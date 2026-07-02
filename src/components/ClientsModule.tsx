@@ -3603,7 +3603,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
         
         const { data: prodData } = await supabase
             .from('products')
-            .select('id, name, sku, options_config')
+            .select('id, name, sku, options_config, accounting_id')
             .eq('is_active', true);
 
         if (excData) setExceptions(excData);
@@ -3840,7 +3840,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             key={p.id}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
-                                                                setSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowResults(false);
                                                             }}
                                                             style={{ 
@@ -3853,7 +3853,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
                                                             <span style={{ color: THEME.colors.primary, fontSize: '0.95rem', fontWeight: '600' }}>＋</span>
                                                         </div>
@@ -3936,7 +3936,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             key={p.id}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, substitution_product_id: p.id}));
-                                                                setSubSearchTerm(`[${p.sku}] ${p.name}`);
+                                                                setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowSubResults(false);
                                                             }}
                                                             style={{ 
@@ -3949,7 +3949,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>SKU: {p.sku}</span>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: '500', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>ID: {p.accounting_id || p.sku}</span>
                                                             </div>
                                                             <span style={{ color: '#D97706', fontSize: '0.95rem', fontWeight: '600' }}>🔄</span>
                                                         </div>
@@ -4008,30 +4008,34 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                             <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <span>Original: {origProd?.name || '---'}</span>
                                                 <span style={{ color: '#94A3B8' }}>|</span>
-                                                <span style={{ color: '#64748B' }}>SKU: {origProd?.sku || '---'}</span>
+                                                <span style={{ color: '#64748B' }}>ID: {origProd?.accounting_id || '---'}</span>
                                             </div>
 
                                             {/* RENDER DETAILED RULES */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                                                 
                                                 {/* Nickname alias */}
-                                                <div>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
-                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname || '---'}</span>
-                                                </div>
+                                                {exc.nickname && (
+                                                    <div>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
+                                                    </div>
+                                                )}
 
                                                 {/* Picking notes */}
-                                                <div>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nota del cliente: </span>
-                                                    <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note || '---'}</span>
-                                                </div>
+                                                {exc.picking_note && (
+                                                    <div>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nota del cliente: </span>
+                                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note}</span>
+                                                    </div>
+                                                )}
 
                                                 {/* Substitution product */}
                                                 {subProd && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span style={{ fontSize: '0.7rem', color: '#D97706', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>🔄 Sustituir por: </span>
                                                         <span style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: '800', backgroundColor: '#FFFBEB', padding: '2px 6px', borderRadius: '4px' }}>
-                                                            [{subProd.sku}] {subProd.name}
+                                                            [{subProd.accounting_id || subProd.sku}] {subProd.name}
                                                         </span>
                                                     </div>
                                                 )}
@@ -4050,8 +4054,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                             delivery_note: exc.delivery_note || '',
                                                             preferred_options: exc.preferred_options || {}
                                                         });
-                                                        setSearchTerm(origProd ? `[${origProd.sku}] ${origProd.name}` : '');
-                                                        setSubSearchTerm(subProd ? `[${subProd.sku}] ${subProd.name}` : '');
+                                                        setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
+                                                        setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
                                                         setIsAdding(true);
                                                     }} 
                                                     style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
