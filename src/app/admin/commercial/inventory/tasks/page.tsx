@@ -204,13 +204,13 @@ export default function KanbanTasksPage() {
                 const filePath = `tasks/${Date.now()}_${fileName}`;
 
                 const { error: uploadError } = await supabase.storage
-                    .from('task-attachments')
+                    .from('client-documents')
                     .upload(filePath, file);
 
                 if (uploadError) throw uploadError;
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from('task-attachments')
+                    .from('client-documents')
                     .getPublicUrl(filePath);
                 
                 uploadedUrls.push(publicUrl);
