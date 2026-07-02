@@ -14,8 +14,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             if (!profile) {
                 router.push('/');
             } else {
-                const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
-                if (!staffRoles.includes(profile.role)) {
+                const isStaff = profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client';
+                if (!isStaff) {
                     if (profile.role === 'b2b_client') {
                         router.push('/b2b/dashboard');
                     } else {
@@ -48,8 +48,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     // Check if user is staff before rendering children
-    const staffRoles = ['admin', 'web_admin', 'sys_admin', 'administrativo', 'employee', 'operations'];
-    if (!staffRoles.includes(profile.role)) {
+    const isStaff = profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client';
+    if (!isStaff) {
         return null;
     }
 
