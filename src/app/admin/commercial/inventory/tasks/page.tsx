@@ -253,8 +253,12 @@ export default function KanbanTasksPage() {
 
             if (error) throw error;
             fetchData();
-        } catch (err: unknown) {
+        } catch (err: any) {
             console.error('Error updating status:', err);
+            const errMsg = err?.message || err?.details || JSON.stringify(err);
+            console.error('Error message:', errMsg);
+            window.showToast?.('Error al actualizar estado: ' + errMsg, 'error');
+            fetchData();
         }
     };
 
