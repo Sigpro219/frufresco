@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Product } from '@/lib/supabase';
+import { Product, supabase } from '@/lib/supabase';
 
 interface Variant {
     id: string;
@@ -26,6 +26,25 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
     const [variants, setVariants] = useState<Variant[]>(product.variants || []);
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
+    const [showCustomInput, setShowCustomInput] = useState<Record<number, boolean>>({});
+
+    useEffect(() => {
+        async function fetchMasterAttributes() {
+            try {
+                const { data, error } = await supabase
+                    .from('product_attributes_master')
+                    .select('*')
+                    .order('name', { ascending: true });
+                if (!error && data) {
+                    setMasterAttributes(data);
+                }
+            } catch (err) {
+                console.error('Error fetching master attributes:', err);
+            }
+        }
+        fetchMasterAttributes();
+    }, []);
 
 
     const handleUpload = async (id: string, file: File) => {
@@ -174,24 +193,126 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {options.map((opt, idx) => (
-                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '200px 1fr 40px', gap: '1rem', alignItems: 'center', backgroundColor: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Ej: Madurez, Tamaño..."
-                                        value={opt.name}
-                                        onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                        style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700' }}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Verde, Pintón, Maduro (separado por comas)"
-                                        value={opt.values.join(', ')}
-                                        onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                        style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                    />
+                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '250px 1fr 40px', gap: '1.25rem', alignItems: 'start', backgroundColor: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E5E7EB' }}>
+                                    <div>
+                                        {(() => {
+                                            const isCustomName = opt.name && !masterAttributes.some(ma => ma.name === opt.name);
+                                            const isCustom = showCustomInput[idx] || isCustomName;
+
+                                            if (isCustom) {
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Nombre del Atributo (Ej: Madurez)"
+                                                                value={opt.name}
+                                                                onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
+                                                                style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem' }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setShowCustomInput(prev => ({ ...prev, [idx]: false }));
+                                                                    updateOption(idx, '', '');
+                                                                }}
+                                                                style={{ padding: '0.6rem 0.8rem', backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 'bold' }}
+                                                                title="Seleccionar de la lista"
+                                                            >
+                                                                📋
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <select
+                                                    value={opt.name}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val === '__custom__') {
+                                                            setShowCustomInput(prev => ({ ...prev, [idx]: true }));
+                                                            updateOption(idx, '', '');
+                                                        } else {
+                                                            const matched = masterAttributes.find(ma => ma.name === val);
+                                                            updateOption(idx, val, matched ? matched.suggested_values.join(', ') : '');
+                                                        }
+                                                    }}
+                                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontWeight: '700', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
+                                                >
+                                                    <option value="">Seleccionar Atributo...</option>
+                                                    {masterAttributes.map(ma => (
+                                                        <option key={ma.name} value={ma.name}>{ma.name}</option>
+                                                    ))}
+                                                    <option value="__custom__">✍️ Atributo Personalizado...</option>
+                                                </select>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Valores (Verde, Pintón, Maduro... separados por comas)"
+                                            value={opt.values.join(', ')}
+                                            onChange={(e) => updateOption(idx, opt.name, e.target.value)}
+                                            style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '0.9rem', width: '100%' }}
+                                        />
+                                        {(() => {
+                                            const matchedAttribute = masterAttributes.find(ma => ma.name === opt.name);
+                                            if (!matchedAttribute || !matchedAttribute.suggested_values || matchedAttribute.suggested_values.length === 0) return null;
+
+                                            return (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                                                    {matchedAttribute.suggested_values.map((val: string) => {
+                                                        const isChecked = opt.values.includes(val);
+                                                        return (
+                                                            <label 
+                                                                key={val} 
+                                                                style={{ 
+                                                                    display: 'inline-flex', 
+                                                                    alignItems: 'center', 
+                                                                    gap: '6px', 
+                                                                    backgroundColor: isChecked ? '#EFF6FF' : '#F3F4F6', 
+                                                                    color: isChecked ? '#1E40AF' : '#4B5563',
+                                                                    border: isChecked ? '1px solid #BFDBFE' : '1px solid #E5E7EB',
+                                                                    padding: '4px 10px', 
+                                                                    borderRadius: '20px', 
+                                                                    cursor: 'pointer', 
+                                                                    fontSize: '0.78rem',
+                                                                    fontWeight: '600',
+                                                                    transition: 'all 0.15s',
+                                                                    userSelect: 'none'
+                                                                }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        const checked = e.target.checked;
+                                                                        let newVals;
+                                                                        if (checked) {
+                                                                            newVals = [...opt.values, val];
+                                                                        } else {
+                                                                            newVals = opt.values.filter(v => v !== val);
+                                                                        }
+                                                                        updateOption(idx, opt.name, newVals.join(', '));
+                                                                    }}
+                                                                    style={{ cursor: 'pointer' }}
+                                                                />
+                                                                {val}
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
                                     <button 
                                         onClick={() => removeOption(idx)}
-                                        style={{ border: 'none', background: 'none', color: '#EF4444', fontSize: '1.2rem', cursor: 'pointer', fontWeight: '800' }}
+                                        style={{ border: 'none', background: 'none', color: '#EF4444', fontSize: '1.2rem', cursor: 'pointer', fontWeight: '800', marginTop: '6px' }}
                                     >✕</button>
                                 </div>
                             ))}
