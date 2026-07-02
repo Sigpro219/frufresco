@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 
 export async function GET(req: NextRequest) {
-    const connectionString = 'postgresql://postgres:postgres@db.csqurhdykbalvlnpowcz.supabase.co:5432/postgres';
+    const connectionString = 'postgresql://postgres.csqurhdykbalvlnpowcz:postgres@aws-0-us-east-1.pooler.supabase.com:6543/postgres';
     const client = new Client({ connectionString });
     try {
         await client.connect();
