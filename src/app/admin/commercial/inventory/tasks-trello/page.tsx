@@ -73,6 +73,7 @@ export default function KanbanTrelloPage() {
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
     // Form state
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [newTaskStatus, setNewTaskStatus] = useState<'todo' | 'in_progress' | 'done'>('todo');
     const [newTask, setNewTask] = useState({
         title: '',
@@ -83,6 +84,111 @@ export default function KanbanTrelloPage() {
         scheduled_start: '',
         due_date: ''
     });
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingTask(null);
+    };
+
+    useEffect(() => {
+        if (editingTask) {
+            setNewTask({
+                title: editingTask.title || '',
+                description: editingTask.description || '',
+                priority: (editingTask.priority || 'medium') as 'low' | 'medium' | 'high',
+                assigned_to: editingTask.assigned_to || '',
+                target_role: editingTask.target_role || '',
+                scheduled_start: editingTask.scheduled_start ? new Date(editingTask.scheduled_start).toISOString().split('T')[0] : '',
+                due_date: editingTask.due_date ? new Date(editingTask.due_date).toISOString().split('T')[0] : ''
+            });
+            setNewTaskStatus(editingTask.status as any);
+        } else {
+            setNewTask({
+                title: '',
+                description: '',
+                priority: 'medium',
+                assigned_to: '',
+                target_role: '',
+                scheduled_start: '',
+                due_date: ''
+            });
+        }
+        setTempFiles([]);
+    }, [editingTask]);
+
+    const handleUpdateTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingTask) return;
+        setUploading(true);
+        try {
+            const uploadedUrls = [...(editingTask.attachments || [])];
+
+            for (const file of tempFiles) {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Math.random()}.${fileExt}`;
+                const filePath = `tasks/${Date.now()}_${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('client-documents')
+                    .upload(filePath, file);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('client-documents')
+                    .getPublicUrl(filePath);
+                
+                uploadedUrls.push(publicUrl);
+            }
+
+            const { error } = await supabase
+                .from('admin_tasks')
+                .update({
+                    title: newTask.title,
+                    description: newTask.description,
+                    priority: newTask.priority,
+                    target_role: newTask.target_role,
+                    assigned_to: newTask.assigned_to,
+                    scheduled_start: newTask.scheduled_start || null,
+                    due_date: newTask.due_date || null,
+                    attachments: uploadedUrls
+                })
+                .eq('id', editingTask.id);
+
+            if (error) throw error;
+
+            window.showToast?.('Tarea actualizada correctamente', 'success');
+            closeModal();
+            fetchData();
+        } catch (err: any) {
+            const message = err?.message || 'Error desconocido';
+            alert('Error al actualizar tarea: ' + message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDeleteTask = async () => {
+        if (!editingTask) return;
+        if (!confirm('¿Estás seguro de que deseas eliminar esta tarea permanentemente?')) return;
+        setUploading(true);
+        try {
+            const { error } = await supabase
+                .from('admin_tasks')
+                .delete()
+                .eq('id', editingTask.id);
+
+            if (error) throw error;
+
+            window.showToast?.('Tarea eliminada correctamente', 'success');
+            closeModal();
+            fetchData();
+        } catch (err: any) {
+            alert('Error al eliminar tarea: ' + err.message);
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -410,6 +516,10 @@ export default function KanbanTrelloPage() {
                                                         e.dataTransfer.effectAllowed = 'move';
                                                     }}
                                                     onDragEnd={() => setDraggingTaskId(null)}
+                                                    onClick={() => {
+                                                        setEditingTask(task);
+                                                        setIsModalOpen(true);
+                                                    }}
                                                     style={{ 
                                                         backgroundColor: isArchived ? '#F8FAFC' : 'white', 
                                                         borderRadius: '16px', 
@@ -547,15 +657,15 @@ export default function KanbanTrelloPage() {
                         <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A' }}>Nueva Tarjeta</h2>
+                                    <h2 style={{ margin: 0, fontWeight: '900', color: '#0F172A' }}>{editingTask ? 'Editar Tarjeta' : 'Nueva Tarjeta'}</h2>
                                     <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
                                         En columna: <span style={{ color: '#2563EB' }}>{columns.find(c => c.id === newTaskStatus)?.title}</span>
                                     </span>
                                 </div>
-                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
+                                <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}>✕</button>
                             </div>
                             
-                            <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <form onSubmit={editingTask ? handleUpdateTask : handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 <div>
                                     <label style={labelStyle}>Asunto / Título</label>
                                     <input 
@@ -665,9 +775,19 @@ export default function KanbanTrelloPage() {
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                                    {editingTask && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleDeleteTask} 
+                                            style={{ padding: '0.8rem 1.2rem', borderRadius: '12px', border: '1px solid #FEE2E2', backgroundColor: '#FEF2F2', color: '#EF4444', fontWeight: '700', cursor: 'pointer' }}
+                                            title="Eliminar tarea permanentemente"
+                                        >
+                                            🗑️
+                                        </button>
+                                    )}
                                     <button 
                                         type="button"
-                                        onClick={() => setIsModalOpen(false)} 
+                                        onClick={closeModal} 
                                         style={{ flex: 1, padding: '0.8rem', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: 'transparent', fontWeight: '700', cursor: 'pointer' }}
                                     >
                                         Cancelar
@@ -677,7 +797,7 @@ export default function KanbanTrelloPage() {
                                         disabled={!newTask.assigned_to || !newTask.priority || !newTask.target_role || uploading}
                                         style={{ flex: 2, padding: '0.8rem', borderRadius: '12px', border: 'none', backgroundColor: (newTask.assigned_to && newTask.priority && newTask.target_role && !uploading) ? '#2563EB' : '#94A3B8', color: 'white', fontWeight: '800', cursor: (newTask.assigned_to && newTask.priority && newTask.target_role && !uploading) ? 'pointer' : 'not-allowed' }}
                                     >
-                                        {uploading ? 'SUBIENDO...' : 'CREAR TARJETA'}
+                                        {uploading ? 'SUBIENDO...' : editingTask ? 'GUARDAR' : 'CREAR TARJETA'}
                                     </button>
                                 </div>
                             </form>
