@@ -3734,13 +3734,9 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     Guía de Excepciones y Particularidades del Cliente
                                 </h4>
                                 <p style={{ margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en tres tipos de particularidades:
+                                    Esta sección permite configurar cómo debe comportarse el catálogo de productos específicamente para este cliente institucional. Las reglas se dividen en las siguientes particularidades:
                                 </p>
                                 <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <li>
-                                        <strong>⚙️ Variantes Fijas (Características Físicas):</strong> 
-                                        Si el producto tiene opciones configuradas (ej: Maduración, Calibre), puedes seleccionar la preferencia de este cliente. Al digitar un pedido, el sistema <em>pre-seleccionará automáticamente</em> esta opción.
-                                    </li>
                                     <li>
                                         <strong>🔄 Productos de Reemplazo (Sustitución):</strong> 
                                         Define qué producto alternativo ofrecer si el original no está disponible. Al agregar el producto original, el sistema <em>propondrá y permitirá cambiarlo</em> de inmediato con un clic.
@@ -3750,7 +3746,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
                                             <li><u>Nota del cliente:</u> Indicaciones de empaque y preparación solicitadas por el cliente (ej: <em>Bolsa microperforada, 130grs</em>).</li>
-                                            <li><u>Nota de Despacho (Conductor):</u> Instrucciones de entrega para el transportador (ej: <em>Recibir canastillas vacías</em>).</li>
                                         </ul>
                                     </li>
                                 </ul>
@@ -3869,37 +3864,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                     </div>
                                 </div>
 
-                                {/* B. VARIANTES PREFERIDAS (CONDICIONAL) */}
-                                {selectedOriginalProd?.options_config && selectedOriginalProd.options_config.length > 0 && (
-                                    <div style={{ backgroundColor: '#F0FDFA', border: '1px solid #CCFBF1', padding: '1rem', borderRadius: '8px' }}>
-                                        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0F766E', display: 'block', marginBottom: '8px', textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilySecondary }}>Variantes Preferidas del Cliente</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.8rem' }}>
-                                            {selectedOriginalProd.options_config.map((opt: any) => (
-                                                <div key={opt.name}>
-                                                    <label style={{ fontSize: '0.65rem', fontWeight: '600', color: '#115E59', display: 'block', marginBottom: '4px' }}>{opt.name}</label>
-                                                    <select
-                                                        value={newException.preferred_options?.[opt.name] || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setNewException(prev => {
-                                                                const updatedOptions = { ...prev.preferred_options };
-                                                                if (val) updatedOptions[opt.name] = val;
-                                                                else delete updatedOptions[opt.name];
-                                                                return { ...prev, preferred_options: updatedOptions };
-                                                            });
-                                                        }}
-                                                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #CCFBF1', fontSize: '0.8rem', backgroundColor: 'white' }}
-                                                    >
-                                                        <option value="">Por defecto (Cualquiera)</option>
-                                                        {opt.values?.map((v: string) => (
-                                                            <option key={v} value={v}>{v}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* C. PRODUCTO DE REEMPLAZO (SUSTITUCIÓN) */}
                                 <div>
@@ -4011,14 +3975,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         placeholder="Ej: Maduración: Pintón / Con etiqueta"
                                     />
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                    <FormField 
-                                        label="Nota de Despacho / Conductor (Entrega)" 
-                                        value={newException.delivery_note} 
-                                        onChange={(v) => setNewException({...newException, delivery_note: v})} 
-                                        placeholder="Ej: Entregar en sótano 1, recibir canastillas vacías"
-                                    />
-                                </div>
+
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button onClick={() => {
                                         setIsAdding(false);
@@ -4069,14 +4026,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note || '---'}</span>
                                                 </div>
 
-                                                {/* Delivery note */}
-                                                {exc.delivery_note && (
-                                                    <div>
-                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Conductor (Despacho): </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#4F46E5', fontWeight: '600' }}>{exc.delivery_note}</span>
-                                                    </div>
-                                                )}
-
                                                 {/* Substitution product */}
                                                 {subProd && (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -4086,19 +4035,6 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         </span>
                                                     </div>
                                                 )}
-
-                                                {/* Preferred options list */}
-                                                {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#0F766E', fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>⚙️ Variantes Fijas:</span>
-                                                        {Object.entries(exc.preferred_options).map(([k, v]) => (
-                                                            <span key={k} style={{ fontSize: '0.65rem', backgroundColor: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                                                {k}: {String(v)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-
                                             </div>
                                         </div>
                                         {!readOnly && (

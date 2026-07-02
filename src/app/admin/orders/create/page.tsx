@@ -2908,13 +2908,7 @@ function CreateOrderContent() {
                                         <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
                                     )}
                                     {exc.picking_note && (
-                                        <div><strong>Bodega (Picking):</strong> {exc.picking_note}</div>
-                                    )}
-                                    {exc.delivery_note && (
-                                        <div><strong>Despacho (Conductores):</strong> {exc.delivery_note}</div>
-                                    )}
-                                    {exc.preferred_options && Object.keys(exc.preferred_options).length > 0 && (
-                                        <div><strong>Variación Preferida:</strong> {Object.entries(exc.preferred_options).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+                                        <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
                                     )}
                                 </div>
                             )}
