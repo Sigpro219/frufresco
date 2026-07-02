@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
     UserCheck, UserX, ShieldAlert, Key, Share2, Check, Copy, Printer, QrCode, 
     Trash2, Lock, Unlock, RefreshCw, AlertTriangle, ExternalLink, HelpCircle, ShieldCheck,
-    Search
+    Search, Eye, EyeOff
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME } from '@/lib/adminTheme';
@@ -81,6 +81,7 @@ export default function TechUserGovernance() {
     // Reset Password State
     const [resettingUser, setResettingUser] = useState<ActiveTechUser | null>(null);
     const [inputResetPassword, setInputResetPassword] = useState('');
+    const [showResetPassword, setShowResetPassword] = useState(false);
 
     // Custom Permissions State
     const [editingPermissionsUser, setEditingPermissionsUser] = useState<ActiveTechUser | null>(null);
@@ -669,6 +670,7 @@ export default function TechUserGovernance() {
                                                             onClick={() => {
                                                                 setResettingUser(user);
                                                                 setInputResetPassword('');
+                                                                setShowResetPassword(false);
                                                             }}
                                                             style={{ 
                                                                 padding: '0.5rem 0.8rem', 
@@ -1047,13 +1049,41 @@ export default function TechUserGovernance() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, marginBottom: '0.4rem', textTransform: 'uppercase' }}>Nueva Contraseña (Opcional)</label>
-                                <input 
-                                    type="text" 
-                                    value={inputResetPassword} 
-                                    onChange={e => setInputResetPassword(e.target.value)}
-                                    placeholder="Dejar en blanco para autogenerar"
-                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', boxSizing: 'border-box', outline: 'none' }}
-                                />
+                                <div style={{ position: 'relative' }}>
+                                    <input 
+                                        type={showResetPassword ? "text" : "password"} 
+                                        value={inputResetPassword} 
+                                        onChange={e => setInputResetPassword(e.target.value)}
+                                        placeholder="Dejar en blanco para autogenerar"
+                                        style={{ width: '100%', padding: '0.8rem 3rem 0.8rem 0.8rem', borderRadius: '12px', border: `1.5px solid ${THEME.colors.border}`, fontWeight: '600', boxSizing: 'border-box', outline: 'none' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onMouseDown={() => setShowResetPassword(true)}
+                                        onMouseUp={() => setShowResetPassword(false)}
+                                        onMouseLeave={() => setShowResetPassword(false)}
+                                        onTouchStart={() => setShowResetPassword(true)}
+                                        onTouchEnd={() => setShowResetPassword(false)}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '12px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            color: showResetPassword ? THEME.colors.primary : THEME.colors.textSecondary,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '0.2rem',
+                                            userSelect: 'none',
+                                            touchAction: 'none'
+                                        }}
+                                        title="Mantén presionado para ver la contraseña"
+                                    >
+                                        {showResetPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                                    </button>
+                                </div>
                                 <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, display: 'block', marginTop: '0.3rem' }}>
                                     Debe tener al menos 6 caracteres.
                                 </span>
