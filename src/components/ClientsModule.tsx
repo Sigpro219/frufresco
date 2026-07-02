@@ -3616,6 +3616,44 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
     useEffect(() => { fetchData(); }, [clientId]);
 
+    useEffect(() => {
+        if (focusedProdIndex >= 0) {
+            const container = document.getElementById('original-prod-dropdown');
+            const element = document.getElementById(`orig-item-${focusedProdIndex}`);
+            if (container && element) {
+                const containerTop = container.scrollTop;
+                const containerBottom = containerTop + container.clientHeight;
+                const elemTop = element.offsetTop;
+                const elemBottom = elemTop + element.offsetHeight;
+                
+                if (elemTop < containerTop) {
+                    container.scrollTop = elemTop;
+                } else if (elemBottom > containerBottom) {
+                    container.scrollTop = elemBottom - container.clientHeight;
+                }
+            }
+        }
+    }, [focusedProdIndex]);
+
+    useEffect(() => {
+        if (focusedSubIndex >= 0) {
+            const container = document.getElementById('sub-prod-dropdown');
+            const element = document.getElementById(`sub-item-${focusedSubIndex}`);
+            if (container && element) {
+                const containerTop = container.scrollTop;
+                const containerBottom = containerTop + container.clientHeight;
+                const elemTop = element.offsetTop;
+                const elemBottom = elemTop + element.offsetHeight;
+                
+                if (elemTop < containerTop) {
+                    container.scrollTop = elemTop;
+                } else if (elemBottom > containerBottom) {
+                    container.scrollTop = elemBottom - container.clientHeight;
+                }
+            }
+        }
+    }, [focusedSubIndex]);
+
     const handleSave = async () => {
         if (!newException.product_id) return;
         
@@ -3802,6 +3840,32 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 onChange={(e) => {
                                                     setSearchTerm(e.target.value);
                                                     setShowResults(true);
+                                                    setFocusedProdIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (!showResults || searchTerm.length === 0) return;
+                                                    const filtered = products.filter(p => 
+                                                        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                                        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+                                                    ).slice(0, 10);
+                                                    
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedProdIndex(prev => (prev + 1) % filtered.length);
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedProdIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const targetIndex = focusedProdIndex >= 0 && focusedProdIndex < filtered.length ? focusedProdIndex : 0;
+                                                        const p = filtered[targetIndex];
+                                                        if (p) {
+                                                            setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
+                                                            setSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
+                                                            setShowResults(false);
+                                                            setFocusedProdIndex(-1);
+                                                        }
+                                                    }
                                                 }}
                                                 onFocus={() => setShowResults(true)}
                                                 style={{ 
@@ -3817,7 +3881,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     backgroundColor: 'white',
                                                     fontFamily: THEME.typography.fontFamilySecondary
                                                 }}
-                                                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                                                onBlur={() => setTimeout(() => {
+                                                    setShowResults(false);
+                                                    setFocusedProdIndex(-1);
+                                                }, 200)}
                                             />
                                             {newException.product_id && (
                                                 <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
@@ -3829,33 +3896,39 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         </div>
 
                                         {showResults && searchTerm.length > 0 && (
-                                            <div style={{ 
-                                                position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
-                                                boxShadow: THEME.shadow.lg, 
-                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
-                                            }}>
+                                            <div 
+                                                id="original-prod-dropdown"
+                                                style={{ 
+                                                    position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                    backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                    boxShadow: THEME.shadow.lg, 
+                                                    zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
+                                                }}
+                                            >
                                                 {products
                                                     .filter(p => 
                                                         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                                         p.sku.toLowerCase().includes(searchTerm.toLowerCase())
                                                     )
                                                     .slice(0, 10)
-                                                    .map(p => (
+                                                    .map((p, idx) => (
                                                         <div 
                                                             key={p.id}
+                                                            id={`orig-item-${idx}`}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, product_id: p.id, preferred_options: {}}));
                                                                 setSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowResults(false);
+                                                                setFocusedProdIndex(-1);
                                                             }}
                                                             style={{ 
                                                                 padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                transition: 'background 0.2s'
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: idx === focusedProdIndex ? '#F1F5F9' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                            onMouseEnter={() => setFocusedProdIndex(idx)}
+                                                            onMouseLeave={() => setFocusedProdIndex(-1)}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
@@ -3954,12 +4027,15 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         </div>
 
                                         {showSubResults && subSearchTerm.length > 0 && (
-                                            <div style={{ 
-                                                position: 'absolute', top: '100%', left: 0, right: 0, 
-                                                backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
-                                                boxShadow: THEME.shadow.lg, 
-                                                zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
-                                            }}>
+                                            <div 
+                                                id="sub-prod-dropdown"
+                                                style={{ 
+                                                    position: 'absolute', top: '100%', left: 0, right: 0, 
+                                                    backgroundColor: 'white', borderRadius: '12px', border: `1px solid ${THEME.colors.border}`, 
+                                                    boxShadow: THEME.shadow.lg, 
+                                                    zIndex: 10, marginTop: '8px', maxHeight: '200px', overflowY: 'auto' 
+                                                }}
+                                            >
                                                 {products
                                                     .filter(p => 
                                                         p.id !== newException.product_id && (
@@ -3971,6 +4047,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     .map((p, idx) => (
                                                         <div 
                                                             key={p.id}
+                                                            id={`sub-item-${idx}`}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, substitution_product_id: p.id}));
                                                                 setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
