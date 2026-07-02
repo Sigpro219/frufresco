@@ -112,6 +112,10 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                     {t.navHome}
                 </Link> 
                 <ChevronRight size={14} />
+                <Link href={`/#catalog${isEn ? '?lang=en' : ''}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: '500' }}>
+                    {t.navCatalog || 'Catálogo'}
+                </Link> 
+                <ChevronRight size={14} />
                 <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
                     {(isEn && product.name_en) ? product.name_en : (product.display_name || product.name)}
                 </span>
@@ -220,20 +224,25 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                         <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.75rem', textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
                             {t.quantity}
                         </label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
-                            <button
-                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
-                                <Minus size={18} strokeWidth={2.5} />
-                            </button>
-                            <span style={{ width: '40px', textAlign: 'center', fontWeight: '800', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
-                                {quantity}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', border: '1px solid var(--border)', width: 'fit-content', padding: '0.4rem', borderRadius: 'var(--radius-md)', backgroundColor: 'white' }}>
+                                <button
+                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                    style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
+                                    <Minus size={18} strokeWidth={2.5} />
+                                </button>
+                                <span style={{ width: '40px', textAlign: 'center', fontWeight: '800', fontSize: '1.2rem', color: 'var(--primary-dark)' }}>
+                                    {quantity}
+                                </span>
+                                <button
+                                    onClick={() => setQuantity(quantity + 1)}
+                                    style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
+                            </div>
+                            <span style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'lowercase', backgroundColor: 'rgba(34, 197, 94, 0.08)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.15)' }}>
+                                {product.web_unit || product.unit_of_measure || 'un'}
                             </span>
-                            <button
-                                onClick={() => setQuantity(quantity + 1)}
-                                style={{ width: '40px', height: '40px', border: 'none', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: 'var(--radius-sm)', transition: 'all 0.2s' }}>
-                                <Plus size={18} strokeWidth={2.5} />
-                            </button>
                         </div>
                     </div>
 

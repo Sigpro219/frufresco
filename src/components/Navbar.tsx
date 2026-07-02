@@ -348,6 +348,9 @@ export default function Navbar() {
                             <Link href="/" className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Home size={18} strokeWidth={2} /> {t.navHome}
                             </Link>
+                            <Link href={`/${locale === 'en' ? '?lang=en' : ''}#catalog`} className="premium-nav-link" style={{ fontWeight: '600', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <ShoppingBag size={18} strokeWidth={2} /> {t.navCatalog || 'Catálogo'}
+                            </Link>
                             {hasPermission('commercial') && (
                                 <Link href="/b2b/dashboard" className="premium-nav-link" style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <Building2 size={18} strokeWidth={2} /> {t.navInstitutional}
