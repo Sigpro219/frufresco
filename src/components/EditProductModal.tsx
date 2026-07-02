@@ -1081,19 +1081,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                             >
                                                 <option value="">-- Seleccionar --</option>
                                                 {masterAttributes.map(attr => <option key={attr.name} value={attr.name}>{attr.name}</option>)}
-                                                <option value="Personalizado">➕ Otra (Personalizada)...</option>
                                             </select>
-
-                                            {(opt.name !== '' && !masterAttributes.some(a => a.name === opt.name)) && (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre: ej. Calibre, Color..."
-                                                    value={opt.name}
-                                                    onChange={(e) => updateOption(idx, e.target.value, opt.values.join(', '))}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '2px solid #3B82F6', fontWeight: '800', marginTop: '10px', outline: 'none' }}
-                                                    autoFocus
-                                                />
-                                            )}
                                         </div>
 
                                         <div>
@@ -1137,13 +1125,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Verde, Pintón, Maduro"
-                                                    value={opt.values.join(', ')}
-                                                    onChange={(e) => updateOption(idx, opt.name, e.target.value)}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '10px', border: '1px solid #D1D5DB', fontSize: '0.95rem', fontWeight: '600' }}
-                                                />
+                                                <div style={{ fontSize: '0.85rem', color: '#94A3B8', fontWeight: '600', padding: '12px', backgroundColor: 'white', borderRadius: '10px', border: '1px dashed #D1D5DB', textAlign: 'center' }}>
+                                                    Selecciona una variable de la lista para activar las opciones.
+                                                </div>
                                             )}
                                         </div>
                                     </div>
