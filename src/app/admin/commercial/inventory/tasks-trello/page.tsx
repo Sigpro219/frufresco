@@ -368,6 +368,7 @@ export default function KanbanTrelloPage() {
                                             updateTaskStatus(taskId, col.id);
                                         }
                                         setDragOverColumn(null);
+                                        setDraggingTaskId(null);
                                     }}
                                     style={{ 
                                         backgroundColor: isOver ? '#E2E8F0' : '#F1F5F9', 
