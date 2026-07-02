@@ -803,15 +803,15 @@ export default function Navbar() {
                 <div
                     className="nav-mobile-menu"
                     style={{
-                        position: 'absolute',
-                        top: '100%',
+                        position: 'fixed',
+                        top: '85px',
+                        bottom: 0,
                         left: 0,
                         right: 0,
                         backgroundColor: 'white',
                         borderBottom: `1px solid ${THEME.colors.border}`,
                         boxShadow: THEME.shadow.lg,
                         zIndex: 200,
-                        maxHeight: 'calc(100vh - 85px)',
                         overflowY: 'auto',
                     }}
                 >
@@ -919,7 +919,13 @@ export default function Navbar() {
                     )}
 
                     {/* Auth actions */}
-                    <div style={{ padding: '16px 20px', display: 'flex', gap: '12px', borderTop: `2px solid ${THEME.colors.border}` }}>
+                    <div style={{ 
+                        padding: '16px 20px 40px 20px', 
+                        display: 'flex', 
+                        gap: '12px', 
+                        borderTop: `2px solid ${THEME.colors.border}`,
+                        backgroundColor: 'white'
+                    }}>
                         {mounted && user ? (
                             <button
                                 onClick={() => { signOut(); setMobileOpen(false); }}

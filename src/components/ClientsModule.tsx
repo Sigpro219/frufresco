@@ -3749,7 +3749,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         <strong>📦 Notas Logísticas y Alias de Facturación:</strong>
                                         <ul style={{ margin: '4px 0 0 0', paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             <li><u>Alias (Nombre Factura):</u> Sobrescribe el nombre impreso en la factura o remisión.</li>
-                                            <li><u>Nota de Picking (Bodega):</u> Indicaciones de empaque y preparación visibles para el alistador en bodega (ej: <em>Bolsa microperforada</em>).</li>
+                                            <li><u>Nota del cliente:</u> Indicaciones de empaque y preparación solicitadas por el cliente (ej: <em>Bolsa microperforada, 130grs</em>).</li>
                                             <li><u>Nota de Despacho (Conductor):</u> Instrucciones de entrega para el transportador (ej: <em>Recibir canastillas vacías</em>).</li>
                                         </ul>
                                     </li>
@@ -4005,7 +4005,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                         placeholder="Ej: Papa Amarilla (Sin costo)"
                                     />
                                     <FormField 
-                                        label="Nota de Picking (Bodega)" 
+                                        label="Nota del cliente" 
                                         value={newException.picking_note} 
                                         onChange={(v) => setNewException({...newException, picking_note: v})} 
                                         placeholder="Ej: Maduración: Pintón / Con etiqueta"
@@ -4065,7 +4065,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                                                 {/* Picking notes */}
                                                 <div>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Instrucción Bodega (Picking): </span>
+                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nota del cliente: </span>
                                                     <span style={{ fontSize: '0.75rem', color: THEME.colors.primary, fontWeight: '700' }}>{exc.picking_note || '---'}</span>
                                                 </div>
 
