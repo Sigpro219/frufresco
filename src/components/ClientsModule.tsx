@@ -3594,6 +3594,8 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [subSearchTerm, setSubSearchTerm] = useState('');
     const [showSubResults, setShowSubResults] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
+    const [focusedProdIndex, setFocusedProdIndex] = useState(-1);
+    const [focusedSubIndex, setFocusedSubIndex] = useState(-1);
 
     const fetchData = async () => {
         setLoading(true);
@@ -3884,6 +3886,34 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                 onChange={(e) => {
                                                     setSubSearchTerm(e.target.value);
                                                     setShowSubResults(true);
+                                                    setFocusedSubIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (!showSubResults || subSearchTerm.length === 0) return;
+                                                    const filtered = products.filter(p => 
+                                                        p.id !== newException.product_id && (
+                                                            p.name.toLowerCase().includes(subSearchTerm.toLowerCase()) || 
+                                                            p.sku.toLowerCase().includes(subSearchTerm.toLowerCase())
+                                                        )
+                                                    ).slice(0, 10);
+                                                    
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setFocusedSubIndex(prev => (prev + 1) % filtered.length);
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setFocusedSubIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const targetIndex = focusedSubIndex >= 0 && focusedSubIndex < filtered.length ? focusedSubIndex : 0;
+                                                        const p = filtered[targetIndex];
+                                                        if (p) {
+                                                            setNewException(prev => ({...prev, substitution_product_id: p.id}));
+                                                            setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
+                                                            setShowSubResults(false);
+                                                            setFocusedSubIndex(-1);
+                                                        }
+                                                    }
                                                 }}
                                                 onFocus={() => setShowSubResults(true)}
                                                 style={{ 
@@ -3899,7 +3929,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                     backgroundColor: 'white',
                                                     fontFamily: THEME.typography.fontFamilySecondary
                                                 }}
-                                                onBlur={() => setTimeout(() => setShowSubResults(false), 200)}
+                                                onBlur={() => setTimeout(() => {
+                                                    setShowSubResults(false);
+                                                    setFocusedSubIndex(-1);
+                                                }, 200)}
                                             />
                                             {newException.substitution_product_id && (
                                                 <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3935,21 +3968,23 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         )
                                                     )
                                                     .slice(0, 10)
-                                                    .map(p => (
+                                                    .map((p, idx) => (
                                                         <div 
                                                             key={p.id}
                                                             onClick={() => {
                                                                 setNewException(prev => ({...prev, substitution_product_id: p.id}));
                                                                 setSubSearchTerm(`[${p.accounting_id || p.sku}] ${p.name}`);
                                                                 setShowSubResults(false);
+                                                                setFocusedSubIndex(-1);
                                                             }}
                                                             style={{ 
                                                                 padding: '0.8rem 1.2rem', cursor: 'pointer', borderBottom: `1px solid ${THEME.colors.border}`,
                                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                transition: 'background 0.2s'
+                                                                transition: 'background 0.2s',
+                                                                backgroundColor: idx === focusedSubIndex ? '#F1F5F9' : 'white'
                                                             }}
-                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                                            onMouseEnter={() => setFocusedSubIndex(idx)}
+                                                            onMouseLeave={() => setFocusedSubIndex(-1)}
                                                         >
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', fontWeight: '600', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>{p.name}</span>
