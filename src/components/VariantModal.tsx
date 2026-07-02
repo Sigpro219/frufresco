@@ -11,6 +11,7 @@ interface Variant {
     image_url: string | null;
     price_adjustment_percent: number;
     is_active?: boolean;
+    show_on_web?: boolean;
 }
 
 interface VariantModalProps {
@@ -132,13 +133,15 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                 Object.keys(v.options).length === Object.keys(combination).length
             );
 
+            const resolvedActive = existing?.is_active ?? existing?.show_on_web ?? true;
             return {
                 id: existing?.id || `v-${Math.random().toString(36).substr(2, 9)}`,
                 options: combination,
                 sku: variantSku,
                 image_url: existing?.image_url || null,
                 price_adjustment_percent: existing?.price_adjustment_percent || 0,
-                is_active: existing?.is_active ?? true
+                is_active: resolvedActive,
+                show_on_web: resolvedActive
             };
         });
 
@@ -426,9 +429,13 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
                                             <button 
                                                 disabled={readOnly}
                                                 onClick={() => {
-                                                    setVariants(prev => prev.map(variant => 
-                                                        variant.id === v.id ? { ...variant, is_active: !(variant.is_active ?? true) } : variant
-                                                    ));
+                                                    setVariants(prev => prev.map(variant => {
+                                                        if (variant.id === v.id) {
+                                                            const newActive = !(variant.is_active ?? true);
+                                                            return { ...variant, is_active: newActive, show_on_web: newActive };
+                                                        }
+                                                        return variant;
+                                                    }));
                                                 }}
                                                 style={{ 
                                                     display: 'flex', 
