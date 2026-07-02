@@ -3577,6 +3577,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
     const [products, setProducts] = useState<any[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const scrollableRef = useRef<HTMLDivElement>(null);
     
     const [newException, setNewException] = useState<any>({
         product_id: '',
@@ -3692,7 +3693,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                     </button>
                 </header>
 
-                <div style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
+                <div ref={scrollableRef} style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
                     {/* INSTRUCTIVO DE USO */}
                     <div style={{ marginBottom: '1.5rem' }}>
                         <button
@@ -3755,7 +3756,10 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
 
                     {!readOnly && !isAdding && (
                         <button 
-                            onClick={() => setIsAdding(true)}
+                            onClick={() => {
+                                setIsAdding(true);
+                                scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
                             style={{ 
                                 width: '100%', 
                                 padding: '1rem', 
@@ -4057,6 +4061,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                                         setSearchTerm(origProd ? `[${origProd.accounting_id || origProd.sku}] ${origProd.name}` : '');
                                                         setSubSearchTerm(subProd ? `[${subProd.accounting_id || subProd.sku}] ${subProd.name}` : '');
                                                         setIsAdding(true);
+                                                        scrollableRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                                                     }} 
                                                     style={{ border: `1px solid ${THEME.colors.border}`, background: 'white', color: THEME.colors.textSecondary, width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
                                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
