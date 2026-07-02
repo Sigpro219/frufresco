@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
@@ -275,7 +274,6 @@ export default function KanbanTrelloPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
-            <Navbar />
             <Toast />
             
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
