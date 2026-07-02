@@ -82,25 +82,35 @@ export default function KanbanTasksPage() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch Tasks
-            const { data: tasksData, error: tasksError } = await supabase
-                .from('admin_tasks')
-                .select('*, profiles:assigned_to(contact_name, role)')
-                .order('created_at', { ascending: false });
-            
-            if (tasksError) throw tasksError;
-            setTasks(tasksData || []);
-
-            // 2. Fetch Staff (Only active members, excluding clients)
+            // 1. Fetch Staff (from collaborators)
             const { data: staffData, error: staffError } = await supabase
-                .from('profiles')
+                .from('collaborators')
                 .select('id, contact_name, role, is_active')
-                .eq('is_active', true)
-                .not('role', 'eq', 'b2b_client')
                 .order('contact_name');
             
             if (staffError) throw staffError;
             setStaff(staffData || []);
+
+            // 2. Fetch Tasks (without profiles join)
+            const { data: tasksData, error: tasksError } = await supabase
+                .from('admin_tasks')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (tasksError) throw tasksError;
+
+            // Map collaborator details to the profiles field in memory
+            const mappedTasks = (tasksData || []).map(task => {
+                const assignee = staffData?.find(s => s.id === task.assigned_to);
+                return {
+                    ...task,
+                    profiles: assignee ? {
+                        contact_name: assignee.contact_name,
+                        role: assignee.role
+                    } : null
+                };
+            });
+            setTasks(mappedTasks);
 
             // 3. Fetch Incomplete Providers Count
             const { count: incCount, error: incError } = await supabase
@@ -262,8 +272,8 @@ export default function KanbanTasksPage() {
         }
     };
 
-    // Filter staff based on selected role (already filtered by active in fetchData)
-    const filteredStaff = staff.filter(s => s.role === newTask.target_role);
+    // Filter staff based on selected role
+    const filteredStaff = staff.filter(s => s.is_active && s.role === newTask.target_role);
 
     const columns = [
         { id: 'todo', title: 'Pendientes', color: '#FEE2E2', textColor: '#991B1B' },
@@ -665,7 +675,7 @@ export default function KanbanTasksPage() {
                                 </div>
 
                                 <div>
-                                    <label style={labelStyle}>Asignar a ({staff.filter(s => s.contact_name).length} disponibles)</label>
+                                    <label style={labelStyle}>Asignar a ({staff.filter(s => s.is_active && s.contact_name).length} disponibles)</label>
                                     <select 
                                         required
                                         value={newTask.assigned_to}
@@ -673,7 +683,7 @@ export default function KanbanTasksPage() {
                                         style={inputStyle}
                                     >
                                         <option value="">Seleccionar responsable...</option>
-                                        {staff.filter(s => s.contact_name).map(s => (
+                                        {staff.filter(s => s.is_active && s.contact_name).map(s => (
                                             <option key={s.id} value={s.id}>
                                                 {s.contact_name} ({roles.find(r => r.value === s.role)?.label || s.role || 'Colaborador'})
                                             </option>

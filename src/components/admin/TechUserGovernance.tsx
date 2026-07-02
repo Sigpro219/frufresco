@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     UserCheck, UserX, ShieldAlert, Key, Share2, Check, Copy, Printer, QrCode, 
-    Trash2, Lock, Unlock, RefreshCw, AlertTriangle, ExternalLink, HelpCircle, ShieldCheck
+    Trash2, Lock, Unlock, RefreshCw, AlertTriangle, ExternalLink, HelpCircle, ShieldCheck,
+    Search
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME } from '@/lib/adminTheme';
@@ -41,6 +42,20 @@ interface ActiveTechUser {
 export default function TechUserGovernance() {
     const [pending, setPending] = useState<PendingRequest[]>([]);
     const [activeUsers, setActiveUsers] = useState<ActiveTechUser[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredActiveUsers = useMemo(() => {
+        if (!searchQuery.trim()) return activeUsers;
+        const query = searchQuery.toLowerCase().trim();
+        return activeUsers.filter(user => 
+            user.contact_name?.toLowerCase().includes(query) ||
+            user.email?.toLowerCase().includes(query) ||
+            user.specialty?.toLowerCase().includes(query) ||
+            user.role?.toLowerCase().includes(query) ||
+            user.phone?.toLowerCase().includes(query)
+        );
+    }, [activeUsers, searchQuery]);
+
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -477,16 +492,80 @@ export default function TechUserGovernance() {
                     </section>
 
                     {/* 2. ACTIVE TECH USERS LIST */}
-                    <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '2rem', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: 0, fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <UserCheck size={20} style={{ color: THEME.colors.primary }} /> Cuentas Digitales Activas (Gobernanza)
-                                <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '12px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, fontWeight: '900', marginLeft: '0.5rem' }}>
-                                    {activeUsers.length} total
-                                </span>
-                            </h3>
-                            <p style={{ margin: '0.3rem 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                Cuentas con login activo en la aplicación. Puedes suspender de forma temporal su acceso (forzando logout inmediato) o revocar la cuenta de forma permanente.
+                    <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: '1.5rem', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                <h3 style={{ margin: 0, fontWeight: '800', color: THEME.colors.textMain, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <UserCheck size={18} style={{ color: THEME.colors.primary }} /> Cuentas Digitales Activas (Gobernanza)
+                                    <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '12px', backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary, fontWeight: '900', marginLeft: '0.25rem' }}>
+                                        {searchQuery ? `${filteredActiveUsers.length} de ` : ''}{activeUsers.length} total
+                                    </span>
+                                </h3>
+
+                                {/* Buscador */}
+                                <div style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar colaborador..." 
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.5rem 2rem 0.5rem 2rem', 
+                                            borderRadius: '10px', 
+                                            border: `1px solid ${THEME.colors.border}`, 
+                                            fontSize: '0.8rem',
+                                            fontWeight: '600',
+                                            color: THEME.colors.textMain,
+                                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)',
+                                            outline: 'none',
+                                            transition: 'all 0.2s',
+                                            backgroundColor: '#F8FAFC'
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor = THEME.colors.primary;
+                                            e.target.style.backgroundColor = 'white';
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor = THEME.colors.border;
+                                            e.target.style.backgroundColor = '#F8FAFC';
+                                        }}
+                                    />
+                                    <Search 
+                                        size={14} 
+                                        style={{ 
+                                            position: 'absolute', 
+                                            left: '0.7rem', 
+                                            top: '50%', 
+                                            transform: 'translateY(-50%)', 
+                                            color: THEME.colors.textSecondary,
+                                            pointerEvents: 'none'
+                                        }} 
+                                        strokeWidth={1.8}
+                                    />
+                                    {searchQuery && (
+                                        <button 
+                                            onClick={() => setSearchQuery('')}
+                                            style={{ 
+                                                position: 'absolute', 
+                                                right: '0.7rem', 
+                                                top: '50%', 
+                                                transform: 'translateY(-50%)', 
+                                                background: 'none', 
+                                                border: 'none', 
+                                                cursor: 'pointer', 
+                                                color: THEME.colors.textSecondary,
+                                                fontSize: '0.8rem',
+                                                padding: '2px'
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <p style={{ margin: 0, color: THEME.colors.textSecondary, fontSize: '0.8rem', lineHeight: '1.3' }}>
+                                Cuentas con login activo en la aplicación. Puedes suspender de forma temporal su acceso o revocar la cuenta de forma permanente.
                             </p>
                         </div>
 
@@ -496,6 +575,14 @@ export default function TechUserGovernance() {
                                 <h4 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '700' }}>No hay cuentas creadas</h4>
                                 <p style={{ margin: '0.3rem 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem' }}>
                                     Aún no has activado credenciales para ningún colaborador.
+                                </p>
+                            </div>
+                        ) : filteredActiveUsers.length === 0 ? (
+                            <div style={{ padding: '3rem 1rem', textAlign: 'center', backgroundColor: THEME.colors.background, borderRadius: '16px', border: `1px dashed ${THEME.colors.border}` }}>
+                                <Search size={36} style={{ color: THEME.colors.textSecondary, opacity: 0.5, marginBottom: '0.8rem' }} />
+                                <h4 style={{ margin: 0, color: THEME.colors.textMain, fontWeight: '700' }}>Sin resultados</h4>
+                                <p style={{ margin: '0.3rem 0 0 0', color: THEME.colors.textSecondary, fontSize: '0.8rem' }}>
+                                    No se encontraron cuentas activas que coincidan con "{searchQuery}".
                                 </p>
                             </div>
                         ) : (
@@ -510,7 +597,7 @@ export default function TechUserGovernance() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {activeUsers.map(user => (
+                                        {filteredActiveUsers.map(user => (
                                             <tr key={user.profile_id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, opacity: user.is_active ? 1 : 0.65 }}>
                                                 <td style={{ padding: '1rem' }}>
                                                     <div style={{ fontWeight: '800', color: THEME.colors.textMain }}>{user.contact_name}</div>
