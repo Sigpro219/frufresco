@@ -650,14 +650,48 @@ export default function ClientsModule() {
         const searchTerms = searchTerm.toLowerCase().split(',').map(term => term.trim()).filter(term => term.length > 0);
         if (searchTerms.length === 0) return data;
 
-        return data.filter(item => 
-            searchTerms.every(term => 
-                fields.some(field => {
-                    const value = (item as Record<string, unknown>)[field];
+        return data.filter(item => {
+            const record = item as Record<string, unknown>;
+            return searchTerms.every(term => {
+                // Special command handlers starting with @
+                if (term.startsWith('@')) {
+                    if (term === '@branch' || term === '@sucursal') {
+                        return !!record.parent_id;
+                    }
+                    if (term === '@matrix' || term === '@matriz') {
+                        return record.is_corporate_parent === true;
+                    }
+                    if (term === '@activo') {
+                        return record.is_active === true;
+                    }
+                    if (term === '@vencido' || term === '@inactivo') {
+                        return record.is_active === false;
+                    }
+                    if (term === '@nogps') {
+                        return !record.latitude || !record.longitude;
+                    }
+                    if (term === '@bogota' || term === '@bogotá') {
+                        const cityVal = String(record.city || '').toLowerCase();
+                        const muniVal = String(record.municipality || '').toLowerCase();
+                        const deptVal = String(record.department || '').toLowerCase();
+                        return cityVal.includes('bogot') || muniVal.includes('bogot') || deptVal.includes('bogot');
+                    }
+                    if (term.startsWith('@nit')) {
+                        const valuePart = term.replace('@nit', '').replace(':', '').trim();
+                        if (!valuePart) {
+                            return !!record.nit;
+                        }
+                        return String(record.nit || '').toLowerCase().includes(valuePart);
+                    }
+                }
+
+                // Default field searching
+                return fields.some(field => {
+                    const value = record[field];
                     return String(value || '').toLowerCase().includes(term);
-                })
-            )
-        );
+                });
+            });
+        });
     };
 
     return (
@@ -997,6 +1031,7 @@ export default function ClientsModule() {
                                         <div>
                                             <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
                                             <b style={{ color: '#FCD34D' }}>@vencido</b>: Expirado<br/>
+                                            <b style={{ color: '#FCD34D' }}>@matrix</b>: Casa Matriz<br/>
                                             <b style={{ color: '#FCD34D' }}>@branch</b>: Sucursales
                                         </div>
                                     </div>
