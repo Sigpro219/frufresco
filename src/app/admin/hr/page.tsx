@@ -189,6 +189,57 @@ export default function HRManagement() {
         if (!newUser.specialty) return alert('Debes seleccionar una ubicación/sede');
         try {
             setSaving(true);
+
+            // Check if document_id is already registered
+            if (newUser.document_id) {
+                const { data: existing, error: checkError } = await supabase
+                    .from('collaborators')
+                    .select('*')
+                    .eq('document_id', newUser.document_id)
+                    .maybeSingle();
+
+                if (checkError) throw checkError;
+
+                if (existing) {
+                    if (existing.is_active) {
+                        alert(`Ya existe un colaborador ACTIVO llamado "${existing.contact_name}" con este documento de identidad.`);
+                        setSaving(false);
+                        return;
+                    } else {
+                        const confirmReactivate = confirm(
+                            `Ya existe un colaborador llamado "${existing.contact_name}" con este documento de identidad, pero actualmente está INACTIVO/ARCHIVADO.\n\n¿Deseas reactivar su perfil y actualizarlo con los datos ingresados?`
+                        );
+                        if (!confirmReactivate) {
+                            setSaving(false);
+                            return;
+                        }
+
+                        const { error: updateError } = await supabase
+                            .from('collaborators')
+                            .update({
+                                contact_name: newUser.contact_name,
+                                email: newUser.email,
+                                phone: newUser.phone,
+                                role: newUser.role,
+                                specialty: newUser.specialty,
+                                is_temporary: newUser.is_temporary || false,
+                                login_requested: newUser.login_requested || false,
+                                is_active: true
+                            })
+                            .eq('id', existing.id);
+
+                        if (updateError) throw updateError;
+
+                        setShowAdd(false);
+                        setNewUser({ contact_name: '', email: '', phone: '', role: '', specialty: '', is_active: true, is_temporary: false, login_requested: false });
+                        await fetchData();
+                        alert('Colaborador reactivado y actualizado con éxito.');
+                        setSaving(false);
+                        return;
+                    }
+                }
+            }
+
             const { error } = await supabase
                 .from('collaborators')
                 .insert([{
