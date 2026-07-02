@@ -399,22 +399,28 @@ export default function HRManagement() {
                             placeholder="Buscar por nombre, teléfono, rol (@rol), ID o @temporal..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            onFocus={() => setShowSearchHelp(true)}
-                            onBlur={() => setTimeout(() => setShowSearchHelp(false), 200)}
                             style={{ 
-                                width: '100%', padding: '0.8rem 2.8rem 0.8rem 2.8rem', borderRadius: '14px', 
+                                width: '100%', padding: '0.8rem 4.5rem 0.8rem 2.8rem', borderRadius: '14px', 
                                 border: `1.5px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontSize: '0.95rem',
                                 fontWeight: '600', color: THEME.colors.textMain, outline: 'none'
                             }}
                         />
-                        {showSearchHelp && (
+                        {(showSearchHelp || searchTerm.includes('@') || searchTerm.includes(',')) && (
                             <div style={{ 
                                 position: 'absolute', top: '110%', left: 0, right: 0, backgroundColor: 'white', 
                                 padding: '1.2rem', borderRadius: '16px', boxShadow: THEME.shadow.lg,
                                 zIndex: 100, border: `1px solid ${THEME.colors.border}`, fontSize: '0.8rem'
                             }}>
-                                <div style={{ fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>
-                                    <HelpCircle strokeWidth={1.5} size={16} style={{ color: THEME.colors.primary }} /> Atajos de Búsqueda Avanzada
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                    <div style={{ fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05rem' }}>
+                                        <HelpCircle strokeWidth={1.5} size={16} style={{ color: THEME.colors.primary }} /> Atajos de Búsqueda Avanzada
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowSearchHelp(false)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: 'bold' }}
+                                    >
+                                        Ocultar
+                                    </button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                                     <div style={{ color: THEME.colors.textSecondary, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -435,18 +441,31 @@ export default function HRManagement() {
                                 </div>
                             </div>
                         )}
-                        {searchTerm && (
+                        <div style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '0.4rem', zIndex: 10 }}>
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => setSearchTerm('')}
+                                    style={{ 
+                                        background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                        color: THEME.colors.textSecondary, fontWeight: 'bold', padding: '0.2rem'
+                                    }}
+                                >
+                                    <X strokeWidth={1.5} size={16} />
+                                </button>
+                            )}
                             <button 
-                                onClick={() => setSearchTerm('')}
+                                onClick={() => setShowSearchHelp(!showSearchHelp)}
+                                type="button"
+                                title="Ayuda de búsqueda avanzada"
                                 style={{ 
-                                    position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)',
                                     background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                    color: THEME.colors.textSecondary, fontWeight: 'bold', padding: '0.2rem'
+                                    color: showSearchHelp ? THEME.colors.primary : THEME.colors.textSecondary, padding: '0.2rem',
+                                    transition: 'color 0.2s'
                                 }}
                             >
-                                <X strokeWidth={1.5} size={16} />
+                                <HelpCircle strokeWidth={1.5} size={18} />
                             </button>
-                        )}
+                        </div>
                     </div>
                     <select 
                         value={filterRole} 
