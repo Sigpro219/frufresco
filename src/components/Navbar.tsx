@@ -124,6 +124,17 @@ export default function Navbar() {
         }
     }, [appName, locale]);
 
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [mobileOpen]);
+
     // Persistent Language Logic
     useEffect(() => {
         const savedLang = localStorage.getItem('frufresco_lang');
@@ -812,6 +823,24 @@ export default function Navbar() {
                         </div>
                     )}
 
+                    {/* General navigation links (Visible to all users) */}
+                    {mounted && (
+                        <>
+                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
+                            </Link>
+                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
+                            </Link>
+                            {/* B2B Institutional link for staff with commercial permissions */}
+                            {user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && hasPermission('commercial') && (
+                                <Link href="/b2b/dashboard" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
+                                    <Building2 size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navInstitutional}
+                                </Link>
+                            )}
+                        </>
+                    )}
+
                     {/* Navigation links for admin/employee */}
                     {mounted && user && profile?.role !== 'b2b_client' && profile?.role !== 'b2c_client' && (
                         <>
@@ -885,18 +914,6 @@ export default function Navbar() {
                             </Link>
                             <Link href="/b2b/orders" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
                                 <ShoppingCart size={16} strokeWidth={1.5} color={THEME.colors.primary} /> Mis Pedidos
-                            </Link>
-                        </>
-                    )}
-
-                    {/* Guest links */}
-                    {mounted && !user && (
-                        <>
-                            <Link href="/" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Home size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navHome}
-                            </Link>
-                            <Link href="/#catalog" className="mobile-nav-link" onClick={() => setMobileOpen(false)}>
-                                <Package size={16} strokeWidth={1.5} color={THEME.colors.primary} /> {t.navCatalog}
                             </Link>
                         </>
                     )}
