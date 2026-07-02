@@ -662,10 +662,13 @@ export default function ClientsModule() {
                         return record.is_corporate_parent === true;
                     }
                     if (term === '@activo') {
-                        return record.is_active === true;
+                        return record.is_active === true || getAgreementStatus(String(record.id || '')) === 'active';
                     }
                     if (term === '@vencido' || term === '@inactivo') {
-                        return record.is_active === false;
+                        return record.is_active === false || getAgreementStatus(String(record.id || '')) === 'warning';
+                    }
+                    if (term === '@sin acuerdo' || term === '@sin_acuerdo' || term === '@sinacuerdo') {
+                        return getAgreementStatus(String(record.id || '')) === 'none';
                     }
                     if (term === '@nogps') {
                         return !record.latitude || !record.longitude;
@@ -1045,7 +1048,7 @@ export default function ClientsModule() {
                                     position: 'absolute',
                                     top: '48px',
                                     right: '0',
-                                    width: '280px',
+                                    width: '310px',
                                     backgroundColor: '#1E293B',
                                     color: 'white',
                                     padding: '1.2rem',
@@ -1060,11 +1063,12 @@ export default function ClientsModule() {
                                     <div style={{ fontWeight: '900', color: '#38BDF8', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
                                         🚀 COMANDOS CRM (@)
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '10px' }}>
                                         <div>
                                             <b style={{ color: '#FCD34D' }}>@bogota</b>: Por ciudad<br/>
                                             <b style={{ color: '#FCD34D' }}>@nit</b>: Por NIT<br/>
-                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo
+                                            <b style={{ color: '#FCD34D' }}>@nogps</b>: Sin geo<br/>
+                                            <b style={{ color: '#FCD34D' }}>@sin acuerdo</b>: Sin acuerdo
                                         </div>
                                         <div>
                                             <b style={{ color: '#FCD34D' }}>@activo</b>: Acuerdo ok<br/>
