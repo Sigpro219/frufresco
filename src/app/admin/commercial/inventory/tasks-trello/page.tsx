@@ -102,7 +102,8 @@ export default function KanbanTrelloPage() {
                 .from('profiles')
                 .select('id, contact_name, role, is_active')
                 .eq('is_active', true)
-                .not('role', 'eq', 'b2b_client');
+                .not('role', 'eq', 'b2b_client')
+                .order('contact_name');
             
             if (staffError) throw staffError;
             setStaff(staffData || []);
@@ -723,7 +724,7 @@ export default function KanbanTrelloPage() {
                                 </div>
 
                                 <div>
-                                    <label style={labelStyle}>Asignar a ({filteredStaff.length} disponibles)</label>
+                                    <label style={labelStyle}>Asignar a ({staff.filter(s => s.contact_name).length} disponibles)</label>
                                     <select 
                                         required
                                         value={newTask.assigned_to}
@@ -731,15 +732,12 @@ export default function KanbanTrelloPage() {
                                         style={inputStyle}
                                     >
                                         <option value="">Seleccionar responsable...</option>
-                                        {filteredStaff.map(s => (
-                                            <option key={s.id} value={s.id}>{s.contact_name}</option>
+                                        {staff.filter(s => s.contact_name).map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.contact_name} ({roles.find(r => r.value === s.role)?.label || s.role || 'Colaborador'})
+                                            </option>
                                         ))}
                                     </select>
-                                    {filteredStaff.length === 0 && (
-                                        <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.7rem', color: '#EF4444', fontWeight: '600' }}>
-                                            ⚠️ No hay colaboradores ACTIVOS con este rol.
-                                        </p>
-                                    )}
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
