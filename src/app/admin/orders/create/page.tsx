@@ -38,6 +38,7 @@ import {
     UploadCloud
 } from 'lucide-react';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import VariantModal from '@/components/VariantModal';
 
 function CreateOrderContent() {
     const router = useRouter();
@@ -165,6 +166,7 @@ function CreateOrderContent() {
     // MODAL STATE (For Product Variants)
     const [selectedProductForModal, setSelectedProductForModal] = useState<any | null>(null);
     const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
+    const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
     const [modalQuantity, setModalQuantity] = useState<string | number>(1);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
     const [modalUnit, setModalUnit] = useState('Kg');
@@ -709,6 +711,77 @@ function CreateOrderContent() {
                 }, ...prev];
             }
         });
+    };
+
+    const handleSaveVariantsFromOrder = async (productId: string, optionsConfig: any[] | null, variants: any[] | null): Promise<boolean> => {
+        try {
+            const { error: prodError } = await supabase
+                .from('products')
+                .update({
+                    options_config: optionsConfig,
+                    variants: variants,
+                    options: (optionsConfig || []).reduce((acc: any, opt: any) => {
+                        acc[opt.name] = opt.values;
+                        return acc;
+                    }, {})
+                })
+                .eq('id', productId);
+
+            if (prodError) throw prodError;
+
+            // Sincronizar tabla dedicada product_variants
+            if (variants && variants.length > 0) {
+                await supabase
+                    .from('product_variants')
+                    .delete()
+                    .eq('product_id', productId);
+
+                const formattedVariants = variants.map((v: any) => ({
+                    product_id: productId,
+                    sku: v.sku,
+                    options: v.options,
+                    image_url: v.image_url,
+                    price_adjustment_percent: v.price_adjustment_percent || 0,
+                    is_active: v.is_active ?? true
+                }));
+
+                const { error: variantError } = await supabase
+                    .from('product_variants')
+                    .insert(formattedVariants);
+
+                if (variantError) throw variantError;
+            }
+
+            return true;
+        } catch (err: any) {
+            console.error('Error al guardar variantes desde pedido:', err);
+            alert('Error al guardar variantes: ' + err.message);
+            return false;
+        }
+    };
+
+    const handleVariantImageUploadFromOrder = async (file: File): Promise<string | null> => {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (err: any) {
+            console.error('Error subiendo imagen de variante:', err);
+            alert('Error al subir imagen de variante: ' + err.message);
+            return null;
+        }
     };
 
     const confirmModalAdd = () => {
@@ -2951,27 +3024,48 @@ function CreateOrderContent() {
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                                             Unidad de Medida
                                         </label>
-                                        <button
-                                            type="button"
-                                            tabIndex={-1}
-                                            onClick={() => {
-                                                if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
-                                                    setManageConversionsProduct(selectedProductForModal);
-                                                }
-                                            }}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                color: '#2563EB',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '700',
-                                                cursor: 'pointer',
-                                                padding: 0,
-                                                textDecoration: 'underline'
-                                            }}
-                                        >
-                                            ⚙️ Equivalencias
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                            <button
+                                                type="button"
+                                                tabIndex={-1}
+                                                onClick={() => {
+                                                    setVariantConfigProduct(selectedProductForModal);
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#059669',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    padding: 0,
+                                                    textDecoration: 'underline'
+                                                }}
+                                            >
+                                                ⚙️ Variantes
+                                            </button>
+                                            <button
+                                                type="button"
+                                                tabIndex={-1}
+                                                onClick={() => {
+                                                    if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
+                                                        setManageConversionsProduct(selectedProductForModal);
+                                                    }
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#2563EB',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    padding: 0,
+                                                    textDecoration: 'underline'
+                                                }}
+                                            >
+                                                ⚙️ Equivalencias
+                                            </button>
+                                        </div>
                                     </div>
                                     {optionsList.length > 1 ? (
                                         <select
@@ -3279,6 +3373,33 @@ function CreateOrderContent() {
                     </div>
                 );
             })()}
+
+            {variantConfigProduct && (
+                <VariantModal
+                    product={variantConfigProduct}
+                    onClose={() => setVariantConfigProduct(null)}
+                    onSave={async (optionsConfig, variants) => {
+                        const success = await handleSaveVariantsFromOrder(variantConfigProduct.id, optionsConfig, variants);
+                        if (success) {
+                            setProducts(prev => prev.map(p => 
+                                p.id === variantConfigProduct.id 
+                                    ? { ...p, options_config: optionsConfig, variants: variants } 
+                                    : p
+                            ));
+                            setSelectedProductForModal(prev => {
+                                if (prev && prev.id === variantConfigProduct.id) {
+                                    return { ...prev, options_config: optionsConfig, variants: variants };
+                                }
+                                return prev;
+                            });
+                            showToast('Variantes del producto actualizadas', 'success');
+                        }
+                        return success;
+                    }}
+                    onUploadImage={handleVariantImageUploadFromOrder}
+                    readOnly={false}
+                />
+            )}
 
             {/* MAP PICKER MODAL */}
             {showMapPicker && (
