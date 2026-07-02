@@ -112,7 +112,8 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             const eliminados = dbAttributes.filter(a => !idsEnLocal.includes(a.id));
             
             for (const del of eliminados) {
-                await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                const { error } = await supabase.from('product_attributes_master').delete().eq('id', del.id);
+                if (error) throw error;
             }
 
             for (const attr of localAttributes) {
@@ -122,17 +123,25 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
                 };
                 
                 if (attr.id.startsWith('temp-')) {
-                    await supabase.from('product_attributes_master').insert([payload]);
+                    const { error } = await supabase.from('product_attributes_master').insert([payload]);
+                    if (error) throw error;
                 } else {
-                    await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    const { error } = await supabase.from('product_attributes_master').update(payload).eq('id', attr.id);
+                    if (error) throw error;
                 }
             }
 
             await fetchAttributes();
-            if ((window as any).showToast) (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
-        } catch (err) {
+            if ((window as any).showToast) {
+                (window as any).showToast('Gobernanza actualizada con éxito ✅', 'success');
+            } else {
+                alert('Gobernanza actualizada con éxito ✅');
+            }
+            onClose(); // Cerrar el modal al guardar exitosamente
+        } catch (err: any) {
             console.error('Save error:', err);
-            alert('Error al guardar los cambios.');
+            const errMsg = err.message || err.details || 'Error desconocido de permisos de base de datos.';
+            alert(`Error al guardar los cambios: ${errMsg}`);
         } finally {
             setSaving(false);
         }
