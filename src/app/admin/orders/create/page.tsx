@@ -2904,7 +2904,7 @@ function CreateOrderContent() {
                                     <div style={{ fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase', fontSize: '0.7rem', color: '#B45309', letterSpacing: '0.05em' }}>
                                         📌 Requerimientos del Cliente:
                                     </div>
-                                    {exc.nickname && exc.nickname !== selectedProductForModal.name && (
+                                    {exc.nickname && exc.nickname.trim().toLowerCase() !== selectedProductForModal.name.trim().toLowerCase() && (
                                         <div><strong>Alias Comercial:</strong> {exc.nickname}</div>
                                     )}
                                     {exc.picking_note && (

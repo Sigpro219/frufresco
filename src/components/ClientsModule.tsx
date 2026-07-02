@@ -4015,7 +4015,7 @@ function ClientExceptionsModal({ clientId, onClose, readOnly = false }: { client
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                                                 
                                                 {/* Nickname alias */}
-                                                {exc.nickname && (
+                                                {exc.nickname && origProd?.name && exc.nickname.trim().toLowerCase() !== origProd.name.trim().toLowerCase() && (
                                                     <div>
                                                         <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>Nombre Factura: </span>
                                                         <span style={{ fontSize: '0.75rem', color: THEME.colors.textMain, fontWeight: '600' }}>{exc.nickname}</span>
