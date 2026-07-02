@@ -182,31 +182,25 @@ export default function ProductCard({ product }: { product: Product }) {
                     </div>
 
                     {/* Official Brand Watermark Overlay */}
-                    {product.image_url && imageLoaded && (
+                    {product.image_url && imageLoaded && (product.image_url.includes('clean') || product.image_url.includes('overlay')) && (
                         <div style={{
                             position: 'absolute',
-                            bottom: '10px',
-                            right: '10px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                            backdropFilter: 'blur(8px)',
-                            WebkitBackdropFilter: 'blur(8px)',
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
+                            bottom: '4%',
+                            right: '4%',
+                            width: '18%',
+                            height: '18%',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            border: '1px solid rgba(255, 255, 255, 0.6)',
                             zIndex: 8,
                             pointerEvents: 'none'
                         }}>
                             <img 
-                                src="/logo.png" 
+                                src="/logo_simbolo.png" 
                                 alt="FruFresco" 
                                 style={{ 
-                                    width: '26px', 
-                                    height: '26px', 
+                                    width: '100%', 
+                                    height: '100%', 
                                     objectFit: 'contain' 
                                 }} 
                                 onError={(e) => {

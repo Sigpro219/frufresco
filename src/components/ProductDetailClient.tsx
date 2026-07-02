@@ -134,31 +134,25 @@ export default function ProductDetailClient({ product }: { product: Product }) {
                         style={{ objectFit: 'cover' }}
                         priority
                     />
-                    {product.image_url && (
+                    {product.image_url && (product.image_url.includes('clean') || product.image_url.includes('overlay')) && (
                         <div style={{
                             position: 'absolute',
-                            bottom: '15px',
-                            right: '15px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                            backdropFilter: 'blur(8px)',
-                            WebkitBackdropFilter: 'blur(8px)',
-                            width: '48px',
-                            height: '48px',
-                            borderRadius: '50%',
+                            bottom: '4%',
+                            right: '4%',
+                            width: '18%',
+                            height: '18%',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            border: '1px solid rgba(255, 255, 255, 0.6)',
                             zIndex: 8,
                             pointerEvents: 'none'
                         }}>
                             <img 
-                                src="/logo.png" 
+                                src="/logo_simbolo.png" 
                                 alt="FruFresco" 
                                 style={{ 
-                                    width: '32px', 
-                                    height: '32px', 
+                                    width: '100%', 
+                                    height: '100%', 
                                     objectFit: 'contain' 
                                 }} 
                                 onError={(e) => {
