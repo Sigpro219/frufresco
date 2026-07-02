@@ -3020,53 +3020,9 @@ function CreateOrderContent() {
                                 </div>
 
                                 <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                                            Unidad de Medida
-                                        </label>
-                                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                            <button
-                                                type="button"
-                                                tabIndex={-1}
-                                                onClick={() => {
-                                                    setVariantConfigProduct(selectedProductForModal);
-                                                }}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    color: '#059669',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '700',
-                                                    cursor: 'pointer',
-                                                    padding: 0,
-                                                    textDecoration: 'underline'
-                                                }}
-                                            >
-                                                ⚙️ Variantes
-                                            </button>
-                                            <button
-                                                type="button"
-                                                tabIndex={-1}
-                                                onClick={() => {
-                                                    if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
-                                                        setManageConversionsProduct(selectedProductForModal);
-                                                    }
-                                                }}
-                                                style={{
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    color: '#2563EB',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '700',
-                                                    cursor: 'pointer',
-                                                    padding: 0,
-                                                    textDecoration: 'underline'
-                                                }}
-                                            >
-                                                ⚙️ Equivalencias
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Unidad de Medida
+                                    </label>
                                     {optionsList.length > 1 ? (
                                         <select
                                             id="modal-unit-select"
@@ -3134,6 +3090,61 @@ function CreateOrderContent() {
                                         />
                                     )}
                                 </div>
+                            </div>
+
+                            {/* CONFIGURATION ACTION BAR */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                gap: '1.5rem',
+                                padding: '0.6rem 1rem',
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: '12px',
+                                border: '1px solid #E2E8F0',
+                                marginTop: '0.5rem',
+                                marginBottom: '0.5rem'
+                            }}>
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => setVariantConfigProduct(selectedProductForModal)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#059669',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    ⚙️ Configurar Variantes
+                                </button>
+                                <div style={{ width: '1px', backgroundColor: '#CBD5E1' }} />
+                                <button
+                                    type="button"
+                                    tabIndex={-1}
+                                    onClick={() => {
+                                        if (window.confirm("¿Quieres crear una nueva equivalencia?")) {
+                                            setManageConversionsProduct(selectedProductForModal);
+                                        }
+                                    }}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#2563EB',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    ⚙️ Configurar Equivalencias
+                                </button>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
