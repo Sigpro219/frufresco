@@ -694,6 +694,20 @@ export default function ClientsModule() {
         });
     };
 
+    const getActiveFilteredCount = (): number | null => {
+        if (!searchTerm) return null;
+        if (activeTab === 'b2b') {
+            return filterData(clientsB2B, ['company_name', 'razon_social', 'nit', 'contact_name', 'phone', 'email', 'city', 'municipality', 'department', 'address']).length;
+        }
+        if (activeTab === 'b2c') {
+            return filterData(clientsB2C, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'address', 'municipality', 'department']).length;
+        }
+        if (activeTab === 'leads') {
+            return filterData(leads, ['company_name', 'contact_name', 'phone', 'email', 'nit', 'notes', 'business_type', 'municipality', 'department', 'address']).length;
+        }
+        return null;
+    };
+
     return (
         <div style={{ backgroundColor: '#F0F2F5', height: '100%' }}>
             <Toast />
@@ -1002,6 +1016,30 @@ export default function ClientsModule() {
                             }}
                         >
                             i
+                            {getActiveFilteredCount() !== null && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-6px',
+                                    right: '-6px',
+                                    backgroundColor: '#10B981', // Emerald green
+                                    color: 'white',
+                                    fontSize: '0.65rem',
+                                    fontWeight: '900',
+                                    borderRadius: '9999px',
+                                    height: '18px',
+                                    minWidth: '18px',
+                                    padding: '0 5px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px solid white',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                    animation: 'popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                    pointerEvents: 'none'
+                                }}>
+                                    {getActiveFilteredCount()}
+                                </div>
+                            )}
                             {showHelpTooltip && (
                                 <div style={{
                                     position: 'absolute',
@@ -1039,6 +1077,10 @@ export default function ClientsModule() {
                                         @keyframes fadeInDown {
                                             from { opacity: 0; transform: translateY(-10px); }
                                             to { opacity: 1; transform: translateY(0); }
+                                        }
+                                        @keyframes popIn {
+                                            from { opacity: 0; transform: scale(0.6); }
+                                            to { opacity: 1; transform: scale(1); }
                                         }
                                     `}</style>
                                 </div>
