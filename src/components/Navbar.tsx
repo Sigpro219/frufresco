@@ -803,15 +803,15 @@ export default function Navbar() {
                 <div
                     className="nav-mobile-menu"
                     style={{
-                        position: 'fixed',
-                        top: '85px',
-                        bottom: 0,
+                        position: 'absolute',
+                        top: '100%',
                         left: 0,
                         right: 0,
                         backgroundColor: 'white',
                         borderBottom: `1px solid ${THEME.colors.border}`,
                         boxShadow: THEME.shadow.lg,
                         zIndex: 200,
+                        maxHeight: 'calc(100dvh - 95px)',
                         overflowY: 'auto',
                     }}
                 >
