@@ -2372,7 +2372,7 @@ function CreateOrderContent() {
                                                                          const val = e.currentTarget.value;
                                                                          const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
                                                                          if (p) {
-                                                                             e.preventDefault(); // Evitar el comportamiento nativo de Tab
+                                                                             e.preventDefault(); 
                                                                              openModalForStagedItem(
                                                                                  item.id, 
                                                                                  p, 
@@ -2383,6 +2383,21 @@ function CreateOrderContent() {
                                                                                  item.originalUnit, 
                                                                                  item.conversion_factor
                                                                              );
+                                                                         }
+                                                                     } else if (e.key === 'Enter') {
+                                                                         e.preventDefault();
+                                                                         const val = e.currentTarget.value;
+                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         if (p) {
+                                                                             updateStagedItem(item.id, 'product', p);
+                                                                         }
+                                                                         updateStagedItem(item.id, 'isConfirmed', true);
+                                                                         const nextInput = document.getElementById(`sku-input-${idx + 1}`);
+                                                                         if (nextInput) {
+                                                                             (nextInput as HTMLElement).focus();
+                                                                             (nextInput as HTMLInputElement).select();
+                                                                         } else {
+                                                                             document.getElementById('confirm-inject-button')?.focus();
                                                                          }
                                                                      }
                                                                  }}
