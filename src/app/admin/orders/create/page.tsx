@@ -206,8 +206,8 @@ function CreateOrderContent() {
                 }
             }, 80);
 
-            // Only reset modal states to defaults if we are NOT in editing mode!
-            if (editingCartIndex !== null) {
+            // Only reset modal states to defaults if we are NOT in editing mode or staging mode!
+            if (editingCartIndex !== null || editingStagedItemId !== null) {
                 return;
             }
 
@@ -222,7 +222,7 @@ function CreateOrderContent() {
                 setModalFactor(1);
             }
         }
-    }, [selectedProductForModal, editingCartIndex]);
+    }, [selectedProductForModal, editingCartIndex, editingStagedItemId]);
 
     // Cart Logic
     const [cart, setCart] = useState<{
