@@ -2318,9 +2318,9 @@ function CreateOrderContent() {
                                                             style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                         />
                                                     </th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left' }}>NOMBRE EN DOCUMENTO</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (ID)</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>CANT.</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left', width: '30%' }}>NOMBRE EN DOCUMENTO</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left', width: '45%' }}>TU PRODUCTO (ID)</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center', width: '25%' }}>CANT.</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2347,90 +2347,103 @@ function CreateOrderContent() {
                                                                 style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
                                                             />
                                                         </td>
-                                                        <td style={{ padding: '1rem 2rem' }}>
-                                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
-                                                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
-                                                                <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
-                                                                    {item.originalQtyInFile || item.quantity} unidades detectadas
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
-                                                            <input 
-                                                                type="text"
-                                                                placeholder="Buscar ID..."
-                                                                defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
-                                                                list="all-products-list"
-                                                                onFocus={(e) => e.target.select()}
-                                                                className="sku-search-input"
-                                                                id={`sku-input-${idx}`}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Tab') {
-                                                                        const val = e.currentTarget.value;
-                                                                        const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                                        if (p) {
-                                                                            e.preventDefault(); // Evitar el comportamiento nativo de Tab
-                                                                            openModalForStagedItem(
-                                                                                item.id, 
-                                                                                p, 
-                                                                                item.quantity, 
-                                                                                idx, 
-                                                                                item.selected_options, 
-                                                                                item.originalQty, 
-                                                                                item.originalUnit, 
-                                                                                item.conversion_factor
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
-                                                                    if (p) {
-                                                                        updateStagedItem(item.id, 'product', p);
-                                                                    }
-                                                                }}
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '10px 14px', 
-                                                                    borderRadius: '10px', 
-                                                                    border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
-                                                                    fontSize: '1rem',
-                                                                    fontWeight: '700',
-                                                                    backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
-                                                                    outline: 'none',
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                }}
-                                                            />
-                                                        </td>
-                                                        <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
-                                                            <input 
-                                                                type="number"
-                                                                value={item.quantity}
-                                                                onFocus={(e) => e.target.select()}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        const nextInput = document.getElementById(`sku-input-${idx + 1}`);
-                                                                        if (nextInput) {
-                                                                            nextInput.focus();
-                                                                        } else {
-                                                                            document.getElementById('confirm-inject-button')?.focus();
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                onChange={(e) => updateStagedItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                                style={{ 
-                                                                    width: '80px', 
-                                                                    padding: '10px', 
-                                                                    borderRadius: '8px', 
-                                                                    border: '2px solid #E2E8F0', 
-                                                                    textAlign: 'center',
-                                                                    fontWeight: '800',
-                                                                    fontSize: '1.1rem',
-                                                                    backgroundColor: 'white'
-                                                                }}
-                                                            />
-                                                        </td>
+                                                        <td style={{ padding: '1rem 2rem', width: '30%' }}>
+                                                             <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
+                                                             <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
+                                                                 <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                     {item.originalQtyInFile || item.quantity} unidades detectadas
+                                                                 </span>
+                                                             </div>
+                                                         </td>
+                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative', width: '45%' }}>
+                                                             <input 
+                                                                 type="text"
+                                                                 placeholder="Buscar ID..."
+                                                                 defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
+                                                                 list="all-products-list"
+                                                                 onFocus={(e) => e.target.select()}
+                                                                 className="sku-search-input"
+                                                                 id={`sku-input-${idx}`}
+                                                                 onKeyDown={(e) => {
+                                                                     if (e.key === 'Tab') {
+                                                                         const val = e.currentTarget.value;
+                                                                         const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                         if (p) {
+                                                                             e.preventDefault(); // Evitar el comportamiento nativo de Tab
+                                                                             openModalForStagedItem(
+                                                                                 item.id, 
+                                                                                 p, 
+                                                                                 item.quantity, 
+                                                                                 idx, 
+                                                                                 item.selected_options, 
+                                                                                 item.originalQty, 
+                                                                                 item.originalUnit, 
+                                                                                 item.conversion_factor
+                                                                             );
+                                                                         }
+                                                                     }
+                                                                 }}
+                                                                 onChange={(e) => {
+                                                                     const val = e.target.value;
+                                                                     const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
+                                                                     if (p) {
+                                                                         updateStagedItem(item.id, 'product', p);
+                                                                     }
+                                                                 }}
+                                                                 style={{ 
+                                                                     width: '100%', 
+                                                                     padding: '10px 14px', 
+                                                                     borderRadius: '10px', 
+                                                                     border: item.suggestedProduct ? '2px solid #E2E8F0' : '2px solid #F97316',
+                                                                     fontSize: '1rem',
+                                                                     fontWeight: '700',
+                                                                     backgroundColor: item.suggestedProduct ? '#FFFFFF' : '#FFFBEB',
+                                                                     outline: 'none',
+                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                                 }}
+                                                             />
+                                                         </td>
+                                                         <td style={{ padding: '0.5rem 1rem', textAlign: 'center', width: '25%' }}>
+                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                                 <input 
+                                                                     type="number"
+                                                                     value={item.originalQty !== undefined ? item.originalQty : item.quantity}
+                                                                     onFocus={(e) => e.target.select()}
+                                                                     onKeyDown={(e) => {
+                                                                         if (e.key === 'Enter') {
+                                                                             const nextInput = document.getElementById(`sku-input-${idx + 1}`);
+                                                                             if (nextInput) {
+                                                                                 nextInput.focus();
+                                                                             } else {
+                                                                                 document.getElementById('confirm-inject-button')?.focus();
+                                                                             }
+                                                                         }
+                                                                     }}
+                                                                     onChange={(e) => {
+                                                                         const val = parseFloat(e.target.value) || 0;
+                                                                         if (item.originalQty !== undefined) {
+                                                                             updateStagedItem(item.id, 'originalQty', val);
+                                                                             updateStagedItem(item.id, 'quantity', parseFloat((val * (item.conversion_factor || 1)).toFixed(2)));
+                                                                         } else {
+                                                                             updateStagedItem(item.id, 'quantity', val);
+                                                                         }
+                                                                     }}
+                                                                     style={{ 
+                                                                         width: '80px', 
+                                                                         padding: '10px', 
+                                                                         borderRadius: '8px', 
+                                                                         border: '2px solid #E2E8F0', 
+                                                                         textAlign: 'center',
+                                                                         fontWeight: '800',
+                                                                         fontSize: '1.1rem',
+                                                                         backgroundColor: 'white'
+                                                                     }}
+                                                                 />
+                                                                 <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#475569', minWidth: '45px', textAlign: 'left' }}>
+                                                                     {item.originalUnit || item.suggestedProduct?.unit_of_measure || 'Kg'}
+                                                                 </span>
+                                                             </div>
+                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
