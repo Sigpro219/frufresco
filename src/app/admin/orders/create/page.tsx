@@ -809,7 +809,8 @@ function CreateOrderContent() {
                         originalQty: qtyNum,
                         originalUnit: resolvedUnit,
                         conversion_factor: resolvedFactor,
-                        status: 'MATCH'
+                        status: 'MATCH',
+                        isConfirmed: true
                     };
                 }
                 return item;
@@ -1076,9 +1077,9 @@ function CreateOrderContent() {
         setStagedItems(prev => prev.map(item => {
             if (item.id === id) {
                 if (field === 'product') {
-                    return { ...item, suggestedProduct: value, status: 'MATCH' };
+                    return { ...item, suggestedProduct: value, status: 'MATCH', isConfirmed: true };
                 }
-                return { ...item, [field]: value };
+                return { ...item, [field]: value, isConfirmed: true };
             }
             return item;
         }));
@@ -2329,7 +2330,9 @@ function CreateOrderContent() {
                                                         key={item.id} 
                                                         style={{ 
                                                             borderBottom: '1px solid #F8FAFC',
-                                                            backgroundColor: item.suggestedProduct ? 'white' : '#FFF7ED',
+                                                            backgroundColor: item.isConfirmed 
+                                                                ? '#F0FDF4' 
+                                                                : (item.suggestedProduct ? 'white' : '#FFF7ED'),
                                                             transition: 'background-color 0.2s'
                                                         }}
                                                     >
