@@ -172,6 +172,8 @@ function CreateOrderContent() {
     const [modalUnit, setModalUnit] = useState('Kg');
     const [modalFactor, setModalFactor] = useState(1);
     const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
+    const [editingStagedItemId, setEditingStagedItemId] = useState<string | null>(null);
+    const [editingStagedItemIdx, setEditingStagedItemIdx] = useState<number | null>(null);
     const firstSelectRef = useRef<HTMLSelectElement | null>(null);
     const productSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -789,12 +791,48 @@ function CreateOrderContent() {
         const optionValues = Object.values(selectedOptions).filter(v => v);
         const variantLabel = optionValues.length > 0 ? optionValues.join(', ') : undefined;
         const qtyNum = parseFloat(String(modalQuantity).replace(',', '.')) || 1;
+        const resolvedFactor = modalFactor || 1;
+        const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
+        const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(2));
 
-        if (editingCartIndex !== null) {
+        if (editingStagedItemId !== null) {
+            const nextIdx = editingStagedItemIdx !== null ? editingStagedItemIdx + 1 : null;
+
+            setStagedItems(prev => prev.map(item => {
+                if (item.id === editingStagedItemId) {
+                    return {
+                        ...item,
+                        suggestedProduct: selectedProductForModal,
+                        quantity: baseQty,
+                        variant_label: variantLabel,
+                        selected_options: selectedOptions,
+                        originalQty: qtyNum,
+                        originalUnit: resolvedUnit,
+                        conversion_factor: resolvedFactor,
+                        status: 'MATCH'
+                    };
+                }
+                return item;
+            }));
+
+            // Close modal by resetting state
+            setSelectedProductForModal(null);
+            setEditingCartIndex(null);
+            setEditingStagedItemId(null);
+            setEditingStagedItemIdx(null);
+
+            // Shift focus to the next row's SKU input
+            if (nextIdx !== null) {
+                setTimeout(() => {
+                    const nextInput = document.getElementById(`sku-input-${nextIdx}`);
+                    if (nextInput) {
+                        (nextInput as HTMLElement).focus();
+                        (nextInput as HTMLInputElement).select();
+                    }
+                }, 80);
+            }
+        } else if (editingCartIndex !== null) {
             const finalLabel = variantLabel || '';
-            const resolvedFactor = modalFactor || 1;
-            const resolvedUnit = modalUnit || selectedProductForModal.unit_of_measure || 'Kg';
-            const baseQty = parseFloat((qtyNum * resolvedFactor).toFixed(2));
 
             setCart(prev => prev.map((c, i) => i === editingCartIndex ? {
                 ...c,
@@ -819,11 +857,46 @@ function CreateOrderContent() {
         }
     };
 
+    const openModalForStagedItem = (
+        stagedId: string, 
+        product: any, 
+        qty: number,
+        rowIdx: number,
+        selectedOptionsMap?: any,
+        originalQty?: number,
+        originalUnit?: string,
+        factor?: number
+    ) => {
+        setEditingStagedItemId(stagedId);
+        setEditingStagedItemIdx(rowIdx);
+        setSelectedProductForModal(product);
+        setSelectedOptions(selectedOptionsMap || {});
+        
+        if (originalQty !== undefined) {
+            setModalQuantity(originalQty);
+            setModalUnit(originalUnit || product.unit_of_measure || 'Kg');
+            setModalFactor(factor || 1);
+        } else {
+            setModalQuantity(qty);
+            setModalUnit(product.web_unit || product.unit_of_measure || 'Kg');
+            setModalFactor(parseFloat(product.web_conversion_factor) || 1);
+        }
+    };
+
     const closeProductModal = () => {
+        const currentStagedIdx = editingStagedItemIdx;
         setSelectedProductForModal(null);
         setEditingCartIndex(null);
+        setEditingStagedItemId(null);
+        setEditingStagedItemIdx(null);
         setTimeout(() => {
-            if (productSearchInputRef.current) {
+            if (currentStagedIdx !== null) {
+                const currentInput = document.getElementById(`sku-input-${currentStagedIdx}`);
+                if (currentInput) {
+                    (currentInput as HTMLElement).focus();
+                    (currentInput as HTMLInputElement).select();
+                }
+            } else if (productSearchInputRef.current) {
                 productSearchInputRef.current.focus();
             }
         }, 80);
@@ -979,8 +1052,11 @@ function CreateOrderContent() {
             .map(item => ({
                 product: item.suggestedProduct,
                 qty: item.quantity,
-                variant_label: undefined,
-                selected_options: undefined
+                variant_label: item.variant_label,
+                selected_options: item.selected_options,
+                originalQty: item.originalQty,
+                originalUnit: item.originalUnit,
+                conversion_factor: item.conversion_factor
             }));
 
         setCart(prev => [...itemsToInject, ...prev]);
@@ -2276,6 +2352,25 @@ function CreateOrderContent() {
                                                                 onFocus={(e) => e.target.select()}
                                                                 className="sku-search-input"
                                                                 id={`sku-input-${idx}`}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Tab') {
+                                                                        const val = e.currentTarget.value;
+                                                                        const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
+                                                                        if (p) {
+                                                                            e.preventDefault(); // Evitar el comportamiento nativo de Tab
+                                                                            openModalForStagedItem(
+                                                                                item.id, 
+                                                                                p, 
+                                                                                item.quantity, 
+                                                                                idx, 
+                                                                                item.selected_options, 
+                                                                                item.originalQty, 
+                                                                                item.originalUnit, 
+                                                                                item.conversion_factor
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                }}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
