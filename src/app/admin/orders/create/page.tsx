@@ -1461,7 +1461,7 @@ function CreateOrderContent() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             <style>{hideSpinnersStyle}</style>
-            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.5rem' }}>
+            <div style={{ maxWidth: '1700px', margin: '0 auto', padding: '1rem 2rem' }}>
                 <div style={{ marginBottom: '1rem' }}>
                     <Link href="/admin/orders/loading" style={{
                         display: 'inline-flex',
