@@ -69,12 +69,12 @@ No incluyas markdown, solo el JSON puro.
     } catch (error: any) {
         console.error('❌ [Product AI Engine] Error:', error.message);
         
-        // Si el error es específicamente de "model not found", intentamos un último recurso con gemini-pro
+        // Si el error es específicamente de "model not found", intentamos un último recurso con gemini-2.5-flash
         if (error.message.includes('not found') || error.message.includes('not supported')) {
             try {
-                console.log('🔄 Reintentando con modelo alternativo (gemini-pro)...');
+                console.log('🔄 Reintentando con modelo alternativo (gemini-2.5-flash)...');
                 const genAI = new GoogleGenerativeAI(GEMINI_KEY as string);
-                const backupModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+                const backupModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                 const result = await backupModel.generateContent("Traduce a ingles: " + name);
                 const response = await result.response;
                 return NextResponse.json({
