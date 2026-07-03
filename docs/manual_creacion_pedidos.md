@@ -197,6 +197,11 @@ El flujo de geolocalización está protegido contra errores logísticos:
     ```
 2.  Si `outOfZone` es `true`, el operador puede pulsar el botón administrativo de excepciones (`isOverrideMode`). Esto requiere ingresar una justificación textual (ej: "Cliente acordó flete extra de $15,000") para desbloquear la creación del pedido. La justificación queda registrada directamente en el pedido en la columna `coverage_override_reason`.
 
+### Almacenamiento de Documento Original de Compra
+Cuando se importa un pedido desde la Mesa de Trabajo, el sistema retiene el archivo original en el estado `uploadedFile`.
+1. **Subida Automática a Supabase Storage:** Al confirmar y crear el pedido en `handleSubmit`, si existe un archivo cargado en el estado, se sube de forma asíncrona al bucket existente de Supabase `order-attachments` con un UUID único.
+2. **Asociación en Base de Datos:** Se obtiene la URL pública del archivo y se inyecta en la columna `document_url` de la tabla `orders` para permitir que el PDF/documento original quede enlazado permanentemente al pedido.
+
 ---
 
 ## 6. Guía de Réplica para Nuevos Módulos

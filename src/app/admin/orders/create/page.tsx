@@ -269,6 +269,7 @@ function CreateOrderContent() {
         documentType: 'PDF' | 'EXCEL' | 'CSV' | null
     }>({ clientInDocument: '', isMatch: true, documentType: null });
     const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
     useEffect(() => {
         loadData();
@@ -1002,6 +1003,7 @@ function CreateOrderContent() {
             }
             const url = URL.createObjectURL(file);
             setUploadedFileUrl(url);
+            setUploadedFile(file);
 
             const formData = new FormData();
             formData.append('file', file);
@@ -1197,6 +1199,32 @@ function CreateOrderContent() {
 
         setLoading(true);
         try {
+            // Upload document to order-attachments bucket if present
+            let documentUrl = null;
+            if (uploadedFile) {
+                try {
+                    const fileExt = uploadedFile.name.split('.').pop();
+                    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+                    const filePath = `${fileName}`;
+
+                    const { data: uploadData, error: uploadError } = await supabase
+                        .storage
+                        .from('order-attachments')
+                        .upload(filePath, uploadedFile, { upsert: true });
+
+                    if (uploadError) {
+                        console.error('Error uploading order attachment:', uploadError);
+                    } else {
+                        const { data: publicUrlData } = supabase
+                            .storage
+                            .from('order-attachments')
+                            .getPublicUrl(filePath);
+                        documentUrl = publicUrlData?.publicUrl || null;
+                    }
+                } catch (uploadErr) {
+                    console.error('Upload catch error:', uploadErr);
+                }
+            }
 
             let finalProfileId = clientType === 'B2B' ? selectedClient : (b2cMode === 'search' ? selectedClientB2C : null);
             let finalAdminNotes = adminNotes;
@@ -1341,7 +1369,8 @@ function CreateOrderContent() {
                     manual_delivery_time: manualDeliveryTime || null,
                     manual_delivery_margin: manualDeliveryMargin,
                     manual_delivery_note: manualDeliveryNote || null,
-                    logistics_data: logisticsOverride
+                    logistics_data: logisticsOverride,
+                    document_url: documentUrl
                 })
                 .select()
                 .single();
@@ -1431,6 +1460,11 @@ function CreateOrderContent() {
             }
 
             showToast('Pedido creado exitosamente ✅', 'success');
+            setUploadedFile(null);
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+                setUploadedFileUrl(null);
+            }
             router.push('/admin/orders/loading');
 
         } catch (e: any) {
@@ -2516,6 +2550,7 @@ function CreateOrderContent() {
                                             onClick={() => { 
                                                 setIsStaging(false); 
                                                 setStagedItems([]); 
+                                                setUploadedFile(null);
                                                 if (uploadedFileUrl) {
                                                     URL.revokeObjectURL(uploadedFileUrl);
                                                     setUploadedFileUrl(null);
