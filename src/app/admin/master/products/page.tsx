@@ -827,67 +827,64 @@ export default function MasterProductsPage() {
         const query = searchQuery.trim().toLowerCase();
         if (!query) return products;
 
-        // Separar términos normales de etiquetas con @
-        const parts = query.split(/\s+/);
-        const tags = parts.filter(p => p.startsWith('@')).map(t => t.slice(1));
-        const ids = parts.filter(p => p.startsWith('#')).map(t => t.slice(1));
-        const searchTerms = parts.filter(p => !p.startsWith('@') && !p.startsWith('#'));
+        // Separar factores por comas
+        const factors = query.split(',').map(f => f.trim()).filter(Boolean);
 
         return products.filter(p => {
-            // 1. Lógica de IDs EXACTOS (#3, #15...)
-            const matchesIds = ids.length === 0 || ids.some(id => 
-                p.accounting_id?.toString() === id
-            );
-            if (!matchesIds) return false;
-
-            // 2. Lógica de TEXTO (AND: debe cumplir todos los términos escritos)
-            const matchesText = searchTerms.every(term => 
-                p.name?.toLowerCase().includes(term) ||
-                p.sku?.toLowerCase().includes(term) ||
-                p.accounting_id?.toString().includes(term)
-            );
-
-            if (!matchesText && searchTerms.length > 0) return false;
-
-            // 2. Lógica de ETIQUETAS (AND: debe cumplir todos los filtros @)
-            const matchesTags = tags.every(tag => {
-                // Filtro IVA (@19, @19%, @0...)
-                if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
-                    const rate = parseInt(tag.replace('%', ''));
-                    return (p.iva_rate ?? 19) === rate;
+            return factors.every(factor => {
+                // 1. Lógica de IDs (#3, #15...)
+                if (factor.startsWith('#')) {
+                    const id = factor.slice(1);
+                    return p.accounting_id?.toString() === id;
                 }
 
-                // Filtro Web (@web, @virtual, @oculto)
-                if (tag === 'web' || tag === 'virtual') return p.show_on_web;
-                if (tag === 'oculto' || tag === 'hidden') return !p.show_on_web;
+                // 2. Lógica de ETIQUETAS (@web, @oculto...)
+                if (factor.startsWith('@')) {
+                    const tag = factor.slice(1);
+                    
+                    // Filtro IVA (@19, @19%, @0...)
+                    if (['0', '5', '19', '22'].includes(tag.replace('%', ''))) {
+                        const rate = parseInt(tag.replace('%', ''));
+                        return (p.iva_rate ?? 19) === rate;
+                    }
 
-                // Filtro Estado Maestro (@on, @activo, @off, @inactivo)
-                if (tag === 'on' || tag === 'activo') return p.is_active;
-                if (tag === 'off' || tag === 'inactivo') return !p.is_active;
+                    // Filtro Web (@web, @virtual, @oculto)
+                    if (tag === 'web' || tag === 'virtual') return p.show_on_web;
+                    if (tag === 'oculto' || tag === 'hidden') return !p.show_on_web;
 
-                // Filtro Jerarquía (@padre, @hijo)
-                if (tag === 'padre') return p.parent_id === p.id;
-                if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+                    // Filtro Estado Maestro (@on, @activo, @off, @inactivo)
+                    if (tag === 'on' || tag === 'activo') return p.is_active;
+                    if (tag === 'off' || tag === 'inactivo') return !p.is_active;
 
-                // Filtro Incompletos (@sindatos)
-                if (tag === 'sindatos' || tag === 'incompleto') {
-                    return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
+                    // Filtro Jerarquía (@padre, @hijo)
+                    if (tag === 'padre') return p.parent_id === p.id;
+                    if (tag === 'hijo') return p.parent_id !== null && p.parent_id !== p.id;
+
+                    // Filtro Incompletos (@sindatos)
+                    if (tag === 'sindatos' || tag === 'incompleto') {
+                        return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
+                    }
+
+                    // Filtro Categoría (@frutas, @despensa...)
+                    const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
+                        label.toLowerCase().startsWith(tag)
+                    );
+                    if (categoryEntry && p.category === categoryEntry[0]) return true;
+
+                    // Filtro Logística/Compras (@alistamiento, @equipo...)
+                    if (p.buying_team?.toLowerCase().includes(tag)) return true;
+                    if (p.procurement_method?.toLowerCase().includes(tag)) return true;
+
+                    return false;
                 }
 
-                // Filtro Categoría (@frutas, @despensa...)
-                const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
-                    label.toLowerCase().startsWith(tag)
+                // 3. Lógica de TEXTO normal
+                return (
+                    p.name?.toLowerCase().includes(factor) ||
+                    p.sku?.toLowerCase().includes(factor) ||
+                    p.accounting_id?.toString().includes(factor)
                 );
-                if (categoryEntry && p.category === categoryEntry[0]) return true;
-
-                // Filtro Logística/Compras (@alistamiento, @equipo...)
-                if (p.buying_team?.toLowerCase().includes(tag)) return true;
-                if (p.procurement_method?.toLowerCase().includes(tag)) return true;
-
-                return false;
             });
-
-            return matchesTags;
         });
     }, [products, searchQuery]);
 
@@ -1358,7 +1355,7 @@ export default function MasterProductsPage() {
                                     ))}
                                 </div>
                                 <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', fontStyle: 'italic' }}>
-                                    Tip: Puedes filtrar por Categoría escribiendo @ seguida del nombre.
+                                    Tip: Filtra por campos combinados separando con comas (,). Ejemplo: Papa, @web, @activo
                                 </div>
                             </div>
                         )}
