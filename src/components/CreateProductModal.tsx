@@ -85,8 +85,12 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                     console.warn('CreateModal: No master table found, using defaults.');
                     return;
                 }
-                if (data && data.length > 0) {
-                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ 
+                        name: attr.name, 
+                        values: attr.suggested_values,
+                        show_on_web: attr.show_on_web !== false
+                    })));
                 }
             } catch (err) {
                 console.warn('CreateModal: Error fetching master attributes.');
@@ -299,7 +303,14 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
                 .insert([{
                     ...formData,
                     image_url: uploadedImageUrl,
-                    options_config: options,
+                    options_config: options.map(opt => {
+                        const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                        return {
+                            name: opt.name,
+                            values: opt.values,
+                            show_on_web: attr ? attr.show_on_web !== false : true
+                        };
+                    }),
                     variants: variants,
                     iva_rate: formData.iva_rate,
                     name_en: formData.name_en,

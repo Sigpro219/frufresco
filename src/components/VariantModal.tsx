@@ -64,8 +64,16 @@ export default function VariantModal({ product, onClose, onSave, onUploadImage, 
 
     const handleSave = async () => {
         setIsSaving(true);
-        // Asegurarnos de usar el estado más fresco
-        const success = await onSave(options, variants);
+        // Map options to include show_on_web from masterAttributes
+        const mappedOptions = options.map(opt => {
+            const master = masterAttributes.find(m => m.name === opt.name);
+            return {
+                name: opt.name,
+                values: opt.values,
+                show_on_web: master ? master.show_on_web !== false : true
+            };
+        });
+        const success = await onSave(mappedOptions, variants);
         setIsSaving(false);
         if (success) {
             onClose();

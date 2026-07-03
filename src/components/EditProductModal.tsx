@@ -68,8 +68,12 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     console.warn('EditModal: No master table found, using defaults.');
                     return;
                 }
-                if (data && data.length > 0) {
-                    setMasterAttributes(data.map(attr => ({ name: attr.name, values: attr.suggested_values })));
+                                if (data && data.length > 0) {
+                    setMasterAttributes(data.map(attr => ({ 
+                        name: attr.name, 
+                        values: attr.suggested_values,
+                        show_on_web: attr.show_on_web !== false
+                    })));
                 }
 
                 // Fetch Dynamic Units from Settings
@@ -287,7 +291,14 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 inventory_group: formData.inventory_group,
                 purchase_sublist: formData.purchase_sublist,
                 utility_deviation_pct: formData.utility_deviation_pct || 0,
-                options_config: options,
+                options_config: options.map(opt => {
+                    const attr: any = masterAttributes.find((a: any) => a.name === opt.name);
+                    return {
+                        name: opt.name,
+                        values: opt.values,
+                        show_on_web: attr ? attr.show_on_web !== false : true
+                    };
+                }),
                 variants: variants,
                 iva_rate: formData.iva_rate,
                 display_name: formData.display_name,

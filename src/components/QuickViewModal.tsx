@@ -39,7 +39,9 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
 
     // Normalizar las opciones
     const displayOptions = product.options_config && product.options_config.length > 0
-        ? product.options_config.reduce((acc, opt) => ({ ...acc, [opt.name]: opt.values }), {})
+        ? product.options_config
+            .filter((opt: any) => opt.show_on_web !== false)
+            .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
         : product.options || {};
 
     const initialSelections: Record<string, string> = {};
