@@ -268,6 +268,7 @@ function CreateOrderContent() {
         isMatch: boolean,
         documentType: 'PDF' | 'EXCEL' | 'CSV' | null
     }>({ clientInDocument: '', isMatch: true, documentType: null });
+    const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -996,6 +997,12 @@ function CreateOrderContent() {
     const parseOrderWithAI = async (file: File) => {
         setParsingFile(true);
         try {
+            if (uploadedFileUrl) {
+                URL.revokeObjectURL(uploadedFileUrl);
+            }
+            const url = URL.createObjectURL(file);
+            setUploadedFileUrl(url);
+
             const formData = new FormData();
             formData.append('file', file);
 
@@ -1072,6 +1079,10 @@ function CreateOrderContent() {
         setCart(prev => [...itemsToInject, ...prev]);
         setIsStaging(false);
         setStagedItems([]);
+        if (uploadedFileUrl) {
+            URL.revokeObjectURL(uploadedFileUrl);
+            setUploadedFileUrl(null);
+        }
         showToast(`✅ Se han inyectado ${itemsToInject.length} productos al detalle del pedido.`, 'success');
     };
 
@@ -2288,17 +2299,39 @@ function CreateOrderContent() {
                                                     <Trash2 size={14} /> Eliminar Seleccionados ({selectedStagedIds.length})
                                                 </button>
                                             )}
-                                            <span style={{ 
-                                                padding: '6px 12px', 
-                                                backgroundColor: 'white', 
-                                                borderRadius: '100px', 
-                                                fontSize: '0.75rem', 
-                                                fontWeight: '800', 
-                                                color: '#475569',
-                                                border: '1px solid rgba(0,0,0,0.05)'
-                                            }}>
-                                                DOCUMENTO {importValidation.documentType}
-                                            </span>
+                                            <button 
+                                                onClick={() => {
+                                                    if (uploadedFileUrl) {
+                                                        window.open(uploadedFileUrl, '_blank');
+                                                    }
+                                                }}
+                                                title="Click para ver documento original"
+                                                style={{ 
+                                                    padding: '6px 12px', 
+                                                    backgroundColor: '#EFF6FF', 
+                                                    borderRadius: '100px', 
+                                                    fontSize: '0.75rem', 
+                                                    fontWeight: '800', 
+                                                    color: '#1D4ED8',
+                                                    border: '1px solid #BFDBFE',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.backgroundColor = '#DBEAFE';
+                                                    e.currentTarget.style.borderColor = '#93C5FD';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.backgroundColor = '#EFF6FF';
+                                                    e.currentTarget.style.borderColor = '#BFDBFE';
+                                                }}
+                                            >
+                                                📄 VER {importValidation.documentType || 'DOCUMENTO'}
+                                            </button>
                                         </div>
                                     </div>
 
@@ -2480,7 +2513,14 @@ function CreateOrderContent() {
                                         alignItems: 'center'
                                     }}>
                                         <button 
-                                            onClick={() => { setIsStaging(false); setStagedItems([]); }}
+                                            onClick={() => { 
+                                                setIsStaging(false); 
+                                                setStagedItems([]); 
+                                                if (uploadedFileUrl) {
+                                                    URL.revokeObjectURL(uploadedFileUrl);
+                                                    setUploadedFileUrl(null);
+                                                }
+                                            }}
                                             style={{ padding: '10px 20px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: 'white', color: '#64748B', fontWeight: '700', cursor: 'pointer' }}
                                         >
                                             Cancelar y Limpiar
