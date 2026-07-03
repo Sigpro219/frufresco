@@ -2913,6 +2913,7 @@ function CreateOrderContent() {
             {selectedProductForModal && (() => {
                 const exc = clientExceptions.find(e => e.product_id === selectedProductForModal.id);
                 const itemConversions = conversions.filter(c => c.product_id === selectedProductForModal.id);
+                const stagedItem = stagedItems.find(item => item.id === editingStagedItemId);
 
                 // Build full options list for unit selection (web_unit is first, if configured)
                 const optionsList = [];
@@ -3021,6 +3022,29 @@ function CreateOrderContent() {
                                     {exc.picking_note && (
                                         <div><strong>Nota del cliente:</strong> {exc.picking_note}</div>
                                     )}
+                                </div>
+                            )}
+
+                            {stagedItem && (
+                                <div style={{
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px dashed #CBD5E1',
+                                    borderRadius: '12px',
+                                    padding: '0.8rem 1.2rem',
+                                    margin: '0.8rem 0 1.2rem 0',
+                                    textAlign: 'left',
+                                    fontSize: '0.85rem',
+                                    color: '#475569'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
+                                        <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                                            {stagedItem.originalQtyInFile || stagedItem.quantity} unidades detectadas
+                                        </span>
+                                    </div>
+                                    <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600' }}>
+                                        &quot;{stagedItem.originalName}&quot;
+                                    </div>
                                 </div>
                             )}
 
