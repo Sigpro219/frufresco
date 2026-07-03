@@ -131,6 +131,7 @@ Para permitir una velocidad óptima durante la importación masiva de archivos:
 1. **Apertura de Modal con Tab:** El input de SKU de cada fila (`sku-input-${idx}`) intercepta la tecla `Tab` para abrir el modal del producto correspondiente de manera inmediata.
 2. **Auto-foco en la Siguiente Fila:** Al confirmar la configuración del modal, la pantalla cierra el modal y sitúa el cursor y foco de forma automática en la casilla SKU del producto de la fila inferior (`sku-input-${idx + 1}`), permitiendo continuar el ciclo sin interrupciones.
 3. **Retorno en Cancelación:** Si se cancela el modal, el foco se devuelve a la casilla de la fila actual para que el operador pueda reescribir.
+4. **Aceptar y Omitir con Enter:** Si el operador nota que el producto sugerido por el autocompletar de la fila y la cantidad son correctos, no necesita presionar Tab para abrir el modal. Simplemente pulsa la tecla **Enter** sobre la celda de búsqueda; el sistema marcará la fila como confirmada (cambiando su color a verde menta) y desplazará el cursor directamente a la casilla de búsqueda de la fila inferior.
 
 ---
 
