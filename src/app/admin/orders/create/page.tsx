@@ -821,13 +821,19 @@ function CreateOrderContent() {
             setEditingStagedItemId(null);
             setEditingStagedItemIdx(null);
 
-            // Shift focus to the next row's SKU input
+            // Shift focus to the next row's SKU input or to the Confirm button if it was the last row
             if (nextIdx !== null) {
                 setTimeout(() => {
                     const nextInput = document.getElementById(`sku-input-${nextIdx}`);
                     if (nextInput) {
                         (nextInput as HTMLElement).focus();
                         (nextInput as HTMLInputElement).select();
+                    } else {
+                        // Focus the confirm and inject button!
+                        const confirmBtn = document.getElementById('confirm-inject-button');
+                        if (confirmBtn) {
+                            confirmBtn.focus();
+                        }
                     }
                 }, 80);
             }
@@ -1013,6 +1019,7 @@ function CreateOrderContent() {
                     id: crypto.randomUUID(),
                     originalName: item.originalName,
                     quantity: item.quantity,
+                    originalQtyInFile: item.quantity,
                     suggestedProduct: match || null,
                     status: match ? 'MATCH' : 'PENDING'
                 };
@@ -2159,7 +2166,7 @@ function CreateOrderContent() {
                                 {/* Global Datalist for SKUs to improve performance */}
                                 <datalist id="all-products-list">
                                     {products.map(p => (
-                                        <option key={p.id} value={`${p.name} (${p.sku})`} />
+                                        <option key={p.id} value={`${p.name} (${p.accounting_id || p.id})`} />
                                     ))}
                                 </datalist>
 
@@ -2312,7 +2319,7 @@ function CreateOrderContent() {
                                                         />
                                                     </th>
                                                     <th style={{ ...THEME.typography?.tableHeader, padding: '1rem 2rem', textAlign: 'left' }}>NOMBRE EN DOCUMENTO</th>
-                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (SKU)</th>
+                                                    <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'left' }}>TU PRODUCTO (ID)</th>
                                                     <th style={{ ...THEME.typography?.tableHeader, padding: '1rem', textAlign: 'center' }}>CANT.</th>
                                                 </tr>
                                             </thead>
@@ -2341,13 +2348,19 @@ function CreateOrderContent() {
                                                             />
                                                         </td>
                                                         <td style={{ padding: '1rem 2rem' }}>
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#475569' }}>{item.originalName}</div>
+                                                            <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                                                    {item.originalQtyInFile || item.quantity} detectados
+                                                                </span>
+                                                                <span style={{ color: '#94A3B8' }}>en el documento</span>
+                                                            </div>
                                                         </td>
                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
                                                             <input 
                                                                 type="text"
-                                                                placeholder="Buscar SKU..."
-                                                                defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.sku})` : ''}
+                                                                placeholder="Buscar ID..."
+                                                                defaultValue={item.suggestedProduct ? `${item.suggestedProduct.name} (${item.suggestedProduct.accounting_id || item.suggestedProduct.id})` : ''}
                                                                 list="all-products-list"
                                                                 onFocus={(e) => e.target.select()}
                                                                 className="sku-search-input"
@@ -2355,7 +2368,7 @@ function CreateOrderContent() {
                                                                 onKeyDown={(e) => {
                                                                     if (e.key === 'Tab') {
                                                                         const val = e.currentTarget.value;
-                                                                        const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
+                                                                        const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
                                                                         if (p) {
                                                                             e.preventDefault(); // Evitar el comportamiento nativo de Tab
                                                                             openModalForStagedItem(
@@ -2373,7 +2386,7 @@ function CreateOrderContent() {
                                                                 }}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
-                                                                    const p = products.find(prod => `${prod.name} (${prod.sku})` === val);
+                                                                    const p = products.find(prod => `${prod.name} (${prod.accounting_id || prod.id})` === val);
                                                                     if (p) {
                                                                         updateStagedItem(item.id, 'product', p);
                                                                     }
@@ -2401,6 +2414,8 @@ function CreateOrderContent() {
                                                                         const nextInput = document.getElementById(`sku-input-${idx + 1}`);
                                                                         if (nextInput) {
                                                                             nextInput.focus();
+                                                                        } else {
+                                                                            document.getElementById('confirm-inject-button')?.focus();
                                                                         }
                                                                     }
                                                                 }}
@@ -2444,6 +2459,7 @@ function CreateOrderContent() {
                                                 <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B' }}>{stagedItems.length} productos</div>
                                             </div>
                                             <button 
+                                                id="confirm-inject-button"
                                                 onClick={handleConfirmImport}
                                                 style={{ 
                                                     padding: '12px 28px', 
@@ -2503,7 +2519,7 @@ function CreateOrderContent() {
                                                 backgroundColor: idx === focusedProductIndex ? '#EFF6FF' : 'white'
                                             }}
                                         >
-                                            <span style={{ fontWeight: '600' }}>{p.name} {p.sku && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.sku})</span>}</span>
+                                            <span style={{ fontWeight: '600' }}>{p.name} {p.accounting_id && <span style={{fontSize: '0.8em', color: '#6B7280'}}>({p.accounting_id})</span>}</span>
                                             <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>
                                                 {formatMoney(p.base_price)}/{p.unit_of_measure}
                                                 {p.options_config?.length > 0 && <span style={{ marginLeft: '6px', fontSize: '0.7em', backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 4px', borderRadius: '4px' }}>⚙️ Opciones</span>}
