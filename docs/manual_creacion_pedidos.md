@@ -158,12 +158,14 @@ El modal de adición de productos no es solo un recolector de cantidades. Está 
                         (qtyInput as HTMLInputElement).focus();
                         (qtyInput as HTMLInputElement).select();
                     }
-                }
+                 }
             }, 80);
             return () => clearTimeout(timer);
         }
     }, [showProductModal, productWithOptions]);
     ```
+3.  **Tarjeta de Ayuda de Texto Detectado:**
+    Si el modal se abre desde la Mesa de Trabajo (importación de órdenes), se renderiza una tarjeta informativa discontinua que muestra el texto original del documento y las unidades detectadas para guiar al operador durante el mapeo de variantes.
 
 ---
 
