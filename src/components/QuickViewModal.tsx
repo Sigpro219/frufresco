@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { createPortal } from 'react-dom';
 import { useCart } from '../lib/cartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -37,10 +38,25 @@ const ModalContent: React.FC<QuickViewModalProps> = ({ product, onClose }) => {
     const t = translations[locale];
     const [quantity, setQuantity] = useState(1);
 
+    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchMaster = async () => {
+            const { data } = await supabase
+                .from('product_attributes_master')
+                .select('name, show_on_web');
+            if (data) setMasterAttributes(data);
+        };
+        fetchMaster();
+    }, []);
+
     // Normalizar las opciones
     const displayOptions = product.options_config && product.options_config.length > 0
         ? product.options_config
-            .filter((opt: any) => opt.show_on_web !== false)
+            .filter((opt: any) => {
+                const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
+                return master ? master.show_on_web !== false : true;
+            })
             .reduce((acc: any, opt: any) => ({ ...acc, [opt.name]: opt.values }), {})
         : product.options || {};
 
