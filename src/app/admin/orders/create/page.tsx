@@ -2349,11 +2349,10 @@ function CreateOrderContent() {
                                                         </td>
                                                         <td style={{ padding: '1rem 2rem' }}>
                                                             <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1E293B' }}>{item.originalName}</div>
-                                                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center' }}>
                                                                 <span style={{ backgroundColor: '#F1F5F9', color: '#334155', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
-                                                                    {item.originalQtyInFile || item.quantity} detectados
+                                                                    {item.originalQtyInFile || item.quantity} unidades detectadas
                                                                 </span>
-                                                                <span style={{ color: '#94A3B8' }}>en el documento</span>
                                                             </div>
                                                         </td>
                                                         <td style={{ padding: '0.5rem 1rem', position: 'relative' }}>
