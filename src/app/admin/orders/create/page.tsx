@@ -2982,36 +2982,71 @@ function CreateOrderContent() {
                     }} onClick={() => closeProductModal()}>
 
                         <div
-                            style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '680px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
+                            style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', width: '95%', maxWidth: '820px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'left' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
-                            {selectedProductForModal.image_url ? (
-                                <img
-                                    src={selectedProductForModal.image_url}
-                                    style={{ width: '100px', height: '100px', borderRadius: '16px', objectFit: 'cover', marginBottom: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
-                                />
-                            ) : (
-                                <div style={{
-                                    width: '100px',
-                                    height: '100px',
-                                    borderRadius: '16px',
-                                    backgroundColor: '#F3F4F6',
-                                    border: '1px solid #E5E7EB',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    margin: '0 auto 1.2rem auto',
-                                    boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
-                                }}>
-                                    <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
-                                    <span style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase', marginTop: '4px', letterSpacing: '0.05em' }}>
-                                        Sin Imagen
-                                    </span>
+                            {/* Horizontal flex container for header */}
+                            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                {/* Left side: Image and Title */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                                    {selectedProductForModal.image_url ? (
+                                        <img
+                                            src={selectedProductForModal.image_url}
+                                            style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            borderRadius: '16px',
+                                            backgroundColor: '#F3F4F6',
+                                            border: '1px solid #E5E7EB',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                                        }}>
+                                            <span style={{ fontSize: '1.8rem', color: '#9CA3AF' }}>📦</span>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForModal.name}</h3>
+                                        <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                                            {selectedProductForModal.options_config && selectedProductForModal.options_config.length > 0
+                                                ? 'Personaliza tu producto:'
+                                                : 'Especifica la cantidad y unidad de medida:'}
+                                        </p>
+                                    </div>
                                 </div>
-                            )}
-                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '0.3rem', color: '#111827' }}>{selectedProductForModal.name}</h3>
-                            
+
+                                {/* Right side: Helper box (if open from staging) */}
+                                {stagedItem && (
+                                    <div style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1px dashed #CBD5E1',
+                                        borderRadius: '12px',
+                                        padding: '0.8rem 1.2rem',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: '#475569',
+                                        minWidth: '280px',
+                                        flex: '1 1 auto',
+                                        maxWidth: '360px'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
+                                            <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
+                                            <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
+                                                {stagedItem.originalQtyInFile || stagedItem.quantity} uds detectadas
+                                            </span>
+                                        </div>
+                                        <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stagedItem.originalName}>
+                                            &quot;{stagedItem.originalName}&quot;
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* CLIENT CUSTOM REQUIREMENT INFO BOX */}
                             {exc && (
                                 <div style={{
@@ -3019,7 +3054,7 @@ function CreateOrderContent() {
                                     border: '1px solid #FCD34D',
                                     borderRadius: '12px',
                                     padding: '0.8rem 1.2rem',
-                                    margin: '0.8rem 0 1.2rem 0',
+                                    margin: '0.5rem 0 1rem 0',
                                     textAlign: 'left',
                                     fontSize: '0.8rem',
                                     color: '#92400E',
@@ -3037,34 +3072,6 @@ function CreateOrderContent() {
                                 </div>
                             )}
 
-                            {stagedItem && (
-                                <div style={{
-                                    backgroundColor: '#F8FAFC',
-                                    border: '1px dashed #CBD5E1',
-                                    borderRadius: '12px',
-                                    padding: '0.8rem 1.2rem',
-                                    margin: '0.8rem 0 1.2rem 0',
-                                    textAlign: 'left',
-                                    fontSize: '0.85rem',
-                                    color: '#475569'
-                                }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                        <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
-                                        <span style={{ backgroundColor: '#E2E8F0', padding: '2px 8px', borderRadius: '6px', fontWeight: '800', color: '#334155', fontSize: '0.75rem' }}>
-                                            {stagedItem.originalQtyInFile || stagedItem.quantity} unidades detectadas
-                                        </span>
-                                    </div>
-                                    <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600' }}>
-                                        &quot;{stagedItem.originalName}&quot;
-                                    </div>
-                                </div>
-                            )}
-
-                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.0rem' }}>
-                                {selectedProductForModal.options_config && selectedProductForModal.options_config.length > 0
-                                    ? 'Personaliza tu producto:'
-                                    : 'Especifica la cantidad y unidad de medida:'}
-                            </p>
 
                             {/* DISCRETE PRODUCT CONFIG ACTION BAR */}
                             <div style={{
