@@ -884,9 +884,11 @@ function CreateOrderContent() {
             setModalUnit(originalUnit || product.unit_of_measure || 'Kg');
             setModalFactor(factor || 1);
         } else {
-            setModalQuantity(qty);
-            setModalUnit(product.web_unit || product.unit_of_measure || 'Kg');
-            setModalFactor(parseFloat(product.web_conversion_factor) || 1);
+            const stagedItem = stagedItems.find(item => item.id === stagedId);
+            const defaultQty = stagedItem ? (stagedItem.originalQtyInFile || stagedItem.quantity) : qty;
+            setModalQuantity(defaultQty);
+            setModalUnit(product.unit_of_measure || 'Kg');
+            setModalFactor(1);
         }
     };
 
